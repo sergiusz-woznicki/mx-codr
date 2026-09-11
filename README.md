@@ -1,7 +1,7 @@
 # The Mendix delivery harness
 
 A drop-in bundle that makes an AI coding agent follow five project rules while it
-builds a Mendix app, and gives you one command that says whether the work is done.
+builds a Mendix app, and gives one command that says whether the work is done.
 
 The rules are prose the agent reads. The enforcement is lint rules, checkers and a
 gate that fails. Neither half is useful alone: the prose without the gate is advice
@@ -9,6 +9,38 @@ an agent drifts from by the third feature, and the gate without the prose only e
 says no.
 
 `dist/` is the whole bundle. Everything below is about installing and using it.
+
+## You run the installer. That is the only command you have to run.
+
+Nothing in this harness is a tool you operate. There is no Python script to invoke,
+no checker to remember the arguments of, no order to run things in. After
+`install.sh`, every piece is found and used by the agent on its own:
+
+| What | How the agent finds it |
+|---|---|
+| The five rules, in prose | `SKILL.md` files in the three directories each host looks in |
+| The always-loaded reminder | `.claude/rules/` and `.cursor/rules/`, loaded on every turn |
+| `MOD001`, `REU001` | `mxcli lint` discovers `.claude/lint-rules/*.star` by itself |
+| `check_mdl.py`, `check_test_coverage.py` | the skills that need them name the exact command; the gate runs them too |
+| The gate | host hooks fire it, and the `test-first-delivery` skill tells the agent to |
+
+The Python checkers exist because two of the rules cannot be expressed as lint
+rules — activity captions are not in the model catalog, and test coverage means
+reading `tests/` off disk. They are an implementation detail of those two rules,
+installed at `tools/mdl-checks/` so every host can cite one path. The agent calls
+them. **You never have to.**
+
+The same is true of `tests/gate.sh`. The hooks run it, and the skills tell the agent
+to run it before claiming anything is finished. You can run it yourself when you
+want to see where a project stands — that is a convenience, not a step.
+
+So the whole of your involvement is:
+
+```bash
+bash install.sh --with-deps
+```
+
+and then working with your agent as usual.
 
 ## What it enforces
 
@@ -20,9 +52,6 @@ says no.
 | `reuse-and-snippets` | a snippet used on more than one page, a `SUB_` microflow with more than one caller |
 | `organize-project` | nothing orphaned, nothing left at module root |
 
-Two of those are checked by Starlark rules that `mxcli lint` runs itself. The rest
-need the Python checkers in `checks/`, which is why this bundle is not text-only.
-
 ## Requirements
 
 | | Why |
@@ -31,7 +60,7 @@ need the Python checkers in `checks/`, which is why this bundle is not text-only
 | **Mendix Studio Pro** or a cached mxbuild | `mx check` validates the model |
 | **PostgreSQL** | the app's database, and a separate `<project>_test` one |
 | **bash** | the harness is shell scripts — Git Bash on Windows |
-| **Python 3** | the caption and coverage checkers |
+| **Python 3** | for the two checkers the agent calls; you never invoke it |
 | **Node + playwright-cli** | the browser tests |
 | **A JDK** | matching the Mendix version; Studio Pro installs one |
 | **Docker** | installed as a prerequisite |
@@ -80,37 +109,31 @@ reported as missing.
 
 If you already have Git Bash, skip `bootstrap.ps1` and use `install.sh` directly.
 
-### What lands in the project
+### What lands in the project, and who reads it
 
 ```
-.claude/skills/<name>/       Claude Code reads this
+.claude/skills/<name>/       Claude Code
 .agents/skills/<name>/       Codex, and other tools on the open SKILL.md standard
 .ai-context/skills/<name>/   mxcli, Cursor, OpenCode, Windsurf, Aider
-.claude/lint-rules/          picked up by `mxcli lint`
-.claude/rules/               the always-loaded rule
-tools/mdl-checks/            the Python checkers
+.claude/rules/               the always-loaded rule (Cursor's copy in .cursor/rules/)
+.claude/lint-rules/          found by `mxcli lint` with nothing to register
+tools/mdl-checks/            the Python checkers the skills cite
 tests/                       the harness scripts, plus tests/harness.env
+.claude/settings.local.json  the hooks (Cursor, Codex and OpenCode get their own)
 ```
 
-Three copies of the same skills, because each tool looks somewhere different.
+Three copies of the same skills, because each tool looks somewhere different. All
+of it is discovered — nothing here needs registering, importing or configuring.
 
-The five harness scripts are replaced on every install — a fix in `gate.sh` that
+The five harness scripts are replaced on every install: a fix in `gate.sh` that
 never reaches an installed project is not a fix. Your own `verify-*.test.sh` and
 `credentials.env` are never overwritten.
 
-## Use
+## The gate
 
-```bash
-bash tests/gate.sh                    # the done gate
-bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
-bash tests/gate.sh --only <feature>   # one test, warm browser, red loop
-bash tests/orient.sh                  # what is in this project
-bash tests/diagnose.sh                # why is the app not answering
-```
-
-`gate.sh` runs five checks concurrently — the browser suite, `mx check`, `mxcli
+One command, five checks, run concurrently — the browser suite, `mx check`, `mxcli
 lint`, test coverage and naming/captions. Every step runs even when another fails,
-so one call reports the whole picture. It exits 0 only when all five pass.
+so one call reports the whole picture. Exit 0 only when all five pass.
 
 ```
 == gate
@@ -122,13 +145,21 @@ so one call reports the whole picture. It exits 0 only when all five pass.
    DONE — every check passed
 ```
 
-The host hooks installed alongside it run the same gate and refuse to let Codex or
-Cursor finish while it is red.
+The agent runs this. The installed hooks run it too, and refuse to let Codex or
+Cursor finish a turn while it is red. When you want to look yourself:
+
+```bash
+bash tests/gate.sh                    # the done gate
+bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
+bash tests/gate.sh --only <feature>   # one test, warm browser, red loop
+bash tests/orient.sh                  # what is in this project
+bash tests/diagnose.sh                # why is the app not answering
+```
 
 ## Configuration
 
 `tests/harness.env` is written by the installer and read by every harness script.
-The environment still wins, so you can override any of it for one run.
+The environment still wins, so any of it can be overridden for one run.
 
 | Key | What it is |
 |---|---|
@@ -140,7 +171,7 @@ The environment still wins, so you can override any of it for one run.
 ## Windows: what the installer repairs, and what it cannot
 
 Four things stand between a Windows machine and a running Mendix app, and none of
-them reports itself usefully. The installer fixes three.
+them reports itself usefully. The installer fixes three, without being asked.
 
 | | Symptom if unfixed |
 |---|---|
@@ -148,9 +179,7 @@ them reports itself usefully. The installer fixes three.
 | No Gradle in the mxbuild cache | `No supported Gradle installation found`, raised after mxbuild is already answering, so it reads as a model problem |
 | ARM Studio Pro ships `win-arm64` tools only | mxbuild launches `win-x64` and dies with `Win32Exception (2)` before it listens |
 
-The installer junctions a space-free JDK, links Studio Pro's `gradle-8.5` into the
-cache, and aliases the `deno`/`node` directory names. Junctions, so nothing is
-copied and no administrator rights are needed.
+Junctions, so nothing is copied and no administrator rights are needed.
 
 **The fourth cannot be fixed from outside mxcli.** Its liveness probe is
 `os.Process.Signal(0)`, and Windows rejects every signal except `Kill` — so a
@@ -191,7 +220,7 @@ setting.
 ```
 
 mxcli does warn that the project was left modified. It does not say what the value
-was, so note it before you run tests against a project you care about.
+was, so note it before running tests against a project you care about.
 
 ## Rebuilding the bundle
 
