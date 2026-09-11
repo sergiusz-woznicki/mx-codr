@@ -304,6 +304,26 @@ Three more things the session showed and the harness now answers:
   test comparing against `"true"` could never pass); `fields` reads several keys in
   one process.
 
+## The skill list is fixed when the session starts
+
+An agent's Skill tool lists what existed when its session began. Install into a
+directory whose session is already open and the skills land on disk but not in that
+list, and the agent cannot invoke them — it is told not to guess names.
+
+Measured, same prompt, same machine, two sessions:
+
+| | session restarted after install | installed mid-session |
+|---|---|---|
+| commands before the first real one | 8 | **36** |
+| time before the first real one | 2m13s | **6m30s** |
+| skill text read | 3 skills, via the Skill tool | **twelve SKILL.md files, 216k characters, by `cat`** |
+
+Without the list the agent has no map, so it reads everything it can find —
+including `bootstrap-app`, which is for a repo with no `.mpr` at all. The installer
+now says this in its closing notes, and the per-prompt reminder hook carries the
+fallback: if the Skill tool does not list them, read exactly the three named files
+and look syntax up on demand rather than sweeping the directory.
+
 ## A green gate that measured the wrong app
 
 The gate has always warned when the model changed after the runtime started —
