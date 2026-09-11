@@ -32,8 +32,32 @@ bash tests/gate.sh --only <feature>          # one script against the running ap
 `--boot-if-needed` is the portable way in. `./mxcli run --local --watch` gives a ~1s
 hot reload where it works, but it deadlocks on some machines, and where the runtime
 serves a built deployment there is no hot reload at all -- a model change is invisible
-until a rebuild. `tests/harness.env` records how this project boots
-(`MDL_BOOT_COMMAND`), so the gate is the one command that is right everywhere.
+until a rebuild. On such machines the installer writes `tests/harness.env` with how
+this project boots (`MDL_BOOT_COMMAND`); where the file is absent, `mxcli run` works
+and nothing needs recording. Either way the gate is the one command that is right
+everywhere, and `bash tests/gate.sh --restart` is the one way to restart the app when
+the gate says the model changed after the runtime started.
+
+Syntax that every session otherwise looks up, one screen (`./mxcli syntax <topic>`
+has the rest):
+
+```
+CREATE [OR MODIFY] ASSOCIATION Mod.Order_Customer FROM Mod.Order TO Mod.Customer
+  TYPE Reference|ReferenceSet [OWNER Default|Both] [DELETE_BEHAVIOR PREVENT|CASCADE];
+  -- FROM holds the foreign key (the many side)          syntax: domain-model.association
+CREATE OR REPLACE NAVIGATION Responsive HOME PAGE Mod.Home [HOME PAGE Mod.X FOR UserRole]
+  MENU ( MENU ITEM 'Label' PAGE Mod.Page ICON Atlas_Core.Atlas."align-center"; );
+  -- FOR takes a bare USER role; ICON is a model reference, hyphens double-quoted
+  -- profiles are Mendix's own kinds only: Responsive, Phone, Tablet (+Offline)
+ACTIONBUTTON btn (Caption: 'Save', Action: SAVE_CHANGES [CLOSE_PAGE], ButtonStyle: Primary,
+  Icon: 'Atlas_Core.Atlas_Filled.pencil')
+  Action: MICROFLOW Mod.MF(Param: $currentObject) | SHOW_PAGE Mod.Page(P: $currentObject)
+        | CREATE_OBJECT Mod.Entity THEN SHOW_PAGE Mod.Page | DELETE | CANCEL_CHANGES | SIGN_OUT
+  -- a SHOW_PAGE argument must be the enclosing widget's object      syntax: page.action
+$O = CREATE Mod.E (A = v) [COMMIT [WITHOUT EVENTS]] [REFRESH];   CHANGE $O (A = v) [COMMIT] [REFRESH];
+COMMIT $O [WITHOUT EVENTS] [REFRESH];  DELETE $O [REFRESH];        syntax: microflow.object-operations
+CREATE [OR MODIFY] MODULE ROLE Mod.Role [DESCRIPTION '...'];          syntax: security.module-role
+```
 
 Never debug by rerunning the whole suite. A test that passes alone and fails in the
 suite is a test-isolation bug (sign-in identity, or data left behind) and is fixed in

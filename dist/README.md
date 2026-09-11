@@ -262,6 +262,48 @@ checking with the wrong binary.
 `tests/harness.env` holds a database password in plain text. It belongs beside
 `tests/credentials.env` and, like it, should stay out of any repository you push.
 
+## Faster without being weaker
+
+A 36-minute agent session was recorded end to end (`docs/sessions/` in the source
+repo) and 20 of those minutes were inside tools. Two harness defects manufactured
+most of the waste, and neither was about the tests being slow:
+
+- **`mx check` rewrote the `.mpr`** it checked -- bytes identical, mtime new. Under
+  `mxcli run --watch` that mtime is the reload trigger, so the gate's own check
+  restarted the runtime in the middle of its own suite: a red test with no cause,
+  then a false "model changed after the runtime started" warning, then two
+  hand-rolled restarts. `check_mx` now runs on a scratch copy (`.mpr`,
+  `mprcontents/`, `widgets/`, `theme/`, `themesource/`; an APFS clone, ~0.2s) and
+  never touches the live tree. Measured on the same app, same runtime: the old gate
+  triggered `Change detected, rebuilding (build #2)` every run; the new one does not.
+- **A test run by hand had no timeout.** `bash tests/verify-x.test.sh` hung for 801s
+  once and 1141s once in that session. `lib.sh` now carries its own watchdog
+  (`SCRIPT_TIMEOUT`, 5s before the runner's kill), which ends the stuck
+  `playwright-cli` process too -- the runner's SIGKILL of bash left it holding the
+  shared browser, so the *next* test hung the same way.
+
+The rest is the suite itself, all of it behaviour-preserving:
+
+| | Before | After | How |
+|---|---|---|---|
+| Suite of 10, green | 29.1s | **14.7s** | one sign-in per run instead of one sign-out and sign-in per test (`MDL_SESSION_REUSE`, set by the gate; `FRESH_SESSION=1` restores); the sign-out moved into the scenario's own `finally` instead of a second process; `await_message(/text/)` instead of `waitForTimeout(1500)` |
+| `--only` iteration | 1.8s | **1.0s** | the session stays signed in between runs (`KEEP_SESSION`) |
+| Full gate, nothing changed | 17s | **~15s** | the four model checks replay their last green result (`.mxcli/gate-cache/`, keyed on the model's size+mtime and each check's inputs; a failure is never cached; `--no-cache`) |
+| Every Bash tool call | +0.05s | **+0.006s** | the coverage hook tests the raw event for `mxcli exec` before it goes looking for a Python |
+
+Three more things the session showed and the harness now answers:
+
+- `bash tests/gate.sh --restart` stops this project's runtime -- the process tree
+  under `mxcli run`, so mxbuild and the Java runtime go with it -- boots it again
+  and runs the gate. The stale-model warning names it.
+- The first red `--only` run of a script is recorded in `.mxcli/red-first/`. A
+  script that goes green with no such record is named once, and that is the only
+  test worth breaking the feature for. The session had broken every feature for
+  every test (15 minutes) and learned nothing the red runs had not already shown.
+- `field` prints JSON booleans as `true`/`false` (it printed Python's `True`, so a
+  test comparing against `"true"` could never pass); `fields` reads several keys in
+  one process.
+
 ## A green gate that measured the wrong app
 
 The gate has always warned when the model changed after the runtime started —

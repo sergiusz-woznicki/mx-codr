@@ -12,6 +12,11 @@
 # Output contract: JSON on stdout, exit 0. Exit codes do not carry meaning here.
 set -uo pipefail
 
+# Almost every event is not an `mxcli exec`; answer that on the raw text before
+# looking for a Python to parse it with (see after-mxcli-exec.sh).
+input="$(cat)"
+case "$input" in *"mxcli exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
+
 # Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
 # Microsoft Store instead of running anything is common, so each candidate is asked
 # to run before it is believed. Inlined rather than sourced: a hook has to work with
@@ -49,15 +54,11 @@ PY="${PY:-python3}"
 # cwd moves to the project below.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-input="$(cat)"
-
 emit() {  # emit "<text>" -- or nothing at all when there is nothing to say
   [ -n "${1:-}" ] || { printf '{}\n'; exit 0; }
   printf '%s' "$1" | "$PY" -c 'import json,sys; print(json.dumps({"additional_context": sys.stdin.read().strip()}))'
   exit 0
 }
-
-case "$input" in *"mxcli exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
 
 cwd="$(printf '%s' "$input" | "$PY" -c 'import json,sys
 try: print(json.load(sys.stdin).get("cwd") or "")

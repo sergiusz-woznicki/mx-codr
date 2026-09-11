@@ -19,14 +19,12 @@ result="$(scenario '
   await page.click(".mx-name-btnSave");
   await page.waitForSelector(".mx-name-txtNumber", {state: "detached", timeout: 15000});
   await menu("Reset demo data");
-  await page.waitForTimeout(1500);
-  const text = await page_text();
+  const text = await await_message(/reset/i);
   await dismiss_dialog();
   return {confirmed: /reset/i.test(text)};
 ')"
 
-[ "$(field "$result" confirmed)" = "True" ] || [ "$(field "$result" confirmed)" = "true" ] \
-  || fail "no confirmation message after the reset"
+[ "$(field "$result" confirmed)" = "true" ] || fail "no confirmation message after the reset"
 
 invoices="$(oql_count Invoice)"; customers="$(oql_count Customer)"
 [ "$invoices" = "10" ] || fail "expected exactly 10 invoices after reset, found $invoices (was $before)"

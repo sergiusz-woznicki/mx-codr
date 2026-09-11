@@ -4,6 +4,15 @@
 # context. The model still decides what to do with it -- but it can no longer
 # claim not to have known.
 
+# This hook runs after EVERY Bash tool call, and almost none of them are an
+# `mxcli exec`. So the cheap question comes first, on the raw event, before any
+# Python is looked for: a plain substring test costs nothing, the Python probe
+# below runs up to three interpreters. (A false positive here -- the words in a
+# comment, say -- only means the precise check below runs; a miss is impossible,
+# since the command text is inside the event.)
+input="$(cat)"
+case "$input" in *"mxcli exec"*) ;; *) exit 0 ;; esac
+
 # Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
 # Microsoft Store instead of running anything is common, so each candidate is asked
 # to run before it is believed. Inlined rather than sourced: a hook has to work with
@@ -36,7 +45,6 @@ mdl_find_python() {
 PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
-input="$(cat)"
 command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
 # Only a real model write. Matching read-only queries too (mxcli -c "SHOW ...")
 # ran the coverage checker after every lookup a session made, for nothing.

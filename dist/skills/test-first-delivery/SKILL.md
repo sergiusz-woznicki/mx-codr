@@ -23,9 +23,13 @@ are the detail behind each line.
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call
 # 2. RUN IT AND WATCH IT FAIL -- the step that proves the test can fail at all
 bash tests/gate.sh --only <feature> --boot-if-needed
+#    (the gate records that red run in .mxcli/red-first/; that record is the proof,
+#     so there is no need to break the feature later to see the test notice)
 # 3. implement the smallest MDL that satisfies the criterion
-./mxcli check mdlsource/<script>.mdl -p <app>.mpr --references && ./mxcli exec ...
-# 4. iterate on that ONE script until green (~2s a run)
+./mxcli check <script>.mdl -p <app>.mpr --references && ./mxcli exec ...
+# 4. iterate on that ONE script until green (~2s a run) -- always through the gate,
+#    never `bash tests/verify-x.test.sh`: the gate keeps the browser and the session
+#    warm and it is where the timeout and the facts-on-failure live
 bash tests/gate.sh --only <feature>
 # 5. the whole gate: suite + mx check + lint + coverage, ends in DONE or NOT DONE
 bash tests/gate.sh
@@ -104,6 +108,16 @@ FAIL: browser scenario failed: Error: page.click: Timeout 8000ms exceeded. | Cal
 Read that instead of re-running the script by hand, screenshotting, or probing the
 runtime — those rounds are the expensive part of a red loop, not the test.
 
+**This red run is the proof that the test can fail, and the gate keeps it.** The
+first failing `--only` run of a script writes `.mxcli/red-first/<script>`. Mutation
+testing — breaking the feature on purpose to see the test go red — is worth doing
+for exactly one kind of test: one that went green without ever having been red here.
+The gate names such a test when it first passes (`went green without ever being red
+here`). For every other test the record already answers the question; one session
+spent 15 minutes breaking every feature for every test, and proved nothing the red
+runs had not. When you do mutate, run the mutant through `bash tests/gate.sh --only
+<feature>` like any other run, and undo the mutation before going on.
+
  This is the only step that catches a test
 asserting nothing: a test written after the implementation, or one that checks a
 selector exists without checking what it renders, passes just as happily against a
@@ -143,13 +157,16 @@ the suite. If a test passes alone and fails in the suite, that is a test-isolati
 bug — sign-in identity, or data left behind — and it is fixed in `tests/lib.sh`, not
 by rerunning the suite until it makes sense.
 
-Under the hood it is `mxcli playwright verify <script> --keep-open --timeout 30s`.
+Under the hood it is `mxcli playwright verify <script> --keep-open --timeout 90s`.
 Three things decide how long the loop takes:
 
-- `--keep-open` leaves the browser warm, so the next run skips the Chromium launch.
-- `--timeout 30s` caps a script instead of the 2m default. A failing test sits out
-  its waits, which is why a red suite measured 8m55s against 2m19s green — during
-  development the failing case is the normal case.
+- `--keep-open` leaves the browser warm, so the next run skips the Chromium launch;
+  under `--only` the session stays signed in too, so the next run skips the sign-in.
+- `--timeout 90s` caps a script instead of the 2m default, and `tests/lib.sh` fires
+  its own watchdog 5s earlier, so a hung browser call ends with a `FAIL:` line that
+  names the cause rather than a bare kill. A failing test sits out its waits, which
+  is why a red suite measured 8m55s against 2m19s green — during development the
+  failing case is the normal case.
 - Keep the app up in another terminal with hot reload, so a page or microflow
   change needs no restart:
 
@@ -159,7 +176,11 @@ Three things decide how long the loop takes:
 
   That starts the app the way this project starts it, which is not always
   `./mxcli run --local --watch` -- that command deadlocks on some machines, and
-  `tests/harness.env` records the working alternative in `MDL_BOOT_COMMAND`.
+  where the installer had to choose another way, `tests/harness.env` records it in
+  `MDL_BOOT_COMMAND` (the file exists only on such machines; do not go looking for
+  it elsewhere). When the gate says the model changed after the runtime started,
+  `bash tests/gate.sh --restart` stops this project's runtime, boots it again and
+  runs the gate -- one command, not a pgrep-and-kill improvisation.
 
   **Check which loop you are in before planning around it.** With `--watch` and a
   live model, only entity and association changes need a reboot and everything else
@@ -209,7 +230,22 @@ wrong page or a signed-out session:
 A Mendix *Show message* renders a modal with an OK button, and it swallows the next
 click. Dismiss it (`dismiss_dialog` in `tests/lib.sh`) before acting again; reuse the
 helpers there — `open_app`, `fill`, `pick_combo`, `row_action`, `menu`,
-`dismiss_dialog`, `page_text` — rather than reinventing them per test.
+`await_message`, `dismiss_dialog`, `page_text` — rather than reinventing them per test.
+
+Three habits that quietly cost time or hide a failure:
+
+- **Never `page.waitForTimeout(1500)` to wait for a message.** `const text = await
+  await_message(/reminder sent/i)` returns the moment the text is on screen and, when
+  it never comes, fails saying what the page showed instead. A fixed pause is either
+  too long every time or too short on a slow run. Match the *message*, not a word
+  the page already shows — a button captioned "Unpaid" satisfies `/unpaid/i` before
+  the message exists; `/has \d+ unpaid invoice/i` does not.
+- **Booleans come back as `true`/`false`.** `field "$result" ok` prints JSON:
+  `[ "$(field "$result" ok)" = "true" ]`. Read several keys in one call with
+  `fields "$result" a b c` (one line each, in order).
+- **Put both values in the `fail` message.** `fail "expected 4 customers, found $n"`
+  — the raw compared values, so a wrong assertion (a stray space, a number as a
+  string) is visible from the one line the runner reprints.
 
 ### 6. Only now is it done
 
@@ -340,8 +376,9 @@ bash tests/diagnose.sh Invoice demo_customer   # ~0.2s: row counts, sessions, ac
 Reach for `orient.sh` before building. `diagnose.sh` you rarely need to run yourself:
 `gate.sh` runs it for you whenever a test fails, and prints the facts under the
 failure. It also warns when the model changed after the runtime started — security
-and entity changes do not hot-apply, and a stale runtime fails a correct fix. `docs/brain/` is still
-where the *decisions* live; these report state only.
+and entity changes do not hot-apply, and a stale runtime fails a correct fix — and
+names the fix: `bash tests/gate.sh --restart`. `docs/brain/`, where it exists, is
+still where the *decisions* live; these report state only.
 
 `gate.sh` does the same internally: `mx check`, lint and coverage need neither the app
 nor the browser, so they run while the suite runs (~37s serial becomes ~27s), and with

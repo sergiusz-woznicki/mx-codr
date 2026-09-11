@@ -19,13 +19,14 @@ result="$(scenario '
   await menu("Customers");
   await page.waitForSelector(".mx-name-customerGrid", {timeout: 15000});
   await row_action("customerGrid", "'"$customer"'", "btnUnpaid");
-  await page.waitForTimeout(1200);
-  const text = await page_text();
+  // Match the message, not a word the page already shows: the button itself is
+  // captioned "Unpaid", so /unpaid/ would return before the message exists.
+  const text = await await_message(/has \d+ unpaid invoice/i);
   await dismiss_dialog();
   return {reported: /unpaid/i.test(text), text: text.slice(-300)};
 ')"
 
-[ "$(field "$result" reported)" = "True" ] || fail "no unpaid-count message shown for $customer"
+[ "$(field "$result" reported)" = "true" ] || fail "no unpaid-count message shown for $customer"
 printf '%s' "$(field "$result" text)" | grep -q "$expected" || fail "message does not report the expected count of $expected"
 
 echo "OK: $customer reported $expected unpaid invoice(s)"

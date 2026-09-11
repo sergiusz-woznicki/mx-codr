@@ -91,7 +91,10 @@ yet named — find the business operation, do not type the default out by hand.
 Escape a single quote by doubling it: `@caption 'Load the customer''s invoices'`.
 
 `check_mdl.py --skill naming` fails on a missing action `@caption` and on a
-caption that is still the generated default.
+caption that is still the generated default. The gate runs it over every microflow
+and nanoflow in the app's own modules on every full run (the `naming:` line of its
+summary), so there is nothing to run by hand after a flow lands; the command below is
+for checking one draft before it goes in.
 
 ## Decision captions
 

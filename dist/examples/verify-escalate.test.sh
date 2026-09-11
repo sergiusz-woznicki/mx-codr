@@ -12,8 +12,9 @@ result="$(scenario '
   await open_app();
   await dismiss_dialog();
   await row_action("invoiceGrid", "'"$number"'", "btnEscalate");
-  await page.waitForTimeout(1500);
-  const text = await page_text();
+  // Wait for the message itself, not a fixed pause: it returns the moment the
+  // text is there, and fails saying what the page shows when it never comes.
+  const text = await await_message(/escalated invoice/i);
   await dismiss_dialog();
   return {
     explained: /escalated invoice/i.test(text) && /collections/i.test(text)
@@ -22,6 +23,6 @@ result="$(scenario '
 
 status="$(oql_value Invoice Status "InvoiceNumber = '$number'")"
 [ "$status" = "WrittenOff" ] || fail "expected status WrittenOff after escalation, got '$status'"
-[ "$(field "$result" explained)" = "True" ] || fail "the escalation message does not explain what escalation means"
+[ "$(field "$result" explained)" = "true" ] || fail "the escalation message does not explain what escalation means"
 
 echo "OK: $number escalated to WrittenOff with the explanation shown"

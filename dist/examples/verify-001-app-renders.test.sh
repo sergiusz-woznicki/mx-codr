@@ -35,11 +35,14 @@ result="$(scenario '
   };
 ')"
 
-[ "$(field "$result" header)" = "True" ] || fail "header snippet missing from the home page"
-[ "$(field "$result" columns)" = "True" ] || fail "a grid column is missing"
-[ "$(field "$result" seeded)" = "True" ] || fail "seeded rows are not rendering"
-[ "$(field "$result" missing)" = "[]" ] || fail "buttons missing from the invoice list: $(field "$result" missing)"
-[ "$(field "$result" rows)" -gt 1 ] || fail "invoice grid rendered no data rows"
-[ "$(field "$result" navigated)" = "True" ] || fail "menu navigation failed"
+# One Python start for all six keys, not eight.
+{ read -r header; read -r columns; read -r seeded; read -r missing; read -r rows; read -r navigated; } \
+  <<< "$(fields "$result" header columns seeded missing rows navigated)"
+[ "$header" = "true" ] || fail "header snippet missing from the home page"
+[ "$columns" = "true" ] || fail "a grid column is missing"
+[ "$seeded" = "true" ] || fail "seeded rows are not rendering"
+[ "$missing" = "[]" ] || fail "buttons missing from the invoice list: $missing"
+[ "$rows" -gt 1 ] || fail "invoice grid rendered no data rows"
+[ "$navigated" = "true" ] || fail "menu navigation failed"
 
-echo "OK: home renders $(field "$result" rows) rows, all columns and actions, both menu items navigate"
+echo "OK: home renders $rows rows, all columns and actions, both menu items navigate"
