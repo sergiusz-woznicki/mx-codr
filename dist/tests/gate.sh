@@ -584,8 +584,10 @@ summary=()
 # the feature on purpose to see the test notice. Breaking every feature for every
 # test, as one session did, cost 15 minutes and proved what the red-first run had
 # already proved.
-record_red_first() {
+record_red_first() {   # record_red_first <runner output> <environment cause or "">
   [ -n "$ONLY" ] || return 0
+  # A failure the app or the browser caused proves nothing about the test.
+  [ -z "${2:-}" ] || return 0
   local out="$1" dir="$APP_DIR/.mxcli/red-first" line name verdict
   mkdir -p "$dir" 2>/dev/null || return 0
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s' | while read -r verdict name _; do
@@ -636,7 +638,6 @@ step_tests() {
   status=$?
   echo $((SECONDS - started)) > "$WORK/tests.secs"
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)|^\s+FAIL:|^Total:'
-  record_red_first "$out"
   # The one sign-out for the whole run. Not under --only: that session is the
   # next iteration's saving, and the full gate ends it.
   if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
@@ -658,6 +659,7 @@ step_tests() {
   if [ -n "$environment" ]; then
     echo "   !! not a feature failure: $environment"
   fi
+  record_red_first "$out" "$environment"
 
   line="$(printf '%s\n' "$out" | grep -E '^Total:' | tail -1)"
   if [ -n "$line" ]; then

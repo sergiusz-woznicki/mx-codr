@@ -1606,6 +1606,21 @@ for source_file in "$SRC"/tests/*; do
   suite_written=$((suite_written + 1))
 done
 
+# lib.sh's field() now prints JSON booleans as `true`/`false`; until 2026-09-11 it
+# printed Python's `True`/`False`, and every test written against the shipped
+# examples compares against that. A lib.sh upgraded under such tests would turn
+# them red with messages that read like broken features, so the comparison is
+# rewritten in place, once, and each file touched is named.
+migrated=""
+for script in "$APP"/tests/verify-*.test.sh; do
+  [ -f "$script" ] || continue
+  if grep -qE '= "(True|False)"' "$script" 2>/dev/null; then
+    perl -pi -e 's/= "True"/= "true"/g; s/= "False"/= "false"/g' "$script" 2>/dev/null \
+      && migrated="$migrated $(basename "$script")"
+  fi
+done
+[ -z "$migrated" ] || ui_note "field() booleans are now true/false; rewrote the comparison in:$migrated"
+
 # CRLF is not a line ending to bash: one Windows editor save of gate.sh otherwise
 # makes every line fail with `$'\r': command not found`.
 if [ ! -e "$APP/.gitattributes" ] && [ -f "$SRC/.gitattributes" ]; then
