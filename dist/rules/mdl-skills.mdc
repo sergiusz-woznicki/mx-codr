@@ -1,0 +1,60 @@
+---
+description: The five project rules for building in this Mendix app, and the three commands that check them
+alwaysApply: true
+---
+
+# Project rules that are always in force
+
+This app is built under five rules. They are **not** in the skill table mxcli writes
+into `AGENTS.md` — that table lists only mxcli's own skills. Read the skill before
+the work, not after; each lives at `.ai-context/skills/<name>/SKILL.md`.
+
+| When | Rule |
+|---|---|
+| Adding, changing or fixing **any** feature — a page, a button, a microflow, an action | `test-first-delivery` — the failing test comes first, and nothing is done until the whole suite is green |
+| Creating a module, adding the first documents to one, or deciding which folder a document goes in | `module-structure` |
+| Writing or changing any microflow, nanoflow or rule | `naming-and-captions` — a business `@caption` on every decision **and** every action (retrieve, create, change, commit, delete, call, show page, set), never the Mendix default |
+| A second page, snippet or microflow that resembles an existing one | `reuse-and-snippets` |
+| Moving documents between folders or modules | `organize-project` |
+
+## Facts come from one call, not from exploring
+
+```bash
+bash tests/orient.sh                    # structure, security, navigation, tests + covers, coverage, lint, app state
+bash tests/diagnose.sh <Entity> <user>  # row counts, sessions, access rules, associations, runtime errors
+```
+
+## The loop
+
+Keep the app up in another terminal and run one script at a time — the suite is for
+the end, not the loop:
+
+```bash
+bash tests/gate.sh --boot-if-needed        # starts the app the way this project starts it
+bash tests/gate.sh --only <feature>        # one script against the running app
+```
+
+`--boot-if-needed` is the portable way in: `./mxcli run --local --watch` gives a ~1s
+hot reload where it works, but it deadlocks on some machines, and a runtime serving a
+built deployment has no hot reload at all. `tests/harness.env` records how this
+project boots.
+
+Never debug by rerunning the whole suite. A test that passes alone and fails in the
+suite is a test-isolation bug, and it is fixed in `tests/lib.sh`.
+
+## Done
+
+"Done" is one command, and it is the gate this project is built around — the suite,
+`mx check`, lint and the coverage checker, ending in `DONE` or `NOT DONE`:
+
+```bash
+bash tests/gate.sh
+```
+
+Every model change goes through MDL: write it, validate it with
+`./mxcli check <file>.mdl -p <app>.mpr --references`, then apply it with
+`./mxcli exec <file>.mdl -p <app>.mpr`. Everything here runs on `./mxcli` in the
+project root — not a system-wide install.
+
+On Windows the harness runs under Git Bash or WSL2 and the binary is
+`./mxcli.exe`; everything else here is unchanged.

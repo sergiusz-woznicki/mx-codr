@@ -1,0 +1,481 @@
+# dist — the installable bundle
+
+Everything a Mendix project needs to pick up this repo's skills, lint rules and
+checkers. `install.sh` copies it into a project; this file explains how the payload
+is rebuilt when the sources change.
+
+Deliberately **not** documented in `CLAUDE.md` or `AGENTS.md`: mxcli regenerates
+both on `mxcli init`, so anything written there is lost on the next tooling update.
+
+## What is in here
+
+```
+install.sh        copies the payload into a Mendix project
+VERSION           date-based version, copied to tools/mdl-checks/VERSION in the target
+rules/            mdl-skills.md (Claude) and mdl-skills.mdc (Cursor) — the always-loaded rule
+hooks/            host-specific prompt/PostToolUse adapters plus the Codex and Cursor gates
+plugins/          mendix-mdl-harness.js — the same three jobs as one OpenCode plugin
+tests/            lib.sh, gate.sh, orient.sh, diagnose.sh, portable.sh — the harness, upgraded in
+                  place on every install (gate.sh is the done gate — tests, mx check, lint, coverage
+                  and naming; orient.sh and diagnose.sh gather facts in parallel; portable.sh holds
+                  the three platform differences and nothing else)
+.gitattributes    forces LF on *.sh and *.py — copied only if the project has none
+examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
+                  are written by whoever builds the feature
+skills/           5 × SKILL.md — the prose
+lint-rules/       *.star — run by `mxcli lint`, no Python needed
+checks/           *.py + fixtures/ — the checks Starlark cannot express
+```
+
+The payload is a **copy** of files that live elsewhere in this repo. This directory
+is the shipping container, never the place to edit:
+
+| In dist | Source of truth |
+|---|---|
+| `skills/<name>/SKILL.md` | `.ai-context/skills/<name>/SKILL.md` |
+| `lint-rules/*.star` | `.claude/lint-rules/*.star` |
+| `checks/*.py`, `checks/fixtures/` | `tests/skills/` |
+| `rules/mdl-skills.md`, `hooks/*.sh`, `tests/*` | authored here; no other copy in the repo |
+
+## Why the suite is written as one scenario per test
+
+`playwright-cli` costs ~0.66s per invocation, before any browser work. The old
+suite made ~25 of them per test and took **2m19s green, 8m55s red**. Each test now
+runs its whole flow in a single `playwright-cli run-code` process and asserts
+against the database with `mxcli oql` (~0.03s per query):
+
+| | Before | After |
+|---|---|---|
+| Suite, green | 2m19s | **15s** |
+| Suite, red | 8m55s | **22s** |
+| One test | 8–36s | **1–3s** |
+| Scripts | 10 | 8 (same coverage: 10/10) |
+
+`install.sh` never overwrites a `verify-*.test.sh` or `credentials.env`, so an app
+that already has tests keeps every one of them. The five harness scripts are the
+bundle's own and *are* replaced on each install — a fix in `gate.sh` that never
+reaches an installed project is not a fix.
+
+## Why rules and hooks, not generated agent files
+
+`mxcli init` **overwrites** `CLAUDE.md`, `AGENTS.md` and `.claude/settings.json` —
+measured, not assumed: markers written into all three were gone after one
+`./mxcli init`. The same test showed `.claude/rules/`, `CLAUDE.local.md` and
+`.claude/settings.local.json` survive untouched.
+
+So the project's own instructions live where mxcli does not reach:
+
+- **`.claude/rules/mdl-skills.md`** — loaded into every session at launch, same
+  priority as `.claude/CLAUDE.md`. It names the five skills and when each applies,
+  because mxcli's generated `CLAUDE.md` skill table lists only mxcli's own skills
+  and an agent that follows that table never sees these.
+- **`.claude/settings.local.json`** — registers Claude's two hooks.
+- **`.codex/hooks.json`** — registers the Codex equivalents plus a `Stop` gate.
+  Codex discovers the five `.agents/skills/` copies automatically. Project hooks
+  require project trust and one review through `/hooks`; Codex asks again whenever
+  a hook definition changes.
+- **`.opencode/plugin/mendix-mdl-harness.js` and `opencode.json`** — OpenCode has no
+  exit-code contract and no follow-up field; its hook payloads are mutable instead,
+  and its SDK client can submit a message into the session. Rules load through
+  `opencode.json`'s `instructions` glob rather than `AGENTS.md`, which mxcli
+  regenerates. Both `.opencode/plugin/` and `.opencode/plugins/` are accepted;
+  the singular is used.
+- **`.cursor/hooks.json` and `.cursor/rules/mdl-skills.mdc`** — Cursor reads neither
+  `.claude/rules/` nor `.ai-context/skills/`, so the same rules are installed in its
+  own shape: an `alwaysApply` `.mdc` rule, plus three hooks. All three wire formats
+  differ from the other hosts, which is why it gets its own adapters rather than
+  sharing Codex's.
+- **`.codex/config.toml`** — receives a short `developer_instructions` block that
+  asks Codex to remind the user about `/hooks` after the first prompt. This has to
+  live outside the hook: a hook awaiting trust cannot remind the user to trust it.
+  If the project already defines `developer_instructions`, the installer preserves
+  it and prints a notice instead of replacing it.
+
+All four hosts are now registered the same way — `bash tools/mdl-checks/hooks/<x>.sh`,
+project-relative. Codex used to get `bash "$(git rev-parse --show-toplevel)/…"`, which
+only expands if the host runs hook commands through a POSIX shell; the three Codex
+scripts resolve the repo root themselves, so the registration never needed it. An
+upgrade replaces the old entry rather than adding a second one, and Codex asks for
+`/hooks` trust again because the definition changed.
+
+Both registrations are merged rather than replaced, so a developer's existing
+Claude settings and project-specific Codex hooks survive installation. The hook
+scripts live together in `tools/mdl-checks/hooks/`; separate PostToolUse adapters
+preserve the hosts' different output contracts.
+
+The five `.agents/skills/` copies are self-contained except for links to standard
+mxcli guidance such as `test-app` and `overview-pages`. Those links explicitly
+resolve through `.ai-context/skills/`, where `mxcli init` installs the canonical
+versions, instead of assuming Codex has duplicate sibling skills under `.agents/`.
+
+The hooks are the part that does not depend on the model choosing to comply:
+
+| Hook | Fires | Does |
+|---|---|---|
+| `remind-skills.sh` | every Claude user prompt | adds one line of context naming the skills and what "done" means |
+| `remind-skills-codex.sh` | every Codex user prompt | gives the same rule using Codex's `$skill-name` invocation syntax |
+| `after-mxcli-exec.sh` | after a Claude Bash call containing `mxcli exec` | runs coverage and reports only a failure on stdout |
+| `after-mxcli-exec-codex.sh` | after a Codex Bash call containing `mxcli exec` | adapts coverage failures to Codex's exit-2 feedback contract and marks the session as requiring the full gate |
+| `stop-gate-codex.sh` | when that Codex session tries to finish | runs `bash tests/gate.sh`; exit 2 continues the turn until the positive `DONE — every check passed` line appears |
+| `remind-skills-cursor.sh` | Cursor `sessionStart` | returns `additional_context` — Cursor's `beforeSubmitPrompt` can only allow or block a prompt, it cannot inject |
+| `after-mxcli-exec-cursor.sh` | Cursor `postToolUse` | returns coverage failures as `additional_context` — `afterShellExecution` sees the command but cannot answer the agent — and writes the marker |
+| `stop-gate-cursor.sh` | Cursor `stop` | runs the gate and returns its output as `followup_message`, auto-submitted as the next user message; `loop_limit` caps the retries |
+| `plugins/mendix-mdl-harness.js` | OpenCode `chat.message`, `tool.execute.after`, `event(session.idle)` | one plugin doing all three: appends the rules to each user message, appends coverage failures to the tool output the model reads, and on idle runs the gate and submits its output through `client.session.prompt` (capped at 3 rounds) |
+
+## Rebuilding after a source change
+
+Bump `dist/VERSION` first (today's date, `YYYY.MM.DD`), then run from the repo
+root. It is a copy, so re-running is always safe:
+
+```bash
+mkdir -p dist/skills dist/lint-rules dist/checks/fixtures
+
+for s in naming-and-captions reuse-and-snippets test-first-delivery \
+         module-structure organize-project; do
+  mkdir -p "dist/skills/$s"
+  cp ".ai-context/skills/$s/SKILL.md" "dist/skills/$s/"
+done
+
+cp .claude/lint-rules/mod001_process_folders.star \
+   .claude/lint-rules/reu001_shared_documents.star dist/lint-rules/
+
+cp tests/skills/check_mdl.py tests/skills/check_test_coverage.py dist/checks/
+cp tests/skills/fixtures/*.mdl dist/checks/fixtures/
+```
+
+`rules/` and `hooks/` have no upstream copy — they are authored in `dist/` and
+copied only outward, so nothing needs syncing for them.
+
+Only two Python checkers ship: captions/positions (`check_mdl.py`) and test
+coverage (`check_test_coverage.py`). Folder structure and reuse are Starlark rules
+(`lint-rules/`) because the model can answer those; captions and positions are not
+in the model catalog, and coverage needs the filesystem, so those two stay Python.
+
+Two things the copy loop will not tell you, so check them by hand:
+
+- **Both skill copies must agree first.** The repo keeps `.ai-context/skills/<name>/`
+  and `.claude/skills/<name>/` byte-identical; only the first is copied here.
+  `diff -r` them before rebuilding, or you ship whichever one you happened to edit.
+- **A new skill is three edits, not one**: add it to the loop above, and to
+  `install.sh` only if it needs anything beyond a `SKILL.md`.
+
+## Testing the bundle before shipping it
+
+Never test against a real project — install into a throwaway copy, with the skills
+and checkers stripped out, so nothing passes because it was already there:
+
+```bash
+W=/tmp/install-target
+rm -rf "$W" && mkdir -p "$W"
+rsync -a --exclude deployment --exclude .git --exclude .mendix-cache \
+      --exclude mxcli --exclude mxcli.linux --exclude tests \
+      ~/CloudeCodeProjects/InvoiceDesk/ "$W/"
+ln -s ~/CloudeCodeProjects/InvoiceDesk/mxcli "$W/mxcli"
+rm -rf "$W"/.claude/lint-rules/mod001_*.star "$W"/.claude/lint-rules/reu001_*.star "$W"/tools
+
+bash dist/install.sh "$W"
+```
+
+Then confirm the installer claims:
+
+```bash
+cd "$W"
+ls .claude/skills .agents/skills .ai-context/skills          # 5 in each
+diff -r .claude/skills/module-structure .agents/skills/module-structure
+python3 -m json.tool .codex/hooks.json >/dev/null             # Codex hooks merged
+python3 -c 'import tomllib; tomllib.load(open(".codex/config.toml", "rb"))'
+./mxcli lint -p InvoiceDesk.mpr | grep -E 'MOD001|REU001'    # rules load and fire
+python3 tools/mdl-checks/check_test_coverage.py . InvoiceDesk
+./mxcli init --sync-skills . && ls .agents/skills            # survives an mxcli sync
+```
+
+That last line is the one that matters most: it proves an mxcli upgrade does not
+delete skills mxcli never shipped.
+
+## Running it
+
+Two ways in, because both are things people actually do:
+
+```bash
+bash dist/install.sh .          # from the project root, naming the target
+cd dist && bash install.sh      # from the bundle, after copying it into the app
+```
+
+The second infers the target: the bundle cannot install into itself, so with no
+path named it installs into the directory the bundle sits in. The target is
+printed before any work starts, and the run is identical either way.
+
+Two things that inference deliberately will not do. A path named on the command
+line is never second-guessed -- `install.sh dist` still fails, because that is a
+mistake rather than a shorthand. And an inferred target with no `.mpr` asks
+before creating an app (`[y/N]`), or refuses outright when nothing can answer,
+because `mxcli new` writes a few hundred files into a directory the caller never
+named. Naming the target restores the old behaviour of just creating it.
+
+`--no-app` declines app creation entirely; `--help` lists the arguments,
+`MX_VERSION` and `APP_NAME` override what gets created.
+
+## Running without Docker
+
+Docker turned out to be needed for far less than this file used to claim. **`mx check`
+never needed it**: `mxcli docker check` runs Mendix's own `mx` from an installed
+Studio Pro or a cached mxbuild — the command name is misleading, and
+`--mxbuild-path <dir>` points it at one explicitly. What actually wanted a container
+was the **database**.
+
+So the harness has a no-Docker mode. `install.sh` offers it whenever Docker is not
+running and a Mendix installation is present, and records the answer in
+`tests/harness.env`:
+
+```sh
+MDL_NO_DOCKER=1
+MDL_MXBUILD_PATH="C:/Program Files/Mendix/9.24.37.77045"
+MDL_DB_HOST="127.0.0.1"
+MDL_DB_NAME="mendfixerinstall"
+MDL_DB_USER="mendix"
+MDL_DB_PASSWORD="mendix"
+MDL_PSQL="/c/Program Files/PostgreSQL/17/bin/psql.exe"
+```
+
+`tests/portable.sh` sources that file, so every harness script sees it at once, and
+the environment still wins — `MDL_MXBUILD_PATH=… bash tests/gate.sh` overrides it for
+one run. What changes:
+
+- `gate.sh`'s `mx check` gains `--mxbuild-path`, so it runs Studio Pro's `mx`;
+- `gate.sh --boot-if-needed` creates the database with `psql` instead of
+  `--ensure-db`, and passes `--db-host/--db-name/--db-user/--db-password` to
+  `mxcli run --local`, which has always been Docker-free.
+
+**The database still has to be PostgreSQL.** `mxcli run --local` is Postgres-only in
+code — it rejects anything else outright ("`--ensure-db only supports PostgreSQL`") —
+so HSQLDB is not an option however the project's settings are configured. The
+installer will install one where it can, and where PostgreSQL is already running but
+no login works it asks for a superuser **once**, creates the `mendix` role and the
+app's database with it, and writes only the app's own credentials to
+`tests/harness.env`. That superuser password is never stored.
+
+**The limit worth knowing:** `mx check` runs at *Studio Pro's* version. A project
+built at 9.24 is checked by 9.24's `mx`, which is correct — but the mode cannot check
+a project whose Mendix version is not installed. The gate says so rather than
+checking with the wrong binary.
+
+`tests/harness.env` holds a database password in plain text. It belongs beside
+`tests/credentials.env` and, like it, should stay out of any repository you push.
+
+## A green gate that measured the wrong app
+
+The gate has always warned when the model changed after the runtime started —
+security and entity changes do not hot-apply, so a correct fix reads as a failing
+feature. That check keyed on the runtime process's start time via `pgrep` and
+`ps -o lstart=`, neither of which exists in Git Bash.
+
+So on Windows it returned silently, every run. Found in the field with a `.mpr`
+about 25 minutes newer than the deployment being served: the gate would have gone
+green against an old build and said nothing. A check that degrades quietly is worse
+than no check, because the green is still printed.
+
+It now keys on **file dates** first, which need no process tools:
+
+```
+!! the model is 1523s newer than the built deployment -- this run measures the OLD app
+   rebuild before trusting anything green here
+```
+
+`.mpr` against `deployment/model/model.mdp`. The `pgrep` path is kept as a second
+signal where it exists — it catches the other direction, a deployment rebuilt while
+the runtime kept serving what it booted with.
+
+This matters most where there is **no hot reload at all**: a runtime serving a built
+deployment cannot see an MDL change until something rebuilds. A boot script used
+through `MDL_BOOT_COMMAND` should rebuild whenever the `.mpr` is newer than
+`deployment/model/model.mdp`, rather than waiting to be told with a flag.
+
+## When `mxcli run --local` cannot boot
+
+On Windows/ARM it deadlocks: mxcli spawns `mxbuild --serve` and never drains its
+stdout pipe, so mxbuild fills the pipe and dies, and mxcli waits forever for a
+readiness that cannot arrive. There is no error, no output and no CPU — it looks
+exactly like a slow build, which is how it costs you an hour before you suspect it.
+
+The gate takes a way out. Put a working boot command in `tests/harness.env`:
+
+```sh
+MDL_BOOT_COMMAND="bash tests/run-app.sh"
+```
+
+`gate.sh --boot-if-needed` then runs that instead, still creating the database first
+and still bounded by `BOOT_TIMEOUT`. Anything that ends with an app answering on
+`$APP_PORT` will do.
+
+A boot script written this way has to do three things `mxcli run --local` would
+otherwise have done, each of which is easy to miss:
+
+- **Bundle the web client.** `mxbuild --target=deploy`'s "Bundle application" step
+  compiles Java and stops — it never runs rollup, so `deployment/web/dist/` is absent
+  and the page is blank on a 404 for `dist/index.js`. mxbuild has already written the
+  inputs (`index.js` and a `rollup.config.mjs` of absolute paths), so running that
+  config finishes the job in about three seconds.
+- **Start the runtime with the admin password the tools expect.** `mxcli oql` and
+  `tests/diagnose.sh` authenticate with `mxcli-local-dev`.
+- **Set `mendix.running.locally.by.studiopro`.** The OQL endpoint is a `/dev/`
+  servlet gated on that system property; without it the runtime logs *"Skipping
+  development servlet registration"* and every data assertion fails.
+
+## Windows
+
+The harness is bash and Python on every host, so on Windows it runs under **Git
+Bash** or WSL2 — there is no PowerShell port, and there is not going to be one:
+the gate, the hooks and every host adapter are the same scripts on all four
+runtimes, and a second implementation is a second thing to keep true.
+
+**Git Bash** is the shell inside Git for Windows: a real `bash.exe` plus `grep`,
+`sed`, `curl`, `mktemp` and the rest, on the MSYS2 compatibility layer. Not a VM
+and not WSL — it runs on the Windows filesystem directly (`C:\Users\you` is
+`/c/Users/you`) and calls Windows binaries, so `./mxcli.exe` works from it.
+
+### Setting a Windows machine up — one command
+
+```powershell
+powershell -ExecutionPolicy Bypass -File dist\bootstrap.ps1 C:\Mendix\YourApp
+```
+
+`bootstrap.ps1` is the only piece that cannot be bash: `install.sh` needs a shell
+before it can run, so getting that shell is PowerShell's job. It winget-installs
+Git for Windows, Python 3 and Node.js (skipping whatever is already there), finds
+a **real** Git Bash, and hands over to `bash install.sh <target> --with-deps`,
+which installs `playwright-cli`, its Chromium headless shell and `mxcli.exe`, then
+lands the harness.
+
+Three things it deliberately does not do:
+
+- **Docker Desktop is offered, not silently installed.** When it is missing and
+  someone is at the keyboard, the installer explains what needs it, shows the exact
+  command, and asks. On yes it installs, offers to start Docker Desktop, lists the
+  three things only a person can do (start it, accept the licence, let it set up the
+  WSL2 backend) and then waits with you for the daemon — up to `DOCKER_WAIT`
+  seconds, default 180, and Ctrl-C stops the waiting without stopping the install.
+  With no console it falls back to printing the command. `MDL_ASSUME_YES=1` answers
+  the prompts for an unattended run.
+- **The JDK is found, not demanded.** Studio Pro installs one as its own
+  prerequisite, so a machine that can open the project usually has a usable JDK
+  already — on the Windows test machine there were *three*, and none on the PATH.
+  The installer looks in `JAVA_HOME` (both `$JAVA_HOME/bin/java` and the
+  `$JAVA_HOME/java` shape a real machine turned out to use), Eclipse Adoptium,
+  Java, Microsoft and Zulu directories, `/usr/lib/jvm` and
+  `/Library/Java/JavaVirtualMachines`, and prints the path plus the one-line
+  `export PATH=...` that fixes it. The version follows the project, not a
+  constant: Mendix 9 wants 11, 10 and 11 want 21, 11.14+ wants 25.
+- **Studio Pro** is never installed. On Windows it is the only source of `mx`
+  (the Mendix CDN publishes a Linux mxbuild only, and `mxcli setup mxbuild` says
+  so and refuses), so the installer *looks for* the Studio Pro versions already on
+  the machine and creates the app at the newest one. `MX_VERSION` overrides.
+
+The manual route, if you would rather do it yourself:
+
+1. **Git for Windows** — <https://git-scm.com/download/win>. Keep the default
+   *“Checkout as-is, commit Unix-style line endings”*, and tick *“Add a Git Bash
+   Profile to Windows Terminal”*. Everything below is typed in Git Bash, not
+   PowerShell or `cmd`.
+2. **Python 3** — <https://python.org/downloads>, ticking *“Add python.exe to
+   PATH”*. Not the Microsoft Store build: it leaves a `python3.exe` stub that
+   answers `command -v` and then opens the Store instead of running. (If it is
+   already installed without PATH, the harness finds it anyway — see below.)
+3. **Docker Desktop** — *optional*. Only the app's PostgreSQL ever needed a
+   container, and a native PostgreSQL replaces it; `mx check` runs from Studio Pro.
+   See **Running without Docker** above.
+4. **mxcli** — `mxcli.exe` in the project root. On a fresh app `mxcli new` writes
+   a *Linux* binary there for the devcontainer; the installer swaps in the Windows
+   one and keeps the other as `mxcli.linux`.
+5. **Install** — from Git Bash, in the project: `bash dist/install.sh . --with-deps`
+
+```bash
+# confirm the machine before blaming the harness
+bash --version                   # 4.x from Git for Windows
+python --version                 # or python3, or py
+./mxcli.exe --version
+docker info                      # needed by mx check and --ensure-db
+bash tests/orient.sh             # exercises mxcli, Python and mktemp together
+```
+
+What the bundle does about each difference:
+
+| Difference | Handled by |
+|---|---|
+| Git for Windows, with `bash.exe` on the PATH | every command in the loop is `bash tests/...`; the OpenCode plugin also probes `%ProgramFiles%\Git\bin` and `%LOCALAPPDATA%\Programs\Git\bin` before giving up |
+| Python 3 as `python`, `python3` or `py` | `tests/portable.sh` runs each candidate once before believing it, because Windows ships a `python3.exe` stub that opens the Microsoft Store and answers `command -v` |
+| `mxcli.exe` in the project root | detected alongside `mxcli`; `install.sh` swaps out the Linux binary `mxcli new` leaves behind and keeps it as `mxcli.linux` |
+| A PostgreSQL for the app | `mxcli run --local` is Docker-free but Postgres-only. Native PostgreSQL works; `mx check` needs no container at all |
+| LF line endings | `.gitattributes` pins `*.sh` and `*.py`. Without it one editor save turns every line of `gate.sh` into `$'\r': command not found` |
+| Python installed but invisible | winget accepts python.org's default of *not* adding python to the PATH, so a working Python 3.12 can exist that no shell can see — observed on a clean Windows 11 VM. `portable.sh`, the hooks and `install.sh` all search `%LOCALAPPDATA%\Programs\Python\Python3*` and `C:\Program Files\Python3*` before giving up |
+| `bash` on the PATH is the wrong bash | `C:\Windows\System32\bash.exe` is the **WSL launcher**. `bootstrap.ps1` and the OpenCode plugin put Git's own directories first and reject anything under `System32` |
+| No CDN mxbuild | `mxcli setup mxbuild` refuses on Windows; `mx` comes from an installed Studio Pro. The installer enumerates `C:\Program Files\Mendix\*\modeler\mx.exe` and builds at the newest version present |
+
+Three Unix-only niceties degrade instead of failing: the stale-model warning needs
+`pgrep` and says nothing without it, the ELF test for the binary swap needs `file`,
+and the sub-second sleep in `--boot-if-needed` falls back to `sleep 1`.
+
+**Verified on Windows 11** (build 10.0.26200, ARM64, Parallels VM), installing into
+`C:\Mendix\MendfixerInstall` with `bootstrap.ps1`: Git and Node detected and
+skipped, Python found where winget had left it *off* the PATH, `playwright-cli`
+and its Chromium headless shell installed, `mxcli.exe` downloaded for
+windows/amd64, a Mendix app created at 9.24.37.77045 — the newest Studio Pro on
+that machine — and the skills, lint rules, checkers, all four hosts' hooks and the
+harness installed. `bash tests/orient.sh` then read the model, security, lint,
+navigation and structure. A second run installed nothing and reported only Docker.
+
+Four real defects were found and fixed by that run, none of which the macOS or
+Linux testing could have surfaced:
+
+- `install.sh` used `$APP/mxcli.exe` to create the app and then copied the scaffold
+  over it. On Windows a running `.exe` is locked, and `cp` unlinks before it fails,
+  so the binary vanished mid-install. It is now stashed before `mxcli new` runs.
+- Python 3.12 was installed and invisible — winget accepts python.org's default of
+  not touching the PATH. `portable.sh`, the hooks and the installer now search the
+  standard install directories.
+- `mxcli setup mxbuild` exits 1 on Windows ("the Mendix CDN's mxbuild is a Linux
+  binary"), so MxBuild is never installed there; Studio Pro is the only source, and
+  the installer now enumerates what is installed and builds at the newest of them
+  rather than asking for a version that cannot be produced.
+- The first `bash.exe` on the PATH is `C:\Windows\System32\bash.exe`, the WSL
+  launcher. Git's own directories now come first everywhere it matters.
+
+What was also run, elsewhere:
+
+- on macOS, a fake `python3` that exits non-zero placed ahead of a working `python`
+  on the `PATH` — `portable.sh` rejected it and chose `python`, and the coverage
+  checker ran;
+- in a `debian:stable-slim` container with no Python at all, the old
+  `mktemp -d -t mdl-gate` failed exactly as predicted (`too few X's in template`)
+  while `mdl_tmpdir` worked — so this bundle was broken on Linux and Git Bash
+  before the fix, not merely unproven;
+- `mxcli` renamed to `mxcli.exe` in a probe app: found by both the shell scripts
+  and `check_test_coverage.py`;
+- a full `bash tests/gate.sh` in that probe: suite, `mx check`, lint, coverage and
+  naming all ran through the rewritten paths;
+- a second `install.sh` over the first: the harness scripts upgraded, the
+  `verify-*.test.sh` untouched, and the stale `./tools/...` hook registration
+  replaced rather than duplicated.
+
+Two things stay unproven on Windows, both for want of Docker on that VM:
+`bash tests/gate.sh` cannot run `mx check`, and the browser suite has not been
+exercised there. A JDK *is* installed — three of them — so
+`./mxcli.exe run --local` needs only the `export PATH` line the installer prints.
+
+## Publishing it as a repo
+
+`install.sh` resolves its own location, so the contents of this directory work
+unchanged as the root of a standalone repo:
+
+```bash
+git clone https://github.com/<you>/mendix-mdl-skills /tmp/mdl-skills
+bash /tmp/mdl-skills/install.sh ~/CloudeCodeProjects/YourApp
+```
+
+## What it deliberately does not touch
+
+`.claude/settings.json` and `AGENTS.md` remain owned by mxcli and the project. The
+installer merges only its named entries into `.claude/settings.local.json` and
+`.codex/hooks.json`; it never replaces either file. It prepends the first-prompt
+reminder to `.codex/config.toml` only when no `developer_instructions` key exists.
+Codex users still make the explicit security decision by trusting the project and
+reviewing the installed definitions with `/hooks`.
