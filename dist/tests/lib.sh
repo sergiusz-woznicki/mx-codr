@@ -481,6 +481,9 @@ PRELUDE
         await page.waitForSelector(LOGIN_FIELD, {timeout: 5000});
       } catch (e) {}
     }
+    // The goto guard is this scenario's, not the page's: left in place it refused
+    // the next hand-run `playwright-cli run-code` probe as a "mid-journey reload".
+    page.goto = page.__mdl_raw_goto;
   }
 CATCH
     printf '}\n'

@@ -585,7 +585,9 @@ summary=()
 # test, as one session did, cost 15 minutes and proved what the red-first run had
 # already proved.
 record_red_first() {   # record_red_first <runner output> <environment cause or "">
-  [ -n "$ONLY" ] || return 0
+  # Under --only, and under --tests-only -- one session ran the whole suite red on
+  # purpose, before any model existed, exactly to have that on record.
+  [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ] || return 0
   # A failure the app or the browser caused proves nothing about the test.
   [ -z "${2:-}" ] || return 0
   local out="$1" dir="$APP_DIR/.mxcli/red-first" line name verdict
@@ -595,6 +597,7 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
     case "$verdict" in
       FAIL) [ -f "$dir/$name" ] || date '+%Y-%m-%d %H:%M' > "$dir/$name" ;;
       PASS)
+        [ -n "$ONLY" ] || continue
         if [ ! -f "$dir/$name" ] && [ ! -f "$dir/$name.green" ]; then
           date '+%Y-%m-%d %H:%M' > "$dir/$name.green"
           echo "   !! $name went green without ever being red here. A test that has never"

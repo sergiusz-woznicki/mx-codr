@@ -57,6 +57,9 @@ ACTIONBUTTON btn (Caption: 'Save', Action: SAVE_CHANGES [CLOSE_PAGE], ButtonStyl
 $O = CREATE Mod.E (A = v) [COMMIT [WITHOUT EVENTS]] [REFRESH];   CHANGE $O (A = v) [COMMIT] [REFRESH];
 COMMIT $O [WITHOUT EVENTS] [REFRESH];  DELETE $O [REFRESH];        syntax: microflow.object-operations
 CREATE [OR MODIFY] MODULE ROLE Mod.Role [DESCRIPTION '...'];          syntax: security.module-role
+show message '{1}' type info|warning|error objects [$Obj/Name + ' saved'];   -- '{1}' is the slot, the
+show message 'Plain text' type info;                                          -- list fills it
+validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
 ```
 
 Never debug by rerunning the whole suite. A test that passes alone and fails in the
