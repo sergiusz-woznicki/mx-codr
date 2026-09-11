@@ -61,6 +61,23 @@ while [ $# -gt 0 ]; do
 done
 
 answers() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$1" 2>/dev/null)" = "200" ]; }
+
+# A boot that cannot succeed, recognised from its own log. Without this the wait
+# loop below polls a port nothing will ever answer on until BOOT_TIMEOUT -- three
+# minutes, measured, for a model that fails `mxbuild` with CE1613 while the log
+# said so in the first two seconds. The reason is what the session needs, and it
+# needs it now, not at the timeout.
+boot_failed() {   # boot_failed <log>
+  [ -f "$1" ] || return 1
+  grep -qE '^Error:|initial build failed|cannot be deployed, because it contains errors|is already in use|exited during startup|BUILD FAILED' "$1" 2>/dev/null
+}
+report_boot_failure() {   # report_boot_failure <log> <waited>
+  echo "the app did not start (${2}s): the boot reported an error rather than coming up" >&2
+  grep -E '^Error:|\[CE[0-9]+\]|initial build failed|is already in use|exited during startup' "$1" 2>/dev/null \
+    | head -12 >&2
+  echo "   full log: $1" >&2
+  exit 2
+}
 GATE_START=$SECONDS
 
 # This project's own modules -- read once, used by coverage, naming and the cache.
@@ -360,6 +377,7 @@ if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
       until answers "$BASE_URL"; do
         sleep 1
         waited=$((waited + 1))
+        boot_failed .mxcli/gate-boot.log && report_boot_failure .mxcli/gate-boot.log "$waited"
         if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
           echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of .mxcli/gate-boot.log:" >&2
           tail -15 .mxcli/gate-boot.log >&2
@@ -389,6 +407,7 @@ if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
     until answers "$BASE_URL"; do
       perl -e 'select undef, undef, undef, 1' 2>/dev/null || sleep 1
       waited=$((waited + 1))
+      boot_failed .mxcli/gate-boot.log && report_boot_failure .mxcli/gate-boot.log "$waited"
       if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
         echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of .mxcli/gate-boot.log:" >&2
         tail -15 .mxcli/gate-boot.log >&2

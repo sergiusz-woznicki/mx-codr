@@ -422,8 +422,24 @@ scenario() {
   // falls back to "something must have happened": a menu item that is a microflow
   // action opens a dialog rather than a page, and both count.
   const menu = async (label, ready) => {
-    const link = page.locator('.mx-navigationtree a, nav a, a').filter({hasText: label}).first();
-    await link.waitFor({timeout: 10000});
+    const candidates = page.locator('.mx-navigationtree a, nav a, a').filter({hasText: label});
+    await candidates.first().waitFor({timeout: 10000});
+    // An Atlas layout renders its menu twice -- the top bar and the off-canvas
+    // sidebar. Both report themselves visible, but the collapsed one sits under a
+    // .mx-placeholder overlay, so clicking it times out as "element is not stable"
+    // and the failure reads as a missing menu item. Click the copy a real pointer
+    // would reach. (Found by a session that lost several minutes to it.)
+    let link = candidates.first();
+    const total = await candidates.count();
+    for (let i = 0; i < total; i++) {
+      const reachable = await candidates.nth(i).evaluate(el => {
+        const r = el.getBoundingClientRect();
+        if (!r.width || !r.height) return false;
+        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+        return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
+      }).catch(() => false);
+      if (reachable) { link = candidates.nth(i); break; }
+    }
     const before = (await page.locator('.mx-page').first().innerText().catch(() => '')).slice(0, 300);
     const url_before = page.url();
     await link.click();

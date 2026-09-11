@@ -62,6 +62,13 @@ show message 'Plain text' type info;                                          --
 validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
 ```
 
+Never run `mx check` (or `./mxcli docker check`) straight at the project while the
+app is up: it re-saves the `.mpr`, the `--watch` runtime rebuilds underneath the
+suite, and a green feature turns red for no reason. `bash tests/gate.sh` runs the
+same check against a scratch copy of the model, which is why the check belongs in
+the gate and not in a command of its own. CLAUDE.md's `docker check` line is for a
+project with nothing running.
+
 Never debug by rerunning the whole suite. A test that passes alone and fails in the
 suite is a test-isolation bug (sign-in identity, or data left behind) and is fixed in
 `tests/lib.sh`.
