@@ -85,5 +85,9 @@ fi
 
 # The shared script reads a Claude-shaped payload and reports failures on stdout.
 # Hand it the command it expects rather than duplicating the coverage logic.
-feedback="$(printf '{"tool_input":{"command":"mxcli exec"}}' | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
+# The real command, so the shared hook can tell a logic change from an entity or
+# security change. Cursor's shell tool has moved tool_input's shape around, so it
+# is lifted out of the raw payload rather than read from a named field.
+_cmd="$(printf '%s' "$input" | grep -oE '[^"]*mxcli(\.exe)? exec[^"]*' | head -1 | sed 's/\\\\/\//g')"
+feedback="$(printf '{"tool_input":{"command":"%s"}}' "${_cmd:-mxcli exec}" | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
 emit "$feedback"

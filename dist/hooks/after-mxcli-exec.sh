@@ -49,6 +49,44 @@ command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.std
 # Only a real model write. Matching read-only queries too (mxcli -c "SHOW ...")
 # ran the coverage checker after every lookup a session made, for nothing.
 case "$command" in *"mxcli exec"*) ;; *) exit 0 ;; esac
+# --- does the running app still match the model? -----------------------------
+# Entity, association, enumeration and security changes do NOT hot-apply: the
+# runtime keeps serving the model it booted with, so a correct fix reads as a
+# failing feature -- one session chased that twice. Microflow, page, nanoflow and
+# snippet changes DO hot-apply under `mxcli run --watch`, in about two seconds,
+# and restarting for those costs ~35s each -- another session did it ten times.
+# One line, saying which of the two this exec was.
+_app_running=0
+for _port in "${APP_PORT:-8081}" 8080; do
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 "http://localhost:$_port/" 2>/dev/null)" = "200" ] \
+    && { _app_running=1; break; }
+done
+if [ "$_app_running" = "1" ]; then
+  # What the exec actually carried: the .mdl files named on the command line, or
+  # the inline text when there are none.
+  _changed=""
+  for _word in $command; do
+    case "$_word" in
+      *.mdl) [ -f "$_word" ] && _changed="$_changed
+$(cat "$_word" 2>/dev/null)" ;;
+    esac
+  done
+  [ -n "$_changed" ] || _changed="$command"
+  # Document-level access -- `grant execute on microflow`, `grant view on page` --
+  # is dropped first: `describe microflow` prints those grants under almost every
+  # flow, so counting them made nearly every exec look like a security change.
+  # What actually needs a reboot is the schema (entities, associations,
+  # enumerations), the row-level rules on an entity, the roles behind them, and
+  # runtime settings.
+  if printf '%s' "$_changed" \
+     | grep -viE '(grant|revoke)[[:space:]]+(execute|view)[[:space:]]+on[[:space:]]+(microflow|nanoflow|page|snippet)' \
+     | grep -qiE '(create|alter|drop)[[:space:]]+(or[[:space:]]+(modify|replace)[[:space:]]+)?((non-)?persistent[[:space:]]+)?(entity|association|enumeration)|alter[[:space:]]+project[[:space:]]+security|alter[[:space:]]+settings|(grant|revoke)[[:space:]]|(create|drop)[[:space:]]+(or[[:space:]]+modify[[:space:]]+)?(module[[:space:]]+role|user[[:space:]]+role|demo[[:space:]]+user)'; then
+    printf 'That exec touched entities, associations, enumerations or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart\n'
+  else
+    printf 'That exec changed logic and screens only -- `mxcli run --watch` hot-applies those in about two seconds, so no restart is needed. Run the test: bash tests/gate.sh --only <feature>\n'
+  fi
+fi
+
 [ -f tools/mdl-checks/check_test_coverage.py ] || exit 0
 mpr="$(ls -1 *.mpr 2>/dev/null | head -1)"; [ -n "$mpr" ] || exit 0
 

@@ -619,6 +619,12 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
         [ -n "$ONLY" ] || continue
         if [ ! -f "$dir/$name" ] && [ ! -f "$dir/$name.green" ]; then
           date '+%Y-%m-%d %H:%M' > "$dir/$name.green"
+          # Written to a file, not just echoed: this runs inside a `while read`
+          # subshell, and the line matters enough to survive into the summary
+          # block -- a session whose own `grep -E "FAIL:|PASS|Total:"` dropped it
+          # went looking for the markers by hand instead.
+          echo "$name: went green without ever being red -- break the feature once and watch it go red" \
+            >> "$WORK/redfirst.note"
           echo "   !! $name went green without ever being red here. A test that has never"
           echo "      failed may assert nothing: break the feature once (an mxcli exec that"
           echo "      changes the message, say) and watch this same command go red, then undo it."
@@ -732,6 +738,9 @@ preflight_session
 preflight_environment
 preflight_stale_model
 step_tests
+if [ -s "$WORK/redfirst.note" ]; then
+  while IFS= read -r line; do summary+=("$line"); done < "$WORK/redfirst.note"
+fi
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   wait
   collect mx "mx check"

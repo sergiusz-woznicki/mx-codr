@@ -38,6 +38,15 @@ and nothing needs recording. Either way the gate is the one command that is righ
 everywhere, and `bash tests/gate.sh --restart` is the one way to restart the app when
 the gate says the model changed after the runtime started.
 
+`./mxcli syntax` with no argument lists every topic. After that, **ask for the leaf
+topic directly and ask for everything you need in one command** -- each lookup costs
+a whole round trip, and `syntax microflow` followed by `syntax microflow.create` is
+two where one would do:
+
+```bash
+./mxcli syntax microflow.object-operations; ./mxcli syntax page.action; ./mxcli syntax navigation.create
+```
+
 Syntax that every session otherwise looks up, one screen (`./mxcli syntax <topic>`
 has the rest):
 
