@@ -270,6 +270,7 @@ bash tests/gate.sh
 - [ ] `mx check` reports 0 errors
 - [ ] `./mxcli lint -p <app>.mpr` reports 0 errors for your module
 - [ ] Every page and `ACT_` microflow is covered (the gate runs the checker)
+- [ ] `layout` passes — no two inline widgets touching (skill: `spacing-and-layout`)
 
 Never report a feature as working on the strength of having written it. "Should
 work" is not a result; paste what the runner printed.
@@ -380,7 +381,7 @@ and entity changes do not hot-apply, and a stale runtime fails a correct fix —
 names the fix: `bash tests/gate.sh --restart`. `docs/brain/`, where it exists, is
 still where the *decisions* live; these report state only.
 
-`gate.sh` does the same internally: `mx check`, lint and coverage need neither the app
+`gate.sh` does the same internally: `mx check`, lint, coverage, naming and layout need neither the app
 nor the browser, so they run while the suite runs (~37s serial becomes ~27s), and with
 `--boot-if-needed` they run while the runtime is still booting.
 

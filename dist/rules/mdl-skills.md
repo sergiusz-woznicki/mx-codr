@@ -1,6 +1,6 @@
 # Project skills that are always in force
 
-Five skills are installed in `.claude/skills/` that are **not** in the skill table
+Six skills are installed in `.claude/skills/` that are **not** in the skill table
 mxcli writes into `CLAUDE.md`. That table lists only mxcli's own skills; these are
 this project's, and they apply on top of it. Load them with the Skill tool, before
 the work, not after:
@@ -12,6 +12,7 @@ the work, not after:
 | Writing or changing any microflow, nanoflow or rule | `naming-and-captions` — a business `@caption` on every decision **and** every action (retrieve, create, change, commit, delete, call, show page, set), never the Mendix default |
 | A second page, snippet or microflow that resembles an existing one | `reuse-and-snippets` |
 | Moving documents between folders or modules | `organize-project` |
+| Writing or altering any **page** or snippet | `spacing-and-layout` — two inline widgets side by side need `DesignProperties: ['Spacing': ['margin-right': 'S']]`; the gate's `layout` verdict fails without it |
 
 Facts about this app come from one call, not from exploring by hand -- each of these
 runs its lookups in parallel and answers in well under a second:
@@ -66,6 +67,10 @@ ACTIONBUTTON btn (Caption: 'Save', Action: SAVE_CHANGES [CLOSE_PAGE], ButtonStyl
 $O = CREATE Mod.E (A = v) [COMMIT [WITHOUT EVENTS]] [REFRESH];   CHANGE $O (A = v) [COMMIT] [REFRESH];
 COMMIT $O [WITHOUT EVENTS] [REFRESH];  DELETE $O [REFRESH];        syntax: microflow.object-operations
 CREATE [OR MODIFY] MODULE ROLE Mod.Role [DESCRIPTION '...'];          syntax: security.module-role
+DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']]
+  -- sides margin-|padding- top|right|bottom|left · values None S M L and NOTHING else
+  -- two inline widgets side by side (label+button, button+button) collide without it;
+  --   the gate's `layout` verdict fails on it. Never a Class: or custom CSS for spacing
 show message '{1}' type info|warning|error objects [$Obj/Name + ' saved'];   -- '{1}' is the slot, the
 show message 'Plain text' type info;                                          -- list fills it
 validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
@@ -83,7 +88,7 @@ suite is a test-isolation bug (sign-in identity, or data left behind) and is fix
 `tests/lib.sh`.
 
 "Done" for a feature is one command, reported as command output — it runs the suite,
-`mx check`, lint and the coverage checker, and ends in `DONE` or `NOT DONE`:
+`mx check`, lint, coverage, naming and layout, and ends in `DONE` or `NOT DONE`:
 
 ```bash
 bash tests/gate.sh

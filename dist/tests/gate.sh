@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The done gate: everything "finished" means, in one command.
 #
-#   bash tests/gate.sh                    # suite + mx check + lint + coverage + naming
+#   bash tests/gate.sh                    # suite + mx check + lint + coverage + naming + layout
 #   bash tests/gate.sh --only crud        # one script by name fragment, warm browser
 #   bash tests/gate.sh --tests-only       # the suite alone
 #   bash tests/gate.sh --boot-if-needed   # start the app first if nothing answers
@@ -306,13 +306,51 @@ run_cached() {
   return "$status"
 }
 
+# Spacing is the one defect every other verdict lets through: a page can pass tests,
+# mx check, lint, coverage and naming and still render a label welded to two buttons,
+# because nothing in the model is wrong -- the widgets simply carry no margin. Read
+# from `describe page`, which prints DesignProperties; mxcli's Starlark rules cannot
+# see widgets at all (a page object there exposes only widget_count).
+check_layout() {
+  [ -f tools/mdl-checks/check_layout.py ] || { : > "$WORK/layout.summary"; return 0; }
+  local modules="$USER_MODULES" module status=0 dumped=0
+  [ -n "$modules" ] || { echo "layout: no user module found" > "$WORK/layout.summary"; return 0; }
+  mkdir -p "$WORK/pages"
+  for module in $modules; do
+    "$MXCLI" -p "$MPR" --json -c "SHOW PAGES IN $module" 2>/dev/null \
+      | "$PY" -c 'import json,sys
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    rows = []
+for row in rows:
+    name = row.get("Qualified Name") or row.get("QualifiedName")
+    if name:
+        print(name)' 2>/dev/null | while read -r page; do
+        "$MXCLI" describe PAGE "$page" -p "$MPR" >> "$WORK/pages/$module.mdl" 2>/dev/null
+      done
+    [ -s "$WORK/pages/$module.mdl" ] && dumped=$((dumped + 1))
+  done
+  if [ "$dumped" = "0" ]; then
+    echo "layout: no page to check" > "$WORK/layout.summary"; return 0
+  fi
+  local out
+  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)" || status=1
+  echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
+  # Errors gate; the heading warning is printed but does not, the same way lint's
+  # warnings do not.
+  printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
+  return $status
+}
+
 # --- start the slow, independent work first ---------------------------------
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   ( run_cached mx       check_mx       widgets theme themesource javasource ) &
   ( run_cached lint     check_lint     .claude/lint-rules ) &
   ( run_cached coverage check_coverage tests tools/mdl-checks/check_test_coverage.py ) &
   ( run_cached naming   check_naming   tools/mdl-checks/check_mdl.py ) &
-  echo "== mx check, lint, coverage and naming started (they need no app; running while the suite does)"
+  ( run_cached layout   check_layout   tools/mdl-checks/check_layout.py ) &
+  echo "== mx check, lint, coverage, naming and layout started (they need no app; running while the suite does)"
 fi
 
 # --- --restart: this project's app, stopped and booted again -------------------
@@ -751,13 +789,14 @@ if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   collect lint "lint"
   collect coverage "coverage"
   collect naming "naming"
+  collect layout "layout"
 fi
 
 echo
 echo "== gate"
 for line in "${summary[@]}"; do echo "   $line"; done
 timing=""
-for name in tests mx lint coverage naming; do
+for name in tests mx lint coverage naming layout; do
   [ -f "$WORK/$name.secs" ] && timing="$timing $name $(cat "$WORK/$name.secs")s,"
 done
 echo "   timing:${timing} wall $((SECONDS - GATE_START))s"

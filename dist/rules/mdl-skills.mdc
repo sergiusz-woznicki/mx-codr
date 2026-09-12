@@ -1,11 +1,11 @@
 ---
-description: The five project rules for building in this Mendix app, and the three commands that check them
+description: The six project rules for building in this Mendix app, and the three commands that check them
 alwaysApply: true
 ---
 
 # Project rules that are always in force
 
-This app is built under five rules. They are **not** in the skill table mxcli writes
+This app is built under six rules. They are **not** in the skill table mxcli writes
 into `AGENTS.md` — that table lists only mxcli's own skills. Read the skill before
 the work, not after; each lives at `.ai-context/skills/<name>/SKILL.md`.
 
@@ -16,6 +16,7 @@ the work, not after; each lives at `.ai-context/skills/<name>/SKILL.md`.
 | Writing or changing any microflow, nanoflow or rule | `naming-and-captions` — a business `@caption` on every decision **and** every action (retrieve, create, change, commit, delete, call, show page, set), never the Mendix default |
 | A second page, snippet or microflow that resembles an existing one | `reuse-and-snippets` |
 | Moving documents between folders or modules | `organize-project` |
+| Writing or altering any **page** or snippet | `spacing-and-layout` — two inline widgets side by side need `DesignProperties: ['Spacing': ['margin-right': 'S']]`; the gate's `layout` verdict fails without it |
 
 ## Facts come from one call, not from exploring
 

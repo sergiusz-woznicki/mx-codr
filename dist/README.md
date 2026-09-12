@@ -66,7 +66,7 @@ measured, not assumed: markers written into all three were gone after one
 So the project's own instructions live where mxcli does not reach:
 
 - **`.claude/rules/mdl-skills.md`** — loaded into every session at launch, same
-  priority as `.claude/CLAUDE.md`. It names the five skills and when each applies,
+  priority as `.claude/CLAUDE.md`. It names the six skills and when each applies,
   because mxcli's generated `CLAUDE.md` skill table lists only mxcli's own skills
   and an agent that follows that table never sees these.
 - **`.claude/settings.local.json`** — registers Claude's two hooks.
@@ -323,6 +323,47 @@ including `bootstrap-app`, which is for a repo with no `.mpr` at all. The instal
 now says this in its closing notes, and the per-prompt reminder hook carries the
 fallback: if the Skill tool does not list them, read exactly the three named files
 and look syntax up on demand rather than sweeping the directory.
+
+## The verdict that catches what looks wrong
+
+A page can pass everything and still be unusable. Measured: a gate reporting 10/10
+tests, `mx check` 0 errors, lint 0 errors, coverage 12/12 and naming clean, on a
+screen whose heading, two buttons and grid were welded together with no gap — because
+the widgets were emitted as bare siblings with no spacing at all.
+
+Mendix has a property for exactly this, so no CSS is involved. Atlas Core declares a
+`Spacing` design property with `margin-` and `padding-` on four sides, values `None`
+`S` `M` `L`:
+
+```
+actionbutton btnRemind (
+  Caption: 'Send reminder',
+  Action: microflow Mod.ACT_Invoice_SendReminder(Invoice: $currentObject),
+  DesignProperties: ['Spacing': ['margin-right': 'S']])
+```
+
+`checks/check_layout.py` reads `describe page` — which prints `DesignProperties` —
+and reports three things:
+
+| | Severity | Fails when |
+|---|---|---|
+`SPACE01` | error | two **inline** widgets side by side and the first carries no margin |
+`SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
+`HEAD01` | warning | the page renders no heading and calls no header snippet |
+
+Only inline-against-inline fails. A textbox in a dataview, a datagrid, a layoutgrid
+or a snippetcall is block-level and already spaced by the theme — an earlier, broader
+version of this check produced 20 findings on an app whose screens look right, so it
+was narrowed to what actually collides.
+
+`SPACE02` exists because `mxcli check` accepts any value here (`'XL'` passes) and only
+`mx check` catches it, late, as CE6083. `HEAD01` is a warning because a heading may
+legitimately come from a shared snippet — the demo app's `SNIPPET_AppHeader` — and a
+rule must only fail what is wrong under every convention.
+
+mxcli's Starlark rules cannot do this: a `page` object there exposes only
+`widget_count`. And `ALTER PAGE`'s `SET` rejects a `DesignProperties` map, so an
+existing page is fixed by patching its `describe` output and re-running it.
 
 ## The local database a deploy build can eat
 
