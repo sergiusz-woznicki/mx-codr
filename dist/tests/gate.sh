@@ -691,6 +691,11 @@ step_tests() {
   # otherwise default to :8081; SCRIPT_TIMEOUT sizes lib.sh's own watchdog to fire
   # just before the runner's kill would.
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT
+  # The module oql_count and oql_value query, so a test need not spell it out and
+  # lib.sh need not look it up per script.
+  MODULE="${MODULE:-$(printf '%s\n' "$USER_MODULES" | head -1)}"
+  [ -n "$MODULE" ] || MODULE="$(user_modules | head -1)"
+  export MODULE
   # Sessions: a full run signs in once and out once (MDL_SESSION_REUSE, see
   # lib.sh); an --only loop leaves the session signed in between iterations
   # (KEEP_SESSION), so the next run of the same script skips the sign-in. Either

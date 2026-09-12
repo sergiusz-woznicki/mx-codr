@@ -61,6 +61,23 @@ if [ -z "${TEST_PASSWORD:-}" ] && [ -f "$CREDENTIALS" ]; then
 fi
 TEST_PASSWORD="${TEST_PASSWORD:-}"
 
+# The module oql_count and oql_value query. It used to be the demo app's name, written
+# into the helpers, so `oql_count Invoice` worked in exactly one project and every
+# other app had to spell out full OQL -- a session building `InvoiceChase` found this
+# and patched its own copy. gate.sh exports MODULE (it has already read the app's
+# modules); a script run on its own resolves it here, once.
+if [ -z "${MODULE:-}" ]; then
+  MODULE="$("$MXCLI" -p "$APP_DIR/$MPR" --json -c "SHOW MODULES" 2>/dev/null \
+    | "$PY" -c 'import json,sys
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    rows = []
+for row in rows:
+    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
+        print(row["Module"]); break' 2>/dev/null)"
+fi
+
 # The runtime log is where a licence refusal is explained; the browser only shows a
 # failed sign-in. Read from it rather than guessing at the cause.
 RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
@@ -588,7 +605,12 @@ for key in keys:
 # traceback. Surface mxcli's own message instead.
 oql() {
   local query="$1" output
-  if ! output="$("$MXCLI" oql -p "$APP_DIR/$MPR" --json "$query" 2>&1)"; then
+  # --port matters: `mxcli oql` talks to the admin API on 8090 unless told otherwise,
+  # so on a machine running a second app -- which is how these tests get a port of
+  # their own -- every data assertion failed with "cannot connect to Mendix admin API
+  # at localhost:8090". Found by a session whose app was on 8091.
+  if ! output="$("$MXCLI" oql -p "$APP_DIR/$MPR" --host "${ADMIN_HOST:-localhost}" \
+                 --port "${ADMIN_PORT:-8090}" --json "$query" 2>&1)"; then
     fail "OQL failed: $(printf '%s' "$output" | grep -v '^$' | head -2 | tr '\n' ' ')"
   fi
   # mxcli prints the JSON and then a human line -- "(1 rows)", or "[]" and "(0 rows)"
@@ -614,12 +636,13 @@ print(json.dumps(value))
 # The WHERE is OQL, not XPath: an association is reached with a JOIN, not with a
 # path. To count a customer's invoices, join and constrain on the joined alias:
 #
-#   oql "SELECT COUNT(*) AS Total FROM InvoiceDesk.Invoice AS i
-#        JOIN i/InvoiceDesk.Invoice_Customer/InvoiceDesk.Customer AS c
+#   oql "SELECT COUNT(*) AS Total FROM $MODULE.Invoice AS i
+#        JOIN i/$MODULE.Invoice_Customer/$MODULE.Customer AS c
 #        WHERE c/Name = 'Northwind Traders'"
 oql_count() {
   local entity="$1" where="${2:-}"
-  local query="SELECT COUNT(*) AS Total FROM InvoiceDesk.$entity"
+  [ -n "${MODULE:-}" ] || fail "oql_count needs a module: set MODULE=<YourModule> or run through tests/gate.sh"
+  local query="SELECT COUNT(*) AS Total FROM $MODULE.$entity"
   # Not `[ -n "$where" ] && ...`: with set -e, the false test ends the function.
   if [ -n "$where" ]; then
     query="$query WHERE $where"
@@ -653,7 +676,8 @@ await_row() {
 oql_value() {
   local entity="$1" attribute="$2" where="$3"
   local json
-  json="$(oql "SELECT $attribute FROM InvoiceDesk.$entity WHERE $where")" || exit 1
+  [ -n "${MODULE:-}" ] || fail "oql_value needs a module: set MODULE=<YourModule> or run through tests/gate.sh"
+  json="$(oql "SELECT $attribute FROM $MODULE.$entity WHERE $where")" || exit 1
   printf '%s' "$json" | "$PY" -c "
 import json, sys
 rows = json.load(sys.stdin)
