@@ -324,6 +324,33 @@ now says this in its closing notes, and the per-prompt reminder hook carries the
 fallback: if the Skill tool does not list them, read exactly the three named files
 and look syntax up on demand rather than sweeping the directory.
 
+## The local database a deploy build can eat
+
+Studio Pro keeps the app's own data in an HSQLDB under `deployment/data/database/`.
+`mxbuild --target=deploy` runs a Clean up step across the whole of `deployment/`,
+and that has been observed leaving the database half-written: the
+`mendixsystem$version` table's DDL present, the single row the runtime reads out of
+it absent. The runtime then refuses to start, and Studio Pro refuses to open the
+project, both complaining about that table. A killed runtime also leaves a
+`default.lck` behind, which blocks the next boot on its own.
+
+Neither needs a database to diagnose — HSQLDB writes its schema as text:
+
+```
+healthy   default.script: CREATE … "mendixsystem$version" … + INSERT INTO "mendixsystem$version"
+broken    default.script: CREATE … "mendixsystem$version" …   (no INSERT, 426 rows against 1077)
+```
+
+So `mdl_check_local_database` in `portable.sh` greps for exactly that, and the gate's
+environment preflight and `diagnose.sh` both call it. Silent when the database is
+absent (normal), fresh, or healthy; otherwise it names the file and the one command
+that fixes it. The database holds demo data only — the seed runs through the app.
+
+`tests/run-app.sh` also stopped causing it: it copies
+`deployment/data/database/` aside before its `--target=deploy` build and puts it back
+afterwards. The runtime it boots talks to PostgreSQL, so that database is nobody's
+business but Studio Pro's.
+
 ## A green gate that measured the wrong app
 
 The gate has always warned when the model changed after the runtime started —

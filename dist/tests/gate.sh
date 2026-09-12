@@ -580,6 +580,10 @@ if path and not os.path.exists(path):
     fi
   fi
 
+  # A local database a deploy build left half-written, or a lock a killed runtime
+  # left behind. Both stop a boot with a message about neither.
+  mdl_check_local_database
+
   # With security on, tests must sign in; without credentials they all fail the same
   # way, and the failure reads as nine broken features.
   if [ -z "${TEST_PASSWORD:-}" ] && [ ! -f "$APP_DIR/tests/credentials.env" ]; then
