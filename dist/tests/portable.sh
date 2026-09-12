@@ -134,6 +134,99 @@ mdl_check_local_database() {
   echo "      mv '$(dirname "$(dirname "$script")")' '$(dirname "$(dirname "$script")").broken-$(date +%H%M%S)'"
 }
 
+# Has the harness in this project drifted from the one that was installed? A
+# project once ran checkers from 2026.09.09 against a bundle at 2026.09.11 and
+# reported `naming: PASS` where the current checker finds 37 problems -- a gate
+# that passes because it is out of date is worse than no gate, because the green
+# is still printed. tools/mdl-checks/record_install.py writes a checksum per
+# installed file into INSTALL.json; this compares the files on disk against it,
+# and the version against dist/ when the project keeps a bundle. Around forty
+# small checksums, roughly ten milliseconds. Silent when nothing has drifted.
+mdl_check_install_freshness() {
+  local app="${APP_DIR:-.}"
+  local manifest="$app/tools/mdl-checks/INSTALL.json"
+  local installed="$app/tools/mdl-checks/VERSION"
+  local python="${PY:-$(mdl_find_python || true)}"
+
+  [ -n "$python" ] || return 0
+
+  if [ ! -f "$manifest" ]; then
+    # Installed before manifests existed, or assembled by hand. Worth one line:
+    # the check cannot run, and silence would read as a clean result.
+    if [ -f "$installed" ] && [ -d "$app/dist" ]; then
+      echo "   !! no tools/mdl-checks/INSTALL.json, so harness drift cannot be detected here."
+      echo "      This install predates the record (VERSION says $(cat "$installed" 2>/dev/null)):  bash dist/install.sh ."
+    fi
+    return 0
+  fi
+
+  "$python" - "$app" "$manifest" <<'PY_FRESH'
+import hashlib, json, os, sys
+
+app, manifest_path = sys.argv[1], sys.argv[2]
+try:
+    with open(manifest_path, encoding="utf-8") as handle:
+        manifest = json.load(handle)
+except Exception:
+    raise SystemExit(0)
+
+installed = manifest.get("version", "?")
+changed, missing = [], []
+for relative, expected in sorted((manifest.get("files") or {}).items()):
+    try:
+        with open(os.path.join(app, *relative.split("/")), "rb") as handle:
+            actual = hashlib.sha256(handle.read()).hexdigest()
+    except OSError:
+        missing.append(relative)
+        continue
+    if actual != expected:
+        changed.append(relative)
+
+
+def name_some(paths, limit):
+    shown = ", ".join(paths[:limit])
+    if len(paths) > limit:
+        shown += " and %d more" % (len(paths) - limit)
+    return shown
+
+
+def ordered(version):
+    # 2026.09.11.28 sorts after 2026.09.11.3, which string comparison gets wrong
+    # as soon as a within-day counter passes 9 -- and they reach 28.
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except (AttributeError, ValueError):
+        return ()
+
+
+# A newer bundle sitting in the project is the plainest signal there is. The
+# other direction is the hand-copy case, where the files are ahead of dist/ on
+# purpose, so it is left alone -- the checksums below cover it.
+bundle = os.path.join(app, "dist", "VERSION")
+if os.path.exists(bundle):
+    try:
+        with open(bundle, encoding="utf-8") as handle:
+            available = handle.read().strip()
+    except OSError:
+        available = ""
+    if available and ordered(available) > ordered(installed):
+        print("   !! the harness installed here is %s; dist/ holds a newer one (%s)."
+              % (installed, available))
+        print("      An out-of-date checker passes what the current one fails:  bash dist/install.sh .")
+
+if missing:
+    print("   !! %d harness file(s) gone since install: %s"
+          % (len(missing), name_some(missing, 3)))
+    print("      re-run the installer to put them back")
+
+if changed:
+    print("   !! differs from the installed harness (%s): %s"
+          % (installed, name_some(changed, 4)))
+    print("      either these were edited here, and the next install overwrites them -- send a")
+    print("      real fix upstream -- or newer files were copied in and the VERSION stamp is stale")
+PY_FRESH
+}
+
 mdl_tmpdir() {  # mdl_tmpdir <name> -- portable `mktemp -d -t <name>`
   mktemp -d "${TMPDIR:-/tmp}/$1.XXXXXX"
 }

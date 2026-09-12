@@ -379,6 +379,12 @@ if [ "$RESTART" = "1" ]; then
   BASE_URL=""
 fi
 
+# Checkers older than the bundle, or edited since they were installed. A gate that
+# passes because its checkers are out of date still prints the green, so this is
+# said before any verdict is -- and before the missing-app bail below, which would
+# otherwise swallow it.
+mdl_check_install_freshness
+
 # --- the app ------------------------------------------------------------------
 if [ -z "${BASE_URL:-}" ]; then
   for candidate in "http://localhost:$APP_PORT" http://localhost:8080; do

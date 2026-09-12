@@ -22,9 +22,12 @@ tests/            lib.sh, gate.sh, orient.sh, diagnose.sh, portable.sh — the h
 .gitattributes    forces LF on *.sh and *.py — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
-skills/           5 × SKILL.md — the prose
+skills/           6 × SKILL.md — the prose
 lint-rules/       *.star — run by `mxcli lint`, no Python needed
-checks/           *.py + fixtures/ — the checks Starlark cannot express
+checks/           *.py + fixtures/ — the checks Starlark cannot express, plus
+                  record_install.py, which writes tools/mdl-checks/INSTALL.json (version,
+                  date, sha256 per installed file) so the gate can tell a project running
+                  last week's checkers from one running these
 ```
 
 The payload is a **copy** of files that live elsewhere in this repo. This directory

@@ -1628,6 +1628,14 @@ if [ ! -e "$APP/.gitattributes" ] && [ -f "$SRC/.gitattributes" ]; then
 fi
 ui_done "test harness" "$suite_written $I_ARROW tests/  (verify-*.test.sh left alone)"
 
+# What this install put where, and what each file looked like leaving here. The
+# gate compares against it at preflight, because two kinds of drift have cost real
+# time: a project quietly running checkers two versions old, and a session's own
+# repair to lib.sh that nobody upstream ever heard about.
+ui_begin "recording the install"
+recorded="$("$PY" "$APP/tools/mdl-checks/record_install.py" "$APP" "$SRC" "$version" 2>/dev/null || true)"
+ui_done "install record" "${recorded:-0} files $I_ARROW tools/mdl-checks/INSTALL.json"
+
 ui_begin "checking the environment"
 
 # `mxcli new` writes .playwright/cli.config.json pinning chromium to a path that may
@@ -1745,6 +1753,9 @@ if [ "$codex_reminder" = "added" ]; then
 else
   printf '     %s%-10s%s %s%3s%s  %s\n' "$C_YELLOW" "reminder" "$C_RESET" "$C_BOLD" "$I_WARN" "$C_RESET" \
     ".codex/config.toml already defines developer_instructions, left alone"
+fi
+if [ -n "${recorded:-}" ]; then
+  ui_row "record" "$recorded"         "tools/mdl-checks/INSTALL.json  ${C_GREY}(the gate checks for drift)${C_RESET}"
 fi
 if [ "$suite_written" -gt 0 ]; then
   ui_row "harness" "$suite_written"   "tests/  ${C_GREY}(verify-*.test.sh are yours to write)${C_RESET}"
