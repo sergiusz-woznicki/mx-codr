@@ -347,9 +347,16 @@ and reports three things:
 
 | | Severity | Fails when |
 |---|---|---|
-`SPACE01` | error | two **inline** widgets side by side and the first carries no margin |
+`SPACE01` | error | a widget sharing a line with the next and no `margin-right`; a heading with content under it and no `margin-bottom` |
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
+`SPACE03` | error | widgets on one line disagreeing on vertical margins, or none carrying `margin-bottom` |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
+
+`SPACE03` came from two further screenshots. A `margin-bottom` on one inline-block and
+not its neighbour lifts it about ten pixels out of line; and a row of buttons with
+`margin-right` but no `margin-bottom` looks right until the window narrows, when it
+wraps onto a second row sitting against the first. One omission, two symptoms, so one
+rule: everything on a line shares its vertical margin and it is not `None`.
 
 Only inline-against-inline fails. A textbox in a dataview, a datagrid, a layoutgrid
 or a snippetcall is block-level and already spaced by the theme — an earlier, broader

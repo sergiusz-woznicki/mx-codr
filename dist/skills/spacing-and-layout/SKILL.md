@@ -12,16 +12,27 @@ at all. Nothing in the model was wrong. The widgets simply carried no margin.
 
 ## The one thing to get right
 
-**Two inline widgets next to each other need a margin on the first.** Inline means
-buttons, link buttons, text, images, checkboxes — Atlas renders them on one line, so
-without a margin they touch.
+**Widgets that share a line need `margin-right` between them and the same
+`margin-bottom` on all of them.** Inline means buttons, link buttons, paragraph text,
+images, checkboxes — Atlas puts them on one line, and that line *wraps* when the
+window narrows.
 
 ```
-actionbutton btnRemind (
-  Caption: 'Send reminder',
-  Action: microflow Mod.ACT_Invoice_SendReminder(Invoice: $currentObject),
-  DesignProperties: ['Spacing': ['margin-right': 'S']])
+actionbutton btnEdit   (Caption: 'Edit',   Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
+actionbutton btnDelete (Caption: 'Delete', Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
+actionbutton btnSend   (Caption: 'Send',   Action: ..., DesignProperties: ['Spacing': ['margin-bottom': 'S']])
 ```
+
+Three measured failures, each from leaving part of that out:
+
+| What was written | What it looked like |
+|---|---|
+| `margin-right` on the first only | the second button touching the first |
+| `margin-right` on one, `margin-bottom` on its neighbour | the two ten pixels out of line — a bottom margin lifts an inline-block off the baseline |
+| `margin-right` on both, `margin-bottom` on neither | right on a wide screen; narrow the window and three buttons wrap onto two rows, the second against the first |
+
+So the gap goes on every widget but the last, and the bottom margin goes on **all** of
+them, with the same value.
 
 That is Studio Pro's own **Spacing** design property — the same dropdown a developer
 would use. No `Class:`, no `Style:`, no custom CSS.
@@ -31,8 +42,8 @@ would use. No `Class:`, no `Style:`, no custom CSS.
 Sides | `margin-top` `margin-right` `margin-bottom` `margin-left`, and the same four as `padding-` |
 Values | **`None` `S` `M` `L`** — Atlas Core defines nothing else |
 Scopes | any widget, plus `LayoutGridRow` and `LayoutGridColumn` |
-Side by side | `margin-right` |
-Stacked | `margin-bottom` |
+Side by side | `margin-right` on each but the last |
+Stacked, or a line that can wrap | `margin-bottom` on every one, same value |
 
 `mxcli check` does **not** validate the value: `'XL'` passes it and then fails much
 later in `mx check` as CE6083 *"Design property Spacing is not supported by your
@@ -62,16 +73,16 @@ layoutgrid pageGrid {
   row headerRow {
     column colTitle  (DesktopWidth: 8) { dynamictext heading (Content: 'Invoices', RenderMode: H2) }
     column colActions (DesktopWidth: 4) {
-      actionbutton btnNew (Caption: 'New invoice', Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S']])
-      actionbutton btnReset (Caption: 'Reset demo data', Action: ...)
+      actionbutton btnNew   (Caption: 'New invoice',     Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
+      actionbutton btnReset (Caption: 'Reset demo data', Action: ..., DesignProperties: ['Spacing': ['margin-bottom': 'S']])
     }
   }
   row gridRow { column col1 (DesktopWidth: 12) { datagrid invoiceGrid (...) { ... } } }
 }
 ```
 
-The last widget in a group needs no margin — there is nothing after it to collide
-with.
+The last widget in a line needs no `margin-right` — nothing follows it — but it keeps
+the same `margin-bottom` as the rest, or a wrapped row lands against the one above.
 
 ## Headings
 
@@ -111,9 +122,17 @@ layout: PASS  0 failure(s) over 6 page(s)
 
 | Check | Severity | Fails when |
 |---|---|---|
-`SPACE01` | error | two inline widgets side by side and the first has no `margin-right`/`margin-bottom` |
+`SPACE01` | error | a widget sharing a line with the next and no `margin-right`; or a heading with content under it and no `margin-bottom` |
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
+`SPACE03` | error | widgets on one line disagreeing on vertical margins (misaligned), or none carrying `margin-bottom` (wraps into the row above) |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
+
+## What this cannot see
+
+A narrow window also **cuts content off sideways** when a grid has more columns than
+fit. No margin fixes that and no read of the MDL proves it: it is a datagrid with too
+many columns for a phone, or a `layoutgrid` column that never stacks. Judge that by
+narrowing the browser.
 
 Nothing here judges colour, typography or contrast — those are not mechanically
 checkable, and a rule that cannot be checked is advice. Look at the screen for those.

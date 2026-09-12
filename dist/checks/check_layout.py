@@ -27,6 +27,8 @@ exposes only `widget_count`.
 
     SPACE01  error    two inline widgets side by side, neither carrying a margin
     SPACE02  error    a spacing value Atlas does not define (it offers None, S, M, L)
+    SPACE03  error    widgets on one line with different vertical margins, so they
+                      render at different heights
     HEAD01   warning  the page renders no heading widget
 
 SPACE02 exists because `mxcli check` accepts any value here -- `'XL'` passes -- and
@@ -62,6 +64,31 @@ STRUCTURAL = {"row", "column", "region", "placeholder", "controlbar", "header", 
 # 20 findings on an app whose screens look right, so they are not flagged.
 INLINE = {"actionbutton", "linkbutton", "dynamictext", "text", "image", "staticimage",
           "dynamicimage", "checkbox", "radiobuttons"}
+
+# A dynamictext in a heading render mode is a block: measured on a real screen, an H1
+# and an H2 each take their own line while a paragraph shares one with the buttons
+# beside it. So a heading is never part of a line-run -- it only needs a margin under
+# it -- and the widgets that do share a line are grouped without it.
+HEADING_MODE = re.compile(r"RenderMode:\s*(H1|H2|H3)", re.IGNORECASE)
+
+
+def is_heading(widget) -> bool:
+    return widget.type in ("dynamictext", "text") and bool(HEADING_MODE.search(widget.text))
+
+
+def runs_of(group: list) -> list[list]:
+    """Split siblings into the runs that actually end up on one line."""
+    runs, current = [], []
+    for widget in group:
+        if widget.type not in INLINE or widget.type in STRUCTURAL or is_heading(widget):
+            if current:
+                runs.append(current)
+            current = []
+            continue
+        current.append(widget)
+    if current:
+        runs.append(current)
+    return runs
 
 WIDGET_RE = re.compile(r"^(?P<indent>\s*)(?P<type>[a-z][a-z0-9_]*)\s+(?P<name>\"[^\"]+\"|[A-Za-z_][\w/]*)\s*[({]")
 # A widget can also be written without a name (rare, and mxcli prints one anyway),
@@ -160,26 +187,71 @@ def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
     for (page, _parent, _indent), group in siblings(widgets).items():
         if len(group) < 2:
             continue
-        # The last one has nothing after it to collide with.
+
+        # A heading with anything under it needs a margin beneath, or the next widget
+        # starts against its descenders.
         for index, widget in enumerate(group[:-1]):
-            following = group[index + 1]
-            if widget.type in STRUCTURAL or following.type in STRUCTURAL:
+            if not is_heading(widget):
                 continue
-            # Both sides have to be inline for them to end up on one line together.
-            if widget.type not in INLINE or following.type not in INLINE:
-                continue
-            spacing = spacing_of(widget)
-            if any(spacing.get(side) not in (None, "None")
-                   for side in ("margin-right", "margin-bottom")):
+            if spacing_of(widget).get("margin-bottom", "None") != "None":
                 continue
             failures.append({
                 "check": "SPACE01",
                 "line": widget.line,
-                "message": (f"{page}: {widget.type} '{widget.name}' sits directly against"
-                            f" {following.type} '{following.name}' with no margin --"
-                            f" add DesignProperties: ['Spacing': ['margin-right': 'S']]"
-                            f" (side by side) or ['margin-bottom': 'S'] (stacked)"),
+                "message": (f"{page}: heading '{widget.name}' has nothing under it but"
+                            f" {group[index + 1].type} '{group[index + 1].name}' --"
+                            f" add DesignProperties: ['Spacing': ['margin-bottom': 'S']]"),
             })
+
+        for run in runs_of(group):
+            if len(run) < 2:
+                continue
+            # Side by side, so the gap is margin-right. The last one needs nothing:
+            # there is nothing after it to collide with.
+            for widget in run[:-1]:
+                if spacing_of(widget).get("margin-right", "None") != "None":
+                    continue
+                following = run[run.index(widget) + 1]
+                failures.append({
+                    "check": "SPACE01",
+                    "line": widget.line,
+                    "message": (f"{page}: {widget.type} '{widget.name}' sits on one line with"
+                                f" {following.type} '{following.name}' and no gap between them"
+                                f" -- add DesignProperties: ['Spacing': ['margin-right': 'S']]"),
+                })
+
+            # One line, one baseline, and one more thing: the line wraps. Two defects
+            # measured on real screens, both from the same omission --
+            #   * a bottom margin on one inline-block and not its neighbour lifts it,
+            #     about ten pixels out of line;
+            #   * narrow the window until three buttons wrap onto two lines and the
+            #     second line sits against the first, because nothing carries a bottom
+            #     margin at all.
+            # So every member of a run needs the SAME bottom margin, and it has to be
+            # a real one. That is what the demo app already does: margin-right and
+            # margin-bottom on each of a row's action buttons.
+            vertical = {w.name: (spacing_of(w).get("margin-top", "None"),
+                                 spacing_of(w).get("margin-bottom", "None")) for w in run}
+            shown = ", ".join(f"{name} {top}/{bottom}" for name, (top, bottom) in vertical.items())
+            if len(set(vertical.values())) > 1:
+                failures.append({
+                    "check": "SPACE03",
+                    "line": run[0].line,
+                    "message": (f"{page}: {' and '.join(w.name for w in run)} sit on one line with"
+                                f" different vertical spacing, so they render at different heights"
+                                f" (margin-top/bottom: {shown}). Make those equal, and use"
+                                f" margin-right for the gap between them"),
+                })
+            elif all(bottom == "None" for _top, bottom in vertical.values()):
+                failures.append({
+                    "check": "SPACE03",
+                    "line": run[0].line,
+                    "message": (f"{page}: {' and '.join(w.name for w in run)} share a line and none"
+                                f" carries margin-bottom, so on a narrow window the line wraps and"
+                                f" the second row sits against the first -- add"
+                                f" ['margin-right': 'S', 'margin-bottom': 'S'] to each"
+                                f" (the last one needs the bottom margin only)"),
+                })
 
     # Per page, from the parsed widgets -- not from slicing the text on "page <name>",
     # which also matches the `grant view on page <name>` line printed after the body
