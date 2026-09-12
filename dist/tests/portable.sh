@@ -153,9 +153,16 @@ mdl_check_install_freshness() {
   if [ ! -f "$manifest" ]; then
     # Installed before manifests existed, or assembled by hand. Worth one line:
     # the check cannot run, and silence would read as a clean result.
-    if [ -f "$installed" ] && [ -d "$app/dist" ]; then
+    if [ -f "$installed" ] && [ -f "$app/dist/VERSION" ]; then
       echo "   !! no tools/mdl-checks/INSTALL.json, so harness drift cannot be detected here."
-      echo "      This install predates the record (VERSION says $(cat "$installed" 2>/dev/null)):  bash dist/install.sh ."
+      # Installing from a bundle older than what is already here would be a
+      # downgrade, so say which of the two has to move first.
+      if [ "$(printf '%s\n%s\n' "$(cat "$installed")" "$(cat "$app/dist/VERSION")" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)" = "$(cat "$installed")" ] \
+         && [ "$(cat "$installed")" != "$(cat "$app/dist/VERSION")" ]; then
+        echo "      dist/ is older than what is installed ($(cat "$app/dist/VERSION") vs $(cat "$installed")); refresh dist/ first, then:  bash dist/install.sh ."
+      else
+        echo "      This install predates the record (VERSION says $(cat "$installed" 2>/dev/null)):  bash dist/install.sh ."
+      fi
     fi
     return 0
   fi

@@ -134,7 +134,7 @@ root. It is a copy, so re-running is always safe:
 mkdir -p dist/skills dist/lint-rules dist/checks/fixtures
 
 for s in naming-and-captions reuse-and-snippets test-first-delivery \
-         module-structure organize-project; do
+         module-structure organize-project; do   # spacing-and-layout is dist-only
   mkdir -p "dist/skills/$s"
   cp ".ai-context/skills/$s/SKILL.md" "dist/skills/$s/"
 done
@@ -146,8 +146,11 @@ cp tests/skills/check_mdl.py tests/skills/check_test_coverage.py dist/checks/
 cp tests/skills/fixtures/*.mdl dist/checks/fixtures/
 ```
 
-`rules/` and `hooks/` have no upstream copy — they are authored in `dist/` and
-copied only outward, so nothing needs syncing for them.
+`rules/`, `hooks/`, `plugins/`, `tests/`, `checks/check_layout.py`,
+`checks/record_install.py` and `skills/spacing-and-layout/` have no upstream copy —
+they are authored in `dist/` and copied only outward, so nothing needs syncing for
+them. The commands above only copy *into* `dist/`, so re-running them never
+removes anything that lives here alone.
 
 Only two Python checkers ship: captions/positions (`check_mdl.py`) and test
 coverage (`check_test_coverage.py`). Folder structure and reuse are Starlark rules
