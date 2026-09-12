@@ -241,12 +241,19 @@ row, then `y += 160` and back to the left margin.
 ```
 
 **A position inside a loop is an offset from the loop, not a canvas coordinate.**
-Mendix stores every position as `RelativeMiddlePoint`, relative to its parent, so an
-activity inside a loop is placed relative to the loop itself. Measured on the stored
-model: a body at `@position(560, 360)` inside a loop at `@position(560, 200)` produced
-a loop box **670px wide**; the same body at `@position(40, 100)` produced **200px**.
-The wide one renders as a huge empty rectangle with the activity adrift near its
-bottom edge.
+Mendix stores every position as `RelativeMiddlePoint`, relative to its parent, and
+sizes the loop's box to hold whatever is inside it. Measured on three real loops:
+
+| body positions | box Mendix drew | children | filled |
+|---|---|---|---|
+| one child at `(560, 360)` | 670 × 440 | 1 | **2.4%** |
+| one child at `(40, 100)` | 200 × 180 | 1 | 20% |
+| eight children, `(150, 330)`…`(320, 580)` | 590 × 660 | 8 | 13% |
+
+The check is on that last column, not on any coordinate: **a loop box should not be
+mostly empty.** A body with eight activities makes a big box and fills it; one
+activity given a canvas coordinate makes an equally big box with nothing in it, which
+is what renders as a huge empty rectangle.
 
 ```
 @position(560, 200)
@@ -262,7 +269,7 @@ end loop;
 | Check | Fails when |
 |---|---|
 | `flow-width` | a flow wider than 1600px laid out on one or two rows |
-| `loop-body-position` | an activity inside a loop positioned as if on the canvas |
+| `loop-box-empty` | a loop box under 8% filled by its body — whatever the coordinates |
 
 ## Validation checklist
 

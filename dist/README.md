@@ -341,13 +341,17 @@ LoopedActivity            560;200   Size 670;440    <- box grew to hold its chil
 ```
 
 Confirmed by experiment: the same body at `@position(40, 100)` yields a loop of
-`200;180`. So `check_mdl.py --skill naming` gained two checks, both read from the same
-`describe` dump it already uses:
+`200;180`, and a real loop holding eight children came out `590;660`. The first rule
+written here keyed on the coordinates themselves, and it flagged that eight-child loop
+— a pattern from one screenshot, not a defect. What actually distinguishes them is
+**density**: 2.4% of the box filled against 13% and 20%. A big body makes a big box
+and fills it. So `check_mdl.py --skill naming` gained two checks, both read from the
+same `describe` dump it already uses:
 
 | | Fails when |
 |---|---|
 `flow-width` | a flow wider than 1600px on one or two rows — wrap it, ~8 activities per row, `y += 160` |
-`loop-body-position` | an activity inside a loop positioned as if on the canvas |
+`loop-box-empty` | a loop box under 8% filled by its body |
 
 Neither is an mxcli fix: the tool wrote what it was told. What was missing was a rule
 saying a flow has to be readable, and one saying where an in-loop position lives.

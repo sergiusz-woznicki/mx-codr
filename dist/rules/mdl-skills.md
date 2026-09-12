@@ -68,8 +68,9 @@ $O = CREATE Mod.E (A = v) [COMMIT [WITHOUT EVENTS]] [REFRESH];   CHANGE $O (A = 
 COMMIT $O [WITHOUT EVENTS] [REFRESH];  DELETE $O [REFRESH];        syntax: microflow.object-operations
 CREATE [OR MODIFY] MODULE ROLE Mod.Role [DESCRIPTION '...'];          syntax: security.module-role
 @position(x, y) inside a loop is an OFFSET FROM THE LOOP, not a canvas coordinate:
-  loop at (560,200) with its body at (40,100) -- not (560,360), which makes the loop
-  box 670px wide and look empty. Wrap a flow every ~8 activities: y += 160, x back left
+  loop at (560,200) with its body at (40,100) -- not (560,360), which draws a 670px box
+  around one activity (2% full; the gate fails a loop box under 8% filled).
+  Wrap a flow every ~8 activities: y += 160, x back to the left
 DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']]
   -- sides margin-|padding- top|right|bottom|left · values None S M L and NOTHING else
   -- two inline widgets side by side (label+button, button+button) collide without it;
