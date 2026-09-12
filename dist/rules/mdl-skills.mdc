@@ -40,6 +40,46 @@ hot reload where it works, but it deadlocks on some machines, and a runtime serv
 built deployment has no hot reload at all. `tests/harness.env` records how this
 project boots.
 
+`./mxcli syntax` with no argument lists every topic. After that, **ask for the leaf
+topic directly and ask for everything you need in one command** -- each lookup costs
+a whole round trip, and `syntax microflow` followed by `syntax microflow.create` is
+two where one would do:
+
+```bash
+./mxcli syntax microflow.object-operations; ./mxcli syntax page.action; ./mxcli syntax navigation.create
+```
+
+Syntax that every session otherwise looks up, one screen (`./mxcli syntax <topic>`
+has the rest):
+
+```
+CREATE [OR MODIFY] ASSOCIATION Mod.Order_Customer FROM Mod.Order TO Mod.Customer
+  TYPE Reference|ReferenceSet [OWNER Default|Both] [DELETE_BEHAVIOR PREVENT|CASCADE];
+  -- FROM holds the foreign key (the many side)          syntax: domain-model.association
+CREATE OR REPLACE NAVIGATION Responsive HOME PAGE Mod.Home [HOME PAGE Mod.X FOR UserRole]
+  MENU ( MENU ITEM 'Label' PAGE Mod.Page ICON Atlas_Core.Atlas."align-center"; );
+  -- FOR takes a bare USER role; ICON is a model reference, hyphens double-quoted
+  -- profiles are Mendix's own kinds only: Responsive, Phone, Tablet (+Offline)
+ACTIONBUTTON btn (Caption: 'Save', Action: SAVE_CHANGES [CLOSE_PAGE], ButtonStyle: Primary,
+  Icon: 'Atlas_Core.Atlas_Filled.pencil')
+  Action: MICROFLOW Mod.MF(Param: $currentObject) | SHOW_PAGE Mod.Page(P: $currentObject)
+        | CREATE_OBJECT Mod.Entity THEN SHOW_PAGE Mod.Page | DELETE | CANCEL_CHANGES | SIGN_OUT
+  -- a SHOW_PAGE argument must be the enclosing widget's object      syntax: page.action
+$O = CREATE Mod.E (A = v) [COMMIT [WITHOUT EVENTS]] [REFRESH];   CHANGE $O (A = v) [COMMIT] [REFRESH];
+COMMIT $O [WITHOUT EVENTS] [REFRESH];  DELETE $O [REFRESH];        syntax: microflow.object-operations
+CREATE [OR MODIFY] MODULE ROLE Mod.Role [DESCRIPTION '...'];          syntax: security.module-role
+@position(x, y) inside a loop is an OFFSET FROM THE LOOP, not a canvas coordinate:
+  loop at (560,200) with its body at (40,100) -- not (560,360), which makes the loop
+  box 670px wide and look empty. Wrap a flow every ~8 activities: y += 160, x back left
+DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']]
+  -- sides margin-|padding- top|right|bottom|left · values None S M L and NOTHING else
+  -- two inline widgets side by side (label+button, button+button) collide without it;
+  --   the gate's `layout` verdict fails on it. Never a Class: or custom CSS for spacing
+show message '{1}' type info|warning|error objects [$Obj/Name + ' saved'];   -- '{1}' is the slot, the
+show message 'Plain text' type info;                                          -- list fills it
+validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
+```
+
 Never debug by rerunning the whole suite. A test that passes alone and fails in the
 suite is a test-isolation bug, and it is fixed in `tests/lib.sh`.
 

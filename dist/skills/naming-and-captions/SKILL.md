@@ -226,6 +226,44 @@ two activities at one `@position`. (In this repo the checker is
 `tests/skills/check_mdl.py`; `tools/mdl-checks/` is where `install.sh` puts it in an
 installed project.)
 
+## Where the activities go
+
+Positions are part of whether a flow can be read, and two of them are checked.
+
+**Wrap a long flow.** Studio Pro shows roughly 1600px at a readable zoom. A flow
+written as one long row runs off the screen: measured, a 17-activity reset flow spanned
+2400px and had to be read at 75% and scrolled sideways. About eight activities to a
+row, then `y += 160` and back to the left margin.
+
+```
+@position(200, 200)  ... first row ...  @position(1400, 200)
+@position(200, 360)  ... second row ... @position(1400, 360)
+```
+
+**A position inside a loop is an offset from the loop, not a canvas coordinate.**
+Mendix stores every position as `RelativeMiddlePoint`, relative to its parent, so an
+activity inside a loop is placed relative to the loop itself. Measured on the stored
+model: a body at `@position(560, 360)` inside a loop at `@position(560, 200)` produced
+a loop box **670px wide**; the same body at `@position(40, 100)` produced **200px**.
+The wide one renders as a huge empty rectangle with the activity adrift near its
+bottom edge.
+
+```
+@position(560, 200)
+@annotation 'Delete every invoice'
+loop $Invoice in $AllInvoices
+begin
+  @position(40, 100)        -- an offset inside the loop, not 560 again
+  @caption 'Delete the invoice'
+  delete $Invoice;
+end loop;
+```
+
+| Check | Fails when |
+|---|---|
+| `flow-width` | a flow wider than 1600px laid out on one or two rows |
+| `loop-body-position` | an activity inside a loop positioned as if on the canvas |
+
 ## Validation checklist
 
 - [ ] No variable named `$Int1`, `$List2`, `$tmp` or similar

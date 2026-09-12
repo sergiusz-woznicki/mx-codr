@@ -324,6 +324,34 @@ now says this in its closing notes, and the per-prompt reminder hook carries the
 fallback: if the Skill tool does not list them, read exactly the three named files
 and look syntax up on demand rather than sweeping the directory.
 
+## Two more things the naming verdict reads out of positions
+
+A screenshot of a reset flow in Studio Pro: one row of 17 activities running 2400px
+off the right of the screen, and two loops drawn as enormous empty rectangles with
+their delete activity adrift below them. mxcli had authored it correctly -- `mx check`
+0 errors -- so the question was where the defect lived.
+
+Dumping the stored model answered it. Mendix keeps geometry as `RelativeMiddlePoint`,
+**relative to the parent**, and an activity inside a loop is therefore placed relative
+to the loop:
+
+```
+LoopedActivity            560;200   Size 670;440    <- box grew to hold its child
+  delete (inside loop)    560;360                   <- 560px right OF THE LOOP
+```
+
+Confirmed by experiment: the same body at `@position(40, 100)` yields a loop of
+`200;180`. So `check_mdl.py --skill naming` gained two checks, both read from the same
+`describe` dump it already uses:
+
+| | Fails when |
+|---|---|
+`flow-width` | a flow wider than 1600px on one or two rows — wrap it, ~8 activities per row, `y += 160` |
+`loop-body-position` | an activity inside a loop positioned as if on the canvas |
+
+Neither is an mxcli fix: the tool wrote what it was told. What was missing was a rule
+saying a flow has to be readable, and one saying where an in-loop position lives.
+
 ## The verdict that catches what looks wrong
 
 A page can pass everything and still be unusable. Measured: a gate reporting 10/10
