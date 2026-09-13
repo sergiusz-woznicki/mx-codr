@@ -8,7 +8,7 @@ set -uo pipefail
 # Almost every event is not an `mxcli exec`; answer that on the raw text before
 # looking for a Python to parse it with (see after-mxcli-exec.sh).
 input="$(cat)"
-case "$input" in *"mxcli exec"*) ;; *) exit 0 ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 
 # Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
 # Microsoft Store instead of running anything is common, so each candidate is asked
@@ -43,7 +43,7 @@ PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
 command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
-case "$command" in *"mxcli exec"*) ;; *) exit 0 ;; esac
+case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # Remember that this Codex session changed the model. The Stop hook uses the

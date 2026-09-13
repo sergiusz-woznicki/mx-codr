@@ -145,7 +145,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (!installed) return
       if (input.tool !== "bash") return
       const command = input.args?.command
-      if (typeof command !== "string" || !command.includes("mxcli exec")) return
+      // mxcli.exe on Windows: "mxcli.exe exec" does not contain "mxcli exec".
+      if (typeof command !== "string" || !/mxcli(\.exe)? exec/.test(command)) return
 
       writeState(input.sessionID, "gate-required", root)
 

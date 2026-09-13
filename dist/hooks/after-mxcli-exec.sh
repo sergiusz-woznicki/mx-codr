@@ -11,7 +11,7 @@
 # comment, say -- only means the precise check below runs; a miss is impossible,
 # since the command text is inside the event.)
 input="$(cat)"
-case "$input" in *"mxcli exec"*) ;; *) exit 0 ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 
 # Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
 # Microsoft Store instead of running anything is common, so each candidate is asked
@@ -48,7 +48,7 @@ PY="${PY:-python3}"
 command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
 # Only a real model write. Matching read-only queries too (mxcli -c "SHOW ...")
 # ran the coverage checker after every lookup a session made, for nothing.
-case "$command" in *"mxcli exec"*) ;; *) exit 0 ;; esac
+case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 # --- does the running app still match the model? -----------------------------
 # Entity, association, enumeration and security changes do NOT hot-apply: the
 # runtime keeps serving the model it booted with, so a correct fix reads as a
@@ -108,12 +108,13 @@ HOOK_WORDS
   # is dropped first: `describe microflow` prints those grants under almost every
   # flow, so counting them made nearly every exec look like a security change.
   # What actually needs a reboot is the schema (entities, associations,
-  # enumerations), the row-level rules on an entity, the roles behind them, and
-  # runtime settings.
+  # enumerations), a module created or dropped (measured: the watched app rebuilds
+  # and the next test times out), the row-level rules on an entity, the roles behind
+  # them, and runtime settings.
   if printf '%s' "$_changed" \
      | grep -viE '(grant|revoke)[[:space:]]+(execute|view)[[:space:]]+on[[:space:]]+(microflow|nanoflow|page|snippet)' \
-     | grep -qiE '(create|alter|drop)[[:space:]]+(or[[:space:]]+(modify|replace)[[:space:]]+)?((non-)?persistent[[:space:]]+)?(entity|association|enumeration)|alter[[:space:]]+project[[:space:]]+security|alter[[:space:]]+settings|(grant|revoke)[[:space:]]|(create|drop)[[:space:]]+(or[[:space:]]+modify[[:space:]]+)?(module[[:space:]]+role|user[[:space:]]+role|demo[[:space:]]+user)'; then
-    printf 'That exec touched entities, associations, enumerations or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart --only <feature>\n'
+     | grep -qiE '(create|alter|drop)[[:space:]]+(or[[:space:]]+(modify|replace)[[:space:]]+)?((non-)?persistent[[:space:]]+)?(entity|association|enumeration)|alter[[:space:]]+project[[:space:]]+security|alter[[:space:]]+settings|(create|drop)[[:space:]]+module[[:space:]]|(grant|revoke)[[:space:]]|(create|drop)[[:space:]]+(or[[:space:]]+modify[[:space:]]+)?(module[[:space:]]+role|user[[:space:]]+role|demo[[:space:]]+user)'; then
+    printf 'That exec touched entities, associations, enumerations, modules or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart --only <feature>\n'
   elif [ -n "$_unreadable" ] || ! printf '%s' "$_changed" | grep -qiE '(create|alter|drop|grant|revoke|move|rename)[[:space:]]'; then
     if [ -n "$_unreadable" ]; then _why="could not open${_unreadable}"; else _why="no script path or MDL in the command"; fi
     printf 'Could not tell what that exec changed (%s). If it touched entities, associations, enumerations or security, the app does not have it yet: bash tests/gate.sh --restart --only <feature>. Logic and screen changes need no restart: bash tests/gate.sh --only <feature>\n' "$_why"

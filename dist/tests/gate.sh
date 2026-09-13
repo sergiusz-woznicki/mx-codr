@@ -367,7 +367,7 @@ check_naming() {
 # timestamp. Only a passing result is stored, so a cached line is always a line
 # that was green when it ran; a red check, and one that could not run, runs again
 # every time.
-fingerprint() {   # fingerprint <path>... -> one digest line; meta:<path> keys on size + mtime
+fingerprint() {   # fingerprint <path>... -> one digest line; meta:<path> keys on size + mtime, env:NAME=value on the value
   "$PY" - "$MPR" mprcontents "$@" <<'PY_FP'
 import hashlib, os, sys
 h = hashlib.sha256()
@@ -393,7 +393,12 @@ def add(path, content):
     except OSError:
         h.update(("unreadable %s\n" % path).encode())
 for arg in sys.argv[1:]:
-    if arg.startswith("meta:"):
+    if arg.startswith("env:"):
+        # env:NAME=value -- a setting read from the environment rather than a file.
+        # The value is expanded by the caller, so it counts whether or not it was
+        # exported.
+        h.update(("%s\n" % arg).encode())
+    elif arg.startswith("meta:"):
         add(arg[5:], False)
     else:
         add(arg, True)
@@ -464,7 +469,10 @@ if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   # Every result also depends on the gate that produced it, its configuration and
   # the mxcli that read the model: upgrading any of them must not replay old greens.
   cache_inputs=(tests/gate.sh tests/harness.env "meta:$MXCLI")
-  ( run_cached mx       check_mx       "${cache_inputs[@]}" meta:widgets meta:theme meta:themesource meta:javasource ) &
+  # MDL_MXBUILD_PATH picks which `mx` checks the model. Set in harness.env it is
+  # already in the key; set only in the shell it is not, so its value goes in too.
+  ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
+      meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
   ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py ) &

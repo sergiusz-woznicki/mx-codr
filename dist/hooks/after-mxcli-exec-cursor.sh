@@ -15,7 +15,7 @@ set -uo pipefail
 # Almost every event is not an `mxcli exec`; answer that on the raw text before
 # looking for a Python to parse it with (see after-mxcli-exec.sh).
 input="$(cat)"
-case "$input" in *"mxcli exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
 
 # Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
 # Microsoft Store instead of running anything is common, so each candidate is asked
