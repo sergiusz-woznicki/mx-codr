@@ -82,14 +82,23 @@ GATE_START=$SECONDS
 
 # This project's own modules -- read once, used by coverage, naming and the cache.
 user_modules() {
-  "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null \
-    | "$PY" -c 'import json,sys
-for row in json.load(sys.stdin):
+  local listing
+  listing="$("$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
+  printf '%s' "$listing" | "$PY" -c 'import json,sys
+rows = json.load(sys.stdin)
+if not isinstance(rows, list):
+    sys.exit(1)
+for row in rows:
     if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
-        print(row["Module"])' 2>/dev/null
+        print(row["Module"])' 2>/dev/null || return 2
 }
-USER_MODULES=""
-if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then USER_MODULES="$(user_modules)"; fi
+# USER_MODULES_READ says whether the list could be read at all. An empty list from a
+# model with no module of its own is a real answer; an empty list because SHOW
+# MODULES failed is not, and every model check below tells the two apart.
+USER_MODULES=""; USER_MODULES_READ=1
+if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
+  USER_MODULES="$(user_modules)" || USER_MODULES_READ=0
+fi
 
 # --- the processes that are this project's app ---------------------------------
 # Matched on the project, not on the program name: another app's runtime on the
@@ -166,7 +175,7 @@ check_mx() {
   for item in "$MPR" mprcontents widgets theme themesource javasource; do
     [ -e "$item" ] || continue
     cp -Rc "$item" "$scratch/" 2>/dev/null || cp -R "$item" "$scratch/" 2>/dev/null || {
-      echo "mx check: could not copy $item to a scratch directory" > "$WORK/mx.summary"; return 1; }
+      echo "mx check: could not run -- could not copy $item to a scratch directory" > "$WORK/mx.summary"; return 2; }
   done
   local -a mx_args=(docker check -p "$scratch/$MPR")
   [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
@@ -182,7 +191,7 @@ check_mx() {
       echo "   (using $MDL_MXBUILD_PATH -- it must match this project's Mendix version)" \
         >> "$WORK/mx.detail"
     fi
-    echo "mx check: did not report a count" > "$WORK/mx.summary"; return 1
+    echo "mx check: could not run -- mx did not report an error count" > "$WORK/mx.summary"; return 2
   fi
   echo "mx check: $errors errors" > "$WORK/mx.summary"
   [ "$errors" = "0" ] && return 0
@@ -190,11 +199,98 @@ check_mx() {
   return 1
 }
 
+# --- the model checks ------------------------------------------------------------
+# Every check returns 0 (passed), 1 (found problems) or 2 (could not run). The third
+# is not a kind of pass. Until 2026.09.13 a lint that crashed, a model that could not
+# be described, or a worker that died all fell through to "return 0", and the gate
+# printed DONE over checks that had never looked at anything.
+
+# qualified_names: the names out of a `SHOW ... --json` listing on stdin. Exits
+# non-zero when the listing is not JSON, which is how a failed query shows up.
+qualified_names() {
+  "$PY" -c 'import json,sys
+rows = json.load(sys.stdin)
+if not isinstance(rows, list):
+    sys.exit(1)
+for row in rows:
+    name = row.get("Qualified Name") or row.get("QualifiedName")
+    if name:
+        print(name)' 2>/dev/null
+}
+
+# checker_verdict <exit> <output>: 0 passed, 1 findings, 2 the checker itself broke.
+# A Python traceback also exits 1, so a 1 only counts as findings when the checker
+# printed its FAIL verdict line first.
+checker_verdict() {
+  case "$1" in
+    0) return 0 ;;
+    1) printf '%s\n' "$2" | head -1 | grep -qE '^FAIL ' && return 1 ;;
+  esac
+  return 2
+}
+
+# describe_all <label> <dir> <kinds> <describe-type-from-kind>: describe every document
+# of those kinds in every user module into <dir>/<module>.mdl. Any failed listing or
+# describe is written to $WORK/<label>.broken -- not swallowed -- and the loop reads
+# from a here-string, not a pipe, so it runs in this shell and nothing is lost.
+describe_all() {
+  local label="$1" dir="$2" kinds="$3" module kind listing names document
+  local broken="$WORK/$label.broken"
+  : > "$broken"
+  mkdir -p "$dir"
+  for module in $USER_MODULES; do
+    for kind in $kinds; do
+      if ! listing="$("$MXCLI" -p "$MPR" --json -c "SHOW $kind IN $module" 2>/dev/null)"; then
+        echo "SHOW $kind IN $module failed" >> "$broken"; continue
+      fi
+      if ! names="$(printf '%s' "$listing" | qualified_names)"; then
+        echo "SHOW $kind IN $module did not return a JSON list" >> "$broken"; continue
+      fi
+      while IFS= read -r document; do
+        [ -n "$document" ] || continue
+        "$MXCLI" describe "${kind%S}" "$document" -p "$MPR" >> "$dir/$module.mdl" 2>/dev/null \
+          || echo "describe ${kind%S} $document failed" >> "$broken"
+      done <<< "$names"
+    done
+  done
+  [ ! -s "$broken" ]
+}
+
+# modules_or_status <label>: prints nothing and returns 0 when there are modules to
+# check; otherwise writes the summary and returns the status the check should end on.
+modules_or_status() {
+  if [ "${USER_MODULES_READ:-1}" != "1" ]; then
+    echo "$1: could not run -- SHOW MODULES failed" > "$WORK/$1.summary"; return 2
+  fi
+  if [ -z "$USER_MODULES" ]; then
+    echo "$1: no user module found" > "$WORK/$1.summary"; return 3
+  fi
+  return 0
+}
+
 check_lint() {
-  local out line errors
-  out="$("$MXCLI" lint -p "$MPR" 2>&1)"
+  local out code line errors
+  out="$("$MXCLI" lint -p "$MPR" 2>&1)"; code=$?
+  # A .star file that does not parse is skipped with a warning on stderr, and lint
+  # still exits 0 with a normal-looking summary -- measured on 2026-09-13 with a rule
+  # that had a syntax error. Its rules never ran, so this is not a pass.
+  if printf '%s\n' "$out" | grep -qE 'rule file\(s\) skipped|rule file skipped'; then
+    echo "lint: could not run -- $(printf '%s\n' "$out" | grep -cE '^Warning: rule file skipped') lint rule file(s) failed to load" > "$WORK/lint.summary"
+    printf '%s\n' "$out" | grep -E '^Warning: rule file skipped' | sed 's/^Warning: rule file skipped: /  - /' | head -5 > "$WORK/lint.detail"
+    return 2
+  fi
   line="$(printf '%s\n' "$out" | grep -E '^[0-9]+ issues:' | tail -1)"
-  echo "lint: ${line:-no summary line}" > "$WORK/lint.summary"
+  # A clean project prints no count at all, only this sentence.
+  if [ -z "$line" ] && [ "$code" = "0" ] && printf '%s\n' "$out" | grep -qF 'No issues found.'; then
+    echo "lint: No issues found." > "$WORK/lint.summary"
+    return 0
+  fi
+  if [ -z "$line" ]; then
+    echo "lint: could not run -- mxcli lint exited $code without a summary" > "$WORK/lint.summary"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -5 > "$WORK/lint.detail"
+    return 2
+  fi
+  echo "lint: $line" > "$WORK/lint.summary"
   errors="$(printf '%s\n' "$line" | grep -oE '[0-9]+ errors' | grep -oE '[0-9]+')"
   # Warnings and info are for a human to weigh; only errors gate.
   [ -n "$errors" ] && [ "$errors" != "0" ] || return 0
@@ -203,16 +299,28 @@ check_lint() {
 }
 
 check_coverage() {
-  [ -f tools/mdl-checks/check_test_coverage.py ] || { : > "$WORK/coverage.summary"; return 0; }
-  local modules="$USER_MODULES" module out status=0
-  [ -n "$modules" ] || { echo "coverage: no user module found" > "$WORK/coverage.summary"; return 0; }
-  : > "$WORK/coverage.summary"; : > "$WORK/coverage.detail"
-  for module in $modules; do
-    out="$("$PY" tools/mdl-checks/check_test_coverage.py . "$module" 2>&1)" || status=1
-    echo "coverage $module: $(printf '%s\n' "$out" | tail -1)" >> "$WORK/coverage.summary"
-    printf '%s\n' "$out" | grep -vE '^(PASS|FAIL)' | head -10 >> "$WORK/coverage.detail"
-  done
-  return $status
+  [ -f tools/mdl-checks/check_test_coverage.py ] || {
+    echo "coverage: could not run -- tools/mdl-checks/check_test_coverage.py is missing" > "$WORK/coverage.summary"
+    return 2; }
+  local gate out code
+  modules_or_status coverage; gate=$?
+  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
+  # All modules in one call: a test may cover a page in another module, and only a
+  # checker that sees the whole project can tell that claim from a stale one.
+  # shellcheck disable=SC2086
+  out="$("$PY" tools/mdl-checks/check_test_coverage.py . $USER_MODULES 2>&1)"; code=$?
+  printf '%s\n' "$out" | grep -E '^(PASS|FAIL|ERROR) ' | sed 's/^/coverage /' > "$WORK/coverage.summary"
+  printf '%s\n' "$out" | grep -E '^[[:space:]]+- ' | head -10 > "$WORK/coverage.detail"
+  case "$code" in
+    0) return 0 ;;
+    1) grep -q '^coverage FAIL ' "$WORK/coverage.summary" && return 1 ;;
+  esac
+  [ -s "$WORK/coverage.summary" ] && ! grep -q '^coverage ERROR ' "$WORK/coverage.summary" \
+    && : > "$WORK/coverage.summary"
+  [ -s "$WORK/coverage.summary" ] \
+    || echo "coverage: could not run -- check_test_coverage.py exited $code" > "$WORK/coverage.summary"
+  printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 >> "$WORK/coverage.detail"
+  return 2
 }
 
 # The naming rules -- captions on decisions and on every action, real variable
@@ -221,50 +329,49 @@ check_coverage() {
 # an agent could skip without the gate noticing. `describe module` is ground truth:
 # it is what actually landed in the .mpr, not what a script file claimed.
 check_naming() {
-  [ -f tools/mdl-checks/check_mdl.py ] || { : > "$WORK/naming.summary"; return 0; }
-  local modules="$USER_MODULES" module status=0 dumped=0
-  [ -n "$modules" ] || { echo "naming: no user module found" > "$WORK/naming.summary"; return 0; }
+  [ -f tools/mdl-checks/check_mdl.py ] || {
+    echo "naming: could not run -- tools/mdl-checks/check_mdl.py is missing" > "$WORK/naming.summary"
+    return 2; }
+  local gate out code
+  modules_or_status naming; gate=$?
+  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
   # `describe module` emits the module and its roles only -- the documents have to be
   # enumerated and described one by one. Thirteen microflows cost well under a second.
-  mkdir -p "$WORK/mdl"
-  for module in $modules; do
-    for kind in MICROFLOWS NANOFLOWS; do
-      "$MXCLI" -p "$MPR" --json -c "SHOW $kind IN $module" 2>/dev/null \
-        | "$PY" -c 'import json,sys
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    rows = []
-for row in rows:
-    name = row.get("Qualified Name") or row.get("QualifiedName")
-    if name:
-        print(name)' 2>/dev/null | while read -r document; do
-          "$MXCLI" describe "${kind%S}" "$document" -p "$MPR" >> "$WORK/mdl/$module.mdl" 2>/dev/null
-        done
-    done
-    [ -s "$WORK/mdl/$module.mdl" ] && dumped=$((dumped + 1))
-  done
-  if [ "$dumped" = "0" ]; then
-    echo "naming: could not describe any module" > "$WORK/naming.summary"; return 0
+  if ! describe_all naming "$WORK/mdl" "MICROFLOWS NANOFLOWS"; then
+    echo "naming: could not run -- $(head -1 "$WORK/naming.broken")" > "$WORK/naming.summary"
+    head -5 "$WORK/naming.broken" | sed 's/^/  - /' > "$WORK/naming.detail"
+    return 2
   fi
-  local out
-  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming 2>&1)" || status=1
+  # A module with no microflow at all is a real, empty answer.
+  if ! ls "$WORK"/mdl/*.mdl >/dev/null 2>&1; then
+    echo "naming: no microflow or nanoflow to check" > "$WORK/naming.summary"; return 0
+  fi
+  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming 2>&1)"; code=$?
+  checker_verdict "$code" "$out"; gate=$?
+  if [ "$gate" = "2" ]; then
+    echo "naming: could not run -- check_mdl.py exited $code" > "$WORK/naming.summary"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/naming.detail"
+    return 2
+  fi
   echo "naming: $(printf '%s\n' "$out" | head -1)" > "$WORK/naming.summary"
   printf '%s\n' "$out" | grep -E '^\s+- ' | head -10 > "$WORK/naming.detail"
-  return $status
+  return "$gate"
 }
 
 # --- caching the model checks --------------------------------------------------
-# A check's key is a digest of every input it reads: the model (size + mtime of the
-# .mpr and of each file under mprcontents/ -- bytes would cost 15MB of hashing per
-# check, and the mtime is honest now that `mx check` runs on a copy) and the
-# check's own extras. Only a passing result is stored, so a cached line is always a
-# line that was green when it ran; a red check runs again every time until fixed.
-fingerprint() {   # fingerprint <path>... -> one digest line
+# A check's key is a digest of every input it reads. The model, the tests, the
+# checkers, gate.sh and harness.env are keyed on their bytes: a same-size edit with
+# its timestamp restored must not replay an old green, and hashing all of it costs
+# about 10ms on InvoiceDesk. The mxcli binary (90MB) and the widget and theme trees
+# are keyed on size + mtime (meta:), where replacing a file always moves the
+# timestamp. Only a passing result is stored, so a cached line is always a line
+# that was green when it ran; a red check, and one that could not run, runs again
+# every time.
+fingerprint() {   # fingerprint <path>... -> one digest line; meta:<path> keys on size + mtime
   "$PY" - "$MPR" mprcontents "$@" <<'PY_FP'
 import hashlib, os, sys
 h = hashlib.sha256()
-def add(path):
+def add(path, content):
     try:
         st = os.stat(path)
     except OSError:
@@ -273,11 +380,23 @@ def add(path):
         for root, dirs, files in os.walk(path):
             dirs.sort()
             for name in sorted(files):
-                add(os.path.join(root, name))
-    else:
+                add(os.path.join(root, name), content)
+        return
+    if not content:
         h.update(("%s %d %d\n" % (path, st.st_size, st.st_mtime_ns)).encode())
-for path in sys.argv[1:]:
-    add(path)
+        return
+    h.update(("%s %d\n" % (path, st.st_size)).encode())
+    try:
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                h.update(chunk)
+    except OSError:
+        h.update(("unreadable %s\n" % path).encode())
+for arg in sys.argv[1:]:
+    if arg.startswith("meta:"):
+        add(arg[5:], False)
+    else:
+        add(arg, True)
 print(h.hexdigest()[:24])
 PY_FP
 }
@@ -312,44 +431,44 @@ run_cached() {
 # from `describe page`, which prints DesignProperties; mxcli's Starlark rules cannot
 # see widgets at all (a page object there exposes only widget_count).
 check_layout() {
-  [ -f tools/mdl-checks/check_layout.py ] || { : > "$WORK/layout.summary"; return 0; }
-  local modules="$USER_MODULES" module status=0 dumped=0
-  [ -n "$modules" ] || { echo "layout: no user module found" > "$WORK/layout.summary"; return 0; }
-  mkdir -p "$WORK/pages"
-  for module in $modules; do
-    "$MXCLI" -p "$MPR" --json -c "SHOW PAGES IN $module" 2>/dev/null \
-      | "$PY" -c 'import json,sys
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    rows = []
-for row in rows:
-    name = row.get("Qualified Name") or row.get("QualifiedName")
-    if name:
-        print(name)' 2>/dev/null | while read -r page; do
-        "$MXCLI" describe PAGE "$page" -p "$MPR" >> "$WORK/pages/$module.mdl" 2>/dev/null
-      done
-    [ -s "$WORK/pages/$module.mdl" ] && dumped=$((dumped + 1))
-  done
-  if [ "$dumped" = "0" ]; then
+  [ -f tools/mdl-checks/check_layout.py ] || {
+    echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
+    return 2; }
+  local gate out code
+  modules_or_status layout; gate=$?
+  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
+  if ! describe_all layout "$WORK/pages" "PAGES"; then
+    echo "layout: could not run -- $(head -1 "$WORK/layout.broken")" > "$WORK/layout.summary"
+    head -5 "$WORK/layout.broken" | sed 's/^/  - /' > "$WORK/layout.detail"
+    return 2
+  fi
+  if ! ls "$WORK"/pages/*.mdl >/dev/null 2>&1; then
     echo "layout: no page to check" > "$WORK/layout.summary"; return 0
   fi
-  local out
-  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)" || status=1
+  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)"; code=$?
+  checker_verdict "$code" "$out"; gate=$?
+  if [ "$gate" = "2" ]; then
+    echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/layout.detail"
+    return 2
+  fi
   echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
   # Errors gate; the heading warning is printed but does not, the same way lint's
   # warnings do not.
   printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
-  return $status
+  return "$gate"
 }
 
 # --- start the slow, independent work first ---------------------------------
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
-  ( run_cached mx       check_mx       widgets theme themesource javasource ) &
-  ( run_cached lint     check_lint     .claude/lint-rules ) &
-  ( run_cached coverage check_coverage tests tools/mdl-checks/check_test_coverage.py ) &
-  ( run_cached naming   check_naming   tools/mdl-checks/check_mdl.py ) &
-  ( run_cached layout   check_layout   tools/mdl-checks/check_layout.py ) &
+  # Every result also depends on the gate that produced it, its configuration and
+  # the mxcli that read the model: upgrading any of them must not replay old greens.
+  cache_inputs=(tests/gate.sh tests/harness.env "meta:$MXCLI")
+  ( run_cached mx       check_mx       "${cache_inputs[@]}" meta:widgets meta:theme meta:themesource meta:javasource ) &
+  ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
+  ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py ) &
+  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py ) &
   echo "== mx check, lint, coverage, naming and layout started (they need no app; running while the suite does)"
 fi
 
@@ -642,6 +761,7 @@ if path and not os.path.exists(path):
 }
 
 failures=()
+cannot_run=()
 summary=()
 
 # A test that has never failed may assert nothing at all, and nothing about its
@@ -772,19 +892,28 @@ step_tests() {
 }
 
 collect() {
-  local name="$1" label="$2"
-  [ -f "$WORK/$name.status" ] || return 0
-  local status
+  local name="$1" label="$2" status
+  if [ ! -f "$WORK/$name.status" ]; then
+    # A worker that left no status died before it finished -- killed, out of
+    # memory, a syntax error. None of that is a pass.
+    summary+=("$label: could not run -- the check left no result")
+    cannot_run+=("$label")
+    return 0
+  fi
   status="$(cat "$WORK/$name.status")"
   if [ -s "$WORK/$name.summary" ]; then
     while IFS= read -r line; do
       [ -n "$line" ] && summary+=("$line")
     done < "$WORK/$name.summary"
   fi
-  if [ "$status" != "0" ]; then
-    [ -s "$WORK/$name.detail" ] && { echo "== $label"; cat "$WORK/$name.detail"; }
-    failures+=("$label")
-  fi
+  case "$status" in
+    0) ;;
+    2) echo "== $label (could not run)"
+       [ -s "$WORK/$name.detail" ] && cat "$WORK/$name.detail"
+       cannot_run+=("$label") ;;
+    *) [ -s "$WORK/$name.detail" ] && { echo "== $label"; cat "$WORK/$name.detail"; }
+       failures+=("$label") ;;
+  esac
 }
 
 preflight_session
@@ -813,6 +942,12 @@ done
 echo "   timing:${timing} wall $((SECONDS - GATE_START))s"
 if [ ${#failures[@]} -gt 0 ]; then
   echo "   NOT DONE — failed: ${failures[*]}"
+  [ ${#cannot_run[@]} -eq 0 ] || echo "   and could not run: ${cannot_run[*]}"
   exit 1
+fi
+if [ ${#cannot_run[@]} -gt 0 ]; then
+  echo "   NOT DONE — could not run: ${cannot_run[*]}"
+  echo "   A check that did not run has not passed. Fix what stopped it, then run the gate again."
+  exit 2
 fi
 echo "   DONE — every check passed"

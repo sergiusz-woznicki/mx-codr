@@ -88,6 +88,25 @@ fi
 # The real command, so the shared hook can tell a logic change from an entity or
 # security change. Cursor's shell tool has moved tool_input's shape around, so it
 # is lifted out of the raw payload rather than read from a named field.
-_cmd="$(printf '%s' "$input" | grep -oE '[^"]*mxcli(\.exe)? exec[^"]*' | head -1 | sed 's/\\\\/\//g')"
-feedback="$(printf '{"tool_input":{"command":"%s"}}' "${_cmd:-mxcli exec}" | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
+# Found by walking the parsed payload for the string that holds the exec, then
+# re-encoded with json.dumps -- the old grep stopped at the first escaped quote, so
+# `./mxcli exec "x.mdl"` arrived as `./mxcli exec \` and printf built invalid JSON.
+_payload="$(printf '%s' "$input" | "$PY" -c 'import json, sys
+def strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from strings(item)
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = None
+command = next((s for s in strings(data) if "mxcli exec" in s or "mxcli.exe exec" in s), "mxcli exec")
+print(json.dumps({"tool_input": {"command": command.replace("\\", "/")}}))' 2>/dev/null)"
+[ -n "$_payload" ] || _payload='{"tool_input":{"command":"mxcli exec"}}'
+feedback="$(printf '%s' "$_payload" | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
 emit "$feedback"

@@ -62,16 +62,48 @@ for _port in "${APP_PORT:-8081}" 8080; do
     && { _app_running=1; break; }
 done
 if [ "$_app_running" = "1" ]; then
-  # What the exec actually carried: the .mdl files named on the command line, or
-  # the inline text when there are none.
-  _changed=""
-  for _word in $command; do
+  # What the exec actually carried. The command is split the way a shell splits it
+  # -- by Python's shlex, which parses and never runs anything -- so a quoted path is
+  # a path, not a word with quote marks on it, and a glob is expanded. Every .mdl it
+  # names is read. A name that cannot be opened means the hook does not know what
+  # changed, and it says so instead of guessing: a wrong "no restart needed" is what
+  # sent one session chasing a correct fix for twenty minutes.
+  _words="$(printf '%s' "$command" | "$PY" -c 'import glob, shlex, sys
+text = sys.stdin.read()
+try:
+    words = shlex.split(text)
+except ValueError:
+    words = text.split()
+for word in words:
+    matches = sorted(glob.glob(word)) if any(c in word for c in "*?[") else []
+    print("\n".join(matches) if matches else word)' 2>/dev/null)"
+  [ -n "$_words" ] || _words="$(printf '%s\n' $command)"
+  _changed=""; _unreadable=""; _named=0
+  while IFS= read -r _word; do
     case "$_word" in
-      *.mdl) [ -f "$_word" ] && _changed="$_changed
-$(cat "$_word" 2>/dev/null)" ;;
+      *.mdl)
+        _named=1
+        if [ -f "$_word" ]; then
+          _changed="$_changed
+$(cat "$_word" 2>/dev/null)"
+        else
+          _unreadable="$_unreadable $_word"
+        fi ;;
     esac
-  done
-  [ -n "$_changed" ] || _changed="$command"
+  done <<HOOK_WORDS
+$_words
+HOOK_WORDS
+  # No script named: the MDL, if any, is in the command itself (a heredoc on stdin).
+  [ "$_named" = "1" ] || _changed="$command"
+
+  # A project booted by MDL_BOOT_COMMAND (run-app.sh, a deploy build) is not under
+  # `mxcli run --watch`, so nothing it serves hot-applies.
+  _custom_boot=""
+  if [ -n "${MDL_BOOT_COMMAND:-}" ] \
+     || grep -qE '^[[:space:]]*(export[[:space:]]+)?MDL_BOOT_COMMAND=' tests/harness.env 2>/dev/null; then
+    _custom_boot=1
+  fi
+
   # Document-level access -- `grant execute on microflow`, `grant view on page` --
   # is dropped first: `describe microflow` prints those grants under almost every
   # flow, so counting them made nearly every exec look like a security change.
@@ -81,7 +113,12 @@ $(cat "$_word" 2>/dev/null)" ;;
   if printf '%s' "$_changed" \
      | grep -viE '(grant|revoke)[[:space:]]+(execute|view)[[:space:]]+on[[:space:]]+(microflow|nanoflow|page|snippet)' \
      | grep -qiE '(create|alter|drop)[[:space:]]+(or[[:space:]]+(modify|replace)[[:space:]]+)?((non-)?persistent[[:space:]]+)?(entity|association|enumeration)|alter[[:space:]]+project[[:space:]]+security|alter[[:space:]]+settings|(grant|revoke)[[:space:]]|(create|drop)[[:space:]]+(or[[:space:]]+modify[[:space:]]+)?(module[[:space:]]+role|user[[:space:]]+role|demo[[:space:]]+user)'; then
-    printf 'That exec touched entities, associations, enumerations or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart\n'
+    printf 'That exec touched entities, associations, enumerations or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart --only <feature>\n'
+  elif [ -n "$_unreadable" ] || ! printf '%s' "$_changed" | grep -qiE '(create|alter|drop|grant|revoke|move|rename)[[:space:]]'; then
+    if [ -n "$_unreadable" ]; then _why="could not open${_unreadable}"; else _why="no script path or MDL in the command"; fi
+    printf 'Could not tell what that exec changed (%s). If it touched entities, associations, enumerations or security, the app does not have it yet: bash tests/gate.sh --restart --only <feature>. Logic and screen changes need no restart: bash tests/gate.sh --only <feature>\n' "$_why"
+  elif [ -n "$_custom_boot" ]; then
+    printf 'That exec changed logic and screens only, but this project boots with MDL_BOOT_COMMAND rather than `mxcli run --watch`, so nothing hot-applies. Restart before trusting a test: bash tests/gate.sh --restart --only <feature>\n'
   else
     printf 'That exec changed logic and screens only -- `mxcli run --watch` hot-applies those in about two seconds, so no restart is needed. Run the test: bash tests/gate.sh --only <feature>\n'
   fi
@@ -98,10 +135,11 @@ for row in json.load(sys.stdin):
         print(row["Module"])' 2>/dev/null)"
 [ -n "$modules" ] || exit 0
 
-for module in $modules; do
-  out="$("$PY" tools/mdl-checks/check_test_coverage.py . "$module" 2>&1)" || true
-  case "$out" in
-    FAIL*) printf 'Test coverage after that mxcli exec, module %s:\n%s\nEvery page and ACT_ microflow needs a tests/verify-*.test.sh with a `# covers:` line naming it (skill: test-first-delivery).\n' "$module" "$out" ;;
-  esac
-done
+# All modules in one call, so a test covering another module's page is not reported
+# as stale.
+# shellcheck disable=SC2086
+out="$("$PY" tools/mdl-checks/check_test_coverage.py . $modules 2>&1)" || true
+case "$out" in
+  *FAIL*) printf 'Test coverage after that mxcli exec:\n%s\nEvery page and ACT_ microflow needs a tests/verify-*.test.sh with a `# covers:` line naming it (skill: test-first-delivery).\n' "$out" ;;
+esac
 exit 0

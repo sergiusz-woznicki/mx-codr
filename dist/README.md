@@ -127,43 +127,35 @@ The hooks are the part that does not depend on the model choosing to comply:
 
 ## Rebuilding after a source change
 
-Bump `dist/VERSION` first (today's date, `YYYY.MM.DD`), then run from the repo
-root. It is a copy, so re-running is always safe:
+Twelve files here have a second copy in the repo: five skills in
+`.ai-context/skills/`, two lint rules in `.claude/lint-rules/`, and the naming and
+coverage checkers plus their fixtures in `tests/skills/`. Both copies get edited,
+so a plain copy can go either way. One did: on 2026-09-13 four `dist/` files were
+newer than their sources, and the copy block that used to be here would have rolled
+them back without a word.
+
+Bump `dist/VERSION` first (`YYYY.MM.DD.N`), then run from the repo root:
 
 ```bash
-mkdir -p dist/skills dist/lint-rules dist/checks/fixtures
-
-for s in naming-and-captions reuse-and-snippets test-first-delivery \
-         module-structure organize-project; do   # spacing-and-layout is dist-only
-  mkdir -p "dist/skills/$s"
-  cp ".ai-context/skills/$s/SKILL.md" "dist/skills/$s/"
-done
-
-cp .claude/lint-rules/mod001_process_folders.star \
-   .claude/lint-rules/reu001_shared_documents.star dist/lint-rules/
-
-cp tests/skills/check_mdl.py tests/skills/check_test_coverage.py dist/checks/
-cp tests/skills/fixtures/*.mdl dist/checks/fixtures/
+bash tests/skills/rebuild-dist.sh --check   # report only
+bash tests/skills/rebuild-dist.sh           # copy what is safe, record the result
 ```
 
+The script compares each pair with its hash at the last sync, recorded in
+`tests/skills/.dist-sync.sha256`. A changed source is copied into `dist/`. A `dist/`
+file edited directly is refused, with the `cp` that brings it back to the source.
+When both sides changed, it refuses and asks you to decide. Nothing is copied unless
+every pair is safe.
+
 `rules/`, `hooks/`, `plugins/`, `tests/`, `checks/check_layout.py`,
-`checks/record_install.py` and `skills/spacing-and-layout/` have no upstream copy —
-they are authored in `dist/` and copied only outward, so nothing needs syncing for
-them. The commands above only copy *into* `dist/`, so re-running them never
-removes anything that lives here alone.
+`checks/record_install.py` and `skills/spacing-and-layout/` have no copy in the
+repo. They are authored here, in `dist/`, and nothing overwrites them.
 
-Only two Python checkers ship: captions/positions (`check_mdl.py`) and test
-coverage (`check_test_coverage.py`). Folder structure and reuse are Starlark rules
-(`lint-rules/`) because the model can answer those; captions and positions are not
-in the model catalog, and coverage needs the filesystem, so those two stay Python.
+The harness's own regression tests need no app and run in about four seconds:
 
-Two things the copy loop will not tell you, so check them by hand:
-
-- **Both skill copies must agree first.** The repo keeps `.ai-context/skills/<name>/`
-  and `.claude/skills/<name>/` byte-identical; only the first is copied here.
-  `diff -r` them before rebuilding, or you ship whichever one you happened to edit.
-- **A new skill is three edits, not one**: add it to the loop above, and to
-  `install.sh` only if it needs anything beyond a `SKILL.md`.
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 tests/performance/audit.py
+```
 
 ## Testing the bundle before shipping it
 

@@ -24,6 +24,7 @@ begin
     @caption 'Invoice still unpaid?'
     if $Invoice/IsPaid = false then
       @position(320, 230)
+      @caption 'Count one more unpaid invoice'
       set $UnpaidCount = $UnpaidCount + 1;
     end if;
   end loop;
