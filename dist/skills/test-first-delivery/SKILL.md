@@ -35,6 +35,21 @@ bash tests/gate.sh --only <feature>
 bash tests/gate.sh
 ```
 
+What a test script can call, so there is no need to read `tests/lib.sh` to find out
+(one session spent its first minute grepping it). A complete script is under
+*Write it as one scenario* below.
+
+```bash
+source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
+# shell:  scenario '<js body>'   field "$result" key   fields "$result" a b   fail "msg"
+#         oql "SELECT ..."   oql_count Entity ["where"]   oql_value Entity Attr "where"
+#         await_row Entity "where" [seconds]            (entity names without module)
+# inside a scenario body: await open_app()  menu('Invoices', 'invoiceGrid')
+#         fill('txtName', 'x')  pick_combo('cmbCustomer', 'Northwind')
+#         row_action('invoiceGrid', 'INV-1', 'btnSend')  await_message(/sent/i)
+#         dismiss_dialog()  page_text()  reopen_app()   -- plus Playwright's `page`
+```
+
 Non-negotiable, in order of how often they get skipped:
 
 1. **The test fails before the implementation exists.** A test that has never been red

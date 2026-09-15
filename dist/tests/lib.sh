@@ -77,6 +77,17 @@ for row in rows:
     if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
         print(row["Module"]); break' 2>/dev/null)"
 fi
+# Test first means the test exists before the module does, and then neither gate.sh
+# nor SHOW MODULES has a name to give. Every oql_* call then failed with "needs a
+# module ... or run through tests/gate.sh" -- although it was run through the gate --
+# so the red-first run went red for a reason that had nothing to do with the missing
+# feature (seen in the 2026-09-13 benchmark, two tests of seven). The script's own
+# `# covers:` header already names the module it is about; take it from there, and
+# the query then fails on the entity that does not exist yet, which is the real reason.
+if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
+  MODULE="$(sed -nE 's/^#[[:space:]]*covers:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)\..*/\1/p' \
+    "${BASH_SOURCE[1]}" 2>/dev/null | head -1)"
+fi
 
 # The runtime log is where a licence refusal is explained; the browser only shows a
 # failed sign-in. Read from it rather than guessing at the cause.

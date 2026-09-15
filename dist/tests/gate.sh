@@ -571,6 +571,12 @@ if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
       [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
       [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
       [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
+    else
+      # `mxcli new` creates no database, and `run --local` refuses to create one
+      # unasked: a fresh project's first boot died in 13s with "The database to be
+      # used does not exist", before any test ran. --ensure-db creates it when it is
+      # missing and does nothing when it is there, so it costs a check per boot.
+      boot_args+=(--ensure-db)
     fi
     ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
     BASE_URL="http://localhost:$APP_PORT"
