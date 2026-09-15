@@ -12,6 +12,11 @@
 # Output contract: JSON on stdout, exit 0. Exit codes do not carry meaning here.
 set -uo pipefail
 
+# Almost every event is not an `mxcli exec`; answer that on the raw text before
+# looking for a Python to parse it with (see after-mxcli-exec.sh).
+input="$(cat)"
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
+
 # Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
 # Microsoft Store instead of running anything is common, so each candidate is asked
 # to run before it is believed. Inlined rather than sourced: a hook has to work with
@@ -49,15 +54,11 @@ PY="${PY:-python3}"
 # cwd moves to the project below.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-input="$(cat)"
-
 emit() {  # emit "<text>" -- or nothing at all when there is nothing to say
   [ -n "${1:-}" ] || { printf '{}\n'; exit 0; }
   printf '%s' "$1" | "$PY" -c 'import json,sys; print(json.dumps({"additional_context": sys.stdin.read().strip()}))'
   exit 0
 }
-
-case "$input" in *"mxcli exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
 
 cwd="$(printf '%s' "$input" | "$PY" -c 'import json,sys
 try: print(json.load(sys.stdin).get("cwd") or "")
@@ -84,5 +85,28 @@ fi
 
 # The shared script reads a Claude-shaped payload and reports failures on stdout.
 # Hand it the command it expects rather than duplicating the coverage logic.
-feedback="$(printf '{"tool_input":{"command":"mxcli exec"}}' | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
+# The real command, so the shared hook can tell a logic change from an entity or
+# security change. Cursor's shell tool has moved tool_input's shape around, so it
+# is lifted out of the raw payload rather than read from a named field.
+# Found by walking the parsed payload for the string that holds the exec, then
+# re-encoded with json.dumps -- the old grep stopped at the first escaped quote, so
+# `./mxcli exec "x.mdl"` arrived as `./mxcli exec \` and printf built invalid JSON.
+_payload="$(printf '%s' "$input" | "$PY" -c 'import json, sys
+def strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from strings(item)
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = None
+command = next((s for s in strings(data) if "mxcli exec" in s or "mxcli.exe exec" in s), "mxcli exec")
+print(json.dumps({"tool_input": {"command": command.replace("\\", "/")}}))' 2>/dev/null)"
+[ -n "$_payload" ] || _payload='{"tool_input":{"command":"mxcli exec"}}'
+feedback="$(printf '%s' "$_payload" | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
 emit "$feedback"

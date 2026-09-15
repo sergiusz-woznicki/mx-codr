@@ -14,14 +14,13 @@ result="$(scenario '
   await open_app();
   await dismiss_dialog();
   await row_action("invoiceGrid", "'"$number"'", "btnRemind");
-  await page.waitForTimeout(1200);
-  const text = await page_text();
+  const text = await await_message(/reminder sent for invoice/i);
   await dismiss_dialog();
   return {confirmed: /reminder sent for invoice/i.test(text)};
 ')"
 
 after="$(oql_value Invoice ReminderCount "InvoiceNumber = '$number'")"
 [ "$after" -gt "$before" ] || fail "ReminderCount for $number did not increase ($before -> $after)"
-[ "$(field "$result" confirmed)" = "True" ] || fail "no reminder confirmation message shown"
+[ "$(field "$result" confirmed)" = "true" ] || fail "no reminder confirmation message shown"
 
 echo "OK: reminder for $number raised the count $before -> $after and confirmed on screen"

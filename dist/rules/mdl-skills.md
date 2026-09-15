@@ -1,6 +1,6 @@
 # Project skills that are always in force
 
-Five skills are installed in `.claude/skills/` that are **not** in the skill table
+Six skills are installed in `.claude/skills/` that are **not** in the skill table
 mxcli writes into `CLAUDE.md`. That table lists only mxcli's own skills; these are
 this project's, and they apply on top of it. Load them with the Skill tool, before
 the work, not after:
@@ -12,6 +12,7 @@ the work, not after:
 | Writing or changing any microflow, nanoflow or rule | `naming-and-captions` — a business `@caption` on every decision **and** every action (retrieve, create, change, commit, delete, call, show page, set), never the Mendix default |
 | A second page, snippet or microflow that resembles an existing one | `reuse-and-snippets` |
 | Moving documents between folders or modules | `organize-project` |
+| Writing or altering any **page** or snippet | `spacing-and-layout` — two inline widgets side by side need `DesignProperties: ['Spacing': ['margin-right': 'S']]`; the gate's `layout` verdict fails without it |
 
 Facts about this app come from one call, not from exploring by hand -- each of these
 runs its lookups in parallel and answers in well under a second:
@@ -32,15 +33,66 @@ bash tests/gate.sh --only <feature>          # one script against the running ap
 `--boot-if-needed` is the portable way in. `./mxcli run --local --watch` gives a ~1s
 hot reload where it works, but it deadlocks on some machines, and where the runtime
 serves a built deployment there is no hot reload at all -- a model change is invisible
-until a rebuild. `tests/harness.env` records how this project boots
-(`MDL_BOOT_COMMAND`), so the gate is the one command that is right everywhere.
+until a rebuild. On such machines the installer writes `tests/harness.env` with how
+this project boots (`MDL_BOOT_COMMAND`); where the file is absent, `mxcli run` works
+and nothing needs recording. Either way the gate is the one command that is right
+everywhere, and `bash tests/gate.sh --restart` is the one way to restart the app when
+the gate says the model changed after the runtime started.
+
+`./mxcli syntax` with no argument lists every topic. After that, **ask for the leaf
+topic directly and ask for everything you need in one command** -- each lookup costs
+a whole round trip, and `syntax microflow` followed by `syntax microflow.create` is
+two where one would do:
+
+```bash
+./mxcli syntax microflow.object-operations; ./mxcli syntax page.action; ./mxcli syntax navigation.create
+```
+
+Syntax that every session otherwise looks up, one screen (`./mxcli syntax <topic>`
+has the rest):
+
+```
+CREATE [OR MODIFY] ASSOCIATION Mod.Order_Customer FROM Mod.Order TO Mod.Customer
+  TYPE Reference|ReferenceSet [OWNER Default|Both] [DELETE_BEHAVIOR PREVENT|CASCADE];
+  -- FROM holds the foreign key (the many side)          syntax: domain-model.association
+CREATE OR REPLACE NAVIGATION Responsive HOME PAGE Mod.Home [HOME PAGE Mod.X FOR UserRole]
+  MENU ( MENU ITEM 'Label' PAGE Mod.Page ICON Atlas_Core.Atlas."align-center"; );
+  -- FOR takes a bare USER role; ICON is a model reference, hyphens double-quoted
+  -- profiles are Mendix's own kinds only: Responsive, Phone, Tablet (+Offline)
+ACTIONBUTTON btn (Caption: 'Save', Action: SAVE_CHANGES [CLOSE_PAGE], ButtonStyle: Primary,
+  Icon: 'Atlas_Core.Atlas_Filled.pencil')
+  Action: MICROFLOW Mod.MF(Param: $currentObject) | SHOW_PAGE Mod.Page(P: $currentObject)
+        | CREATE_OBJECT Mod.Entity THEN SHOW_PAGE Mod.Page | DELETE | CANCEL_CHANGES | SIGN_OUT
+  -- a SHOW_PAGE argument must be the enclosing widget's object      syntax: page.action
+$O = CREATE Mod.E (A = v) [COMMIT [WITHOUT EVENTS]] [REFRESH];   CHANGE $O (A = v) [COMMIT] [REFRESH];
+COMMIT $O [WITHOUT EVENTS] [REFRESH];  DELETE $O [REFRESH];        syntax: microflow.object-operations
+CREATE [OR MODIFY] MODULE ROLE Mod.Role [DESCRIPTION '...'];          syntax: security.module-role
+@position(x, y) inside a loop is an OFFSET FROM THE LOOP, not a canvas coordinate:
+  loop at (560,200) with its body at (40,100) -- not (560,360), which draws a 670px box
+  around one activity (2% full; the gate fails a loop box under 8% filled).
+  Wrap a flow every ~8 activities: y += 160, x back to the left
+DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']]
+  -- sides margin-|padding- top|right|bottom|left · values None S M L and NOTHING else
+  -- two inline widgets side by side (label+button, button+button) collide without it;
+  --   the gate's `layout` verdict fails on it. Never a Class: or custom CSS for spacing
+show message '{1}' type info|warning|error objects [$Obj/Name + ' saved'];   -- '{1}' is the slot, the
+show message 'Plain text' type info;                                          -- list fills it
+validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
+```
+
+Never run `mx check` (or `./mxcli docker check`) straight at the project while the
+app is up: it re-saves the `.mpr`, the `--watch` runtime rebuilds underneath the
+suite, and a green feature turns red for no reason. `bash tests/gate.sh` runs the
+same check against a scratch copy of the model, which is why the check belongs in
+the gate and not in a command of its own. CLAUDE.md's `docker check` line is for a
+project with nothing running.
 
 Never debug by rerunning the whole suite. A test that passes alone and fails in the
 suite is a test-isolation bug (sign-in identity, or data left behind) and is fixed in
 `tests/lib.sh`.
 
 "Done" for a feature is one command, reported as command output — it runs the suite,
-`mx check`, lint and the coverage checker, and ends in `DONE` or `NOT DONE`:
+`mx check`, lint, coverage, naming and layout, and ends in `DONE` or `NOT DONE`:
 
 ```bash
 bash tests/gate.sh

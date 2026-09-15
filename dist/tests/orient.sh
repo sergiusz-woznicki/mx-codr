@@ -66,8 +66,9 @@ for row in json.load(sys.stdin):
 
 {
   echo "== lint (the project's own rules included)"
-  "$MXCLI" lint -p "$MPR" 2>&1 | tail -1
-  "$MXCLI" lint -p "$MPR" 2>&1 | grep -oE '\[(MOD001|REU001|SEC00[0-9]|ARCH00[0-9])\]' | sort | uniq -c | head -8
+  lint="$("$MXCLI" lint -p "$MPR" 2>&1)"
+  printf '%s\n' "$lint" | tail -1
+  printf '%s\n' "$lint" | grep -oE '\[(MOD001|REU001|SEC00[0-9]|ARCH00[0-9])\]' | sort | uniq -c | head -8
 } > "$WORK/3-lint" 2>&1 &
 
 {
@@ -79,6 +80,8 @@ for row in json.load(sys.stdin):
   fi
   [ -f tests/credentials.env ] && echo "   tests/credentials.env present (test sign-in configured)"
   [ -d docs/brain ] && echo "   docs/brain/ present -- read project.md before building"
+  [ -f tools/mdl-checks/VERSION ] && echo "   harness $(cat tools/mdl-checks/VERSION)"
+  mdl_check_install_freshness
 } > "$WORK/0-app" 2>&1 &
 
 wait

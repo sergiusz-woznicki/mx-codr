@@ -14,7 +14,9 @@ result="$(scenario '
   await page.click(".mx-name-btnNewInvoice");
   await page.waitForSelector(".mx-name-txtNumber");
   await page.click(".mx-name-btnSave");
-  await page.waitForTimeout(1200);
+  // The customer rule answers last, through a Show message; once it is on screen
+  // the field messages are too.
+  await await_message(/customer this invoice belongs to/i);
   const text = await page_text();
   const stillOpen = await page.locator(".mx-name-txtNumber").count() > 0;
   // The customer rule reports through a Show message, whose modal covers Cancel.
@@ -29,10 +31,13 @@ result="$(scenario '
   };
 ')"
 
-[ "$(field "$result" stillOpen)" = "True" ] || fail "the popup closed on an invalid invoice — validation did not block the save"
-[ "$(field "$result" number)" = "True" ] || fail "missing the 'invoice number is required' message"
-[ "$(field "$result" amount)" = "True" ] || fail "missing the amount validation message"
-[ "$(field "$result" customer)" = "True" ] || fail "missing the customer validation message"
+# One Python start for all four keys, not four.
+{ read -r stillOpen; read -r number; read -r amount; read -r customer; } \
+  <<< "$(fields "$result" stillOpen number amount customer)"
+[ "$stillOpen" = "true" ] || fail "the popup closed on an invalid invoice — validation did not block the save"
+[ "$number" = "true" ] || fail "missing the 'invoice number is required' message"
+[ "$amount" = "true" ] || fail "missing the amount validation message"
+[ "$customer" = "true" ] || fail "missing the customer validation message"
 [ "$(oql_count Invoice)" = "$before" ] || fail "invoice count changed despite failed validation"
 
 echo "OK: invalid invoice refused with all three messages, nothing stored"

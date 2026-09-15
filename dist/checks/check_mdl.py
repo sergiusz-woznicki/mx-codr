@@ -18,6 +18,11 @@ can see them:
     - no placeholder variable names ($Int1, $List2, $tmp, $x)
     - no variable name that only restates its type ($Invoice_List)
     - no two activities at the same @position
+    - a flow no wider than one screen: activities wrap into rows instead of
+      marching off to the right (FLOW01)
+    - a loop box that is not mostly empty: Mendix sizes it to hold its body, and
+      body positions are offsets from the loop, so a canvas coordinate used there
+      inflates the box around one small activity (FLOW02)
 
 The reuse-and-snippets and module-structure rules read the model, so they are
 Starlark lint rules instead: .claude/lint-rules/reu001_shared_documents.star,
@@ -139,11 +144,18 @@ def check_naming(lines: list[str]) -> list[Failure]:
     seen_positions: dict[tuple[int, int], int] = {}
     current_flow = "(unknown)"
 
+    # FLOW01/FLOW02 need the shape of each flow, not just one line at a time: how
+    # far right it runs, and where a loop's body sits relative to the loop.
+    flow_points: dict[str, list[tuple[int, int, int]]] = {}   # flow -> (x, y, line)
+    loop_stack: list[dict] = []                               # loops currently open
+    finished_loops: list[dict] = []
+
     for index, line in enumerate(lines):
         head = MICROFLOW_START_RE.match(line)
         if head:
             current_flow = head.group(1)
             seen_positions = {}
+            loop_stack = []
 
         position = POSITION_RE.match(line)
         if position:
@@ -159,8 +171,24 @@ def check_naming(lines: list[str]) -> list[Failure]:
                 )
             else:
                 seen_positions[point] = index + 1
+            flow_points.setdefault(current_flow, []).append((point[0], point[1], index + 1))
+            if loop_stack:
+                loop_stack[-1]["children"].append((point[0], point[1], index + 1))
 
         stripped = line.strip().lower()
+
+        # A loop is a container, and Mendix sizes it to hold its body: measured on the
+        # stored model, a loop whose only child sat at 560;360 came out 670x440, while
+        # the same child at 40;100 gave 200x180, and a loop holding eight children
+        # spread to 520;580 came out 590x660. So the body's positions decide the box,
+        # and what goes wrong is not a particular coordinate -- it is a box far bigger
+        # than the thing inside it.
+        if stripped.startswith("loop ") or stripped.startswith("while "):
+            loop_stack.append({"flow": current_flow, "line": index + 1, "children": []})
+        elif stripped.startswith("end loop") or stripped.startswith("end while"):
+            if loop_stack:
+                finished_loops.append(loop_stack.pop())
+
         if stripped.startswith("end ") or stripped == "end":
             continue
 
@@ -260,6 +288,59 @@ def check_naming(lines: list[str]) -> list[Failure]:
         ):
             for hit in regex.findall(line):
                 failures.append(Failure(check, f"{label}: {hit}", index + 1))
+
+    # FLOW02: a loop box that is mostly empty. Mendix grows the box to hold the body,
+    # and body positions are offsets from the loop, so a canvas coordinate written
+    # there inflates the box around one small activity -- 2.4% of it filled, measured,
+    # against 13% for a loop holding eight and 20% for a correctly placed single one.
+    # Density, not coordinates: a big body legitimately makes a big box, and fills it.
+    ACTIVITY_AREA = 120 * 60
+    for frame in finished_loops:
+        children = frame["children"]
+        if not children:
+            continue
+        box_width = max(200, max(x for x, _y, _l in children) + 150)
+        box_height = max(180, max(y for _x, y, _l in children) + 80)
+        filled = len(children) * ACTIVITY_AREA / (box_width * box_height)
+        if filled >= 0.08:
+            continue
+        widest = max(children, key=lambda c: c[0] * c[1])
+        failures.append(
+            Failure(
+                "loop-box-empty",
+                f"the loop at line {frame['line']} in {frame['flow']} draws a box about "
+                f"{box_width}x{box_height}px around {len(children)} activit"
+                f"{'y' if len(children) == 1 else 'ies'} -- {filled * 100:.0f}% of it filled, so it "
+                f"reads as an empty rectangle. A position inside a loop is an offset FROM the "
+                f"loop, not a canvas coordinate: @position({widest[0]}, {widest[1]}) puts that "
+                f"activity {widest[0]}px right of the loop. Use small offsets -- (40, 100) for "
+                f"the first, (200, 100) for the next",
+                widest[2],
+            )
+        )
+
+    # FLOW01: a flow that runs off the screen. Studio Pro shows roughly 1600px at a
+    # readable zoom; measured, a 17-activity flow written as one row spanned 2400px
+    # and had to be read at 75% and scrolled. Activities wrap into rows instead:
+    # y += 160 and back to the left margin.
+    for flow, points in flow_points.items():
+        if len(points) < 2:
+            continue
+        xs = [x for x, _y, _line in points]
+        rows = {y for _x, y, _line in points}
+        width = max(xs) - min(xs)
+        if width > 1600:
+            widest = max(points, key=lambda p: p[0])
+            failures.append(
+                Failure(
+                    "flow-width",
+                    f"{flow} is {width}px wide across {len(points)} activities on "
+                    f"{len(rows)} row(s) -- it runs off the screen and has to be scrolled. "
+                    f"Wrap it: about eight activities to a row, then y += 160 and back to "
+                    f"the left",
+                    widest[2],
+                )
+            )
 
     return failures
 

@@ -91,7 +91,10 @@ yet named — find the business operation, do not type the default out by hand.
 Escape a single quote by doubling it: `@caption 'Load the customer''s invoices'`.
 
 `check_mdl.py --skill naming` fails on a missing action `@caption` and on a
-caption that is still the generated default.
+caption that is still the generated default. The gate runs it over every microflow
+and nanoflow in the app's own modules on every full run (the `naming:` line of its
+summary), so there is nothing to run by hand after a flow lands; the command below is
+for checking one draft before it goes in.
 
 ## Decision captions
 
@@ -222,6 +225,51 @@ Mendix default caption, `@caption` on a loop, a loop without `@annotation`, and
 two activities at one `@position`. (In this repo the checker is
 `tests/skills/check_mdl.py`; `tools/mdl-checks/` is where `install.sh` puts it in an
 installed project.)
+
+## Where the activities go
+
+Positions are part of whether a flow can be read, and two of them are checked.
+
+**Wrap a long flow.** Studio Pro shows roughly 1600px at a readable zoom. A flow
+written as one long row runs off the screen: measured, a 17-activity reset flow spanned
+2400px and had to be read at 75% and scrolled sideways. About eight activities to a
+row, then `y += 160` and back to the left margin.
+
+```
+@position(200, 200)  ... first row ...  @position(1400, 200)
+@position(200, 360)  ... second row ... @position(1400, 360)
+```
+
+**A position inside a loop is an offset from the loop, not a canvas coordinate.**
+Mendix stores every position as `RelativeMiddlePoint`, relative to its parent, and
+sizes the loop's box to hold whatever is inside it. Measured on three real loops:
+
+| body positions | box Mendix drew | children | filled |
+|---|---|---|---|
+| one child at `(560, 360)` | 670 × 440 | 1 | **2.4%** |
+| one child at `(40, 100)` | 200 × 180 | 1 | 20% |
+| eight children, `(150, 330)`…`(320, 580)` | 590 × 660 | 8 | 13% |
+
+The check is on that last column, not on any coordinate: **a loop box should not be
+mostly empty.** A body with eight activities makes a big box and fills it; one
+activity given a canvas coordinate makes an equally big box with nothing in it, which
+is what renders as a huge empty rectangle.
+
+```
+@position(560, 200)
+@annotation 'Delete every invoice'
+loop $Invoice in $AllInvoices
+begin
+  @position(40, 100)        -- an offset inside the loop, not 560 again
+  @caption 'Delete the invoice'
+  delete $Invoice;
+end loop;
+```
+
+| Check | Fails when |
+|---|---|
+| `flow-width` | a flow wider than 1600px laid out on one or two rows |
+| `loop-box-empty` | a loop box under 8% filled by its body — whatever the coordinates |
 
 ## Validation checklist
 

@@ -15,7 +15,18 @@ Two things fail the check: an element no test covers, and a `covers:` naming an
 element that is not in the model any more -- a test left behind after a rename,
 which otherwise keeps passing while testing nothing.
 
-    check_test_coverage.py <app-dir> <Module> [--tests-dir tests] [--json]
+A module with no page and no ACT_ microflow has nothing a user can reach, and
+passes. A model that cannot be read is neither a pass nor a finding: the check
+prints ERROR and exits 2.
+
+Every module to check can be named in one call, and should be. A test may cover a
+page in another module; whether that claim is real or left behind by a rename can
+only be told against the whole project, so the stale-claim check always reads
+every user module, whichever modules were asked about.
+
+    check_test_coverage.py <app-dir> <Module> [<Module>...] [--tests-dir tests] [--json]
+
+Exit 0 all covered, 1 something uncovered or stale, 2 the model could not be read.
 """
 
 from __future__ import annotations
@@ -39,21 +50,49 @@ def mxcli_binary(app_dir: Path) -> str:
     return "./mxcli"
 
 
+class ModelReadError(RuntimeError):
+    """The model could not be read -- which is not the same as an empty module."""
+
+
 def mxcli_json(app_dir: Path, mpr: str, command: str) -> list[dict]:
-    """Run one MDL command and read its --json rows."""
-    result = subprocess.run(
-        [mxcli_binary(app_dir), "-p", mpr, "--json", "-c", command],
-        cwd=app_dir,
-        capture_output=True,
-        text=True,
-    )
+    """Run one MDL command and read its --json rows.
+
+    A failed command used to come back as an empty list, so an unreadable model
+    looked exactly like a module with nothing in it. It raises instead.
+    """
+    try:
+        result = subprocess.run(
+            [mxcli_binary(app_dir), "-p", mpr, "--json", "-c", command],
+            cwd=app_dir,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        raise ModelReadError(f"could not start mxcli: {exc}") from exc
     if result.returncode != 0:
-        return []
+        why = (result.stderr or result.stdout).strip().splitlines()
+        raise ModelReadError(f"`{command}` exited {result.returncode}: {why[-1] if why else 'no output'}")
     try:
         rows = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return []
-    return rows if isinstance(rows, list) else []
+    except json.JSONDecodeError as exc:
+        raise ModelReadError(f"`{command}` did not return JSON") from exc
+    if not isinstance(rows, list):
+        raise ModelReadError(f"`{command}` did not return a list")
+    return rows
+
+
+def project_modules(app_dir: Path, mpr: str) -> tuple[set[str], list[str]]:
+    """Every module name in the model, and the ones that are the project's own."""
+    rows = mxcli_json(app_dir, mpr, "SHOW MODULES")
+    every = {row.get("Module") for row in rows if row.get("Module")}
+    own = sorted(
+        row["Module"]
+        for row in rows
+        if row.get("Module")
+        and not (row.get("Source") or "").strip()
+        and row["Module"] not in ("System", "MyFirstModule")
+    )
+    return every, own
 
 
 def qualified_names(rows: list[dict]) -> list[str]:
@@ -99,7 +138,7 @@ def covered(tests_dir: Path) -> dict[str, list[str]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app_dir", type=Path)
-    parser.add_argument("module")
+    parser.add_argument("modules", nargs="+", metavar="Module")
     parser.add_argument("--tests-dir", default="tests")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
@@ -107,44 +146,74 @@ def main() -> int:
     app_dir = args.app_dir
     mprs = sorted(app_dir.glob("*.mpr"))
     if not mprs:
-        print(f"FAIL  no .mpr in {app_dir}", file=sys.stderr)
-        return 1
+        print(f"ERROR  no .mpr in {app_dir}")
+        return 2
     mpr = mprs[0].name
 
-    elements, known = inventory(app_dir, mpr, args.module)
-    if not elements:
-        print(f"FAIL  module {args.module} has no pages or ACT_ microflows in {mpr}", file=sys.stderr)
-        return 1
+    try:
+        every, own = project_modules(app_dir, mpr)
+        unknown = [module for module in args.modules if module not in every]
+        if unknown:
+            print(f"ERROR  no module named {', '.join(unknown)} in {mpr}")
+            return 2
+        inventories = {module: inventory(app_dir, mpr, module)
+                       for module in sorted(set(own) | set(args.modules))}
+    except ModelReadError as exc:
+        print(f"ERROR  could not read the model: {exc}")
+        return 2
+
+    known: set[str] = set()
+    for _required, names in inventories.values():
+        known |= names
 
     claims = covered(app_dir / args.tests_dir)
-
-    untested = [element for element in elements if element not in claims]
-    # A covers: line pointing at something the model no longer has is a test that
-    # survived a rename and now proves nothing.
     stale = sorted(name for name in claims if name not in known)
+    checked = set(args.modules)
 
-    report = {
-        "verdict": "PASS" if not untested and not stale else "FAIL",
-        "module": args.module,
-        "elements": len(elements),
-        "tests": sorted({script for scripts in claims.values() for script in scripts}),
-        "untested": untested,
-        "stale_covers": stale,
-    }
+    reports = []
+    for module in args.modules:
+        required = inventories[module][0]
+        untested = [element for element in required if element not in claims]
+        prefix = module + "."
+        mine = [name for name in stale if name.startswith(prefix)]
+        # A stale claim naming no module being checked -- a typo, a deleted module --
+        # still has to fail somewhere. With one module asked about, it is that one's.
+        if len(args.modules) == 1:
+            mine = stale
+        reports.append({
+            "verdict": "PASS" if not untested and not mine else "FAIL",
+            "module": module,
+            "elements": len(required),
+            "tests": sorted({script for name, scripts in claims.items()
+                             if name.startswith(prefix) for script in scripts}),
+            "untested": untested,
+            "stale_covers": mine,
+        })
+    orphans = [] if len(args.modules) == 1 else [
+        name for name in stale if name.split(".")[0] not in checked]
 
     if args.json:
-        print(json.dumps(report, indent=2))
+        payload = reports[0] if len(reports) == 1 else {"modules": reports, "stale_covers": orphans}
+        print(json.dumps(payload, indent=2))
     else:
-        print(
-            f"{report['verdict']}  {len(elements) - len(untested)}/{len(elements)} "
-            f"elements covered by {len(report['tests'])} test script(s)"
-        )
-        for element in untested:
-            print(f"  - no test covers {element}")
-        for name in stale:
-            print(f"  - covers: names {name}, which is not in {args.module} any more")
+        for report in reports:
+            total, missing = report["elements"], len(report["untested"])
+            if total == 0 and not report["stale_covers"]:
+                print(f"PASS  {report['module']}: nothing a user can reach (no page, no ACT_ microflow)")
+                continue
+            print(f"{report['verdict']}  {report['module']}: {total - missing}/{total} "
+                  f"elements covered by {len(report['tests'])} test script(s)")
+            for element in report["untested"]:
+                print(f"  - no test covers {element}")
+            for name in report["stale_covers"]:
+                print(f"  - covers: names {name}, which is not in the model any more")
+        if orphans:
+            print("FAIL  covers: lines name elements in no module of this project")
+            for name in orphans:
+                print(f"  - covers: names {name}, which is not in the model any more")
 
-    return 0 if report["verdict"] == "PASS" else 1
+    failed = orphans or any(report["verdict"] == "FAIL" for report in reports)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

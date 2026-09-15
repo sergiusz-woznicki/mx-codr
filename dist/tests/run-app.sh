@@ -85,8 +85,25 @@ needs_rebuild() {
 if needs_rebuild "${1:-}"; then
   echo "== building deployment (this is the slow part)"
   stop_runtime
+  # --target=deploy runs a Clean up step over the whole of deployment/, and Studio
+  # Pro's own HSQLDB lives in deployment/data/database/. A build has been seen
+  # leaving it half-written -- the version table with no row in it -- after which
+  # Studio Pro cannot open the project until the database is thrown away. The
+  # runtime here talks to PostgreSQL, so that database is nobody's business but
+  # Studio Pro's: copy it out of the way and put it back afterwards.
+  SAVED_DB=""
+  if [ -d "$APP_DIR/deployment/data/database" ]; then
+    SAVED_DB="$(mdl_tmpdir mdl-hsqldb)"
+    cp -R "$APP_DIR/deployment/data/database/." "$SAVED_DB/" 2>/dev/null || SAVED_DB=""
+  fi
   "$MXBUILD" "--java-home=$JAVA_DIR" "--java-exe-path=$JAVA" \
     "--gradle-home=$GRADLE_HOME" --target=deploy "$MPR" 2>&1 | tail -3
+  if [ -n "$SAVED_DB" ]; then
+    mkdir -p "$APP_DIR/deployment/data/database"
+    cp -R "$SAVED_DB/." "$APP_DIR/deployment/data/database/" 2>/dev/null || true
+    rm -rf "$SAVED_DB"
+    echo "   (Studio Pro's local database kept across the build)"
+  fi
 fi
 
 # mxbuild writes the project's own configuration into the deployment, and this

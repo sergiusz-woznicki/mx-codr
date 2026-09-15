@@ -98,13 +98,15 @@ function clearState(sessionID, suffix) {
   if (path) try { rmSync(path, { force: true }) } catch { /* ignore */ }
 }
 
-function run(command, cwd, timeout) {
+function run(command, cwd, timeout, input) {
   if (!BASH) return { status: 1, out: NO_BASH }
   // -c, not -lc: a login shell on Git Bash re-reads the profile on every call, which
   // can move the cwd and reorder PATH, and costs real time on a hook that fires
-  // after every tool call.
+  // after every tool call. `input` goes to the script's stdin untouched, so data
+  // never has to survive being quoted into a shell command line.
   const result = spawnSync(BASH, ["-c", command], {
     cwd,
+    input,
     timeout: timeout ?? 120000,
     encoding: "utf8",
     maxBuffer: 8 * 1024 * 1024,
@@ -143,7 +145,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (!installed) return
       if (input.tool !== "bash") return
       const command = input.args?.command
-      if (typeof command !== "string" || !command.includes("mxcli exec")) return
+      // mxcli.exe on Windows: "mxcli.exe exec" does not contain "mxcli exec".
+      if (typeof command !== "string" || !/mxcli(\.exe)? exec/.test(command)) return
 
       writeState(input.sessionID, "gate-required", root)
 
@@ -152,8 +155,12 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       // Forward slashes: join() gives backslashes on Windows, and this path is going
       // into a bash command line, where a backslash is an escape.
       const hookPath = hook.replace(/\\/g, "/")
-      // The shared script reads a Claude-shaped payload and prints only failures.
-      const { out } = run(`printf '{"tool_input":{"command":"mxcli exec"}}' | bash ${JSON.stringify(hookPath)}`, root)
+      // The shared script reads a Claude-shaped payload. It gets the real command --
+      // until 2026.09.13 it got the literal words "mxcli exec", so it could never see
+      // which script ran and told every OpenCode session that no restart was needed,
+      // including after entity changes.
+      const payload = JSON.stringify({ tool_input: { command } })
+      const { out } = run(`bash ${JSON.stringify(hookPath)}`, root, undefined, payload)
       if (!out) return
       output.output = `${output.output || ""}\n\n${out}`
     },

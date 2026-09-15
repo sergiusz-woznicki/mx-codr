@@ -1606,12 +1606,35 @@ for source_file in "$SRC"/tests/*; do
   suite_written=$((suite_written + 1))
 done
 
+# lib.sh's field() now prints JSON booleans as `true`/`false`; until 2026-09-11 it
+# printed Python's `True`/`False`, and every test written against the shipped
+# examples compares against that. A lib.sh upgraded under such tests would turn
+# them red with messages that read like broken features, so the comparison is
+# rewritten in place, once, and each file touched is named.
+migrated=""
+for script in "$APP"/tests/verify-*.test.sh; do
+  [ -f "$script" ] || continue
+  if grep -qE '= "(True|False)"' "$script" 2>/dev/null; then
+    perl -pi -e 's/= "True"/= "true"/g; s/= "False"/= "false"/g' "$script" 2>/dev/null \
+      && migrated="$migrated $(basename "$script")"
+  fi
+done
+[ -z "$migrated" ] || ui_note "field() booleans are now true/false; rewrote the comparison in:$migrated"
+
 # CRLF is not a line ending to bash: one Windows editor save of gate.sh otherwise
 # makes every line fail with `$'\r': command not found`.
 if [ ! -e "$APP/.gitattributes" ] && [ -f "$SRC/.gitattributes" ]; then
   cp "$SRC/.gitattributes" "$APP/.gitattributes"
 fi
 ui_done "test harness" "$suite_written $I_ARROW tests/  (verify-*.test.sh left alone)"
+
+# What this install put where, and what each file looked like leaving here. The
+# gate compares against it at preflight, because two kinds of drift have cost real
+# time: a project quietly running checkers two versions old, and a session's own
+# repair to lib.sh that nobody upstream ever heard about.
+ui_begin "recording the install"
+recorded="$("$PY" "$APP/tools/mdl-checks/record_install.py" "$APP" "$SRC" "$version" 2>/dev/null || true)"
+ui_done "install record" "${recorded:-0} files $I_ARROW tools/mdl-checks/INSTALL.json"
 
 ui_begin "checking the environment"
 
@@ -1731,6 +1754,9 @@ else
   printf '     %s%-10s%s %s%3s%s  %s\n' "$C_YELLOW" "reminder" "$C_RESET" "$C_BOLD" "$I_WARN" "$C_RESET" \
     ".codex/config.toml already defines developer_instructions, left alone"
 fi
+if [ -n "${recorded:-}" ]; then
+  ui_row "record" "$recorded"         "tools/mdl-checks/INSTALL.json  ${C_GREY}(the gate checks for drift)${C_RESET}"
+fi
 if [ "$suite_written" -gt 0 ]; then
   ui_row "harness" "$suite_written"   "tests/  ${C_GREY}(verify-*.test.sh are yours to write)${C_RESET}"
 else
@@ -1770,6 +1796,11 @@ printf '     %-38s %s%s%s\n' "bash tests/gate.sh --only <feature>" "$C_GREY" "on
 printf '     %-38s %s%s%s\n' "bash tests/diagnose.sh <Entity> <user>" "$C_GREY" "why is that row not on the page" "$C_RESET"
 
 ui_head "$I_DOT" "Good to know"
+printf '     %s%s\n' "$C_BOLD" "Start a NEW agent session before building anything here.${C_RESET}"
+printf '     %s\n' "An agent's skill list is fixed when its session starts, so the skills this installer"
+printf '     %s\n' "just wrote are invisible to the session that ran it. Measured: a session that installed"
+printf '     %s\n' "and then built without restarting read twelve SKILL.md files by hand -- 216k characters,"
+printf '     %s\n' "36 commands, 6.5 minutes -- before its first real command. After a restart: 8 commands."
 printf '     %s\n' "Codex will not fire its hooks until you open ${C_BOLD}/hooks${C_RESET} once and trust them."
 printf '     %s\n' "Cursor needs hooks enabled for this workspace before ${C_BOLD}.cursor/hooks.json${C_RESET} runs."
 printf '     %s\n' "OpenCode loads ${C_BOLD}.opencode/plugin/${C_RESET} at startup; restart an open session to pick it up."

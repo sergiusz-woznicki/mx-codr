@@ -22,9 +22,12 @@ tests/            lib.sh, gate.sh, orient.sh, diagnose.sh, portable.sh — the h
 .gitattributes    forces LF on *.sh and *.py — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
-skills/           5 × SKILL.md — the prose
+skills/           6 × SKILL.md — the prose
 lint-rules/       *.star — run by `mxcli lint`, no Python needed
-checks/           *.py + fixtures/ — the checks Starlark cannot express
+checks/           *.py + fixtures/ — the checks Starlark cannot express, plus
+                  record_install.py, which writes tools/mdl-checks/INSTALL.json (version,
+                  date, sha256 per installed file) so the gate can tell a project running
+                  last week's checkers from one running these
 ```
 
 The payload is a **copy** of files that live elsewhere in this repo. This directory
@@ -66,7 +69,7 @@ measured, not assumed: markers written into all three were gone after one
 So the project's own instructions live where mxcli does not reach:
 
 - **`.claude/rules/mdl-skills.md`** — loaded into every session at launch, same
-  priority as `.claude/CLAUDE.md`. It names the five skills and when each applies,
+  priority as `.claude/CLAUDE.md`. It names the six skills and when each applies,
   because mxcli's generated `CLAUDE.md` skill table lists only mxcli's own skills
   and an agent that follows that table never sees these.
 - **`.claude/settings.local.json`** — registers Claude's two hooks.
@@ -124,40 +127,35 @@ The hooks are the part that does not depend on the model choosing to comply:
 
 ## Rebuilding after a source change
 
-Bump `dist/VERSION` first (today's date, `YYYY.MM.DD`), then run from the repo
-root. It is a copy, so re-running is always safe:
+Twelve files here have a second copy in the repo: five skills in
+`.ai-context/skills/`, two lint rules in `.claude/lint-rules/`, and the naming and
+coverage checkers plus their fixtures in `tests/skills/`. Both copies get edited,
+so a plain copy can go either way. One did: on 2026-09-13 four `dist/` files were
+newer than their sources, and the copy block that used to be here would have rolled
+them back without a word.
+
+Bump `dist/VERSION` first (`YYYY.MM.DD.N`), then run from the repo root:
 
 ```bash
-mkdir -p dist/skills dist/lint-rules dist/checks/fixtures
-
-for s in naming-and-captions reuse-and-snippets test-first-delivery \
-         module-structure organize-project; do
-  mkdir -p "dist/skills/$s"
-  cp ".ai-context/skills/$s/SKILL.md" "dist/skills/$s/"
-done
-
-cp .claude/lint-rules/mod001_process_folders.star \
-   .claude/lint-rules/reu001_shared_documents.star dist/lint-rules/
-
-cp tests/skills/check_mdl.py tests/skills/check_test_coverage.py dist/checks/
-cp tests/skills/fixtures/*.mdl dist/checks/fixtures/
+bash tests/skills/rebuild-dist.sh --check   # report only
+bash tests/skills/rebuild-dist.sh           # copy what is safe, record the result
 ```
 
-`rules/` and `hooks/` have no upstream copy — they are authored in `dist/` and
-copied only outward, so nothing needs syncing for them.
+The script compares each pair with its hash at the last sync, recorded in
+`tests/skills/.dist-sync.sha256`. A changed source is copied into `dist/`. A `dist/`
+file edited directly is refused, with the `cp` that brings it back to the source.
+When both sides changed, it refuses and asks you to decide. Nothing is copied unless
+every pair is safe.
 
-Only two Python checkers ship: captions/positions (`check_mdl.py`) and test
-coverage (`check_test_coverage.py`). Folder structure and reuse are Starlark rules
-(`lint-rules/`) because the model can answer those; captions and positions are not
-in the model catalog, and coverage needs the filesystem, so those two stay Python.
+`rules/`, `hooks/`, `plugins/`, `tests/`, `checks/check_layout.py`,
+`checks/record_install.py` and `skills/spacing-and-layout/` have no copy in the
+repo. They are authored here, in `dist/`, and nothing overwrites them.
 
-Two things the copy loop will not tell you, so check them by hand:
+The harness's own regression tests need no app and run in about four seconds:
 
-- **Both skill copies must agree first.** The repo keeps `.ai-context/skills/<name>/`
-  and `.claude/skills/<name>/` byte-identical; only the first is copied here.
-  `diff -r` them before rebuilding, or you ship whichever one you happened to edit.
-- **A new skill is three edits, not one**: add it to the loop above, and to
-  `install.sh` only if it needs anything beyond a `SKILL.md`.
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 tests/performance/audit.py
+```
 
 ## Testing the bundle before shipping it
 
@@ -261,6 +259,175 @@ checking with the wrong binary.
 
 `tests/harness.env` holds a database password in plain text. It belongs beside
 `tests/credentials.env` and, like it, should stay out of any repository you push.
+
+## Faster without being weaker
+
+A 36-minute agent session was recorded end to end (`docs/sessions/` in the source
+repo) and 20 of those minutes were inside tools. Two harness defects manufactured
+most of the waste, and neither was about the tests being slow:
+
+- **`mx check` rewrote the `.mpr`** it checked -- bytes identical, mtime new. Under
+  `mxcli run --watch` that mtime is the reload trigger, so the gate's own check
+  restarted the runtime in the middle of its own suite: a red test with no cause,
+  then a false "model changed after the runtime started" warning, then two
+  hand-rolled restarts. `check_mx` now runs on a scratch copy (`.mpr`,
+  `mprcontents/`, `widgets/`, `theme/`, `themesource/`; an APFS clone, ~0.2s) and
+  never touches the live tree. Measured on the same app, same runtime: the old gate
+  triggered `Change detected, rebuilding (build #2)` every run; the new one does not.
+- **A test run by hand had no timeout.** `bash tests/verify-x.test.sh` hung for 801s
+  once and 1141s once in that session. `lib.sh` now carries its own watchdog
+  (`SCRIPT_TIMEOUT`, 5s before the runner's kill), which ends the stuck
+  `playwright-cli` process too -- the runner's SIGKILL of bash left it holding the
+  shared browser, so the *next* test hung the same way.
+
+The rest is the suite itself, all of it behaviour-preserving:
+
+| | Before | After | How |
+|---|---|---|---|
+| Suite of 10, green | 29.1s | **14.7s** | one sign-in per run instead of one sign-out and sign-in per test (`MDL_SESSION_REUSE`, set by the gate; `FRESH_SESSION=1` restores); the sign-out moved into the scenario's own `finally` instead of a second process; `await_message(/text/)` instead of `waitForTimeout(1500)` |
+| `--only` iteration | 1.8s | **1.0s** | the session stays signed in between runs (`KEEP_SESSION`) |
+| Full gate, nothing changed | 17s | **~15s** | the four model checks replay their last green result (`.mxcli/gate-cache/`, keyed on the model's size+mtime and each check's inputs; a failure is never cached; `--no-cache`) |
+| Every Bash tool call | +0.05s | **+0.006s** | the coverage hook tests the raw event for `mxcli exec` before it goes looking for a Python |
+
+Three more things the session showed and the harness now answers:
+
+- `bash tests/gate.sh --restart` stops this project's runtime -- the process tree
+  under `mxcli run`, so mxbuild and the Java runtime go with it -- boots it again
+  and runs the gate. The stale-model warning names it.
+- The first red `--only` run of a script is recorded in `.mxcli/red-first/`. A
+  script that goes green with no such record is named once, and that is the only
+  test worth breaking the feature for. The session had broken every feature for
+  every test (15 minutes) and learned nothing the red runs had not already shown.
+- `field` prints JSON booleans as `true`/`false` (it printed Python's `True`, so a
+  test comparing against `"true"` could never pass); `fields` reads several keys in
+  one process.
+
+## The skill list is fixed when the session starts
+
+An agent's Skill tool lists what existed when its session began. Install into a
+directory whose session is already open and the skills land on disk but not in that
+list, and the agent cannot invoke them — it is told not to guess names.
+
+Measured, same prompt, same machine, two sessions:
+
+| | session restarted after install | installed mid-session |
+|---|---|---|
+| commands before the first real one | 8 | **36** |
+| time before the first real one | 2m13s | **6m30s** |
+| skill text read | 3 skills, via the Skill tool | **twelve SKILL.md files, 216k characters, by `cat`** |
+
+Without the list the agent has no map, so it reads everything it can find —
+including `bootstrap-app`, which is for a repo with no `.mpr` at all. The installer
+now says this in its closing notes, and the per-prompt reminder hook carries the
+fallback: if the Skill tool does not list them, read exactly the three named files
+and look syntax up on demand rather than sweeping the directory.
+
+## Two more things the naming verdict reads out of positions
+
+A screenshot of a reset flow in Studio Pro: one row of 17 activities running 2400px
+off the right of the screen, and two loops drawn as enormous empty rectangles with
+their delete activity adrift below them. mxcli had authored it correctly -- `mx check`
+0 errors -- so the question was where the defect lived.
+
+Dumping the stored model answered it. Mendix keeps geometry as `RelativeMiddlePoint`,
+**relative to the parent**, and an activity inside a loop is therefore placed relative
+to the loop:
+
+```
+LoopedActivity            560;200   Size 670;440    <- box grew to hold its child
+  delete (inside loop)    560;360                   <- 560px right OF THE LOOP
+```
+
+Confirmed by experiment: the same body at `@position(40, 100)` yields a loop of
+`200;180`, and a real loop holding eight children came out `590;660`. The first rule
+written here keyed on the coordinates themselves, and it flagged that eight-child loop
+— a pattern from one screenshot, not a defect. What actually distinguishes them is
+**density**: 2.4% of the box filled against 13% and 20%. A big body makes a big box
+and fills it. So `check_mdl.py --skill naming` gained two checks, both read from the
+same `describe` dump it already uses:
+
+| | Fails when |
+|---|---|
+`flow-width` | a flow wider than 1600px on one or two rows — wrap it, ~8 activities per row, `y += 160` |
+`loop-box-empty` | a loop box under 8% filled by its body |
+
+Neither is an mxcli fix: the tool wrote what it was told. What was missing was a rule
+saying a flow has to be readable, and one saying where an in-loop position lives.
+
+## The verdict that catches what looks wrong
+
+A page can pass everything and still be unusable. Measured: a gate reporting 10/10
+tests, `mx check` 0 errors, lint 0 errors, coverage 12/12 and naming clean, on a
+screen whose heading, two buttons and grid were welded together with no gap — because
+the widgets were emitted as bare siblings with no spacing at all.
+
+Mendix has a property for exactly this, so no CSS is involved. Atlas Core declares a
+`Spacing` design property with `margin-` and `padding-` on four sides, values `None`
+`S` `M` `L`:
+
+```
+actionbutton btnRemind (
+  Caption: 'Send reminder',
+  Action: microflow Mod.ACT_Invoice_SendReminder(Invoice: $currentObject),
+  DesignProperties: ['Spacing': ['margin-right': 'S']])
+```
+
+`checks/check_layout.py` reads `describe page` — which prints `DesignProperties` —
+and reports three things:
+
+| | Severity | Fails when |
+|---|---|---|
+`SPACE01` | error | a widget sharing a line with the next and no `margin-right`; a heading with content under it and no `margin-bottom` |
+`SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
+`SPACE03` | error | widgets on one line disagreeing on vertical margins, or none carrying `margin-bottom` |
+`HEAD01` | warning | the page renders no heading and calls no header snippet |
+
+`SPACE03` came from two further screenshots. A `margin-bottom` on one inline-block and
+not its neighbour lifts it about ten pixels out of line; and a row of buttons with
+`margin-right` but no `margin-bottom` looks right until the window narrows, when it
+wraps onto a second row sitting against the first. One omission, two symptoms, so one
+rule: everything on a line shares its vertical margin and it is not `None`.
+
+Only inline-against-inline fails. A textbox in a dataview, a datagrid, a layoutgrid
+or a snippetcall is block-level and already spaced by the theme — an earlier, broader
+version of this check produced 20 findings on an app whose screens look right, so it
+was narrowed to what actually collides.
+
+`SPACE02` exists because `mxcli check` accepts any value here (`'XL'` passes) and only
+`mx check` catches it, late, as CE6083. `HEAD01` is a warning because a heading may
+legitimately come from a shared snippet — the demo app's `SNIPPET_AppHeader` — and a
+rule must only fail what is wrong under every convention.
+
+mxcli's Starlark rules cannot do this: a `page` object there exposes only
+`widget_count`. And `ALTER PAGE`'s `SET` rejects a `DesignProperties` map, so an
+existing page is fixed by patching its `describe` output and re-running it.
+
+## The local database a deploy build can eat
+
+Studio Pro keeps the app's own data in an HSQLDB under `deployment/data/database/`.
+`mxbuild --target=deploy` runs a Clean up step across the whole of `deployment/`,
+and that has been observed leaving the database half-written: the
+`mendixsystem$version` table's DDL present, the single row the runtime reads out of
+it absent. The runtime then refuses to start, and Studio Pro refuses to open the
+project, both complaining about that table. A killed runtime also leaves a
+`default.lck` behind, which blocks the next boot on its own.
+
+Neither needs a database to diagnose — HSQLDB writes its schema as text:
+
+```
+healthy   default.script: CREATE … "mendixsystem$version" … + INSERT INTO "mendixsystem$version"
+broken    default.script: CREATE … "mendixsystem$version" …   (no INSERT, 426 rows against 1077)
+```
+
+So `mdl_check_local_database` in `portable.sh` greps for exactly that, and the gate's
+environment preflight and `diagnose.sh` both call it. Silent when the database is
+absent (normal), fresh, or healthy; otherwise it names the file and the one command
+that fixes it. The database holds demo data only — the seed runs through the app.
+
+`tests/run-app.sh` also stopped causing it: it copies
+`deployment/data/database/` aside before its `--target=deploy` build and puts it back
+afterwards. The runtime it boots talks to PostgreSQL, so that database is nobody's
+business but Studio Pro's.
 
 ## A green gate that measured the wrong app
 

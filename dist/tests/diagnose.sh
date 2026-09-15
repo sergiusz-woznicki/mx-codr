@@ -127,3 +127,7 @@ fi
 
 wait
 cat "$WORK"/[0-9]-* 2>/dev/null
+
+# Last, because it is usually silent: a local database a deploy build left
+# half-written, or a lock a killed runtime left behind.
+mdl_check_local_database
