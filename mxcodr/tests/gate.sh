@@ -6,6 +6,7 @@
 #   bash tests/gate.sh --tests-only       # the suite alone
 #   bash tests/gate.sh --boot-if-needed   # start the app first if nothing answers
 #   bash tests/gate.sh --restart          # stop this project's runtime, boot it again, then gate
+#   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the five model checks even if nothing changed
 #
 # Six verdicts: the browser suite (tests/verify-*.test.sh) and five model checks that
@@ -20,8 +21,7 @@
 # Env: BASE_URL (else 8081 then 8080), APP_PORT (8081), SCRIPT_TIMEOUT (90s),
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
-#      MDL_MXBUILD_PATH, MDL_DB_NAME/HOST/USER/PASSWORD, MDL_PSQL -- the MDL_* ones
-#      may also be set in tests/harness.env.
+#      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL -- MDL_* may also be set in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # Sections (2-4, 8 and 9 only define functions):
@@ -44,7 +44,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
 cd "$APP_DIR"
 . "$HARNESS_DIR/portable.sh"
-ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
+ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
 booted_by_command=""   # set to 1 once MDL_BOOT_COMMAND has booted the app
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +52,7 @@ while [ $# -gt 0 ]; do
     --tests-only) TESTS_ONLY=1; shift ;;
     --boot-if-needed) BOOT=1; shift ;;
     --restart) RESTART=1; BOOT=1; shift ;;
+    --stop) STOP=1; shift ;;
     --no-cache) USE_CACHE=0; shift ;;
     -h|--help) sed -n '2,24p' "$HARNESS_DIR/gate.sh"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -133,6 +134,39 @@ project_pids() {
 descendants() {   # every process under <pid>, deepest first
   local child
   for child in $(pgrep -P "$1" 2>/dev/null); do descendants "$child"; echo "$child"; done
+}
+# `mxbuild --serve` processes started in this project's directory: left behind when `mxcli run`
+# is killed, they hold port 6543 and make the next boot fail. Needs lsof to read the directory.
+orphan_mxbuild_pids() {
+  command -v pgrep >/dev/null 2>&1 && command -v lsof >/dev/null 2>&1 || return 0
+  local pid dir
+  for pid in $(pgrep -f 'mxbuild.* --serve' 2>/dev/null); do
+    dir="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+    [ -n "$dir" ] && [ "$(cd "$dir" 2>/dev/null && pwd -P)" = "$(cd "$APP_DIR" && pwd -P)" ] && echo "$pid"
+  done
+}
+
+# Stops this project's app: the runtime, `mxcli run` with everything under it, and orphaned
+# mxbuild. SIGTERM, up to 15s for a clean stop, then SIGKILL. Other projects are never touched.
+stop_project_app() {
+  local victims="" pid waited=0
+  for pid in $(project_pids) $(orphan_mxbuild_pids); do
+    victims="$victims $(descendants "$pid" | tr '\n' ' ') $pid"
+  done
+  # A child of `mxcli run` is also found on its own: list each pid once.
+  victims="$(printf '%s\n' $victims | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+  if [ -z "${victims// /}" ]; then
+    echo "   nothing of this project was running"
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  kill -TERM $victims 2>/dev/null || true
+  while [ "$waited" -lt 15 ] && [ -n "$(project_pids)$(orphan_mxbuild_pids)" ]; do
+    sleep 1; waited=$((waited + 1))
+  done
+  # shellcheck disable=SC2086
+  [ -z "$(project_pids)$(orphan_mxbuild_pids)" ] || kill -KILL $victims 2>/dev/null || true
+  echo "   stopped:$(echo $victims)"
 }
 
 # Prints the psql to use (MDL_PSQL, PATH, Program Files); returns 1 if none.
@@ -485,6 +519,11 @@ run_cached() {
 }
 
 # --- 5. Start checks ---
+if [ "$STOP" = "1" ]; then
+  echo "== stopping this project's app"
+  stop_project_app
+  exit 0
+fi
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   # Upgrading the gate, its config or mxcli must not replay an old pass.
   cache_inputs=(tests/gate.sh tests/harness.env "meta:$MXCLI")
@@ -501,21 +540,8 @@ fi
 # Kill the whole tree under `mxcli run`: TERM on mxcli alone orphans mxbuild and Java.
 if [ "$RESTART" = "1" ]; then
   echo "== restarting this project's app"
-  victims=""
-  for pid in $(project_pids); do victims="$victims $(descendants "$pid") $pid"; done
-  # SIGTERM, up to 15s for a clean stop, then SIGKILL.
-  if [ -n "${victims// /}" ]; then
-    # shellcheck disable=SC2086
-    kill -TERM $victims 2>/dev/null || true
-    waited=0
-    while [ "$waited" -lt 15 ] && [ -n "$(project_pids)" ]; do sleep 1; waited=$((waited + 1)); done
-    # shellcheck disable=SC2086
-    [ -z "$(project_pids)" ] || kill -KILL $victims 2>/dev/null || true
-    sleep 1
-    echo "   stopped:$victims"
-  else
-    echo "   nothing of this project was running"
-  fi
+  stop_project_app
+  sleep 1
   # Whatever answered belonged to the old runtime; do not adopt it.
   BASE_URL=""
 fi
