@@ -127,7 +127,6 @@ print_verdict_and_exit() {
 
 main() {
   ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
-  booted_by_command=""   # set to 1 once MDL_BOOT_COMMAND has booted the app
   parse_arguments "$@"
   find_project
   SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"

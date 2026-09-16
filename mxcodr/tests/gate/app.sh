@@ -142,54 +142,36 @@ restart_app() {
 # Finds the app on $APP_PORT or 8080; with --boot-if-needed boots it (MDL_BOOT_COMMAND, else
 # `mxcli run --local --watch`); otherwise exits 2 saying how to start it. Sets BASE_URL.
 ensure_app() {
+  find_running_app && return 0
+  [ "$BOOT" = "1" ] || explain_no_app
+  # An orphaned `mxbuild --serve` holds port 6543 and makes the boot fail.
+  if command -v pgrep >/dev/null 2>&1 && pgrep -f 'mxbuild' >/dev/null 2>&1; then
+    echo "   !! an mxbuild process is already running. If this boot fails on"
+    echo "      'port 6543 (mxbuild serve) is already in use', it is an orphan:"
+    echo "      pgrep -af 'mxbuild|runtimelauncher'   then kill that pid"
+  fi
+  # MDL_BOOT_COMMAND replaces `mxcli run --local` where that cannot boot (Windows).
+  if [ -n "${MDL_BOOT_COMMAND:-}" ]; then
+    boot_with_command
+  else
+    boot_with_mxcli_run
+  fi
+}
+
+# True when BASE_URL (else $APP_PORT, then 8080) answers; sets BASE_URL to the one that did.
+find_running_app() {
   local candidate
   if [ -z "${BASE_URL:-}" ]; then
     for candidate in "http://localhost:$APP_PORT" http://localhost:8080; do
       answers "$candidate" && { BASE_URL="$candidate"; break; }
     done
   fi
-  if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
-    if [ "$BOOT" = "1" ]; then
-      # An orphaned `mxbuild --serve` holds port 6543 and makes the boot fail.
-      if command -v pgrep >/dev/null 2>&1 && pgrep -f 'mxbuild' >/dev/null 2>&1; then
-        echo "   !! an mxbuild process is already running. If this boot fails on"
-        echo "      'port 6543 (mxbuild serve) is already in use', it is an orphan:"
-        echo "      pgrep -af 'mxbuild|runtimelauncher'   then kill that pid"
-      fi
-      # MDL_BOOT_COMMAND replaces `mxcli run --local` where that cannot boot (Windows).
-      if [ -n "${MDL_BOOT_COMMAND:-}" ]; then
-        echo "== no app answering; booting with MDL_BOOT_COMMAND"
-        ensure_database || true
-        echo "   running: $MDL_BOOT_COMMAND"
-        # `( cmd & )` detaches the app: `wait` does not block on it and it outlives the gate.
-        ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
-        BASE_URL="http://localhost:$APP_PORT"
-        wait_for_boot .mxcli/gate-boot.log
-        booted_by_command=1
-      fi
-      # Default boot: `mxcli run --local --watch` (hot reload).
-      if [ -z "$booted_by_command" ]; then
-        echo "== no app answering; booting $MPR on port $APP_PORT with hot reload"
-        boot_args=(run --local -p "$MPR" --app-port "$APP_PORT" --watch)
-        # A second app on this machine needs its own admin and mxbuild ports.
-        [ -n "${ADMIN_PORT:-}" ] && boot_args+=(--admin-port "$ADMIN_PORT")
-        [ -n "${SERVE_PORT:-}" ] && boot_args+=(--serve-port "$SERVE_PORT")
-        if [ -n "${MDL_DB_NAME:-}" ]; then
-          ensure_database || true
-          boot_args+=(--db-name "$MDL_DB_NAME")
-          [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
-          [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
-          [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
-        else
-          # A fresh project has no database; --ensure-db creates it only when missing.
-          boot_args+=(--ensure-db)
-        fi
-        ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
-        BASE_URL="http://localhost:$APP_PORT"
-        wait_for_boot .mxcli/gate-boot.log
-      fi
-    else
-      cat >&2 <<MSG
+  [ -n "${BASE_URL:-}" ] && answers "$BASE_URL"
+}
+
+# No app and no --boot-if-needed: say how to start one, exit 2.
+explain_no_app() {
+  cat >&2 <<MSG
 no app answering on ${BASE_URL:-http://localhost:$APP_PORT or :8080}. Start it, ideally with
 hot reload so page and microflow changes need no restart:
 
@@ -197,7 +179,37 @@ hot reload so page and microflow changes need no restart:
 
 or re-run this with --boot-if-needed.
 MSG
-      exit 2
-    fi
+  exit 2
+}
+
+boot_with_command() {
+  echo "== no app answering; booting with MDL_BOOT_COMMAND"
+  ensure_database || true
+  echo "   running: $MDL_BOOT_COMMAND"
+  # `( cmd & )` detaches the app: `wait` does not block on it and it outlives the gate.
+  ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
+  BASE_URL="http://localhost:$APP_PORT"
+  wait_for_boot .mxcli/gate-boot.log
+}
+
+# Default boot: `mxcli run --local --watch` (hot reload).
+boot_with_mxcli_run() {
+  local -a boot_args=(run --local -p "$MPR" --app-port "$APP_PORT" --watch)
+  echo "== no app answering; booting $MPR on port $APP_PORT with hot reload"
+  # A second app on this machine needs its own admin and mxbuild ports.
+  [ -n "${ADMIN_PORT:-}" ] && boot_args+=(--admin-port "$ADMIN_PORT")
+  [ -n "${SERVE_PORT:-}" ] && boot_args+=(--serve-port "$SERVE_PORT")
+  if [ -n "${MDL_DB_NAME:-}" ]; then
+    ensure_database || true
+    boot_args+=(--db-name "$MDL_DB_NAME")
+    [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
+    [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
+    [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
+  else
+    # A fresh project has no database; --ensure-db creates it only when missing.
+    boot_args+=(--ensure-db)
   fi
+  ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
+  BASE_URL="http://localhost:$APP_PORT"
+  wait_for_boot .mxcli/gate-boot.log
 }

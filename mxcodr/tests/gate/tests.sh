@@ -48,16 +48,40 @@ export_test_module() {
 
 # Runs the suite (or the --only matches) in this shell, appending to the arrays directly.
 step_tests() {
-  local targets=("tests/") script
-  if [ -n "$ONLY" ]; then
-    targets=()
-    for script in tests/verify-*"$ONLY"*.test.sh; do
-      [ -f "$script" ] && targets+=("$script")
-    done
-    [ ${#targets[@]} -gt 0 ] || { echo "no test matches '$ONLY'" >&2; exit 2; }
-  fi
+  local -a targets
+  local out status environment started=$SECONDS
+  select_test_targets
   echo "== tests: ${targets[*]}"
-  local out status line
+  out="$(run_suite "${targets[@]}")"
+  status=$?
+  echo $((SECONDS - started)) > "$WORK/tests.secs"
+  printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)|^\s+FAIL:|^Total:'
+  # One sign-out for a full run; lib.sh is sourced in a subshell to keep it out of the gate.
+  if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
+    ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
+  fi
+  environment="$(environment_cause "$out")"
+  if [ -n "$environment" ]; then
+    echo "   !! not a feature failure: $environment"
+  fi
+  record_red_first "$out" "$environment"
+  record_suite_result "$out" "$status" "$environment"
+}
+
+# Sets targets: tests/ for the whole suite, or the scripts --only names (exit 2 when none match).
+select_test_targets() {
+  local script
+  targets=("tests/")
+  [ -n "$ONLY" ] || return 0
+  targets=()
+  for script in tests/verify-*"$ONLY"*.test.sh; do
+    [ -f "$script" ] && targets+=("$script")
+  done
+  [ ${#targets[@]} -gt 0 ] || { echo "no test matches '$ONLY'" >&2; exit 2; }
+}
+
+# run_suite <target>... -- the runner's output; its exit code is the suite's.
+run_suite() {
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT
   export_test_module
   # One licence session: a full run reuses it; --only keeps it signed in between runs.
@@ -66,52 +90,43 @@ step_tests() {
   else
     export MDL_SESSION_REUSE="${MDL_SESSION_REUSE:-1}"
   fi
-  local started=$SECONDS
-  out="$("$MXCLI" playwright verify "${targets[@]}" -p "$MPR" \
-        --base-url "$BASE_URL" --timeout "$SCRIPT_TIMEOUT" --keep-open 2>&1)"
-  status=$?
-  echo $((SECONDS - started)) > "$WORK/tests.secs"
-  printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)|^\s+FAIL:|^Total:'
-  # One sign-out for a full run; lib.sh is sourced in a subshell to keep it out of the gate.
-  if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
-    ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
-  fi
+  "$MXCLI" playwright verify "$@" -p "$MPR" \
+    --base-url "$BASE_URL" --timeout "$SCRIPT_TIMEOUT" --keep-open 2>&1
+}
 
-  # Name an environment cause: a dead app or closed browser looks like broken features.
-  local environment=""
-  case "$out" in
+# environment_cause <runner output> -- a dead app or a closed browser looks like broken
+# features; prints what happened, or nothing.
+environment_cause() {
+  case "$1" in
     *ERR_CONNECTION_REFUSED*|*ECONNREFUSED*)
-      environment="the app stopped answering on $BASE_URL during the run (a model change that cannot hot-apply stops the runtime; restart it, or use --boot-if-needed)" ;;
+      echo "the app stopped answering on $BASE_URL during the run (a model change that cannot hot-apply stops the runtime; restart it, or use --boot-if-needed)" ;;
     *"browser has been closed"*|*"Target page, context or browser has been closed"*)
-      environment="the browser was closed while the suite was running (playwright-cli has one shared browser -- another session or command closed it)" ;;
+      echo "the browser was closed while the suite was running (playwright-cli has one shared browser -- another session or command closed it)" ;;
     *"opening browser: exit status"*)
-      environment="the browser could not be started (check .playwright/cli.config.json executablePath, then: playwright-cli close && playwright-cli open)" ;;
+      echo "the browser could not be started (check .playwright/cli.config.json executablePath, then: playwright-cli close && playwright-cli open)" ;;
   esac
-  if [ -n "$environment" ]; then
-    echo "   !! not a feature failure: $environment"
-  fi
-  record_red_first "$out" "$environment"
+}
 
+# record_suite_result <runner output> <exit code> <environment cause> -- the tests line of the
+# summary, a tests failure, and the facts from diagnose.sh when a feature failed.
+record_suite_result() {
+  local out="$1" status="$2" environment="$3" line why
   line="$(printf '%s\n' "$out" | grep -E '^Total:' | tail -1)"
-  if [ -n "$line" ]; then
-    if [ -n "$environment" ]; then
-      summary+=("tests: $line -- ENVIRONMENT, not the feature: $environment")
-    else
-      summary+=("tests: $line")
-    fi
+  if [ -n "$line" ] && [ -n "$environment" ]; then
+    summary+=("tests: $line -- ENVIRONMENT, not the feature: $environment")
+  elif [ -n "$line" ]; then
+    summary+=("tests: $line")
   else
     # No Total line: the runner never ran the scripts; show the line that says why.
-    local why
     why="$(printf '%s\n' "$out" | grep -iE '^error|error:|panic|unknown flag|no such file' | tail -1)"
     [ -n "$why" ] || why="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
     echo "   the runner produced no results: $why"
     summary+=("tests: no result -- ${environment:-${why:-the runner printed nothing}}")
   fi
-  if [ "$status" != "0" ]; then
-    failures+=("tests")
-    if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then
-      echo "== facts (tests/diagnose.sh)"
-      bash tests/diagnose.sh 2>&1 | sed 's/^/   /' | head -40
-    fi
+  [ "$status" != "0" ] || return 0
+  failures+=("tests")
+  if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then
+    echo "== facts (tests/diagnose.sh)"
+    bash tests/diagnose.sh 2>&1 | sed 's/^/   /' | head -40
   fi
 }

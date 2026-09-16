@@ -35,38 +35,44 @@ MSG
 # Warns when the runtime serves an older model: security and entity changes do not hot-apply.
 # The warning also goes to $WORK/stale.note, so record_red_first ignores this run.
 preflight_stale_model() {
-  local started
+  watch_applied_latest_change && return 0
+  warn_if_deployment_older
+  warn_if_runtime_older
+}
 
-  # A --watch boot rebuilds and applies every model change itself -- pages by reload, entities
-  # and security by an in-place restart. Wait for that instead of warning in the middle of it.
+# A --watch boot rebuilds and applies every model change itself -- pages by reload, entities
+# and security by an in-place restart. Waits for that instead of warning in the middle of it;
+# true when the boot log's last line says the latest change was applied.
+watch_applied_latest_change() {
   local boot_log="$APP_DIR/.mxcli/gate-boot.log" waited=0
-  if [ -f "$boot_log" ] && grep -q 'Watching model' "$boot_log" 2>/dev/null; then
-    # The watcher notices a change a moment after the exec: give it a few seconds to start.
-    while [ "$MPR" -nt "$boot_log" ] && [ "$waited" -lt "${MDL_WATCH_SETTLE_SECONDS:-5}" ]; do
-      sleep 1; waited=$((waited + 1))
-    done
-    waited=0
-    while [ "$waited" -lt 120 ] && tail -1 "$boot_log" 2>/dev/null \
-          | grep -qE 'Change detected, rebuilding|re-bundling|Web client bundled'; do
-      [ "$waited" = "0" ] && echo "   (waiting for --watch to apply the latest model change)"
-      sleep 1; waited=$((waited + 1))
-    done
-    if [ ! "$MPR" -nt "$boot_log" ] && tail -1 "$boot_log" 2>/dev/null | grep -qE 'applied via (reload|restart)'; then
-      return 0
-    fi
-  fi
+  [ -f "$boot_log" ] && grep -q 'Watching model' "$boot_log" 2>/dev/null || return 1
+  # The watcher notices a change a moment after the exec: give it a few seconds to start.
+  while [ "$MPR" -nt "$boot_log" ] && [ "$waited" -lt "${MDL_WATCH_SETTLE_SECONDS:-5}" ]; do
+    sleep 1; waited=$((waited + 1))
+  done
+  waited=0
+  while [ "$waited" -lt 120 ] && tail -1 "$boot_log" 2>/dev/null \
+        | grep -qE 'Change detected, rebuilding|re-bundling|Web client bundled'; do
+    [ "$waited" = "0" ] && echo "   (waiting for --watch to apply the latest model change)"
+    sleep 1; waited=$((waited + 1))
+  done
+  [ ! "$MPR" -nt "$boot_log" ] && tail -1 "$boot_log" 2>/dev/null | grep -qE 'applied via (reload|restart)'
+}
 
-  # Primary signal, needs no pgrep (Git Bash): .mpr newer than the built deployment.
+# Primary signal, needs no pgrep (Git Bash): .mpr newer than the built deployment.
+warn_if_deployment_older() {
   local built
   for built in deployment/model/model.mdp deployment/model/metadata.json; do
     [ -f "$built" ] || continue
     gate_py deployment-age "$MPR" "$built" | tee -a "$WORK/stale.note"
     break
   done
+}
 
-  # Secondary signal: .mpr newer than this project's oldest runtime process.
+# Secondary signal: .mpr newer than this project's oldest runtime process.
+warn_if_runtime_older() {
+  local oldest started
   command -v pgrep >/dev/null 2>&1 || return 0
-  local oldest
   oldest="$(project_pids | head -1)"
   [ -n "$oldest" ] || return 0
   started="$(ps -o lstart= -p "$oldest" 2>/dev/null)"
