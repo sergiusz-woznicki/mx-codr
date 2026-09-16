@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Check that page widgets are spaced with Atlas Spacing design properties.
 
-Input: `describe page` dumps (.mdl files or directories), normally from tests/gate.sh.
-Usage: check_layout.py <file.mdl|dir> ... [--json]
+Input: `describe page` dumps (.mdl files or directories), normally from tests/gate.sh;
+optionally `DESCRIBE NAVIGATION` output (--navigation) and snippet dumps (--sign-out-sources).
+Usage: check_layout.py <file.mdl|dir> ... [--navigation nav.mdl] [--sign-out-sources dir]
+                       [--users-sign-in] [--json]
 --json keys: verdict, pages, sources, failures, warnings.
 Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 """
@@ -12,6 +14,9 @@ Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 #   SPACE02  FAIL  margin/padding value other than None, S, M, L (mxcli check accepts it; mx check fails with CE6083)
 #   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
 #   HEAD01   WARN  page with no H1-H3 text, no header widget and no header/title/masthead snippet
+#   NAV01    FAIL  users sign in (--users-sign-in), but a navigation menu has no sign_out item
+#                  and no page or snippet has a sign-out button
+#   NAV02    WARN  the sign_out item is not the last item of its menu
 
 from __future__ import annotations
 
@@ -238,6 +243,53 @@ def missing_heading_warnings(headed: dict[str, bool]) -> list[dict]:
     return warnings
 
 
+# `create or replace navigation <Profile>` starts a profile's block in DESCRIBE NAVIGATION output.
+PROFILE_RE = re.compile(r"^\s*create\s+(?:or\s+replace\s+)?navigation\s+(?P<name>\w+)", re.IGNORECASE)
+# One `menu item '<caption>' ...;` line.
+MENU_ITEM_RE = re.compile(r"^\s*menu\s+item\s+'(?P<caption>[^']*)'(?P<rest>.*)$", re.IGNORECASE)
+SIGN_OUT_RE = re.compile(r"\bsign_out\b", re.IGNORECASE)
+
+
+def menu_items(navigation: str) -> dict[str, list[tuple[str, bool]]]:
+    """{profile: [(caption, is sign_out), ...]} in menu order; profiles without a menu are absent."""
+    menus: dict[str, list[tuple[str, bool]]] = {}
+    profile = ""
+    for line in navigation.splitlines():
+        found = PROFILE_RE.match(line)
+        if found:
+            profile = found.group("name")
+            continue
+        item = MENU_ITEM_RE.match(line)
+        if item and profile:
+            menus.setdefault(profile, []).append(
+                (item.group("caption"), bool(SIGN_OUT_RE.search(item.group("rest")))))
+    return menus
+
+
+def sign_out_findings(navigation: str, other_mdl: str) -> tuple[list[dict], list[dict]]:
+    """NAV01 / NAV02: an app whose users sign in needs a way to log out."""
+    failures, warnings = [], []
+    button_elsewhere = bool(SIGN_OUT_RE.search(other_mdl))
+    for profile, items in sorted(menu_items(navigation).items()):
+        signs_out = [index for index, (_caption, is_sign_out) in enumerate(items) if is_sign_out]
+        if not signs_out:
+            if not button_elsewhere:
+                failures.append({
+                    "check": "NAV01",
+                    "line": 0,
+                    "message": (f"navigation profile {profile}: users sign in, but its menu has no way to log"
+                                f" out -- add `menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;`"
+                                f" as the last menu item (DESCRIBE NAVIGATION {profile} first and keep the other items)"),
+                })
+        elif signs_out[-1] != len(items) - 1:
+            warnings.append({
+                "check": "NAV02",
+                "line": 0,
+                "message": f"navigation profile {profile}: the Log out item is not the last item of the menu",
+            })
+    return failures, warnings
+
+
 def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
     """Return (failures, warnings, page count)."""
     widgets = parse(lines)
@@ -271,6 +323,11 @@ def collect(sources: list[Path]) -> tuple[str, list[Path]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("sources", nargs="+", type=Path, help="describe-page dumps, or a directory of them")
+    parser.add_argument("--navigation", type=Path, help="DESCRIBE NAVIGATION output")
+    parser.add_argument("--sign-out-sources", type=Path, action="append", default=[],
+                        help="more dumps (snippets) where a sign-out button counts")
+    parser.add_argument("--users-sign-in", action="store_true",
+                        help="project security is on, so the menu needs a Log out item")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -280,6 +337,12 @@ def main() -> int:
         return 1
 
     failures, warnings, pages = check(text.splitlines())
+    if args.users_sign_in and args.navigation and args.navigation.exists():
+        extra, _ = collect(args.sign_out_sources)
+        nav_failures, nav_warnings = sign_out_findings(
+            args.navigation.read_text(encoding="utf-8", errors="replace"), text + "\n" + extra)
+        failures += nav_failures
+        warnings += nav_warnings
     report = {
         "verdict": "PASS" if not failures else "FAIL",
         "pages": pages,

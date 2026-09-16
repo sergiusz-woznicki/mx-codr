@@ -358,6 +358,23 @@ check_naming() {
 }
 
 # Widget spacing, read from `describe page` (Starlark lint rules cannot see widgets).
+# Sets nav_args for the Log out rule (NAV01): only when project security is on, since only then
+# do users sign in. Returns 1, with the summary written, when the navigation cannot be read.
+layout_sign_out_inputs() {
+  local level
+  level="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | grep -i 'Security Level' | head -1)"
+  case "$level" in
+    *[Oo]ff*|"") return 0 ;;
+  esac
+  if ! "$MXCLI" -p "$MPR" -c "DESCRIBE NAVIGATION" > "$WORK/navigation.mdl" 2>/dev/null; then
+    echo "layout: could not run -- DESCRIBE NAVIGATION failed" > "$WORK/layout.summary"
+    return 1
+  fi
+  # A sign-out button in a snippet (a shared header, say) also counts; unreadable snippets do not block.
+  describe_all layout-snippets "$WORK/snippets" "SNIPPETS" || true
+  nav_args=(--navigation "$WORK/navigation.mdl" --sign-out-sources "$WORK/snippets" --users-sign-in)
+}
+
 check_layout() {
   [ -f tools/mdl-checks/check_layout.py ] || {
     echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
@@ -377,7 +394,9 @@ check_layout() {
   if ! ls "$WORK"/pages/*.mdl >/dev/null 2>&1; then
     echo "layout: no page to check" > "$WORK/layout.summary"; return 0
   fi
-  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)"; code=$?
+  local -a nav_args=()
+  layout_sign_out_inputs || return 2
+  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" "${nav_args[@]}" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
     echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"

@@ -105,6 +105,9 @@ create or replace navigation Responsive
 `create or replace navigation` replaces the whole menu: `DESCRIBE NAVIGATION Responsive`
 first and keep the items already there.
 
+The gate's layout verdict fails (`NAV01`) while security is on and no menu, page or
+snippet offers a way to log out.
+
 ## Headings
 
 Stock Atlas layouts render the **app** brand in the top region, not the page title,
@@ -147,6 +150,8 @@ layout: PASS  0 failure(s) over 6 page(s)
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
 `SPACE03` | error | widgets on one line disagreeing on vertical margins (misaligned), or none carrying `margin-bottom` (wraps into the row above) |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
+`NAV01` | error | project security is on, a navigation menu has no `sign_out` item, and no page or snippet has a sign-out button |
+`NAV02` | warning | the `sign_out` item is not the last item of its menu |
 
 ## What this cannot see
 
