@@ -67,6 +67,11 @@ function Resolve-Python {
   return $null
 }
 
+# Test-PackagePresent <package> -- true when the package's Resolver (or its Probe command) finds it.
+function Test-PackagePresent($package) {
+  if ($package.Resolver) { [bool](& $package.Resolver) } else { Test-Command $package.Probe }
+}
+
 # --- main ---
 Write-Host ''
 Write-Host '  MX-CODR  ' -ForegroundColor White -NoNewline
@@ -89,8 +94,7 @@ if (-not $SkipWinget) {
   )
 
   foreach ($package in $packages) {
-    $present = if ($package.Resolver) { [bool](& $package.Resolver) } else { Test-Command $package.Probe }
-    if ($present) {
+    if (Test-PackagePresent $package) {
       Write-Ok "$($package.Id) already present"
       continue
     }
@@ -98,8 +102,7 @@ if (-not $SkipWinget) {
     & winget install -e --accept-package-agreements --accept-source-agreements `
         --disable-interactivity --id $package.Id
     Update-PathFromRegistry
-    $present = if ($package.Resolver) { [bool](& $package.Resolver) } else { Test-Command $package.Probe }
-    if ($present) {
+    if (Test-PackagePresent $package) {
       Write-Ok "$($package.Id) installed"
     } else {
       Write-Warn "$($package.Id) did not become available on the PATH."

@@ -135,11 +135,15 @@ _mdl_kill_tree() {   # _mdl_kill_tree <pid>
 # The flag file appearing tells the EXIT trap the watchdog fired.
 _MDL_TIMEOUT_FLAG="$(mdl_tmpfile mdl-watchdog)"; rm -f "$_MDL_TIMEOUT_FLAG"
 _MDL_TIMED_OUT=0
+# The timeout report, on stderr; both the TERM and the EXIT handler print it.
+_mdl_timeout_message() {
+  echo "FAIL: test exceeded ${_MDL_LIMIT}s (SCRIPT_TIMEOUT): a browser call or a polling loop never returned." \
+       "If the next test hangs too, the browser is stuck: playwright-cli close && playwright-cli open" >&2
+}
 # TERM handler: report, kill the children, exit 124.
 _mdl_timed_out() {
   _MDL_TIMED_OUT=1
-  echo "FAIL: test exceeded ${_MDL_LIMIT}s (SCRIPT_TIMEOUT): a browser call or a polling loop never returned." \
-       "If the next test hangs too, the browser is stuck: playwright-cli close && playwright-cli open" >&2
+  _mdl_timeout_message
   _mdl_kill_tree $$
   exit 124
 }
@@ -168,17 +172,21 @@ _mdl_bounded() {
 # --- 6. Sessions ---
 # The licence caps concurrent sessions, so a scenario signs out in its own `finally`.
 # KEEP_SESSION=1 / MDL_SESSION_REUSE=1: stay signed in, reused for the same TEST_USER. FRESH_SESSION=1: never reuse.
-_MDL_RELEASE=1
-if [ "${KEEP_SESSION:-0}" = "1" ] || [ "${MDL_SESSION_REUSE:-0}" = "1" ]; then _MDL_RELEASE=0; fi
-_MDL_REUSE=$((1 - _MDL_RELEASE))
-[ "${FRESH_SESSION:-0}" = "1" ] && _MDL_REUSE=0
+# Both flags are 1 or 0: they are written into the scenario's JavaScript as numbers.
+if [ "${KEEP_SESSION:-0}" = "1" ] || [ "${MDL_SESSION_REUSE:-0}" = "1" ]; then
+  _MDL_RELEASE=0   # stay signed in after the scenario
+  _MDL_REUSE=1     # and pick that session up in the next one
+else
+  _MDL_RELEASE=1
+  _MDL_REUSE=0
+fi
+if [ "${FRESH_SESSION:-0}" = "1" ]; then _MDL_REUSE=0; fi
 # EXIT handler: stop the watchdog, report a timeout set -e hid, remove temp files, sign out after a timeout.
 _release_session() {
   local status=$?
   kill "$_MDL_WATCHDOG" 2>/dev/null || true
   if [ "$_MDL_TIMED_OUT" = "0" ] && [ -f "$_MDL_TIMEOUT_FLAG" ]; then
-    echo "FAIL: test exceeded ${_MDL_LIMIT}s (SCRIPT_TIMEOUT): a browser call or a polling loop never returned." \
-         "If the next test hangs too, the browser is stuck: playwright-cli close && playwright-cli open" >&2
+    _mdl_timeout_message
     _MDL_TIMED_OUT=1
     status=124
   fi
@@ -221,23 +229,53 @@ print('the runtime refused a session: Maximum number of sessions exceeded (devel
 
 # --- 7. scenario ---
 # scenario '<js body>' -- run the body in one playwright-cli process; print its return as JSON, fail() on error.
+# Steps: write the JavaScript to a file, run it, fail on an error, print the result.
 scenario() {
   local body="$1"
   local code_file output
   code_file="$(mdl_tmpfile mdl-scenario)"
   # Written to a file: bodies contain double quotes.
-  {
-    printf 'async () => {\n'
-    # JSON-encoded: these values are data, and an apostrophe must not end the JS string.
-    printf '  const MDL_CFG = JSON.parse(%s);\n' "$(mdl_json_string \
-      "$(mdl_json_object BASE "$BASE_URL" USER "$TEST_USER" PASSWORD "$TEST_PASSWORD")")"
-    printf '  const BASE = MDL_CFG.BASE;\n'
-    printf '  const USER = MDL_CFG.USER;\n'
-    printf '  const PASSWORD = MDL_CFG.PASSWORD;\n'
-    printf '  const ACTION_TIMEOUT = %s;\n' "$(mdl_json_number "${ACTION_TIMEOUT_MS:-8000}" 8000)"
-    printf '  const RELEASE = %s;\n' "$_MDL_RELEASE"
-    printf '  const REUSE = %s;\n' "$_MDL_REUSE"
-    cat <<'PRELUDE'
+  _mdl_scenario_js "$body" > "$code_file"
+
+  # So the EXIT trap can delete it (it holds the password) after a timeout.
+  _MDL_SCENARIO_FILE="$code_file"
+  output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
+  rm -f "$code_file"; _MDL_SCENARIO_FILE=""
+
+  # Called directly, not in $(...): fail() must end the script, not a subshell.
+  _mdl_fail_on_scenario_error "$output"
+  _mdl_scenario_result "$output"
+}
+
+# _mdl_scenario_js <body> -- the whole async function: settings, helpers, then the body in try/catch.
+_mdl_scenario_js() {
+  local body="$1"
+  printf 'async () => {\n'
+  _mdl_js_settings
+  _mdl_js_helpers
+  # verify shows only the last stderr line, so the catch adds url and user to the error.
+  printf '  try {\n'
+  printf '%s\n' "$body"
+  _mdl_js_catch_and_sign_out
+  printf '}\n'
+}
+
+# The JS constants: BASE, USER, PASSWORD, ACTION_TIMEOUT, RELEASE, REUSE.
+_mdl_js_settings() {
+  # JSON-encoded: these values are data, and an apostrophe must not end the JS string.
+  printf '  const MDL_CFG = JSON.parse(%s);\n' "$(mdl_json_string \
+    "$(mdl_json_object BASE "$BASE_URL" USER "$TEST_USER" PASSWORD "$TEST_PASSWORD")")"
+  printf '  const BASE = MDL_CFG.BASE;\n'
+  printf '  const USER = MDL_CFG.USER;\n'
+  printf '  const PASSWORD = MDL_CFG.PASSWORD;\n'
+  printf '  const ACTION_TIMEOUT = %s;\n' "$(mdl_json_number "${ACTION_TIMEOUT_MS:-8000}" 8000)"
+  printf '  const RELEASE = %s;\n' "$_MDL_RELEASE"
+  printf '  const REUSE = %s;\n' "$_MDL_REUSE"
+}
+
+# The JS helpers a body calls: open_app, menu, fill, ... (listed at the top of this file).
+_mdl_js_helpers() {
+  cat <<'PRELUDE'
   // Playwright waits 30s by default for a missing element. During development the
   // failing case is the normal case, so fail in 8s instead -- red runs are what
   // cost time, not green ones. Override per call where a step is genuinely slow.
@@ -447,10 +485,11 @@ scenario() {
   };
   const page_text = async () => (await page.locator('body').innerText());
 PRELUDE
-    # verify shows only the last stderr line, so the catch adds url and user to the error.
-    printf '  try {\n'
-    printf '%s\n' "$body"
-    cat <<'CATCH'
+}
+
+# The end of the try: the catch adds url, user and login message; the finally signs out.
+_mdl_js_catch_and_sign_out() {
+  cat <<'CATCH'
   } catch (e) {
     const url = page.url();  // synchronous in Playwright; do not await or .catch it
     // mx is absent on login.html, so asking for the user there throws. Neither
@@ -483,22 +522,17 @@ PRELUDE
     page.goto = page.__mdl_raw_goto;
   }
 CATCH
-    printf '}\n'
-  } > "$code_file"
+}
 
-  # So the EXIT trap can delete it (it holds the password) after a timeout.
-  _MDL_SCENARIO_FILE="$code_file"
-  output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
-  rm -f "$code_file"; _MDL_SCENARIO_FILE=""
-
-  # playwright-cli prints its answer in sections headed "### Result" or "### Error".
+# _mdl_fail_on_scenario_error <output> -- fail() when playwright-cli reported an error or no result.
+# playwright-cli prints its answer in sections headed "### Result" or "### Error".
+_mdl_fail_on_scenario_error() {
+  local output="$1"
   if printf '%s' "$output" | grep -q '^### Error'; then
     # Full block to stderr; a one-line summary in fail(), the only line verify reprints.
     printf '%s\n' "$output" | sed -n '/^### Error/,/^###/p' | head -8 >&2
     local why
-    why="$(printf '%s\n' "$output" \
-      | sed -n '/^### Error/,/^### [A-Z]/p' | sed '1d;/^### /d' \
-      | sed $'s/\033\[[0-9;]*m//g' | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//' | cut -c1-400)"
+    why="$(_mdl_error_summary "$output")"
     local refusal
     refusal="$(_licence_refusal || true)"
     fail "browser scenario failed: ${why:-no error text}${refusal:+ -- $refusal}"
@@ -507,7 +541,18 @@ CATCH
   if ! printf '%s' "$output" | grep -q '^### Result'; then
     fail "browser scenario produced no result: $(printf '%s' "$output" | tr '\n' ' ' | tr -s ' ' | cut -c1-200) (running a test outside the runner needs: playwright-cli open)"
   fi
-  printf '%s' "$output" | awk '/^### Result/{flag=1; next} /^### /{flag=0} flag' | sed '/^$/d'
+}
+
+# _mdl_error_summary <output> -- the "### Error" text on one line, colours removed, at most 400 chars.
+_mdl_error_summary() {
+  printf '%s\n' "$1" \
+    | sed -n '/^### Error/,/^### [A-Z]/p' | sed '1d;/^### /d' \
+    | sed $'s/\033\[[0-9;]*m//g' | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//' | cut -c1-400
+}
+
+# _mdl_scenario_result <output> -- print the "### Result" section without blank lines.
+_mdl_scenario_result() {
+  printf '%s' "$1" | awk '/^### Result/{flag=1; next} /^### /{flag=0} flag' | sed '/^$/d'
 }
 
 # --- 8. Reading the result ---
@@ -524,9 +569,9 @@ except json.JSONDecodeError:
     sys.exit()
 if isinstance(data, str):
     data = json.loads(data)
-value = data.get('$key', '')
+value = data.get(sys.argv[1], '')
 print(value if isinstance(value, str) else json.dumps(value))
-"
+" "$key"
 }
 
 # fields <json> <key...> -- one line per key, as field(), in one Python start:
@@ -614,6 +659,6 @@ oql_value() {
   printf '%s' "$json" | "$PY" -c "
 import json, sys
 rows = json.load(sys.stdin)
-print((rows[0].get('$attribute') or 'empty') if rows else 'no-such-row')
-"
+print((rows[0].get(sys.argv[1]) or 'empty') if rows else 'no-such-row')
+" "$attribute"
 }

@@ -24,26 +24,29 @@ for row in json.load(sys.stdin):
         print(row["Module"])' 2>/dev/null
 }
 
-{
+# --- Sections: each prints its own "== heading" and runs in the background. ---
+
+structure_section() {
   echo "== structure (this app's own modules; System and Atlas are not listed)"
   for module in $(user_modules); do
     "$MXCLI" -p "$MPR" -c "SHOW STRUCTURE DEPTH 2 IN $module" 2>&1 | head -60
   done
-} > "$WORK/9-structure" 2>&1 &
+}
 
-{
+security_section() {
   echo "== security"
   "$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>&1 | grep -iE 'security level|demo users|guest|user roles'
   "$MXCLI" -p "$MPR" -c "SHOW USER ROLES" 2>&1 | grep -E '^\|' | head -10
-} > "$WORK/1-security" 2>&1 &
+}
 
-{
+navigation_section() {
   echo "== navigation"
   "$MXCLI" -p "$MPR" -c "SHOW NAVIGATION HOMES" 2>&1 | head -10
   "$MXCLI" -p "$MPR" -c "SHOW NAVIGATION MENU" 2>&1 | head -15
-} > "$WORK/4-navigation" 2>&1 &
+}
 
-{
+tests_section() {
+  local script module
   echo "== tests already here (and what each one covers)"
   for script in tests/verify-*.test.sh; do
     [ -f "$script" ] || continue
@@ -56,16 +59,17 @@ for row in json.load(sys.stdin):
       printf '   %-20s %s\n' "$module" "$("$PY" tools/mdl-checks/check_test_coverage.py . "$module" 2>&1 | tail -1)"
     done
   fi
-} > "$WORK/2-tests" 2>&1 &
+}
 
-{
+lint_section() {
+  local lint
   echo "== lint (the project's own rules included)"
   lint="$("$MXCLI" lint -p "$MPR" 2>&1)"
   printf '%s\n' "$lint" | tail -1
   printf '%s\n' "$lint" | grep -oE '\[(MOD001|REU001|SEC00[0-9]|ARCH00[0-9])\]' | sort | uniq -c | head -8
-} > "$WORK/3-lint" 2>&1 &
+}
 
-{
+app_section() {
   echo "== app"
   if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://localhost:$APP_PORT" 2>/dev/null)" = "200" ]; then
     echo "   running on http://localhost:$APP_PORT"
@@ -76,7 +80,15 @@ for row in json.load(sys.stdin):
   [ -d docs/brain ] && echo "   docs/brain/ present -- read project.md before building"
   [ -f tools/mdl-checks/VERSION ] && echo "   harness $(cat tools/mdl-checks/VERSION)"
   mdl_check_install_freshness
-} > "$WORK/0-app" 2>&1 &
+}
+
+# --- Run them in parallel. The file number sets the print order, not the start order. ---
+structure_section  > "$WORK/9-structure"  2>&1 &
+security_section   > "$WORK/1-security"   2>&1 &
+navigation_section > "$WORK/4-navigation" 2>&1 &
+tests_section      > "$WORK/2-tests"      2>&1 &
+lint_section       > "$WORK/3-lint"       2>&1 &
+app_section        > "$WORK/0-app"        2>&1 &
 
 wait
 # Structure last: it is long, and output piped through `head` must keep the rest.

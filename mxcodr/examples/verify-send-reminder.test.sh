@@ -6,9 +6,9 @@ source "$(dirname "$0")/lib.sh"
 
 number="INV-1001"   # seeded, guaranteed present by verify-000-reset
 
-before="$(oql_value Invoice ReminderCount "InvoiceNumber = '$number'")"
-[ "$before" = "no-such-row" ] && fail "seeded invoice $number is missing"
-[ "$before" = "empty" ] && before=0
+reminders_before="$(oql_value Invoice ReminderCount "InvoiceNumber = '$number'")"
+[ "$reminders_before" = "no-such-row" ] && fail "seeded invoice $number is missing"
+[ "$reminders_before" = "empty" ] && reminders_before=0
 
 result="$(scenario '
   await open_app();
@@ -19,8 +19,8 @@ result="$(scenario '
   return {confirmed: /reminder sent for invoice/i.test(text)};
 ')"
 
-after="$(oql_value Invoice ReminderCount "InvoiceNumber = '$number'")"
-[ "$after" -gt "$before" ] || fail "ReminderCount for $number did not increase ($before -> $after)"
+reminders_after="$(oql_value Invoice ReminderCount "InvoiceNumber = '$number'")"
+[ "$reminders_after" -gt "$reminders_before" ] || fail "ReminderCount for $number did not increase ($reminders_before -> $reminders_after)"
 [ "$(field "$result" confirmed)" = "true" ] || fail "no reminder confirmation message shown"
 
-echo "OK: reminder for $number raised the count $before -> $after and confirmed on screen"
+echo "OK: reminder for $number raised the count $reminders_before -> $reminders_after and confirmed on screen"

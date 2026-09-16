@@ -24,19 +24,18 @@
 #      may also be set in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
-# Sections (2-5, 9 and 10 only define functions):
+# Sections (2-4, 8 and 9 only define functions):
 #   1. Setup          find the .mpr, source portable.sh, parse flags
-#   2. App helpers    answers, boot failure, user modules, pids, database
-#   3. Model checks   check_mx, check_lint, check_coverage, check_naming
+#   2. App helpers    answers, boot failure, wait_for_boot, user modules, pids, database
+#   3. Model checks   check_mx, check_lint, check_coverage, check_naming, check_layout
 #   4. Cache          fingerprint, run_cached
-#   5. Layout check   check_layout
-#   6. Start checks   the five model checks, in the background
-#   7. --restart      stop this project's app
-#   8. The app        find it, or boot it
-#   9. Preflights     sessions, stale model, environment
-#  10. Tests          result arrays, record_red_first, step_tests
-#  11. Run            preflights, suite, wait, collect
-#  12. Summary        verdict lines, DONE / NOT DONE, exit code
+#   5. Start checks   the five model checks, in the background
+#   6. --restart      stop this project's app
+#   7. The app        find it, or boot it
+#   8. Preflights     sessions, stale model, environment
+#   9. Tests          result arrays, record_red_first, step_tests
+#  10. Run            preflights, suite, wait, collect
+#  11. Summary        verdict lines, DONE / NOT DONE, exit code
 # No -e: a failing step must not end the gate.
 set -uo pipefail
 
@@ -64,6 +63,7 @@ WORK="$(mdl_tmpdir mdl-gate)"
 trap 'rm -rf "$WORK"' EXIT
 
 ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
+booted_by_command=""   # set to 1 once MDL_BOOT_COMMAND has booted the app
 while [ $# -gt 0 ]; do
   case "$1" in
     --only) ONLY="$2"; shift 2 ;;
@@ -90,6 +90,22 @@ report_boot_failure() {   # report_boot_failure <log> <waited>
     | head -12 >&2
   echo "   full log: $1" >&2
   exit 2
+}
+# Polls $BASE_URL once a second until it answers, then prints how long it took.
+# Exits 2 when <log> shows a boot error or BOOT_TIMEOUT seconds pass.
+wait_for_boot() {   # wait_for_boot <log>
+  local log="$1" waited=0
+  until answers "$BASE_URL"; do
+    perl -e 'select undef, undef, undef, 1' 2>/dev/null || sleep 1
+    waited=$((waited + 1))
+    boot_failed "$log" && report_boot_failure "$log" "$waited"
+    if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
+      echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of $log:" >&2
+      tail -15 "$log" >&2
+      exit 2
+    fi
+  done
+  echo "   up after ${waited}s"
 }
 GATE_START=$SECONDS
 
@@ -169,10 +185,10 @@ ensure_database() {      # the non-container equivalent of --ensure-db
 # $WORK/<name>.summary and .detail and returns 0 pass / 1 problems / 2 could not run;
 # run_cached adds .status and .secs; collect reads them after `wait`.
 check_mx() {
-  local out
+  local out errors item
   # mx check runs on a copy: it rewrites the .mpr and would trigger --watch rebuilds.
   # The copy needs widgets/ and theme*/ as well; `cp -Rc` clones on APFS, else plain cp -R.
-  local scratch="$WORK/mxcheck" item
+  local scratch="$WORK/mxcheck"
   mkdir -p "$scratch"
   for item in "$MPR" mprcontents widgets theme themesource javasource; do
     [ -e "$item" ] || continue
@@ -182,7 +198,6 @@ check_mx() {
   local -a mx_args=(docker check -p "$scratch/$MPR")
   [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
   out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
-  local errors
   # mx check exits 0 even with model errors, so read the count it prints.
   errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"
   if [ -z "$errors" ]; then
@@ -291,7 +306,11 @@ check_coverage() {
     return 2; }
   local gate out code
   modules_or_status coverage; gate=$?
-  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;   # no user modules: a real pass, summary already written
+    *) return "$gate" ;;
+  esac
   # All modules in one call: a test may cover a page in another module.
   # shellcheck disable=SC2086
   out="$("$PY" tools/mdl-checks/check_test_coverage.py . $USER_MODULES 2>&1)"; code=$?
@@ -301,11 +320,10 @@ check_coverage() {
     0) return 0 ;;
     1) grep -q '^coverage FAIL ' "$WORK/coverage.summary" && return 1 ;;
   esac
-  # The checker broke: keep an ERROR summary, otherwise write a could-not-run one.
-  [ -s "$WORK/coverage.summary" ] && ! grep -q '^coverage ERROR ' "$WORK/coverage.summary" \
-    && : > "$WORK/coverage.summary"
-  [ -s "$WORK/coverage.summary" ] \
-    || echo "coverage: could not run -- check_test_coverage.py exited $code" > "$WORK/coverage.summary"
+  # The checker broke: keep its summary if it printed an ERROR line, else replace it.
+  if ! grep -q '^coverage ERROR ' "$WORK/coverage.summary"; then
+    echo "coverage: could not run -- check_test_coverage.py exited $code" > "$WORK/coverage.summary"
+  fi
   printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 >> "$WORK/coverage.detail"
   return 2
 }
@@ -317,7 +335,11 @@ check_naming() {
     return 2; }
   local gate out code
   modules_or_status naming; gate=$?
-  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;   # no user modules: a real pass, summary already written
+    *) return "$gate" ;;
+  esac
   if ! describe_all naming "$WORK/mdl" "MICROFLOWS NANOFLOWS"; then
     echo "naming: could not run -- $(head -1 "$WORK/naming.broken")" > "$WORK/naming.summary"
     head -5 "$WORK/naming.broken" | sed 's/^/  - /' > "$WORK/naming.detail"
@@ -335,6 +357,38 @@ check_naming() {
   fi
   echo "naming: $(printf '%s\n' "$out" | head -1)" > "$WORK/naming.summary"
   printf '%s\n' "$out" | grep -E '^\s+- ' | head -10 > "$WORK/naming.detail"
+  return "$gate"
+}
+
+# Widget spacing, read from `describe page` (Starlark lint rules cannot see widgets).
+check_layout() {
+  [ -f tools/mdl-checks/check_layout.py ] || {
+    echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
+    return 2; }
+  local gate out code
+  modules_or_status layout; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;   # no user modules: a real pass, summary already written
+    *) return "$gate" ;;
+  esac
+  if ! describe_all layout "$WORK/pages" "PAGES"; then
+    echo "layout: could not run -- $(head -1 "$WORK/layout.broken")" > "$WORK/layout.summary"
+    head -5 "$WORK/layout.broken" | sed 's/^/  - /' > "$WORK/layout.detail"
+    return 2
+  fi
+  if ! ls "$WORK"/pages/*.mdl >/dev/null 2>&1; then
+    echo "layout: no page to check" > "$WORK/layout.summary"; return 0
+  fi
+  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)"; code=$?
+  checker_verdict "$code" "$out"; gate=$?
+  if [ "$gate" = "2" ]; then
+    echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/layout.detail"
+    return 2
+  fi
+  echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
+  printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
   return "$gate"
 }
 
@@ -414,36 +468,7 @@ run_cached() {
   return "$status"
 }
 
-# --- 5. Layout check ---
-# Widget spacing, read from `describe page` (Starlark lint rules cannot see widgets).
-check_layout() {
-  [ -f tools/mdl-checks/check_layout.py ] || {
-    echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
-    return 2; }
-  local gate out code
-  modules_or_status layout; gate=$?
-  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
-  if ! describe_all layout "$WORK/pages" "PAGES"; then
-    echo "layout: could not run -- $(head -1 "$WORK/layout.broken")" > "$WORK/layout.summary"
-    head -5 "$WORK/layout.broken" | sed 's/^/  - /' > "$WORK/layout.detail"
-    return 2
-  fi
-  if ! ls "$WORK"/pages/*.mdl >/dev/null 2>&1; then
-    echo "layout: no page to check" > "$WORK/layout.summary"; return 0
-  fi
-  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)"; code=$?
-  checker_verdict "$code" "$out"; gate=$?
-  if [ "$gate" = "2" ]; then
-    echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
-    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/layout.detail"
-    return 2
-  fi
-  echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
-  printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
-  return "$gate"
-}
-
-# --- 6. Start checks ---
+# --- 5. Start checks ---
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   # Upgrading the gate, its config or mxcli must not replay an old pass.
   cache_inputs=(tests/gate.sh tests/harness.env "meta:$MXCLI")
@@ -456,7 +481,7 @@ if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   echo "== mx check, lint, coverage, naming and layout started (they need no app; running while the suite does)"
 fi
 
-# --- 7. --restart ---
+# --- 6. --restart ---
 # Kill the whole tree under `mxcli run`: TERM on mxcli alone orphans mxbuild and Java.
 if [ "$RESTART" = "1" ]; then
   echo "== restarting this project's app"
@@ -482,7 +507,7 @@ fi
 # Warn about drifted checkers before any verdict, and before the no-app exit below.
 mdl_check_install_freshness
 
-# --- 8. The app ---
+# --- 7. The app ---
 if [ -z "${BASE_URL:-}" ]; then
   for candidate in "http://localhost:$APP_PORT" http://localhost:8080; do
     answers "$candidate" && { BASE_URL="$candidate"; break; }
@@ -504,51 +529,29 @@ if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
       # `( cmd & )` detaches the app: `wait` does not block on it and it outlives the gate.
       ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
       BASE_URL="http://localhost:$APP_PORT"
-      waited=0
-      until answers "$BASE_URL"; do
-        sleep 1
-        waited=$((waited + 1))
-        boot_failed .mxcli/gate-boot.log && report_boot_failure .mxcli/gate-boot.log "$waited"
-        if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
-          echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of .mxcli/gate-boot.log:" >&2
-          tail -15 .mxcli/gate-boot.log >&2
-          exit 2
-        fi
-      done
-      echo "   up after ${waited}s"
+      wait_for_boot .mxcli/gate-boot.log
       booted_by_command=1
     fi
     # Default boot: `mxcli run --local --watch` (hot reload).
-    if [ -z "${booted_by_command:-}" ]; then
-    echo "== no app answering; booting $MPR on port $APP_PORT with hot reload"
-    boot_args=(run --local -p "$MPR" --app-port "$APP_PORT" --watch)
-    # A second app on this machine needs its own admin and mxbuild ports.
-    [ -n "${ADMIN_PORT:-}" ] && boot_args+=(--admin-port "$ADMIN_PORT")
-    [ -n "${SERVE_PORT:-}" ] && boot_args+=(--serve-port "$SERVE_PORT")
-    if [ -n "${MDL_DB_NAME:-}" ]; then
-      ensure_database || true
-      boot_args+=(--db-name "$MDL_DB_NAME")
-      [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
-      [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
-      [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
-    else
-      # A fresh project has no database; --ensure-db creates it only when missing.
-      boot_args+=(--ensure-db)
-    fi
-    ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
-    BASE_URL="http://localhost:$APP_PORT"
-    waited=0
-    until answers "$BASE_URL"; do
-      perl -e 'select undef, undef, undef, 1' 2>/dev/null || sleep 1
-      waited=$((waited + 1))
-      boot_failed .mxcli/gate-boot.log && report_boot_failure .mxcli/gate-boot.log "$waited"
-      if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
-        echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of .mxcli/gate-boot.log:" >&2
-        tail -15 .mxcli/gate-boot.log >&2
-        exit 2
+    if [ -z "$booted_by_command" ]; then
+      echo "== no app answering; booting $MPR on port $APP_PORT with hot reload"
+      boot_args=(run --local -p "$MPR" --app-port "$APP_PORT" --watch)
+      # A second app on this machine needs its own admin and mxbuild ports.
+      [ -n "${ADMIN_PORT:-}" ] && boot_args+=(--admin-port "$ADMIN_PORT")
+      [ -n "${SERVE_PORT:-}" ] && boot_args+=(--serve-port "$SERVE_PORT")
+      if [ -n "${MDL_DB_NAME:-}" ]; then
+        ensure_database || true
+        boot_args+=(--db-name "$MDL_DB_NAME")
+        [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
+        [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
+        [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
+      else
+        # A fresh project has no database; --ensure-db creates it only when missing.
+        boot_args+=(--ensure-db)
       fi
-    done
-    echo "   up after ${waited}s"
+      ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
+      BASE_URL="http://localhost:$APP_PORT"
+      wait_for_boot .mxcli/gate-boot.log
     fi
   else
     cat >&2 <<MSG
@@ -563,7 +566,7 @@ MSG
   fi
 fi
 
-# --- 9. Preflights ---
+# --- 8. Preflights ---
 # Warnings before the tests; only preflight_session stops the gate (exit 2), on a
 # trial-licence session refusal in the runtime log within the last two minutes.
 preflight_session() {
@@ -698,7 +701,7 @@ if path and not os.path.exists(path):
   fi
 }
 
-# --- 10. Tests ---
+# --- 9. Tests ---
 # failures -> exit 1, cannot_run -> exit 2, summary -> the verdict lines.
 failures=()
 cannot_run=()
@@ -733,7 +736,7 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
 
 # Runs the suite (or the --only matches) in this shell, appending to the arrays directly.
 step_tests() {
-  local targets=("tests/")
+  local targets=("tests/") script
   if [ -n "$ONLY" ]; then
     targets=()
     for script in tests/verify-*"$ONLY"*.test.sh; do
@@ -803,10 +806,10 @@ step_tests() {
   fi
 }
 
-# --- 11. Run ---
+# --- 10. Run ---
 # Reads one background check's files into summary, failures or cannot_run.
 collect() {
-  local name="$1" label="$2" status
+  local name="$1" label="$2" status line
   if [ ! -f "$WORK/$name.status" ]; then
     # No status file: the worker died. Not a pass.
     summary+=("$label: could not run -- the check left no result")
@@ -845,7 +848,7 @@ if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   collect layout "layout"
 fi
 
-# --- 12. Summary ---
+# --- 11. Summary ---
 # Any failure exits 1; could-not-run alone exits 2; otherwise DONE, exit 0.
 echo
 echo "== gate"

@@ -34,6 +34,12 @@ mdl_find_python() {
 PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
+# A top-level value of the event payload, or "" when absent or unparsable.
+payload_field() {
+  printf '%s' "$input" | "$PY" -c 'import json,sys
+try: print(json.load(sys.stdin).get(sys.argv[1]) or "")
+except Exception: print("")' "$1" 2>/dev/null
+}
 
 # Resolve before cd: BASH_SOURCE may be relative.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,17 +51,13 @@ emit() {  # emit "<text>" -- or nothing at all when there is nothing to say
 }
 
 # Move to the project the event is about: the reported cwd, then its git root.
-cwd="$(printf '%s' "$input" | "$PY" -c 'import json,sys
-try: print(json.load(sys.stdin).get("cwd") or "")
-except Exception: print("")' 2>/dev/null)"
+cwd="$(payload_field cwd)"
 [ -n "$cwd" ] && [ -d "$cwd" ] && cd "$cwd" 2>/dev/null || true
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo_root" 2>/dev/null || true
 
 # Marker per conversation, recording the project, so the stop hook knows the gate is owed.
-conversation="$(printf '%s' "$input" | "$PY" -c 'import json,sys
-try: print(json.load(sys.stdin).get("conversation_id") or "")
-except Exception: print("")' 2>/dev/null)"
+conversation="$(payload_field conversation_id)"
 if [ -n "$conversation" ]; then
   state_dir="${TMPDIR:-/tmp}/mendix-mdl-cursor-hooks"
   safe="$(printf '%s' "$conversation" | tr -cd 'A-Za-z0-9._-')"

@@ -27,31 +27,28 @@ for row in json.load(sys.stdin):
         print(row["Module"])' 2>/dev/null
 }
 
-{
+# --- Sections: each prints its own "== heading" and runs in the background. ---
+
+security_section() {
   echo "== security"
   "$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>&1 | grep -iE 'security level|demo users|guest|admin user'
   "$MXCLI" -p "$MPR" -c "SHOW DEMO USERS" 2>&1 | grep -E '^\|' | head -12
-} > "$WORK/1-security" 2>&1 &
+}
 
-{
-  echo "== rows in the database"
-  # OQL needs the runtime: with the app down, counts would read as missing data.
-  probe="$("$MXCLI" oql -p "$MPR" --json "SELECT COUNT(*) AS n FROM System.User" 2>&1)"
-  case "$probe" in
-    *'"n"'*) ;;
-    *) echo "   the runtime is not answering, so row counts are unavailable"
-       echo "   (start it: $MXCLI run --local -p $MPR --app-port ${APP_PORT:-8081} --watch)"
-       exit 0 ;;
-  esac
-  for module in $(module_list); do
-    "$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $module" 2>/dev/null \
-      | "$PY" -c 'import json,sys
+# The persistent entities of one module, one qualified name per line.
+persistent_entities() {   # persistent_entities <module>
+  "$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $1" 2>/dev/null \
+    | "$PY" -c 'import json,sys
 for row in json.load(sys.stdin):
     name = row.get("Entity") or ""
     if name and "non-persistent" not in (row.get("Type") or "").lower():
-        print(name)' 2>/dev/null | while read -r entity; do
-        count="$("$MXCLI" oql -p "$MPR" --json "SELECT COUNT(*) AS n FROM $entity" 2>/dev/null \
-          | "$PY" -c '
+        print(name)' 2>/dev/null
+}
+
+# The row count of one entity; "?" when the answer has no count, 0 when unreadable.
+row_count() {   # row_count <Module.Entity>
+  "$MXCLI" oql -p "$MPR" --json "SELECT COUNT(*) AS n FROM $1" 2>/dev/null \
+    | "$PY" -c '
 import json, sys
 text = sys.stdin.read()
 start = text.find("[")
@@ -60,14 +57,31 @@ try:
 except Exception:
     rows = []
 print(rows[0].get("n", "?") if rows else 0)
-')"
-        printf "   %-40s %s\n" "$entity" "${count:-?}"
-      done
+'
+}
+
+rows_section() {
+  local probe module entity count
+  echo "== rows in the database"
+  # OQL needs the runtime: with the app down, counts would read as missing data.
+  probe="$("$MXCLI" oql -p "$MPR" --json "SELECT COUNT(*) AS n FROM System.User" 2>&1)"
+  case "$probe" in
+    *'"n"'*) ;;
+    *) echo "   the runtime is not answering, so row counts are unavailable"
+       echo "   (start it: $MXCLI run --local -p $MPR --app-port ${APP_PORT:-8081} --watch)"
+       return 0 ;;
+  esac
+  for module in $(module_list); do
+    persistent_entities "$module" | while read -r entity; do
+      count="$(row_count "$entity")"
+      printf "   %-40s %s\n" "$entity" "${count:-?}"
+    done
   done
   printf "   %-40s %s\n" "System.User" "$("$MXCLI" oql -p "$MPR" --json "SELECT Name FROM System.User" 2>/dev/null | grep -c '"Name"')"
-} > "$WORK/2-rows" 2>&1 &
+}
 
-{
+sessions_section() {
+  local refusals
   echo "== live sessions (a developer/trial licence caps them)"
   curl -s -m 5 -X POST "http://localhost:${ADMIN_PORT:-8090}/" \
     -H "X-M2EE-Authentication: $(printf '%s' "${ADMIN_PASSWORD:-mxcli-local-dev}" | base64)" \
@@ -82,37 +96,47 @@ except Exception:
     refusals="$(tail -400 "$RUNTIME_LOG" | grep -c 'Maximum number of sessions exceeded')"
     [ "$refusals" != "0" ] && echo "   session-cap refusals in the last 400 log lines: $refusals"
   fi
-} > "$WORK/3-sessions" 2>&1 &
+}
 
-{
+errors_section() {
   echo "== last runtime errors"
   if [ -f "$RUNTIME_LOG" ]; then
     grep -E ' (ERROR|CRITICAL) ' "$RUNTIME_LOG" | tail -5 | cut -c1-160
   else
     echo "   no runtime log at $RUNTIME_LOG"
   fi
-} > "$WORK/4-errors" 2>&1 &
+}
 
-if [ -n "$ENTITY" ]; then
-  {
-    echo "== access on $ENTITY (row-level XPath is what hides rows from a role)"
-    for module in $(module_list); do
-      "$MXCLI" -p "$MPR" -c "SHOW ACCESS ON ENTITY $module.$ENTITY" 2>/dev/null | head -25
-    done
-    echo "== associations of $ENTITY (a missing link looks exactly like a missing row)"
-    for module in $(module_list); do
-      "$MXCLI" -p "$MPR" -c "SHOW ASSOCIATIONS IN $module" 2>/dev/null | grep -i "$ENTITY" | head -10
-    done
-  } > "$WORK/5-access" 2>&1 &
-fi
+access_section() {
+  local module
+  echo "== access on $ENTITY (row-level XPath is what hides rows from a role)"
+  for module in $(module_list); do
+    "$MXCLI" -p "$MPR" -c "SHOW ACCESS ON ENTITY $module.$ENTITY" 2>/dev/null | head -25
+  done
+  echo "== associations of $ENTITY (a missing link looks exactly like a missing row)"
+  for module in $(module_list); do
+    "$MXCLI" -p "$MPR" -c "SHOW ASSOCIATIONS IN $module" 2>/dev/null | grep -i "$ENTITY" | head -10
+  done
+}
 
-if [ -n "$USER_NAME" ]; then
-  {
-    echo "== $USER_NAME"
-    "$MXCLI" oql -p "$MPR" --json \
-      "SELECT u/Name AS UserName, r/Name AS RoleName FROM System.User AS u
+user_section() {
+  echo "== $USER_NAME"
+  # The query's second line is indented as it always was: the text reaches mxcli as typed.
+  "$MXCLI" oql -p "$MPR" --json \
+    "SELECT u/Name AS UserName, r/Name AS RoleName FROM System.User AS u
        JOIN u/System.UserRoles/System.UserRole AS r WHERE u/Name = '$USER_NAME'" 2>&1 | head -20
-  } > "$WORK/6-user" 2>&1 &
+}
+
+# --- Run them in parallel. The file number sets the print order. ---
+security_section > "$WORK/1-security" 2>&1 &
+rows_section     > "$WORK/2-rows"     2>&1 &
+sessions_section > "$WORK/3-sessions" 2>&1 &
+errors_section   > "$WORK/4-errors"   2>&1 &
+if [ -n "$ENTITY" ]; then
+  access_section > "$WORK/5-access"   2>&1 &
+fi
+if [ -n "$USER_NAME" ]; then
+  user_section   > "$WORK/6-user"     2>&1 &
 fi
 
 wait

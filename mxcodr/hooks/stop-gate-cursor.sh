@@ -31,13 +31,17 @@ mdl_find_python() {
 PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
-
 input="$(cat)"
 nothing() { printf '{}\n'; exit 0; }
 
-conversation="$(printf '%s' "$input" | "$PY" -c 'import json,sys
-try: print(json.load(sys.stdin).get("conversation_id") or "")
-except Exception: print("")' 2>/dev/null)"
+# A top-level value of the event payload, or "" when absent or unparsable.
+payload_field() {
+  printf '%s' "$input" | "$PY" -c 'import json,sys
+try: print(json.load(sys.stdin).get(sys.argv[1]) or "")
+except Exception: print("")' "$1" 2>/dev/null
+}
+
+conversation="$(payload_field conversation_id)"
 [ -n "$conversation" ] || nothing
 
 state_dir="${TMPDIR:-/tmp}/mendix-mdl-cursor-hooks"
@@ -47,9 +51,7 @@ marker="$state_dir/$safe.gate-required"
 [ -f "$marker" ] || nothing
 
 # An aborted or errored turn is the user stopping, not a finished feature.
-status="$(printf '%s' "$input" | "$PY" -c 'import json,sys
-try: print(json.load(sys.stdin).get("status") or "")
-except Exception: print("")' 2>/dev/null)"
+status="$(payload_field status)"
 case "$status" in ""|completed) ;; *) nothing ;; esac
 
 repo_root="$(cat "$marker" 2>/dev/null || true)"

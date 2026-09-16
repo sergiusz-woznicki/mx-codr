@@ -12,7 +12,8 @@
 # Exit: 0 installed; 1 ui_fail (bad argument, no project, no Python, app creation failed);
 #   other non-zero = unexpected command failure. Missing prerequisites do not fail the install.
 #
-# Sections 1-9 define functions; the install runs from section 10 on.
+# Sections 1-9b define functions; the install runs from section 10 on (create_app is defined in 12).
+#   Constants
 #   1. Platform and Python
 #   2. Terminal output (ui_*)
 #   3. Prerequisite helpers
@@ -22,6 +23,7 @@
 #   7. mxcli: download and update
 #   8. Finding Studio Pro (Windows)
 #   9. Playwright browser and JDK
+#   9b. Prerequisite step helpers
 #   10. Arguments and the target project
 #   11. Step: prerequisites
 #   12. Step: create the Mendix app
@@ -32,6 +34,13 @@
 #   17. Summary
 
 set -euo pipefail
+
+# --- Constants ---
+DEFAULT_MX_VERSION="11.12.1"               # Mendix version for a new app when MX_VERSION is unset
+PLAYWRIGHT_CLI_PACKAGE="@playwright/cli@0.1.15"   # pinned to the devcontainer's version
+DEFAULT_DOCKER_WAIT=180                    # seconds to wait for the Docker daemon (DOCKER_WAIT)
+UI_BAR_WIDTH=24                            # progress bar width, in characters
+UI_SUB_EXPECTED=6                          # sub-steps expected inside one step, for the bar
 
 # --- 1. Platform and Python ---
 # On Windows (Git Bash) python3 may be a Store stub, so each Python candidate is run before use.
@@ -120,7 +129,6 @@ UI_TOTAL=1
 UI_STEP=0
 UI_LABEL=""
 UI_SUB_SEEN=0
-UI_SUB_EXPECTED=6
 
 # ui_plan <steps> -- set how many steps the bar is divided into (called once).
 ui_plan() { UI_TOTAL="$1"; }
@@ -129,10 +137,10 @@ ui_plan() { UI_TOTAL="$1"; }
 ui_pct() {
   local span=$(( 100 / UI_TOTAL ))
   local base=$(( UI_STEP * 100 / UI_TOTAL ))
-  local inside=0
+  local inside=0 cap=$(( span * 9 / 10 ))   # sub-progress never fills more than 90% of a step
   if [ "$UI_SUB_SEEN" -gt 0 ]; then
     inside=$(( span * UI_SUB_SEEN / UI_SUB_EXPECTED ))
-    [ "$inside" -gt $(( span * 9 / 10 )) ] && inside=$(( span * 9 / 10 ))
+    [ "$inside" -gt "$cap" ] && inside="$cap"
   fi
   echo $(( base + inside ))
 }
@@ -140,9 +148,8 @@ ui_pct() {
 # ui_bar -- redraw the progress bar in place (TTY only).
 ui_bar() {
   [ "$UI_TTY" = 1 ] || return 0
-  local pct width filled i bar=""
+  local pct width="$UI_BAR_WIDTH" filled i bar=""
   pct="$(ui_pct)"
-  width=24
   filled=$(( pct * width / 100 ))
   i=0
   while [ "$i" -lt "$width" ]; do
@@ -543,7 +550,7 @@ docker_walkthrough() {
   trap 'stop_waiting=1' INT
   printf '    Waiting for the Docker daemon (Ctrl-C to stop waiting) '
   local waited=0
-  while [ "$waited" -lt "${DOCKER_WAIT:-180}" ] && [ "$stop_waiting" = "0" ]; do
+  while [ "$waited" -lt "${DOCKER_WAIT:-$DEFAULT_DOCKER_WAIT}" ] && [ "$stop_waiting" = "0" ]; do
     if docker_ready; then
       trap - INT
       printf '\n'
@@ -561,7 +568,7 @@ docker_walkthrough() {
     DEPS_MISSING+=("Docker -- installed; you stopped waiting for the daemon. When it is up: docker info")
     return 1
   fi
-  DEPS_MISSING+=("Docker -- installed, but the daemon did not answer within ${DOCKER_WAIT:-180}s.")
+  DEPS_MISSING+=("Docker -- installed, but the daemon did not answer within ${DOCKER_WAIT:-$DEFAULT_DOCKER_WAIT}s.")
   DEPS_MISSING+=("          Start Docker Desktop, accept the licence, then: docker info")
   return 1
 }
@@ -719,12 +726,14 @@ mxcli_describe() {
   printf '%s %s\n' "$date" "$ver"
 }
 
-# mxcli_newest_local -- set MXCLI_BEST/MXCLI_BEST_DESC to the newest runnable candidate (tie: earlier wins).
+# mxcli_newest_local -- set MXCLI_BEST/MXCLI_BEST_DESC to the newest runnable candidate (tie: earlier wins); sets MXCLI_CANDIDATES.
 mxcli_newest_local() {
   local candidate desc
   MXCLI_BEST=""; MXCLI_BEST_DESC=""
-  for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
-                   "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
+  # Every place mxcli may be, in order; mxcli_for_project reuses this list.
+  MXCLI_CANDIDATES=("$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)"
+                    "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE")
+  for candidate in "${MXCLI_CANDIDATES[@]}"; do
     desc="$(mxcli_describe "$candidate")" || continue
     candidate="$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
     # ISO build dates compare correctly as strings.
@@ -840,6 +849,30 @@ mxcli_offer_update() {
     fi
   fi
   return 0
+}
+
+# first_executable <path>... -- print the first non-empty, executable path; return 1 if none.
+first_executable() {
+  local candidate
+  for candidate in "$@"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  return 1
+}
+
+# mxcli_for_project -- print the mxcli to use: ./mxcli if it runs, else MXCLI_BEST, else the first executable candidate.
+# Needs mxcli_newest_local to have run: it sets MXCLI_BEST and MXCLI_CANDIDATES.
+mxcli_for_project() {
+  if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
+    printf '%s\n' "$APP/mxcli$EXE"
+  elif [ -n "${MXCLI_BEST:-}" ]; then
+    printf '%s\n' "$MXCLI_BEST"
+  else
+    # Nothing answered --version.
+    first_executable "${MXCLI_CANDIDATES[@]}"
+  fi
 }
 
 # --- 8. Finding Studio Pro installs (Windows) ---
@@ -995,6 +1028,127 @@ playwright_browser_present() {
   return 1
 }
 
+# --- 9b. Prerequisite step helpers (want_mx, MxBuild, no-Docker mode, JDK) ---
+# choose_want_mx -- set want_mx: the .mpr's Mendix version, or for a new app the one it will be created with.
+choose_want_mx() {
+  if [ "$mpr_count" = "0" ]; then
+    # Same version rule as create_app.
+    if [ -n "${MX_VERSION:-}" ]; then
+      want_mx="$MX_VERSION"
+    elif [ "$IS_WINDOWS" = "1" ]; then
+      want_mx="$(studio_pro_versions | tail -1)"
+      want_mx="${want_mx:-$DEFAULT_MX_VERSION}"
+    else
+      want_mx="$DEFAULT_MX_VERSION"
+    fi
+  else
+    # Print the Mendix version stored in the project's .mpr (SQLite).
+    want_mx="$("$PY" - "$APP" <<'PY_WANT' 2>/dev/null || true
+import glob, os, sqlite3, sys
+mprs = glob.glob(os.path.join(sys.argv[1], "*.mpr"))
+if mprs:
+    try:
+        con = sqlite3.connect("file:%s?mode=ro" % mprs[0], uri=True)
+        print(con.execute("select * from _MetaData limit 1").fetchone()[1])
+    except Exception:
+        pass
+PY_WANT
+)"
+  fi
+  # want_mx ends up in an eval'd command: accept only a version number.
+  case "$want_mx" in
+    ''|*[!0-9.]*)
+      [ -z "$want_mx" ] || ui_note "ignoring an unexpected Mendix version in the project file: $want_mx"
+      want_mx="" ;;
+  esac
+}
+
+# ensure_mxbuild_and_runtime <mxcli> -- MxBuild (or Studio Pro on Windows) for want_mx; on Windows also cache the runtime.
+ensure_mxbuild_and_runtime() {
+  local mxcli="$1" installed_studio
+  if [ "$IS_WINDOWS" = "1" ]; then
+    # `mxcli setup mxbuild` refuses on Windows (the CDN build is Linux-only); Studio Pro is the only source.
+    if ! studio_pro_mx "$want_mx" >/dev/null; then
+      installed_studio="$(studio_pro_versions | tr '\n' ' ')"
+      DEPS_MISSING+=("Studio Pro $want_mx -- needed for \`mx check\` and to create an app at that version.")
+      DEPS_MISSING+=("               installed here: ${installed_studio:-none}. Set MX_VERSION to one of those,")
+      DEPS_MISSING+=("               or install Studio Pro $want_mx. (The Mendix CDN's mxbuild is Linux-only.)")
+    fi
+  else
+    dep_apply "MxBuild $want_mx" \
+      "[ -x \"$HOME/.mxcli/mxbuild/$want_mx/modeler/mx\" ]" \
+      "\"$mxcli\" setup mxbuild --version \"$want_mx\"" || true
+  fi
+  # Cache the runtime; the first attempt may fail on the symlink, the junction fixes it, the retry must pass.
+  if [ "$IS_WINDOWS" = "1" ]; then
+    ui_sub "caching the Mendix runtime"
+    "$mxcli" run --local -p "$APP/$(basename "$APP").mpr" --setup >> "$DEPS_LOG" 2>&1 || true
+    ensure_runtime_junction "$want_mx"
+  fi
+}
+
+# setup_local_build -- with no Docker daemon: use a local Studio Pro or cached mxbuild plus PostgreSQL, and install Docker.
+setup_local_build() {
+  local studio_dir="" studio_mx
+  if [ -n "${want_mx:-}" ] && [ "$IS_WINDOWS" = "1" ]; then
+    studio_mx="$(studio_pro_mx "$want_mx" 2>/dev/null || true)"
+    [ -n "$studio_mx" ] && studio_dir="$(cd "$(dirname "$(dirname "$studio_mx")")" && pwd)"
+  fi
+  # Off Windows, a cached mxbuild enables the same mode.
+  if [ -z "$studio_dir" ] && [ -n "${want_mx:-}" ] && [ -d "$HOME/.mxcli/mxbuild/$want_mx" ]; then
+    studio_dir="$HOME/.mxcli/mxbuild/$want_mx"
+  fi
+
+  # A local mxbuild or Studio Pro is always set up; Docker is still installed below.
+  if [ -n "$studio_dir" ]; then
+    if ! postgres_answers; then
+      if psql_path >/dev/null 2>&1; then
+        # psql is installed but no login worked: ask for a superuser.
+        postgres_ask_superuser || true
+        if ! postgres_answers; then
+          DEPS_MISSING+=("PostgreSQL -- installed, but none of the logins tried could connect.")
+          DEPS_MISSING+=("              Put a working one in tests/harness.env and re-run:")
+          DEPS_MISSING+=("                MDL_DB_USER=... MDL_DB_PASSWORD=... MDL_DB_HOST=...")
+        fi
+      else
+        dep_need "PostgreSQL" "postgres_answers" \
+          "PostgreSQL.PostgreSQL.17" "postgresql@17" "postgresql" || true
+      fi
+    fi
+    ensure_studio_support_junctions "${studio_dir##*/}" "$studio_dir"
+    ensure_tool_arch_aliases "$studio_dir"
+    write_harness_env "$studio_dir"
+    if ! postgres_answers; then
+      DEPS_MISSING+=("PostgreSQL -- no login worked yet, so the app cannot boot. Everything")
+      DEPS_MISSING+=("              else in the gate runs. Fix the credentials in")
+      DEPS_MISSING+=("              tests/harness.env, or create the role by hand:")
+      DEPS_MISSING+=("                psql -U postgres -c \"CREATE ROLE ${MDL_DB_USER:-mendix} LOGIN PASSWORD '${MDL_DB_PASSWORD:-mendix}' CREATEDB\"")
+    fi
+  fi
+
+  # Docker is installed whenever missing; a local mxbuild only covers mx check.
+  if have docker; then
+    docker_ready || DEPS_MISSING+=("Docker -- installed but the daemon is not running: $(docker_start_command)")
+  else
+    docker_walkthrough || true
+  fi
+}
+
+# check_jdk -- report a JDK for want_mx that is missing or off the PATH (often on Windows); never installs one.
+check_jdk() {
+  local want_jdk found_jdk
+  want_jdk="$(jdk_major_for "${want_mx:-}")"
+  found_jdk="$(jdk_find "$want_jdk" || true)"
+  if [ -z "$found_jdk" ]; then
+    dep_report_only "JDK $want_jdk" "false" \
+      "EclipseAdoptium.Temurin.$want_jdk.JDK" "temurin@$want_jdk" "temurin-$want_jdk-jdk" || true
+  elif ! have java || [ "$(java_major java 2>/dev/null)" != "$want_jdk" ]; then
+    DEPS_MISSING+=("JDK $want_jdk -- installed but not on the PATH: $found_jdk")
+    DEPS_MISSING+=("           \`./mxcli$EXE run --local\` needs it there. In Git Bash:")
+    DEPS_MISSING+=("           export PATH=\"\$(dirname '$found_jdk'):\$PATH\"")
+  fi
+}
+
 # --- 10. Command-line arguments and the target project ---
 APP_ARG=""
 CREATE_APP=1
@@ -1012,7 +1166,7 @@ for arg in "$@"; do
       printf '                   its browser, mxcli, MxBuild) with this machine'"'"'s package manager.\n'
       printf '                   Without it they are only reported. Docker and the JDK are never\n'
       printf '                   installed -- both need a reboot or a licence click.\n\n'
-      printf '  MX_VERSION=11.12.1  APP_NAME=<name>   env overrides when an app is created\n'
+      printf '  MX_VERSION=%s  APP_NAME=<name>   env overrides when an app is created\n' "$DEFAULT_MX_VERSION"
       printf '  MDL_DEPS_DRY_RUN=1                    print the install commands, run none\n'
       printf '  MDL_ASSUME_YES=1                      answer the prerequisite prompts with yes\n'
       printf '  MDL_NO_UPDATE_CHECK=1                 do not look online for a newer mxcli\n'
@@ -1039,6 +1193,7 @@ esac
 # With no path named, running from inside the bundle targets the directory it sits in.
 target_inferred=0
 looks_like_project() {
+  local marker
   [ -n "$(find "$1" -maxdepth 1 -name '*.mpr' -print -quit 2>/dev/null)" ] && return 0
   for marker in CLAUDE.md AGENTS.md .ai-context .claude mxcli; do
     [ -e "$1/$marker" ] && return 0
@@ -1123,89 +1278,26 @@ dep_need "Python 3" "mdl_find_python >/dev/null" "Python.Python.3.12" "python" "
 dep_need "Node.js" "have node" "OpenJS.NodeJS.LTS" "node" "nodejs npm" || true
 # A dry run walks the whole chain even though npm was not really installed.
 if have npm || [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
-  # Pinned to the devcontainer's version.
-  dep_apply "playwright-cli" "have playwright-cli" "npm install -g @playwright/cli@0.1.15" || true
+  dep_apply "playwright-cli" "have playwright-cli" "npm install -g $PLAYWRIGHT_CLI_PACKAGE" || true
   if have playwright-cli || [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
     dep_apply "Chromium headless shell" "playwright_browser_present" "$(playwright_browser_command)" || true
   fi
 fi
 
 mxcli_offer_update
-mxcli_here=""
-if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
-  mxcli_here="$APP/mxcli$EXE"
-elif [ -n "${MXCLI_BEST:-}" ]; then
-  mxcli_here="$MXCLI_BEST"
-else
-  # Nothing answered --version: take the first executable candidate.
-  for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
-                   "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
-    [ -n "$candidate" ] && [ -x "$candidate" ] && { mxcli_here="$candidate"; break; }
-  done
-fi
-if [ -z "$mxcli_here" ]; then
+found_mxcli="$(mxcli_for_project || true)"
+if [ -z "$found_mxcli" ]; then
   dep_apply "mxcli" '[ -x "$APP/mxcli$EXE" ]' \
     "curl -fsSL -o \"$APP/mxcli$EXE\" \"$(mxcli_release_url)\" && chmod +x \"$APP/mxcli$EXE\"" || true
   [ -x "$APP/mxcli$EXE" ] && mxcli_verify_download "$APP/mxcli$EXE"
 fi
 
 # MxBuild for the project's version: mx check needs it, and without it mxcli new may use another version.
-mxcli_now=""
-for candidate in "$APP/mxcli$EXE" "$mxcli_here"; do
-  [ -n "$candidate" ] && [ -x "$candidate" ] && { mxcli_now="$candidate"; break; }
-done
-if [ -n "$mxcli_now" ]; then
-  if [ "$mpr_count" = "0" ]; then
-    # Same version rule as the app creation below.
-    if [ -n "${MX_VERSION:-}" ]; then
-      want_mx="$MX_VERSION"
-    elif [ "$IS_WINDOWS" = "1" ]; then
-      want_mx="$(studio_pro_versions | tail -1)"
-      want_mx="${want_mx:-11.12.1}"
-    else
-      want_mx="11.12.1"
-    fi
-  else
-    # Print the Mendix version stored in the project's .mpr (SQLite).
-    want_mx="$("$PY" - "$APP" <<'PY_WANT' 2>/dev/null || true
-import glob, os, sqlite3, sys
-mprs = glob.glob(os.path.join(sys.argv[1], "*.mpr"))
-if mprs:
-    try:
-        con = sqlite3.connect("file:%s?mode=ro" % mprs[0], uri=True)
-        print(con.execute("select * from _MetaData limit 1").fetchone()[1])
-    except Exception:
-        pass
-PY_WANT
-)"
-  fi
-  # want_mx ends up in an eval'd command: accept only a version number.
-  case "$want_mx" in
-    ''|*[!0-9.]*)
-      [ -z "$want_mx" ] || ui_note "ignoring an unexpected Mendix version in the project file: $want_mx"
-      want_mx="" ;;
-  esac
+setup_mxcli="$(first_executable "$APP/mxcli$EXE" "$found_mxcli" || true)"
+if [ -n "$setup_mxcli" ]; then
+  choose_want_mx
   if [ -n "$want_mx" ]; then
-    if [ "$IS_WINDOWS" = "1" ]; then
-      # `mxcli setup mxbuild` refuses on Windows (the CDN build is Linux-only); Studio Pro is the only source.
-      if ! studio_pro_mx "$want_mx" >/dev/null; then
-        installed_studio="$(studio_pro_versions | tr '\n' ' ')"
-        DEPS_MISSING+=("Studio Pro $want_mx -- needed for \`mx check\` and to create an app at that version.")
-        DEPS_MISSING+=("               installed here: ${installed_studio:-none}. Set MX_VERSION to one of those,")
-        DEPS_MISSING+=("               or install Studio Pro $want_mx. (The Mendix CDN's mxbuild is Linux-only.)")
-      fi
-    else
-      dep_apply "MxBuild $want_mx" \
-        "[ -x \"$HOME/.mxcli/mxbuild/$want_mx/modeler/mx\" ]" \
-        "\"$mxcli_now\" setup mxbuild --version \"$want_mx\"" || true
-    fi
-    # Cache the runtime; the first attempt may fail on the symlink, the junction fixes it, the retry must pass.
-    # NOTE: no_docker_candidate is never set, so this always runs on Windows.
-    if [ "$IS_WINDOWS" = "1" ] && [ -n "${no_docker_candidate:-1}" ]; then
-      ui_sub "caching the Mendix runtime"
-      "$mxcli_now" run --local -p "$APP/$(basename "$APP").mpr" --setup >> "$DEPS_LOG" 2>&1 || true
-      ensure_runtime_junction "$want_mx"
-    fi
+    ensure_mxbuild_and_runtime "$setup_mxcli"
   fi
 fi
 
@@ -1213,66 +1305,9 @@ fi
 no_docker_mode=""
 ensure_windows_studio_repairs "${want_mx:-}"
 if ! docker_ready; then
-  studio_dir=""
-  if [ -n "${want_mx:-}" ] && [ "$IS_WINDOWS" = "1" ]; then
-    studio_mx="$(studio_pro_mx "$want_mx" 2>/dev/null || true)"
-    [ -n "$studio_mx" ] && studio_dir="$(cd "$(dirname "$(dirname "$studio_mx")")" && pwd)"
-  fi
-  # Off Windows, a cached mxbuild enables the same mode.
-  if [ -z "$studio_dir" ] && [ -n "${want_mx:-}" ] && [ -d "$HOME/.mxcli/mxbuild/$want_mx" ]; then
-    studio_dir="$HOME/.mxcli/mxbuild/$want_mx"
-  fi
-
-  # NOTE: `interactive` is computed here but not read anywhere below.
-  interactive=0
-  if [ -t 0 ] && [ "$UI_TTY" = 1 ]; then interactive=1; fi
-  if [ -n "${MDL_ASSUME_YES:-}" ]; then interactive=1; fi
-
-  # A local mxbuild or Studio Pro is always set up; Docker is still installed below.
-  if [ -n "$studio_dir" ]; then
-    if ! postgres_answers; then
-      if psql_path >/dev/null 2>&1; then
-        # psql is installed but no login worked: ask for a superuser.
-        postgres_ask_superuser || true
-        if ! postgres_answers; then
-          DEPS_MISSING+=("PostgreSQL -- installed, but none of the logins tried could connect.")
-          DEPS_MISSING+=("              Put a working one in tests/harness.env and re-run:")
-          DEPS_MISSING+=("                MDL_DB_USER=... MDL_DB_PASSWORD=... MDL_DB_HOST=...")
-        fi
-      else
-        dep_need "PostgreSQL" "postgres_answers" \
-          "PostgreSQL.PostgreSQL.17" "postgresql@17" "postgresql" || true
-      fi
-    fi
-    ensure_studio_support_junctions "${studio_dir##*/}" "$studio_dir"
-    ensure_tool_arch_aliases "$studio_dir"
-    write_harness_env "$studio_dir"
-    if ! postgres_answers; then
-      DEPS_MISSING+=("PostgreSQL -- no login worked yet, so the app cannot boot. Everything")
-      DEPS_MISSING+=("              else in the gate runs. Fix the credentials in")
-      DEPS_MISSING+=("              tests/harness.env, or create the role by hand:")
-      DEPS_MISSING+=("                psql -U postgres -c \"CREATE ROLE ${MDL_DB_USER:-mendix} LOGIN PASSWORD '${MDL_DB_PASSWORD:-mendix}' CREATEDB\"")
-    fi
-  fi
-
-  # Docker is installed whenever missing; a local mxbuild only covers mx check.
-  if have docker; then
-    docker_ready || DEPS_MISSING+=("Docker -- installed but the daemon is not running: $(docker_start_command)")
-  else
-    docker_walkthrough || true
-  fi
+  setup_local_build
 fi
-# JDK: found (often off PATH on Windows), never installed.
-want_jdk="$(jdk_major_for "${want_mx:-}")"
-found_jdk="$(jdk_find "$want_jdk" || true)"
-if [ -z "$found_jdk" ]; then
-  dep_report_only "JDK $want_jdk" "false" \
-    "EclipseAdoptium.Temurin.$want_jdk.JDK" "temurin@$want_jdk" "temurin-$want_jdk-jdk" || true
-elif ! have java || [ "$(java_major java 2>/dev/null)" != "$want_jdk" ]; then
-  DEPS_MISSING+=("JDK $want_jdk -- installed but not on the PATH: $found_jdk")
-  DEPS_MISSING+=("           \`./mxcli$EXE run --local\` needs it there. In Git Bash:")
-  DEPS_MISSING+=("           export PATH=\"\$(dirname '$found_jdk'):\$PATH\"")
-fi
+check_jdk
 
 if [ "$DEPS_INSTALLED" -gt 0 ]; then
   ui_done "prerequisites" "$DEPS_INSTALLED installed, ${#DEPS_MISSING[@]} still missing"
@@ -1283,20 +1318,15 @@ else
 fi
 
 # --- 12. Step: create a Mendix app when the project has no .mpr ---
-if [ "$mpr_count" = "0" ]; then
-  new_mxcli=""
-  # Same choice as mxcli_offer_update: project's own if it runs, else newest, else first executable.
-  if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
-    new_mxcli="$APP/mxcli$EXE"
-  elif mxcli_newest_local; then
-    new_mxcli="$MXCLI_BEST"
-  else
-    for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
-                     "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
-      [ -n "$candidate" ] && [ -x "$candidate" ] && { new_mxcli="$candidate"; break; }
-    done
+# create_app -- create the app in a temp dir and copy it in. Sets mx_version, created_app, swapped_mxcli (read by the summary).
+create_app() {
+  local creator_mxcli app_name direct_mx stash_mxcli
+  # Same choice as for the prerequisites, but look for the newest mxcli again when ./mxcli does not run.
+  if ! mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
+    mxcli_newest_local || true
   fi
-  if [ -z "$new_mxcli" ]; then
+  creator_mxcli="$(mxcli_for_project || true)"
+  if [ -z "$creator_mxcli" ]; then
     ui_fail "No .mpr here, and no mxcli to create one with." \
             "Looked in the project, on the PATH, and beside this installer." \
             "Install mxcli, or point this at an existing Mendix project."
@@ -1315,7 +1345,7 @@ if [ "$mpr_count" = "0" ]; then
               "Install Studio Pro, or point this at a project that already has a .mpr."
     fi
   else
-    mx_version="11.12.1"
+    mx_version="$DEFAULT_MX_VERSION"
   fi
   # mxcli new cannot see per-user Studio Pro installs and stamps the wrong version; use its mx.exe, then mxcli init.
   direct_mx=""
@@ -1328,11 +1358,12 @@ if [ "$mpr_count" = "0" ]; then
   ui_begin "creating $app_name (Mendix $mx_version)"
   # --theme/--layout none: stock Atlas (mxcli's theme follows the OS dark mode).
   # mxcli new needs an empty --output-dir: create in a temp dir, then move in.
+  # tmp_app stays global: the EXIT trap reads it after this function has returned.
   tmp_app="$(mktemp -d "${TMPDIR:-/tmp}/mdl-skills-new.XXXXXX")"
   trap 'rm -rf "$tmp_app"' EXIT
   # Stash the running mxcli: on Windows copying over a running .exe deletes it.
   stash_mxcli="$tmp_app/mxcli-host$EXE"
-  cp "$new_mxcli" "$stash_mxcli" 2>/dev/null || stash_mxcli="$new_mxcli"
+  cp "$creator_mxcli" "$stash_mxcli" 2>/dev/null || stash_mxcli="$creator_mxcli"
   # mxcli's "Executing step '<phase>'" lines drive the sub-progress.
   if [ -n "$direct_mx" ]; then
     ui_sub "Studio Pro $mx_version (mxcli cannot see this install)"
@@ -1347,9 +1378,9 @@ if [ "$mpr_count" = "0" ]; then
     fi
     ui_tick
     # mxcli new also initialises the AI tooling; do that half separately.
-    "$new_mxcli" init "$tmp_app/app" >> "$tmp_app/new.log" 2>&1 || true
+    "$creator_mxcli" init "$tmp_app/app" >> "$tmp_app/new.log" 2>&1 || true
     ui_tick
-  elif ! "$new_mxcli" new "$app_name" --version "$mx_version" --output-dir "$tmp_app/app" \
+  elif ! "$creator_mxcli" new "$app_name" --version "$mx_version" --output-dir "$tmp_app/app" \
        --theme none --layout none 2>&1 | while IFS= read -r line; do
          printf '%s\n' "$line" >> "$tmp_app/new.log"
          case "$line" in
@@ -1362,7 +1393,7 @@ if [ "$mpr_count" = "0" ]; then
     tail -5 "$tmp_app/new.log" 2>/dev/null | sed 's/^/    /' >&2
     ui_fail "Creating the Mendix app failed." \
             "Run it by hand to see why:" \
-            "  $new_mxcli new $app_name --version $mx_version --output-dir /tmp/probe"
+            "  $creator_mxcli new $app_name --version $mx_version --output-dir /tmp/probe"
   fi
   # Set the scaffold's Linux mxcli aside; copying it over a running mxcli breaks it.
   if [ -f "$tmp_app/app/mxcli" ]; then mv "$tmp_app/app/mxcli" "$tmp_app/app-mxcli-linux"; fi
@@ -1388,6 +1419,11 @@ if [ "$mpr_count" = "0" ]; then
   created_app="$app_name.mpr"
   ui_done "Mendix app created" "$created_app"
   [ -n "${swapped_mxcli:-}" ] && ui_note "./mxcli$EXE swapped for this machine's binary (Linux one kept as mxcli.linux)"
+  return 0
+}
+
+if [ "$mpr_count" = "0" ]; then
+  create_app
 fi
 
 # --- 13. Step: copy skills, lint rules, checkers and the session rule ---
@@ -1752,9 +1788,6 @@ if not os.path.isdir(cached):
               "./mxcli setup mxbuild -p %s" % (version, os.path.basename(mprs[0])))
 PY_MXBUILD
 )"
-
-rules=${rules:-$(ls -1 "$SRC"/lint-rules/*.star | wc -l | tr -d ' ')}
-checks=${checks:-$(ls -1 "$SRC"/checks/*.py | wc -l | tr -d ' ')}
 
 ui_done "environment" "checked"
 

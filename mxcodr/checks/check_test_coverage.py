@@ -107,6 +107,41 @@ def covered(tests_dir: Path) -> dict[str, list[str]]:
     return claims
 
 
+def module_report(module: str, required: list[str], claims: dict[str, list[str]],
+                  stale: list[str], single: bool) -> dict:
+    """One module's verdict; with a single module every stale claim is reported under it."""
+    untested = [element for element in required if element not in claims]
+    prefix = module + "."
+    mine = stale if single else [name for name in stale if name.startswith(prefix)]
+    return {
+        "verdict": "PASS" if not untested and not mine else "FAIL",
+        "module": module,
+        "elements": len(required),
+        "tests": sorted({script for name, scripts in claims.items()
+                         if name.startswith(prefix) for script in scripts}),
+        "untested": untested,
+        "stale_covers": mine,
+    }
+
+
+def print_text(reports: list[dict], orphans: list[str]) -> None:
+    for report in reports:
+        total, missing = report["elements"], len(report["untested"])
+        if total == 0 and not report["stale_covers"]:
+            print(f"PASS  {report['module']}: nothing a user can reach (no page, no ACT_ microflow)")
+            continue
+        print(f"{report['verdict']}  {report['module']}: {total - missing}/{total} "
+              f"elements covered by {len(report['tests'])} test script(s)")
+        for element in report["untested"]:
+            print(f"  - no test covers {element}")
+        for name in report["stale_covers"]:
+            print(f"  - covers: names {name}, which is not in the model any more")
+    if orphans:
+        print("FAIL  covers: lines name elements in no module of this project")
+        for name in orphans:
+            print(f"  - covers: names {name}, which is not in the model any more")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app_dir", type=Path)
@@ -140,49 +175,19 @@ def main() -> int:
 
     claims = covered(app_dir / args.tests_dir)
     stale = sorted(name for name in claims if name not in known)
-    checked = set(args.modules)
+    single = len(args.modules) == 1
 
-    reports = []
-    for module in args.modules:
-        required = inventories[module][0]
-        untested = [element for element in required if element not in claims]
-        prefix = module + "."
-        mine = [name for name in stale if name.startswith(prefix)]
-        # With one module, every stale claim is reported under it.
-        if len(args.modules) == 1:
-            mine = stale
-        reports.append({
-            "verdict": "PASS" if not untested and not mine else "FAIL",
-            "module": module,
-            "elements": len(required),
-            "tests": sorted({script for name, scripts in claims.items()
-                             if name.startswith(prefix) for script in scripts}),
-            "untested": untested,
-            "stale_covers": mine,
-        })
+    reports = [module_report(module, inventories[module][0], claims, stale, single)
+               for module in args.modules]
     # With several modules, stale names outside all of them are reported once, separately.
-    orphans = [] if len(args.modules) == 1 else [
-        name for name in stale if name.split(".")[0] not in checked]
+    checked = set(args.modules)
+    orphans = [] if single else [name for name in stale if name.split(".")[0] not in checked]
 
     if args.json:
-        payload = reports[0] if len(reports) == 1 else {"modules": reports, "stale_covers": orphans}
+        payload = reports[0] if single else {"modules": reports, "stale_covers": orphans}
         print(json.dumps(payload, indent=2))
     else:
-        for report in reports:
-            total, missing = report["elements"], len(report["untested"])
-            if total == 0 and not report["stale_covers"]:
-                print(f"PASS  {report['module']}: nothing a user can reach (no page, no ACT_ microflow)")
-                continue
-            print(f"{report['verdict']}  {report['module']}: {total - missing}/{total} "
-                  f"elements covered by {len(report['tests'])} test script(s)")
-            for element in report["untested"]:
-                print(f"  - no test covers {element}")
-            for name in report["stale_covers"]:
-                print(f"  - covers: names {name}, which is not in the model any more")
-        if orphans:
-            print("FAIL  covers: lines name elements in no module of this project")
-            for name in orphans:
-                print(f"  - covers: names {name}, which is not in the model any more")
+        print_text(reports, orphans)
 
     failed = orphans or any(report["verdict"] == "FAIL" for report in reports)
     return 1 if failed else 0

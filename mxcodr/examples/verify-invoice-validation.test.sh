@@ -4,7 +4,7 @@
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-before="$(oql_count Invoice)"
+invoices_before="$(oql_count Invoice)"
 
 result="$(scenario '
   await open_app();
@@ -35,6 +35,6 @@ result="$(scenario '
 [ "$number" = "true" ] || fail "missing the 'invoice number is required' message"
 [ "$amount" = "true" ] || fail "missing the amount validation message"
 [ "$customer" = "true" ] || fail "missing the customer validation message"
-[ "$(oql_count Invoice)" = "$before" ] || fail "invoice count changed despite failed validation"
+[ "$(oql_count Invoice)" = "$invoices_before" ] || fail "invoice count changed despite failed validation"
 
 echo "OK: invalid invoice refused with all three messages, nothing stored"

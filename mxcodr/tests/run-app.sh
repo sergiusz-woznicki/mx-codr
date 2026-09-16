@@ -40,9 +40,18 @@ DB_USER="${MDL_DB_USER:-mendix}"
 DB_PASSWORD="${MDL_DB_PASSWORD:-mendix}"
 PY="${PY:-$(mdl_find_python)}"
 
+# Fixed values, named here so they read as what they are.
+ADMIN_WAIT_SECONDS=90         # how long to wait for the admin API after starting java
+ADMIN_REQUEST_SECONDS=300     # the longest wait for one admin action
+DEPLOYMENT="$APP_DIR/deployment"
+BUILT_MODEL="$DEPLOYMENT/model/model.mdp"
+HSQLDB_DIR="$DEPLOYMENT/data/database"
+
+# --- Helpers ---
+
 # admin <json-body> -- send one M2EE admin action, print the JSON answer.
 admin() {                                   # admin <json-body>
-  curl -s -m 300 -H "X-M2EE-Authentication: $(printf '%s' "$ADMIN_PASS" | base64)" \
+  curl -s -m "$ADMIN_REQUEST_SECONDS" -H "X-M2EE-Authentication: $(printf '%s' "$ADMIN_PASS" | base64)" \
     -H 'Content-Type: application/json' -d "$1" "http://127.0.0.1:$ADMIN_PORT/"
 }
 
@@ -55,32 +64,33 @@ stop_runtime() {
 # needs_rebuild [--rebuild] -- true when asked or the .mpr is newer than the built deployment (no hot reload).
 needs_rebuild() {
   [ "${1:-}" = "--rebuild" ] && return 0
-  [ -f "$APP_DIR/deployment/model/model.mdp" ] || return 0
-  [ "$MPR" -nt "$APP_DIR/deployment/model/model.mdp" ]
+  [ -f "$BUILT_MODEL" ] || return 0
+  [ "$MPR" -nt "$BUILT_MODEL" ]
 }
 
 # --- 2. Build the deployment ---
-if needs_rebuild "${1:-}"; then
+# --target=deploy cleans deployment/ and can corrupt Studio Pro's HSQLDB there: save and restore it.
+build_deployment() {
+  local saved_db=""
   echo "== building deployment (this is the slow part)"
   stop_runtime
-  # --target=deploy cleans deployment/ and can corrupt Studio Pro's HSQLDB there: save and restore it.
-  SAVED_DB=""
-  if [ -d "$APP_DIR/deployment/data/database" ]; then
-    SAVED_DB="$(mdl_tmpdir mdl-hsqldb)"
-    cp -R "$APP_DIR/deployment/data/database/." "$SAVED_DB/" 2>/dev/null || SAVED_DB=""
+  if [ -d "$HSQLDB_DIR" ]; then
+    saved_db="$(mdl_tmpdir mdl-hsqldb)"
+    cp -R "$HSQLDB_DIR/." "$saved_db/" 2>/dev/null || saved_db=""
   fi
   "$MXBUILD" "--java-home=$JAVA_DIR" "--java-exe-path=$JAVA" \
     "--gradle-home=$GRADLE_HOME" --target=deploy "$MPR" 2>&1 | tail -3
-  if [ -n "$SAVED_DB" ]; then
-    mkdir -p "$APP_DIR/deployment/data/database"
-    cp -R "$SAVED_DB/." "$APP_DIR/deployment/data/database/" 2>/dev/null || true
-    rm -rf "$SAVED_DB"
+  if [ -n "$saved_db" ]; then
+    mkdir -p "$HSQLDB_DIR"
+    cp -R "$saved_db/." "$HSQLDB_DIR/" 2>/dev/null || true
+    rm -rf "$saved_db"
     echo "   (Studio Pro's local database kept across the build)"
   fi
-fi
+}
 
 # --- 3. Point the built configuration at PostgreSQL ---
-"$PY" - "$APP_DIR" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$APP_PORT" <<'PY'
+point_config_at_postgres() {
+  "$PY" - "$APP_DIR" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$APP_PORT" <<'PY'
 import json, pathlib, sys
 app, host, name, user, password, port = sys.argv[1:7]
 p = pathlib.Path(app) / 'deployment' / 'model' / 'config.json'
@@ -93,44 +103,60 @@ cfg['Configuration'].update({
 })
 p.write_text(json.dumps(cfg, indent=2))
 PY
+}
 
 # --- 4. Bundle the web client ---
 # mxbuild never runs rollup; without dist/index.js the app renders a blank page.
-if [ ! -f "$APP_DIR/deployment/web/dist/index.js" ] \
-   || [ "$APP_DIR/deployment/web/index.js" -nt "$APP_DIR/deployment/web/dist/index.js" ]; then
-  echo "== bundling the web client (mxbuild skips this)"
-  # Use whichever bundled node exists (ARM Studio Pro ships win-arm64 only).
-  NODE=""
-  for _a in win-x64 win-arm64 linux-x64 darwin-arm64; do
-    [ -x "$MXBUILD_TOOLS/$_a/node$EXE_SUFFIX" ] && { NODE="$MXBUILD_TOOLS/$_a/node$EXE_SUFFIX"; break; }
+web_client_needs_bundling() {
+  [ ! -f "$DEPLOYMENT/web/dist/index.js" ] \
+    || [ "$DEPLOYMENT/web/index.js" -nt "$DEPLOYMENT/web/dist/index.js" ]
+}
+
+# Print the first bundled node that exists (ARM Studio Pro ships win-arm64 only); nothing if none.
+find_bundled_node() {
+  local platform
+  for platform in win-x64 win-arm64 linux-x64 darwin-arm64; do
+    if [ -x "$MXBUILD_TOOLS/$platform/node$EXE_SUFFIX" ]; then
+      echo "$MXBUILD_TOOLS/$platform/node$EXE_SUFFIX"
+      return 0
+    fi
   done
-  [ -n "$NODE" ] || { echo "no bundled node under $MXBUILD_TOOLS" >&2; exit 1; }
-  ( cd "$APP_DIR/deployment/web" && NODE_ENV=production "$NODE" \
+}
+
+bundle_web_client() {
+  local node
+  echo "== bundling the web client (mxbuild skips this)"
+  node="$(find_bundled_node)"
+  [ -n "$node" ] || { echo "no bundled node under $MXBUILD_TOOLS" >&2; exit 1; }
+  ( cd "$DEPLOYMENT/web" && NODE_ENV=production "$node" \
       "$MXBUILD_TOOLS/node_modules/rollup/dist/bin/rollup" -c rollup.config.mjs 2>&1 | tail -2 )
-fi
+}
 
 # --- 5. Start the runtime ---
-echo "== starting the runtime container"
-stop_runtime
-# studiopro=true registers the /dev/ servlets `mxcli oql` needs.
-MX_INSTALL_PATH="$RUNTIME" M2EE_ADMIN_PASS="$ADMIN_PASS" M2EE_ADMIN_PORT="$ADMIN_PORT" \
-  nohup "$JAVA" -Dmendix.running.locally.by.studiopro=true \
-  -jar "$RUNTIME/runtime/launcher/runtimelauncher.jar" \
-  "$(cygpath -w "$APP_DIR/deployment" 2>/dev/null || echo "$APP_DIR/deployment")" \
-  > "$APP_DIR/.mxcli/runtime.log" 2>&1 &
+start_runtime() {
+  echo "== starting the runtime container"
+  stop_runtime
+  # studiopro=true registers the /dev/ servlets `mxcli oql` needs.
+  MX_INSTALL_PATH="$RUNTIME" M2EE_ADMIN_PASS="$ADMIN_PASS" M2EE_ADMIN_PORT="$ADMIN_PORT" \
+    nohup "$JAVA" -Dmendix.running.locally.by.studiopro=true \
+    -jar "$RUNTIME/runtime/launcher/runtimelauncher.jar" \
+    "$(cygpath -w "$DEPLOYMENT" 2>/dev/null || echo "$DEPLOYMENT")" \
+    > "$APP_DIR/.mxcli/runtime.log" 2>&1 &
+}
 
-for _ in $(seq 1 90); do
-  curl -s -m 2 -o /dev/null "http://127.0.0.1:$ADMIN_PORT/" && break
-  sleep 1
-done
+# Poll once a second until the admin API answers; carry on after ADMIN_WAIT_SECONDS regardless.
+wait_for_admin_api() {
+  local attempt
+  for attempt in $(seq 1 "$ADMIN_WAIT_SECONDS"); do
+    curl -s -m 2 -o /dev/null "http://127.0.0.1:$ADMIN_PORT/" && break
+    sleep 1
+  done
+}
 
 # --- 6. Configure and start through the admin API ---
-# Jetty needs all three params, or `start` fails with "No Runtime Jetty server available".
-admin "{\"action\":\"update_appcontainer_configuration\",\"params\":{\"runtime_port\":$APP_PORT,\"runtime_listen_addresses\":\"127.0.0.1\",\"runtime_jetty_options\":{}}}" >/dev/null
-
 # BasePath/RuntimePath have no defaults; json.dumps escapes Windows backslashes.
 config_json() {
-  "$PY" - "$(cygpath -w "$APP_DIR/deployment")" "$(cygpath -w "$RUNTIME/runtime")" "$APP_PORT" \
+  "$PY" - "$(cygpath -w "$DEPLOYMENT")" "$(cygpath -w "$RUNTIME/runtime")" "$APP_PORT" \
         "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" <<'PY'
 import json, sys
 base, runtime, port, host, name, user, password = sys.argv[1:8]
@@ -148,16 +174,38 @@ print(json.dumps({"action": "update_configuration", "params": {
 }}))
 PY
 }
-admin "$(config_json)" >/dev/null
 
-result="$(admin '{"action":"start"}')"
-# result 3: schema behind the model -- apply DDL and start again.
-case "$result" in
-  *'"result":3'*) admin '{"action":"execute_ddl_commands"}' >/dev/null
-                  result="$(admin '{"action":"start"}')" ;;
-esac
+configure_runtime() {
+  # Jetty needs all three params, or `start` fails with "No Runtime Jetty server available".
+  admin "{\"action\":\"update_appcontainer_configuration\",\"params\":{\"runtime_port\":$APP_PORT,\"runtime_listen_addresses\":\"127.0.0.1\",\"runtime_jetty_options\":{}}}" >/dev/null
+  admin "$(config_json)" >/dev/null
+}
 
-case "$result" in
-  *'"result":0'*) echo "== app up on http://localhost:$APP_PORT/" ;;
-  *) echo "$result" | head -c 600; echo; echo "== start FAILED" >&2; exit 1 ;;
-esac
+# Start the app; exit 0 with "== app up on ...", or print the answer and exit 1.
+start_app() {
+  local result
+  result="$(admin '{"action":"start"}')"
+  # result 3: schema behind the model -- apply DDL and start again.
+  case "$result" in
+    *'"result":3'*) admin '{"action":"execute_ddl_commands"}' >/dev/null
+                    result="$(admin '{"action":"start"}')" ;;
+  esac
+
+  case "$result" in
+    *'"result":0'*) echo "== app up on http://localhost:$APP_PORT/" ;;
+    *) echo "$result" | head -c 600; echo; echo "== start FAILED" >&2; exit 1 ;;
+  esac
+}
+
+# --- Main: the steps in order ---
+if needs_rebuild "${1:-}"; then
+  build_deployment
+fi
+point_config_at_postgres
+if web_client_needs_bundling; then
+  bundle_web_client
+fi
+start_runtime
+wait_for_admin_api
+configure_runtime
+start_app

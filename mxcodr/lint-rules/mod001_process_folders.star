@@ -44,6 +44,13 @@ def is_type_folder(folder):
             return True
     return False
 
+def document_location(document, kind):
+    return location(
+        module = document.module_name,
+        document_type = kind,
+        document_name = document.qualified_name,
+    )
+
 # kind: label for messages ("Microflow", "Page", "Snippet").
 def check_documents(documents, kind, violations):
     for document in documents:
@@ -55,21 +62,13 @@ def check_documents(documents, kind, violations):
         if folder == "":
             violations.append(violation(
                 message = "%s '%s' sits at module root instead of a process folder" % (kind, document.name),
-                location = location(
-                    module = document.module_name,
-                    document_type = kind,
-                    document_name = document.qualified_name,
-                ),
+                location = document_location(document, kind),
                 suggestion = "move %s to a folder named for the process it serves" % document.name,
             ))
         elif is_type_folder(folder):
             violations.append(violation(
                 message = "%s '%s' is in '%s', a folder named after a document type" % (kind, document.name, folder),
-                location = location(
-                    module = document.module_name,
-                    document_type = kind,
-                    document_name = document.qualified_name,
-                ),
+                location = document_location(document, kind),
                 suggestion = "name the folder for the business process, not the document type",
             ))
 

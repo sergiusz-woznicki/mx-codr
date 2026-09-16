@@ -149,11 +149,13 @@ mdl_check_local_database() {
   [ -n "$script" ] || return 0
   grep -q 'CREATE MEMORY TABLE PUBLIC."mendixsystem\$version"' "$script" 2>/dev/null || return 0
   grep -q 'INSERT INTO "mendixsystem\$version"' "$script" 2>/dev/null && return 0
+  local database_dir
+  database_dir="$(dirname "$(dirname "$script")")"
   echo "   !! the local HSQLDB is half-written: deployment/data/database holds the version"
   echo "      table but no row in it, so a boot fails on mendixsystem\$version. A deploy"
   echo "      build cleaned deployment/ underneath it. It holds demo data only -- move it"
   echo "      aside and let the runtime build a fresh one, then reseed through the app:"
-  echo "      mv '$(dirname "$(dirname "$script")")' '$(dirname "$(dirname "$script")").broken-$(date +%H%M%S)'"
+  echo "      mv '$database_dir' '$database_dir.broken-$(date +%H%M%S)'"
 }
 
 # --- 7. Install freshness ---
@@ -175,12 +177,15 @@ mdl_check_install_freshness() {
     # No manifest: say so, since silence would read as a clean result.
     if [ -f "$installed" ] && [ -n "$bundle" ]; then
       echo "   !! no tools/mdl-checks/INSTALL.json, so harness drift cannot be detected here."
+      local installed_version bundle_version newest
+      installed_version="$(cat "$installed" 2>/dev/null)" || true
+      bundle_version="$(cat "$app/$bundle/VERSION")" || true
       # Numeric per-field version sort: is the bundle older than the install?
-      if [ "$(printf '%s\n%s\n' "$(cat "$installed")" "$(cat "$app/$bundle/VERSION")" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)" = "$(cat "$installed")" ] \
-         && [ "$(cat "$installed")" != "$(cat "$app/$bundle/VERSION")" ]; then
-        echo "      $bundle/ is older than what is installed ($(cat "$app/$bundle/VERSION") vs $(cat "$installed")); refresh $bundle/ first, then:  bash $bundle/install.sh ."
+      newest="$(printf '%s\n%s\n' "$installed_version" "$bundle_version" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)"
+      if [ "$newest" = "$installed_version" ] && [ "$installed_version" != "$bundle_version" ]; then
+        echo "      $bundle/ is older than what is installed ($bundle_version vs $installed_version); refresh $bundle/ first, then:  bash $bundle/install.sh ."
       else
-        echo "      This install predates the record (VERSION says $(cat "$installed" 2>/dev/null)):  bash $bundle/install.sh ."
+        echo "      This install predates the record (VERSION says $installed_version):  bash $bundle/install.sh ."
       fi
     fi
     return 0

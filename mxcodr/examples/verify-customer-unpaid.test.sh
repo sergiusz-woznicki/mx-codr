@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
 customer="Northwind Traders"
-expected="$(oql "SELECT COUNT(*) AS Total FROM InvoiceDesk.Invoice AS i
+expected_unpaid="$(oql "SELECT COUNT(*) AS Total FROM InvoiceDesk.Invoice AS i
   JOIN i/InvoiceDesk.Invoice_Customer/InvoiceDesk.Customer AS c
   WHERE c/Name = '$customer' AND (i/Status = 'Sent' OR i/Status = 'Overdue')" \
   | python3 -c "import json,sys; rows=json.load(sys.stdin); print(rows[0]['Total'] if rows else 0)")"
@@ -24,6 +24,6 @@ result="$(scenario '
 ')"
 
 [ "$(field "$result" reported)" = "true" ] || fail "no unpaid-count message shown for $customer"
-printf '%s' "$(field "$result" text)" | grep -q "$expected" || fail "message does not report the expected count of $expected"
+printf '%s' "$(field "$result" text)" | grep -q "$expected_unpaid" || fail "message does not report the expected count of $expected_unpaid"
 
-echo "OK: $customer reported $expected unpaid invoice(s)"
+echo "OK: $customer reported $expected_unpaid unpaid invoice(s)"

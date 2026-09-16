@@ -31,7 +31,6 @@ mdl_find_python() {
 PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
-
 input="$(cat)"
 session_id="$(printf '%s' "$input" | "$PY" -c 'import json,sys; print(json.load(sys.stdin).get("session_id",""))' 2>/dev/null)"
 [ -n "$session_id" ] || exit 0
