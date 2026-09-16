@@ -1,6 +1,6 @@
 ---
 name: module-structure
-description: "Whether new functionality belongs in an existing module or a new one, and the folder structure a module starts with — processes, not document types. Changes to a Marketplace module go in a <Module>Ext module; an app with user logins gets a Log out menu item. Use before creating a module, before adding the first documents to one, before changing a Marketplace module, and when deciding where a new page or microflow goes."
+description: "Whether new functionality belongs in an existing module or a new one, and the folder structure a module starts with — processes, not document types. Changes to a Marketplace module go in a <Module>Ext module. Use before creating a module, before adding the first documents to one, before changing a Marketplace module, and when deciding where a new page or microflow goes."
 ---
 
 # Module structure
@@ -20,7 +20,6 @@ skill is the decision, not the syntax.
 - When new functionality could plausibly go in two places
 - When a module has grown and someone suggests splitting it
 - Before changing anything in a Marketplace module (Administration, Atlas_Core, DataWidgets, …)
-- When the app gets user accounts that sign in
 
 ## When a new module is justified
 
@@ -177,26 +176,6 @@ access and nothing else.
 4. Put the entities the module owns in its own domain model; reach into another
    module's entities only through that module's microflows.
 
-## An app with user logins needs a Log out menu item
-
-As soon as the app creates user accounts that can sign in (demo users, customer
-logins, an Administration account page), add a **Log out** item as the **last**
-item of the main menu of every navigation profile those users reach. Without it a
-user has no way to end the session except closing the browser.
-
-```sql
-create or replace navigation Responsive
-  home page MyFirstModule.Home_Web
-  menu (
-    menu item 'Invoices' page Invoicing.Invoice_Overview icon Atlas_Core.Atlas_Filled.document;
-    menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;
-  )
-;
-```
-
-`sign_out` needs no page or microflow. `create or replace navigation` replaces the
-whole menu, so `DESCRIBE NAVIGATION Responsive` first and keep the existing items.
-
 ## Check it
 
 ```bash
@@ -219,4 +198,3 @@ cycles and cross-module coupling that no single rule catches.
 - [ ] No cyclic dependency between modules (`graph-report`, ARCH001)
 - [ ] `./mxcli lint -p app.mpr` clean for the module, CONV008 included
 - [ ] No document in a Marketplace module was changed; changes live in `<Module>Ext`
-- [ ] An app whose users sign in ends its main menu with a `Log out` (`sign_out`) item

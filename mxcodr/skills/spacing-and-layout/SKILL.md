@@ -1,6 +1,6 @@
 ---
 name: spacing-and-layout
-description: "Spacing between widgets, using the theme's own Spacing design property rather than CSS — and the structure a screen is laid out with. Use before writing or altering any page or snippet, and when the gate's layout verdict fails."
+description: "Spacing between widgets, using the theme's own Spacing design property rather than CSS — and the structure a screen is laid out with, including the main menu (a Log out item once users can sign in). Use before writing or altering any page, snippet or navigation menu, and when the gate's layout verdict fails."
 ---
 
 # Spacing and layout
@@ -83,6 +83,27 @@ layoutgrid pageGrid {
 
 The last widget in a line needs no `margin-right` — nothing follows it — but it keeps
 the same `margin-bottom` as the rest, or a wrapped row lands against the one above.
+
+## The main menu: Log out once users can sign in
+
+The navigation menu frames every screen. As soon as the app has user accounts that
+sign in (customer logins, demo users, an Administration account page), its main menu
+ends with a **Log out** item, in every navigation profile those users reach. Without
+it a user can only end the session by closing the browser.
+
+```sql
+create or replace navigation Responsive
+  home page MyFirstModule.Home_Web
+  menu (
+    menu item 'Invoices' page Invoicing.Invoice_Overview icon Atlas_Core.Atlas_Filled.document;
+    menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;
+  )
+;
+```
+
+`sign_out` needs no page or microflow, and it is always the **last** item.
+`create or replace navigation` replaces the whole menu: `DESCRIBE NAVIGATION Responsive`
+first and keep the items already there.
 
 ## Headings
 
