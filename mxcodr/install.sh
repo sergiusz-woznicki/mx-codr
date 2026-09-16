@@ -5,7 +5,7 @@
 #
 # With no path it installs into the current directory -- and running it from
 # inside the bundle installs into the project the bundle sits in, because that
-# is what someone means who has just copied dist/ into their app and cd'd there.
+# is what someone means who has just copied mxcodr/ into their app and cd'd there.
 #
 # What lands where, and why each copy is needed:
 #
@@ -97,20 +97,20 @@ fi
 
 ui_banner() {
   local version="$1"
-  # The wordmark is 74 columns with its indent; below that it would wrap and the
+  # The wordmark is 60 columns with its indent; below that it would wrap and the
   # first thing the installer does is look broken. Narrow terminals get the words.
-  if [ "$UI_UNICODE" = 1 ] && [ "${UI_COLS:-80}" -ge 76 ]; then
+  if [ "$UI_UNICODE" = 1 ] && [ "${UI_COLS:-80}" -ge 62 ]; then
     printf '\n'
-    printf '%s  ███╗   ███╗███████╗███╗   ██╗██████╗ ███████╗██╗██╗  ██╗███████╗██████╗ %s\n' "$C_BLUE" "$C_RESET"
-    printf '%s  ████╗ ████║██╔════╝████╗  ██║██╔══██╗██╔════╝██║╚██╗██╔╝██╔════╝██╔══██╗%s\n' "$C_BLUE" "$C_RESET"
-    printf '%s  ██╔████╔██║█████╗  ██╔██╗ ██║██║  ██║█████╗  ██║ ╚███╔╝ █████╗  ██████╔╝%s\n' "$C_CYAN" "$C_RESET"
-    printf '%s  ██║╚██╔╝██║██╔══╝  ██║╚██╗██║██║  ██║██╔══╝  ██║ ██╔██╗ ██╔══╝  ██╔══██╗%s\n' "$C_CYAN" "$C_RESET"
-    printf '%s  ██║ ╚═╝ ██║███████╗██║ ╚████║██████╔╝██║     ██║██╔╝ ██╗███████╗██║  ██║%s\n' "$C_CYAN" "$C_RESET"
-    printf '%s  ╚═╝     ╚═╝╚══════╝╚═╝  ╚═══╝╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝%s\n' "$C_CYAN" "$C_RESET"
+    printf '%s  ███╗   ███╗██╗  ██╗       ██████╗ ██████╗ ██████╗ ██████╗ %s\n' "$C_BLUE" "$C_RESET"
+    printf '%s  ████╗ ████║╚██╗██╔╝      ██╔════╝██╔═══██╗██╔══██╗██╔══██╗%s\n' "$C_BLUE" "$C_RESET"
+    printf '%s  ██╔████╔██║ ╚███╔╝ █████╗██║     ██║   ██║██║  ██║██████╔╝%s\n' "$C_CYAN" "$C_RESET"
+    printf '%s  ██║╚██╔╝██║ ██╔██╗ ╚════╝██║     ██║   ██║██║  ██║██╔══██╗%s\n' "$C_CYAN" "$C_RESET"
+    printf '%s  ██║ ╚═╝ ██║██╔╝ ██╗      ╚██████╗╚██████╔╝██████╔╝██║  ██║%s\n' "$C_CYAN" "$C_RESET"
+    printf '%s  ╚═╝     ╚═╝╚═╝  ╚═╝       ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝%s\n' "$C_CYAN" "$C_RESET"
     printf '\n%s  m x c l i%s   %s%s  %s%s\n\n' \
       "$C_BOLD" "$C_RESET" "$C_GREY" "$I_DOT" "$version" "$C_RESET"
   else
-    printf '\n  %smendfixer%s  %s\n' "$C_BOLD" "$C_RESET" "$version"
+    printf '\n  %smx-codr%s  %s\n' "$C_BOLD" "$C_RESET" "$version"
     printf '  mxcli %s MDL skills, lint rules, hooks and the delivery gate\n\n' "$I_DOT"
   fi
 }
@@ -465,6 +465,21 @@ ensure_postgres_role() {
   printf '%s\n' "$login"
 }
 
+# tests/harness.env holds a database password and tests/credentials.env holds the demo
+# users' passwords. Both live in the project, so a plain `git add -A` committed them.
+# Written once, never duplicated, and the files themselves are kept owner-only.
+ignore_credential_files() {
+  local entry
+  [ -f "$APP/tests/credentials.env" ] && chmod 600 "$APP/tests/credentials.env" 2>/dev/null
+  [ -f "$APP/tests/harness.env" ] && chmod 600 "$APP/tests/harness.env" 2>/dev/null
+  [ -d "$APP/.git" ] || [ -f "$APP/.gitignore" ] || return 0
+  for entry in "tests/harness.env" "tests/credentials.env"; do
+    grep -qxF "$entry" "$APP/.gitignore" 2>/dev/null && continue
+    printf '%s\n' "$entry" >> "$APP/.gitignore"
+  done
+  return 0
+}
+
 # The mode, written where the harness reads it. Beside tests/credentials.env, and
 # rewritten rather than appended so a second install does not stack up duplicates.
 write_harness_env() {    # write_harness_env <mendix-install-dir>
@@ -481,8 +496,9 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
   mkdir -p "$APP/tests"
   {
     printf '# Written by install.sh -- how this project is built and run.\n'
-    printf '# Read by tests/portable.sh, so every harness script sees it. The\n'
-    printf '# environment still wins: export a value to override for one run.\n'
+    printf '# Read by tests/portable.sh as DATA -- KEY=value, one layer of quotes, no\n'
+    printf '# shell. Only the keys it lists are honoured, and this file wins over the\n'
+    printf '# environment for them. It holds a database password: keep it out of git.\n'
     printf 'MDL_NO_DOCKER=1\n'
     [ -n "$mxbuild" ] && printf 'MDL_MXBUILD_PATH="%s"\n' "$mxbuild"
     # mxcli's --db-host is host:port and refuses a bare host with
@@ -509,6 +525,8 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
       printf 'MDL_BOOT_COMMAND="bash tests/run-app.sh"\n'
     fi
   } > "$APP/tests/harness.env"
+  chmod 600 "$APP/tests/harness.env" 2>/dev/null || true
+  ignore_credential_files
   # On Windows the directory is a Studio Pro install; elsewhere it is usually the
   # cached mxbuild. Name what it actually is rather than guessing.
   case "$mxbuild" in
@@ -678,6 +696,23 @@ ensure_tool_arch_aliases() {  # ensure_tool_arch_aliases <studio-dir>
   return 0
 }
 
+# The Studio Pro repairs above -- Gradle/JDK/WebView2 junctions into the mxbuild
+# cache, and win-x64 aliases for an ARM64 install's deno and node -- used to run only
+# in the no-Docker branch. But `mxcli docker build` drives the same Studio Pro mxbuild
+# and dies on the same missing win-x64\deno.exe, so a Windows-on-ARM machine with
+# Docker Desktop running got none of them and every build failed. Both functions skip
+# what already exists, so running this ahead of that branch changes nothing there.
+ensure_windows_studio_repairs() {   # ensure_windows_studio_repairs <version>
+  [ "$IS_WINDOWS" = "1" ] || return 0
+  [ -n "${1:-}" ] || return 0
+  local mx dir
+  mx="$(studio_pro_mx "$1" 2>/dev/null || true)"
+  [ -n "$mx" ] || return 0
+  dir="$(cd "$(dirname "$(dirname "$mx")")" && pwd)" || return 0
+  ensure_studio_support_junctions "${dir##*/}" "$dir"
+  ensure_tool_arch_aliases "$dir"
+}
+
 # mxbuild splits its own command line on spaces. --java-home=C:\Program Files
 # (Arm)\zulu21 reaches it as four unrecognised arguments, so it prints its usage and
 # exits -- which mxcli reports as "mxbuild --serve exited during startup", naming
@@ -731,6 +766,23 @@ mxcli_release_url() {
   esac
   printf 'https://github.com/mendixlabs/mxcli/releases/download/%s/mxcli-%s-%s%s\n' \
     "${MXCLI_TAG:-nightly}" "$os" "$arch" "$EXE"
+}
+
+# The downloaded binary is executed, and the default tag is a moving one, so the bytes
+# differ between runs and no review can pin them. Set MXCLI_SHA256 to require a known
+# build; with it unset the download is reported rather than silently trusted.
+mxcli_verify_download() {   # mxcli_verify_download <file>
+  local want="${MXCLI_SHA256:-}" got
+  if [ -z "$want" ]; then
+    ui_note "mxcli came from the ${MXCLI_TAG:-nightly} release and is not checksum-verified (set MXCLI_SHA256 to pin it)"
+    return 0
+  fi
+  got="$(shasum -a 256 "$1" 2>/dev/null | cut -d" " -f1)"
+  [ -n "$got" ] || got="$(sha256sum "$1" 2>/dev/null | cut -d" " -f1)"
+  if [ "$got" != "$want" ]; then
+    rm -f "$1"
+    ui_fail "The mxcli download does not match MXCLI_SHA256." "  expected $want" "  got      ${got:-nothing}"
+  fi
 }
 
 # Windows has no CDN mxbuild: the Mendix CDN publishes a Linux binary only, and
@@ -806,6 +858,13 @@ offer_studio_pro_junction() {   # <version> <path-to-per-user-mx.exe>
     return 1
   fi
 
+  case "$link_win$target_win" in
+    *"'"*|*'"'*)
+      DEPS_MISSING+=("Studio Pro $version -- the path contains a quote, so the junction cannot be")
+      DEPS_MISSING+=("                 created safely from here. Run it yourself, as administrator:")
+      DEPS_MISSING+=("                 mklink /J \"$link_win\" \"$target_win\"")
+      return 1 ;;
+  esac
   ui_sub "asking Windows for permission"
   powershell.exe -NoProfile -Command \
     "Start-Process cmd.exe -Verb RunAs -Wait -ArgumentList '/c','mklink','/J','\"$link_win\"','\"$target_win\"'" \
@@ -926,10 +985,19 @@ ui_banner "$version"
 if [ -n "$APP_ARG" ]; then APP="$APP_ARG"; else APP="$PWD"; fi
 [ -d "$APP" ] || ui_fail "No such directory: $APP"
 APP="$(cd "$APP" && pwd)"
+# The path is written into command strings that dep_apply runs, so a directory named
+# with a backtick or $( ) would run its own command during the install. Spaces are
+# fine and common; these characters are not.
+case "$APP" in
+  *'`'*|*'$('*|*'"'*|*"'"*|*';'*|*'|'*|*'&'*|*$'\n'*)
+    ui_fail "The project path contains a shell metacharacter and cannot be installed into:" \
+            "  $APP" \
+            "Rename the directory (or move the project) and run the installer again." ;;
+esac
 
 # The bundle cannot be its own target -- it would install into itself and then
 # try to create a Mendix app on top of the payload. But standing in the bundle
-# and running it is exactly what someone does after copying dist/ into their
+# and running it is exactly what someone does after copying mxcodr/ into their
 # app, so with no path named, install into the directory the bundle sits in.
 # A path that was named explicitly is never second-guessed.
 target_inferred=0
@@ -1045,6 +1113,7 @@ done
 if [ -z "$mxcli_here" ]; then
   dep_apply "mxcli" '[ -x "$APP/mxcli$EXE" ]' \
     "curl -fsSL -o \"$APP/mxcli$EXE\" \"$(mxcli_release_url)\" && chmod +x \"$APP/mxcli$EXE\"" || true
+  [ -x "$APP/mxcli$EXE" ] && mxcli_verify_download "$APP/mxcli$EXE"
 fi
 
 # MxBuild for the version this project will be. Without it `mxcli new` falls back
@@ -1080,6 +1149,13 @@ if mprs:
 PY_WANT
 )"
   fi
+  # Read from the project's .mpr (a SQLite file anyone can commit) and interpolated
+  # into the detect command dep_apply evals, so it is a version number or nothing.
+  case "$want_mx" in
+    ''|*[!0-9.]*)
+      [ -z "$want_mx" ] || ui_note "ignoring an unexpected Mendix version in the project file: $want_mx"
+      want_mx="" ;;
+  esac
   if [ -n "$want_mx" ]; then
     if [ "$IS_WINDOWS" = "1" ]; then
       # Nothing to install: `mxcli setup mxbuild` on Windows exits 1 with
@@ -1118,6 +1194,7 @@ fi
 # So where Studio Pro is present the no-Docker mode is offered first. It is a real
 # mode, written to tests/harness.env, not a degraded fallback.
 no_docker_mode=""
+ensure_windows_studio_repairs "${want_mx:-}"
 if ! docker_ready; then
   studio_dir=""
   if [ -n "${want_mx:-}" ] && [ "$IS_WINDOWS" = "1" ]; then
@@ -1375,8 +1452,12 @@ import json, sys
 path = sys.argv[1]
 try:
     settings = json.load(open(path))
-except (FileNotFoundError, json.JSONDecodeError):
+except FileNotFoundError:
     settings = {}
+except json.JSONDecodeError as exc:
+    # Replacing it would throw away whatever the developer had; the Codex and Cursor
+    # mergers below refuse for the same reason.
+    raise SystemExit("   !! %s is not valid JSON (%s); leaving it alone. Fix it and re-run." % (path, exc))
 hooks = settings.setdefault("hooks", {})
 wanted = {
     "UserPromptSubmit": {"hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/remind-skills.sh"}]},
@@ -1389,6 +1470,7 @@ for event, entry in wanted.items():
 json.dump(settings, open(path, "w"), indent=2)
 PY_MERGE
 ui_done "Claude hooks" "2 $I_ARROW .claude/settings.local.json"
+ignore_credential_files
 
 # Codex discovers repository skills in .agents/skills automatically. Its hook
 # wire format is close to Claude's, but PostToolUse ignores plain stdout, so it

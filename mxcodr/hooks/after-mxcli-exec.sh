@@ -74,8 +74,18 @@ try:
     words = shlex.split(text)
 except ValueError:
     words = text.split()
+# A hook runs after every terminal command, so the expansion is bounded: a pattern
+# like /*/*/*/*/* took 14 seconds and returned 120k paths on this machine, and the
+# hook has no timeout of its own on every host.
+LIMIT = 200
 for word in words:
-    matches = sorted(glob.glob(word)) if any(c in word for c in "*?[") else []
+    matches = []
+    if any(c in word for c in "*?[") and word.count("*") <= 4:
+        for i, match in enumerate(sorted(glob.iglob(word))):
+            if i >= LIMIT:
+                matches = []          # too broad to be a list of edited scripts
+                break
+            matches.append(match)
     print("\n".join(matches) if matches else word)' 2>/dev/null)"
   [ -n "$_words" ] || _words="$(printf '%s\n' $command)"
   _changed=""; _unreadable=""; _named=0

@@ -130,26 +130,26 @@ The hooks are the part that does not depend on the model choosing to comply:
 Twelve files here have a second copy in the repo: five skills in
 `.ai-context/skills/`, two lint rules in `.claude/lint-rules/`, and the naming and
 coverage checkers plus their fixtures in `tests/skills/`. Both copies get edited,
-so a plain copy can go either way. One did: on 2026-09-13 four `dist/` files were
+so a plain copy can go either way. One did: on 2026-09-13 four `mxcodr/` files were
 newer than their sources, and the copy block that used to be here would have rolled
 them back without a word.
 
-Bump `dist/VERSION` first (`YYYY.MM.DD.N`), then run from the repo root:
+Bump `mxcodr/VERSION` first (`YYYY.MM.DD.N`), then run from the repo root:
 
 ```bash
-bash tests/skills/rebuild-dist.sh --check   # report only
-bash tests/skills/rebuild-dist.sh           # copy what is safe, record the result
+bash tests/skills/rebuild-mxcodr.sh --check   # report only
+bash tests/skills/rebuild-mxcodr.sh           # copy what is safe, record the result
 ```
 
 The script compares each pair with its hash at the last sync, recorded in
-`tests/skills/.dist-sync.sha256`. A changed source is copied into `dist/`. A `dist/`
+`tests/skills/.mxcodr-sync.sha256`. A changed source is copied into `mxcodr/`. A `mxcodr/`
 file edited directly is refused, with the `cp` that brings it back to the source.
 When both sides changed, it refuses and asks you to decide. Nothing is copied unless
 every pair is safe.
 
 `rules/`, `hooks/`, `plugins/`, `tests/`, `checks/check_layout.py`,
 `checks/record_install.py` and `skills/spacing-and-layout/` have no copy in the
-repo. They are authored here, in `dist/`, and nothing overwrites them.
+repo. They are authored here, in `mxcodr/`, and nothing overwrites them.
 
 The harness's own regression tests need no app and run in about four seconds:
 
@@ -171,7 +171,7 @@ rsync -a --exclude deployment --exclude .git --exclude .mendix-cache \
 ln -s ~/CloudeCodeProjects/InvoiceDesk/mxcli "$W/mxcli"
 rm -rf "$W"/.claude/lint-rules/mod001_*.star "$W"/.claude/lint-rules/reu001_*.star "$W"/tools
 
-bash dist/install.sh "$W"
+bash mxcodr/install.sh "$W"
 ```
 
 Then confirm the installer claims:
@@ -195,7 +195,7 @@ delete skills mxcli never shipped.
 Two ways in, because both are things people actually do:
 
 ```bash
-bash dist/install.sh .          # from the project root, naming the target
+bash mxcodr/install.sh .          # from the project root, naming the target
 cd dist && bash install.sh      # from the bundle, after copying it into the app
 ```
 
@@ -553,7 +553,7 @@ The manual route, if you would rather do it yourself:
 4. **mxcli** — `mxcli.exe` in the project root. On a fresh app `mxcli new` writes
    a *Linux* binary there for the devcontainer; the installer swaps in the Windows
    one and keeps the other as `mxcli.linux`.
-5. **Install** — from Git Bash, in the project: `bash dist/install.sh . --with-deps`
+5. **Install** — from Git Bash, in the project: `bash mxcodr/install.sh . --with-deps`
 
 ```bash
 # confirm the machine before blaming the harness

@@ -65,15 +65,74 @@ if [ -z "${PY:-}" ]; then
 fi
 
 # How this project is built, when it is not the default. Written by install.sh,
-# beside tests/credentials.env and read the same way. It records the no-Docker mode:
-# which Mendix installation supplies `mx`, and which database the app runs on.
-# Anything already in the environment wins, so a one-off override needs no edit.
+# beside tests/credentials.env and read the same way: as DATA, never sourced.
+#
+# It used to be sourced, and that was the bundle's widest hole. The file lives in the
+# project tree, so a clone or an agent could put shell in it and every gate run, every
+# orient, and every verify-*.test.sh -- lib.sh loads this file too -- would execute it
+# before a single check ran. Sourcing also let it set *any* variable, so a line like
+# BASE_URL=https://elsewhere pointed the whole suite, credentials and all, at another
+# host. Parsing KEY=value against the list below closes both.
+#
+# A value is taken literally: no expansion, no command substitution, one layer of
+# quotes stripped because that is the shape install.sh writes. The file wins over the
+# environment for these keys, which is what sourcing did.
+#
+# mdl_load_harness_env <file> [export]
+mdl_load_harness_env() {
+  local file="$1" mode="${2:-}" line key value
+  [ -f "$file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%=*}"
+    [ "$key" != "$line" ] || continue          # no '=' on the line
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"       # trim surrounding blanks
+    key="${key%"${key##*[![:space:]]}"}"
+    case "$key" in
+      MDL_NO_DOCKER|MDL_MXBUILD_PATH|MDL_DB_HOST|MDL_DB_NAME|MDL_DB_USER|MDL_DB_PASSWORD| \
+      MDL_PSQL|MDL_BOOT_COMMAND|JAVA_HOME|MX_VERSION) ;;
+      *) continue ;;
+    esac
+    case "$value" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+    printf -v "$key" '%s' "$value"
+    [ "$mode" = "export" ] && export "${key?}"
+  done < "$file"
+}
+
 _mdl_harness_env="$(dirname "${BASH_SOURCE[0]}")/harness.env"
-if [ -f "$_mdl_harness_env" ]; then
-  # shellcheck disable=SC1090
-  . "$_mdl_harness_env"
-fi
+mdl_load_harness_env "$_mdl_harness_env"
 unset _mdl_harness_env
+
+# --- values that have to survive a trip into generated code ------------------
+#
+# lib.sh builds a JavaScript body and gate.sh builds SQL; a password or a project
+# name written straight into either one is a quote away from being code. These three
+# hand the encoding to Python, which is on every machine the harness runs on.
+
+mdl_json_object() {   # mdl_json_object k1 v1 k2 v2 ... -> {"k1":"v1",...}
+  "$PY" -c 'import json,sys
+a = sys.argv[1:]
+print(json.dumps(dict(zip(a[0::2], a[1::2])), ensure_ascii=True))' "$@"
+}
+
+mdl_json_string() {   # mdl_json_string <text> -> "text", escaped for JS source
+  "$PY" -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=True))' "$1"
+}
+
+mdl_ere_quote() {     # mdl_ere_quote <text> -- match it literally inside an ERE
+  printf '%s' "$1" | sed 's/[][^$.*+?(){}|\\\\]/\\\\&/g'
+}
+
+mdl_json_number() {   # mdl_json_number <value> <fallback> -- digits only, never code
+  case "$1" in
+    ''|*[!0-9]*) printf '%s\n' "$2" ;;
+    *)           printf '%s\n' "$1" ;;
+  esac
+}
 
 # A JAVA_HOME pointing at the JDK's *bin* directory rather than its home breaks
 # every tool that composes "$JAVA_HOME/bin/java" -- gradle and mxbuild both do.
@@ -140,28 +199,34 @@ mdl_check_local_database() {
 # that passes because it is out of date is worse than no gate, because the green
 # is still printed. tools/mdl-checks/record_install.py writes a checksum per
 # installed file into INSTALL.json; this compares the files on disk against it,
-# and the version against dist/ when the project keeps a bundle. Around forty
+# and the version against mxcodr/ when the project keeps a bundle. Around forty
 # small checksums, roughly ten milliseconds. Silent when nothing has drifted.
 mdl_check_install_freshness() {
   local app="${APP_DIR:-.}"
   local manifest="$app/tools/mdl-checks/INSTALL.json"
   local installed="$app/tools/mdl-checks/VERSION"
   local python="${PY:-$(mdl_find_python || true)}"
+  # The bundle a project keeps beside itself is mxcodr; a copy made before the
+  # rename on 2026-09-15 still calls it dist.
+  local bundle="" candidate
+  for candidate in mxcodr dist; do
+    if [ -f "$app/$candidate/VERSION" ]; then bundle="$candidate"; break; fi
+  done
 
   [ -n "$python" ] || return 0
 
   if [ ! -f "$manifest" ]; then
     # Installed before manifests existed, or assembled by hand. Worth one line:
     # the check cannot run, and silence would read as a clean result.
-    if [ -f "$installed" ] && [ -f "$app/dist/VERSION" ]; then
+    if [ -f "$installed" ] && [ -n "$bundle" ]; then
       echo "   !! no tools/mdl-checks/INSTALL.json, so harness drift cannot be detected here."
       # Installing from a bundle older than what is already here would be a
       # downgrade, so say which of the two has to move first.
-      if [ "$(printf '%s\n%s\n' "$(cat "$installed")" "$(cat "$app/dist/VERSION")" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)" = "$(cat "$installed")" ] \
-         && [ "$(cat "$installed")" != "$(cat "$app/dist/VERSION")" ]; then
-        echo "      dist/ is older than what is installed ($(cat "$app/dist/VERSION") vs $(cat "$installed")); refresh dist/ first, then:  bash dist/install.sh ."
+      if [ "$(printf '%s\n%s\n' "$(cat "$installed")" "$(cat "$app/$bundle/VERSION")" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1)" = "$(cat "$installed")" ] \
+         && [ "$(cat "$installed")" != "$(cat "$app/$bundle/VERSION")" ]; then
+        echo "      $bundle/ is older than what is installed ($(cat "$app/$bundle/VERSION") vs $(cat "$installed")); refresh $bundle/ first, then:  bash $bundle/install.sh ."
       else
-        echo "      This install predates the record (VERSION says $(cat "$installed" 2>/dev/null)):  bash dist/install.sh ."
+        echo "      This install predates the record (VERSION says $(cat "$installed" 2>/dev/null)):  bash $bundle/install.sh ."
       fi
     fi
     return 0
@@ -207,19 +272,21 @@ def ordered(version):
 
 
 # A newer bundle sitting in the project is the plainest signal there is. The
-# other direction is the hand-copy case, where the files are ahead of dist/ on
+# other direction is the hand-copy case, where the files are ahead of mxcodr/ on
 # purpose, so it is left alone -- the checksums below cover it.
-bundle = os.path.join(app, "dist", "VERSION")
-if os.path.exists(bundle):
+# mxcodr beside the project, or dist in a copy made before the 2026-09-15 rename.
+name = next((n for n in ("mxcodr", "dist") if os.path.exists(os.path.join(app, n, "VERSION"))), None)
+bundle = os.path.join(app, name, "VERSION") if name else ""
+if bundle:
     try:
         with open(bundle, encoding="utf-8") as handle:
             available = handle.read().strip()
     except OSError:
         available = ""
     if available and ordered(available) > ordered(installed):
-        print("   !! the harness installed here is %s; dist/ holds a newer one (%s)."
-              % (installed, available))
-        print("      An out-of-date checker passes what the current one fails:  bash dist/install.sh .")
+        print("   !! the harness installed here is %s; %s/ holds a newer one (%s)."
+              % (installed, name, available))
+        print("      An out-of-date checker passes what the current one fails:  bash %s/install.sh ." % name)
 
 if missing:
     print("   !! %d harness file(s) gone since install: %s"

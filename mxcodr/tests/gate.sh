@@ -41,6 +41,18 @@ cd "$APP_DIR"
 . "$HARNESS_DIR/portable.sh"
 MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
 [ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
+# The name ends up in a pgrep pattern whose matches are killed, and in mxcli's
+# arguments. A committed `0|.*|.mpr` turned that pattern into one matching every
+# process this user owns, and --restart would have killed all of them; a committed
+# `0-clean.mpr` sorts first and would have become the model every check ran against.
+case "$MPR" in
+  *[!A-Za-z0-9._-]*|-*|.*)
+    echo "refusing to run: the .mpr name must be letters, digits, dot, dash or underscore: $MPR" >&2
+    exit 2 ;;
+esac
+if [ "$(ls -1 *.mpr 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
+  echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
+fi
 SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
 APP_PORT="${APP_PORT:-8081}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
@@ -107,7 +119,7 @@ fi
 project_pids() {
   command -v pgrep >/dev/null 2>&1 || return 0
   { pgrep -f "runtimelauncher.*$APP_DIR" 2>/dev/null
-    pgrep -f "mxcli(\.exe)? run .*$MPR" 2>/dev/null; } | sort -un
+    pgrep -f "mxcli(\.exe)? run .*$(mdl_ere_quote "$MPR")" 2>/dev/null; } | sort -un
 }
 descendants() {   # every process under <pid>, deepest first
   local child
@@ -142,13 +154,23 @@ ensure_database() {      # the non-container equivalent of --ensure-db
   local host="${MDL_DB_HOST:-127.0.0.1:5432}" port user="${MDL_DB_USER:-mendix}"
   port="${host##*:}"; host="${host%%:*}"
   case "$port" in ''|*[!0-9]*) port=5432 ;; esac
-  export PGPASSWORD="${MDL_DB_PASSWORD:-mendix}"
-  if "$psql" -w -h "$host" -p "$port" -U "$user" -d postgres -tAc \
+  # The database name is interpolated into SQL, and psql -c accepts several
+  # statements, so a name carrying a quote could run DDL of its own choosing.
+  case "$MDL_DB_NAME" in
+    ''|*[!A-Za-z0-9_]*)
+      echo "   !! MDL_DB_NAME must be letters, digits or underscore; leaving the database alone" >&2
+      return 1 ;;
+  esac
+  # Given per call, never exported: an exported PGPASSWORD is inherited by every
+  # verify-*.test.sh and every checker the gate starts.
+  local pass="${MDL_DB_PASSWORD:-mendix}"
+  if PGPASSWORD="$pass" "$psql" -w -h "$host" -p "$port" -U "$user" -d postgres -tAc \
        "SELECT 1 FROM pg_database WHERE datname='$MDL_DB_NAME'" 2>/dev/null | grep -q 1; then
     return 0
   fi
   echo "   creating database $MDL_DB_NAME"
-  "$psql" -w -h "$host" -p "$port" -U "$user" -d postgres -c "CREATE DATABASE \"$MDL_DB_NAME\"" >/dev/null 2>&1
+  PGPASSWORD="$pass" "$psql" -w -h "$host" -p "$port" -U "$user" -d postgres \
+    -c "CREATE DATABASE \"$MDL_DB_NAME\"" >/dev/null 2>&1
 }
 
 # --- the checks that need nothing but the .mpr -------------------------------
@@ -406,11 +428,24 @@ print(h.hexdigest()[:24])
 PY_FP
 }
 CACHE_DIR="$APP_DIR/.mxcli/gate-cache"
+# A cached summary is printed as a pass, and the cache lives in the project, so a
+# forged <check>.key/<check>.summary pair used to be enough to make any red check
+# report green. The key now also depends on a secret kept outside the project, so a
+# pair can only be produced by something that has already read this machine's files.
+mdl_cache_secret() {
+  local file="${MDL_CACHE_SECRET_FILE:-$HOME/.mxcli/gate-cache.secret}"
+  if [ ! -s "$file" ]; then
+    mkdir -p "$(dirname "$file")" 2>/dev/null || { echo none; return 0; }
+    ( umask 077; "$PY" -c 'import secrets; print(secrets.token_hex(16))' > "$file" 2>/dev/null ) \
+      || { echo none; return 0; }
+  fi
+  cat "$file" 2>/dev/null || echo none
+}
 # run_cached <name> <function> <extra input paths...>
 run_cached() {
   local name="$1" fn="$2" key="" status; shift 2
   if [ "$USE_CACHE" = "1" ]; then
-    key="$(fingerprint "$@" 2>/dev/null)"
+    key="$(fingerprint "$@" "env:MDL_CACHE_SECRET=$(mdl_cache_secret)" 2>/dev/null)"
     if [ -n "$key" ] && [ -f "$CACHE_DIR/$name.key" ] && [ "$(cat "$CACHE_DIR/$name.key")" = "$key" ] \
        && [ -f "$CACHE_DIR/$name.summary" ]; then
       sed "s/\$/ (cached $(date -r "$CACHE_DIR/$name.summary" +%H:%M 2>/dev/null || echo earlier))/" \
@@ -542,7 +577,8 @@ if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
     if [ -n "${MDL_BOOT_COMMAND:-}" ]; then
       echo "== no app answering; booting with MDL_BOOT_COMMAND"
       ensure_database || true
-      ( eval "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
+      echo "   running: $MDL_BOOT_COMMAND"
+      ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
       BASE_URL="http://localhost:$APP_PORT"
       waited=0
       until answers "$BASE_URL"; do
@@ -795,6 +831,7 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
   mkdir -p "$dir" 2>/dev/null || return 0
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s' | while read -r verdict name _; do
     name="${name%.test.sh}"
+    case "$name" in ''|*/*|.*) continue ;; esac
     case "$verdict" in
       FAIL) [ -f "$dir/$name" ] || date '+%Y-%m-%d %H:%M' > "$dir/$name" ;;
       PASS)

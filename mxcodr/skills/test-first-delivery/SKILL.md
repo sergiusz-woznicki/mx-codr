@@ -104,6 +104,19 @@ makes "everything is tested" a fact rather than a claim:
 set -euo pipefail
 ```
 
+**A `verify-*.test.sh` is a browser test, and only a browser test.** The gate hands
+every one of them to `mxcli playwright verify`, which waits for a browser result. A
+script that never calls `scenario()` -- a bash wrapper around `mxcli test`, say --
+gives it none: one session saw such a script hang for the full timeout and report
+only `timeout after 30s`, with nothing naming the cause, and went down the wrong path
+before building the UI the feature needed anyway.
+
+Logic with no screen in front of it -- a microflow's return value, a calculation --
+is tested in a `tests/*.test.mdl` file run with `mxcli test` (skill: `test-microflows`).
+Know two limits of that route: the gate does not run `.test.mdl` files, and coverage
+counts only `verify-*.test.sh`. So anything a user reaches from a page or a button
+still needs its browser test, and a `.test.mdl` is an extra check, not a substitute.
+
 ### 2. Run it and watch it fail
 
 ```bash
