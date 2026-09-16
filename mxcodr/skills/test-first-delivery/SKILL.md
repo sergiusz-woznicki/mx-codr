@@ -31,7 +31,7 @@ bash tests/gate.sh --only <feature> --boot-if-needed
 #    never `bash tests/verify-x.test.sh`: the gate keeps the browser and the session
 #    warm and it is where the timeout and the facts-on-failure live
 bash tests/gate.sh --only <feature>
-# 5. the whole gate: suite + mx check + lint + coverage, ends in DONE or NOT DONE
+# 5. the whole gate: suite + mx check + lint + coverage + naming + layout, ends in DONE or NOT DONE
 bash tests/gate.sh
 ```
 

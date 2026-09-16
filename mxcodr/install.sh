@@ -1164,8 +1164,8 @@ for arg in "$@"; do
       printf '  --no-app         never create a Mendix app; require one to be there already\n'
       printf '  --with-deps      install missing prerequisites (Python, Node, playwright-cli,\n'
       printf '                   its browser, mxcli, MxBuild) with this machine'"'"'s package manager.\n'
-      printf '                   Without it they are only reported. Docker and the JDK are never\n'
-      printf '                   installed -- both need a reboot or a licence click.\n\n'
+      printf '                   Without it they are only reported. Docker is installed when\n'
+      printf '                   missing either way; the JDK is only reported.\n\n'
       printf '  MX_VERSION=%s  APP_NAME=<name>   env overrides when an app is created\n' "$DEFAULT_MX_VERSION"
       printf '  MDL_DEPS_DRY_RUN=1                    print the install commands, run none\n'
       printf '  MDL_ASSUME_YES=1                      answer the prerequisite prompts with yes\n'
@@ -1793,7 +1793,7 @@ ui_done "environment" "checked"
 
 # --- 17. Summary: what landed, what is still missing, what to do next ---
 ui_clear
-printf '\n  %s%s Installed mendix-mdl-skills %s%s\n' "$C_GREEN" "$I_OK" "$version" "$C_RESET"
+printf '\n  %s%s Installed mx-codr %s%s\n' "$C_GREEN" "$I_OK" "$version" "$C_RESET"
 printf '  %s  %s %s%s\n' "$C_GREY" "$I_ARROW" "$APP" "$C_RESET"
 
 ui_head "$I_BOX" "What landed"
@@ -1849,7 +1849,7 @@ fi
 
 ui_head "$I_PLAY" "Next"
 printf '     %-38s %s%s%s\n' "bash tests/orient.sh" "$C_GREY" "what is in this app, and its state" "$C_RESET"
-printf '     %-38s %s%s%s\n' "bash tests/gate.sh --boot-if-needed" "$C_GREY" "suite + mx check + lint + coverage" "$C_RESET"
+printf '     %-38s %s%s%s\n' "bash tests/gate.sh --boot-if-needed" "$C_GREY" "suite + mx check, lint, coverage, naming, layout" "$C_RESET"
 printf '     %-38s %s%s%s\n' "bash tests/gate.sh --only <feature>" "$C_GREY" "one script, warm browser, red loop" "$C_RESET"
 printf '     %-38s %s%s%s\n' "bash tests/diagnose.sh <Entity> <user>" "$C_GREY" "why is that row not on the page" "$C_RESET"
 
