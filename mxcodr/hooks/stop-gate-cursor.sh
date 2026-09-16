@@ -56,8 +56,20 @@ case "$status" in ""|completed) ;; *) nothing ;; esac
 
 repo_root="$(cat "$marker" 2>/dev/null || true)"
 [ -n "$repo_root" ] && [ -d "$repo_root" ] || nothing
-# NOTE: expected_root is never set here, so this check never fires and the marker's directory is trusted.
-if [ -n "${expected_root:-}" ] && [ "$expected_root" != "$repo_root" ]; then nothing; fi
+# Ignore markers from another checkout: the project must be one of this window's workspace roots.
+# Older Cursor versions send no workspace_roots; then the marker is trusted, as before.
+roots="$(printf '%s' "$input" | "$PY" -c 'import json,sys
+try: roots = json.load(sys.stdin).get("workspace_roots") or []
+except Exception: roots = []
+print("\n".join(r for r in roots if isinstance(r, str)))' 2>/dev/null)"
+if [ -n "$roots" ]; then
+  matched=""
+  while IFS= read -r root; do
+    [ -d "$root" ] || continue
+    [ "$(cd "$root" && { git rev-parse --show-toplevel 2>/dev/null || pwd; })" = "$repo_root" ] && matched=1
+  done <<< "$roots"
+  [ -n "$matched" ] || nothing
+fi
 cd "$repo_root" || nothing
 
 say() {  # say "<text>" -- ask Cursor to submit this as the next message
