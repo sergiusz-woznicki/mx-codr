@@ -58,21 +58,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# MPR=<name>.mpr picks one when the directory holds several; otherwise the first one found.
-if [ -z "${MPR:-}" ]; then
-  MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
-  [ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
-  if [ "$(ls -1 *.mpr 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
-    echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
-  fi
-fi
+mdl_find_mpr || exit 2
 # The name ends up in a pgrep pattern whose matches get killed: safe characters only.
 case "$MPR" in
   *[!A-Za-z0-9._-]*|-*|.*)
     echo "refusing to run: the .mpr name must be letters, digits, dot, dash or underscore: $MPR" >&2
     exit 2 ;;
 esac
-[ -f "$MPR" ] || { echo "no $MPR in $APP_DIR" >&2; exit 2; }
 SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
 APP_PORT="${APP_PORT:-8081}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"

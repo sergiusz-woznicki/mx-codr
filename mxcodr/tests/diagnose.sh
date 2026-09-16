@@ -2,7 +2,7 @@
 # diagnose.sh -- state facts for a red test: security, row counts, live sessions, runtime
 # errors, and optionally one entity's access and one user's roles. Changes nothing.
 #   bash tests/diagnose.sh [Entity] [user]    (pass "" as Entity to skip it)
-# Env: RUNTIME_LOG, ADMIN_PORT (8090), ADMIN_PASSWORD, APP_PORT. Exit 2 without a .mpr, else 0.
+# Env: RUNTIME_LOG, ADMIN_PORT (8090), ADMIN_PASSWORD, APP_PORT, MPR. Exit 2 without a .mpr, else 0.
 # Lookups run in parallel into numbered files; no set -e so one failure doesn't stop the rest.
 set -uo pipefail
 
@@ -10,8 +10,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
 cd "$APP_DIR"
 . "$HARNESS_DIR/portable.sh"
-MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
-[ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
+mdl_find_mpr || exit 2
 ENTITY="${1:-}"
 USER_NAME="${2:-}"
 RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"

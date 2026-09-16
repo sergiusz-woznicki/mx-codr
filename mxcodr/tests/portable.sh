@@ -3,7 +3,7 @@
 # Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh and run-app.sh; not run on its own.
 # Provides: $MXCLI, $PY, mdl_find_python, mdl_load_harness_env, mdl_json_object,
 #   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_check_local_database,
-#   mdl_check_install_freshness, mdl_tmpdir, mdl_tmpfile.
+#   mdl_check_install_freshness, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr.
 # Sourcing it also loads tests/harness.env as data (never sourced) and repairs JAVA_HOME.
 # Inputs: MXCLI, PY, PORTABLE_APP_DIR, APP_DIR, LOCALAPPDATA. Nothing else is exported.
 
@@ -267,4 +267,20 @@ mdl_tmpdir() {  # mdl_tmpdir <name> -- portable `mktemp -d -t <name>`
 
 mdl_tmpfile() {  # mdl_tmpfile <name> -- portable `mktemp -t <name>`
   mktemp "${TMPDIR:-/tmp}/$1.XXXXXX"
+}
+
+# --- 9. Find the .mpr ---
+# mdl_find_mpr -- set MPR for the current directory: MPR=<name>.mpr when given, else the first
+# *.mpr (with a warning when there are several). Returns 1, with the reason on stderr, when none.
+mdl_find_mpr() {
+  if [ -n "${MPR:-}" ]; then
+    [ -f "$MPR" ] || { echo "no $MPR in $(pwd)" >&2; return 1; }
+    return 0
+  fi
+  MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
+  [ -n "$MPR" ] || { echo "no .mpr in $(pwd)" >&2; return 1; }
+  if [ "$(ls -1 *.mpr 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
+    echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
+  fi
+  return 0
 }

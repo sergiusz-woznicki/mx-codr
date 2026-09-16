@@ -2,7 +2,7 @@
 # run-app.sh -- boot the app without `mxcli run --local` (which cannot boot on Windows):
 # mxbuild deployment, standalone runtime, M2EE admin API. Run by gate.sh --boot-if-needed
 # (MDL_BOOT_COMMAND in tests/harness.env) or by hand. Settings from tests/harness.env.
-#   bash tests/run-app.sh [--rebuild]    (rebuilds anyway when the .mpr is newer)
+#   bash tests/run-app.sh [--rebuild]    (rebuilds anyway when the .mpr is newer; MPR= picks one)
 # Prints "== step" lines; exit 0 with "== app up on ...", exit 1 with "== start FAILED".
 set -euo pipefail
 
@@ -16,7 +16,8 @@ mdl_load_harness_env "$APP_DIR/tests/harness.env" export
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE_SUFFIX=".exe" ;; *) EXE_SUFFIX="" ;; esac
 
 # All paths derived from the Mendix version and harness.env; override in the environment.
-MPR="$(ls -1 "$APP_DIR"/*.mpr | head -1)"
+mdl_find_mpr || exit 1
+case "$MPR" in /*) ;; *) MPR="$APP_DIR/$MPR" ;; esac
 MX_VERSION="${MX_VERSION:-$(basename "${MDL_MXBUILD_PATH:-}")}"
 if [ -z "$MX_VERSION" ] || [ ! -d "$HOME/.mxcli/mxbuild/$MX_VERSION" ]; then
   for _d in "$HOME"/.mxcli/mxbuild/*/; do [ -d "$_d" ] && MX_VERSION="$(basename "$_d")"; done

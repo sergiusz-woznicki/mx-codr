@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # orient.sh -- app facts at session start: app state, security, tests and coverage, lint,
 # navigation, module structure. Run by the agent (or you) once per session.
-#   bash tests/orient.sh        (env: APP_PORT, default 8081)
+#   bash tests/orient.sh        (env: APP_PORT, default 8081; MPR when there are several)
 # Lookups run in parallel into numbered files. Exit 2 without a .mpr, else 0.
 set -uo pipefail
 
@@ -9,8 +9,7 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
 cd "$APP_DIR"
 . "$HARNESS_DIR/portable.sh"
-MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
-[ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
+mdl_find_mpr || exit 2
 APP_PORT="${APP_PORT:-8081}"
 WORK="$(mdl_tmpdir mdl-orient)"
 trap 'rm -rf "$WORK"' EXIT
