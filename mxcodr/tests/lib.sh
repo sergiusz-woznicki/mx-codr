@@ -33,7 +33,8 @@
 #   APP_DIR, MPR                           project folder and .mpr (default: folder above tests/)
 #   MXCLI, PY                              mxcli and Python (default: tests/portable.sh)
 #   TEST_USER, TEST_PASSWORD, CREDENTIALS  sign-in (default: tests/credentials.env)
-#   MODULE                                 module for oql_count/oql_value
+#   MODULE                                 module for oql_count/oql_value (default: the
+#                                          test's `# covers:` module, then MDL_DEFAULT_MODULE)
 #   RUNTIME_LOG                            read for licence refusals (default .mxcli/runtime.log)
 #   SCRIPT_TIMEOUT                         per-script limit, "90" or "90s"
 #   ACTION_TIMEOUT_MS                      wait per browser step (default 8000)
@@ -74,7 +75,14 @@ fi
 TEST_PASSWORD="${TEST_PASSWORD:-}"
 
 # --- 3. Module ---
-# gate.sh exports MODULE; otherwise the project's first own module.
+# MODULE if set; else the module on the test's `# covers:` line (so an app with several modules
+# works, and a red-first test runs before the module exists); else the gate's MDL_DEFAULT_MODULE;
+# else the project's first own module.
+if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
+  MODULE="$(sed -nE 's/^#[[:space:]]*covers:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)\..*/\1/p' \
+    "${BASH_SOURCE[1]}" 2>/dev/null | head -1)"
+fi
+MODULE="${MODULE:-${MDL_DEFAULT_MODULE:-}}"
 if [ -z "${MODULE:-}" ]; then
   MODULE="$("$MXCLI" -p "$APP_DIR/$MPR" --json -c "SHOW MODULES" 2>/dev/null \
     | "$PY" -c 'import json,sys
@@ -85,11 +93,6 @@ except Exception:
 for row in rows:
     if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
         print(row["Module"]); break' 2>/dev/null)"
-fi
-# Else the module on the test's `# covers:` line (a red-first test runs before the module exists).
-if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
-  MODULE="$(sed -nE 's/^#[[:space:]]*covers:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)\..*/\1/p' \
-    "${BASH_SOURCE[1]}" 2>/dev/null | head -1)"
 fi
 
 # --- 4. fail and the runtime log ---

@@ -756,6 +756,18 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
   done
 }
 
+# A MODULE set by the caller goes to every test. Otherwise each test takes the module on its own
+# `# covers:` line (lib.sh), and only a test without one falls back to MDL_DEFAULT_MODULE.
+export_test_module() {
+  if [ -n "${MODULE:-}" ]; then
+    export MODULE
+    return 0
+  fi
+  MDL_DEFAULT_MODULE="$(printf '%s\n' "$USER_MODULES" | head -1)"
+  [ -n "$MDL_DEFAULT_MODULE" ] || MDL_DEFAULT_MODULE="$(user_modules | head -1)"
+  export MDL_DEFAULT_MODULE
+}
+
 # Runs the suite (or the --only matches) in this shell, appending to the arrays directly.
 step_tests() {
   local targets=("tests/") script
@@ -769,9 +781,7 @@ step_tests() {
   echo "== tests: ${targets[*]}"
   local out status line
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT
-  MODULE="${MODULE:-$(printf '%s\n' "$USER_MODULES" | head -1)}"
-  [ -n "$MODULE" ] || MODULE="$(user_modules | head -1)"
-  export MODULE
+  export_test_module
   # One licence session: a full run reuses it; --only keeps it signed in between runs.
   if [ -n "$ONLY" ]; then
     export KEEP_SESSION="${KEEP_SESSION:-1}"
