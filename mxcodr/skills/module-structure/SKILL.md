@@ -140,6 +140,20 @@ fix belongs in `AdministrationExt.Account_Overview`, with the Accounts menu item
 pointing at that page — not in `Administration` itself, where the next Marketplace
 update brings the broken filter back.
 
+Two things that are easy to miss:
+
+- **Already changed the original?** Moving the fix into `<Module>Ext` is half the
+  job: the original must go back to what the Marketplace shipped, or it keeps a
+  change nobody knows about. Re-download the module from the Marketplace or undo it
+  in Studio Pro. Do not rewrite a Marketplace page through mxcli to restore it —
+  a page the vendor built in Studio Pro does not always survive a rewrite (a column
+  bound across an association, for one).
+- **The copy is now your code.** The gate does not check Marketplace modules, but it
+  checks `<Module>Ext` like any module of yours: expect layout findings (spacing
+  between buttons and badges that the vendor's page never had) and naming findings,
+  and fix them in the copy. A test for the copied page names it on its covers line:
+  `# covers: AdministrationExt.Account_Overview`.
+
 After a Marketplace update, open the originals once and compare: a fix the vendor
 has since shipped means the Ext copy can go.
 
@@ -198,3 +212,4 @@ cycles and cross-module coupling that no single rule catches.
 - [ ] No cyclic dependency between modules (`graph-report`, ARCH001)
 - [ ] `./mxcli lint -p app.mpr` clean for the module, CONV008 included
 - [ ] No document in a Marketplace module was changed; changes live in `<Module>Ext`
+- [ ] A Marketplace document changed before the move is back to what the Marketplace shipped
