@@ -1,19 +1,14 @@
 #!/usr/bin/env bash
-# Codex PostToolUse adapter. The shared Claude hook reports failed coverage on
-# stdout; Codex intentionally ignores plain stdout for PostToolUse, so translate
-# that report into Codex's blocking exit-code contract without changing Claude's
-# established behavior.
+# Codex PostToolUse hook (matcher ^Bash$): after an `mxcli exec`, marks the session for stop-gate-codex.sh
+# and runs after-mxcli-exec.sh. Its output goes to stderr with exit 2 (Codex feeds it back to the model);
+# exit 0 silently otherwise, since Codex ignores plain PostToolUse stdout.
 set -uo pipefail
 
-# Almost every event is not an `mxcli exec`; answer that on the raw text before
-# looking for a Python to parse it with (see after-mxcli-exec.sh).
+# Cheap substring test first: almost no event is an `mxcli exec`.
 input="$(cat)"
 case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 
-# Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
-# Microsoft Store instead of running anything is common, so each candidate is asked
-# to run before it is believed. Inlined rather than sourced: a hook has to work with
-# nothing else on disk but itself.
+# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
 mdl_find_python() {
   local candidate
   for candidate in python3 python py; do
@@ -22,9 +17,7 @@ mdl_find_python() {
     printf '%s\n' "$candidate"
     return 0
   done
-  # The python.org installer leaves "Add python.exe to PATH" unticked by default
-  # and winget accepts that default, so a Windows box can hold a working Python
-  # that no shell can see. Observed on a clean Windows 11 VM.
+  # The python.org installer does not add Python to PATH by default.
   local local_app="${LOCALAPPDATA:-}"
   local_app="${local_app//\\//}"
   for candidate in \
@@ -46,8 +39,7 @@ command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.std
 case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Remember that this Codex session changed the model. The Stop hook uses the
-# marker to avoid running the full gate after read-only/question-only turns.
+# Marker: the stop hook runs the gate only for sessions that changed the model.
 session_id="$(printf '%s' "$input" | "$PY" -c 'import json,sys; print(json.load(sys.stdin).get("session_id",""))' 2>/dev/null)"
 if [ -n "$session_id" ]; then
   state_dir="${TMPDIR:-/tmp}/mendix-mdl-codex-hooks"

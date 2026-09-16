@@ -1,39 +1,46 @@
 #!/usr/bin/env bash
-# Install the MDL skills, lint rules and checkers into a Mendix project.
+# install.sh -- install the mx-codr harness (skills, lint rules, checkers, hooks, tests/gate.sh)
+# into a Mendix project, creating the app when there is none. Safe to re-run.
 #
-#   bash install.sh [path-to-project] [--no-app]
+# Usage: bash install.sh [project-dir] [--no-app] [--with-deps] [-h|--help]
+#   --no-app     never create a Mendix app; stop when there is no .mpr
+#   --with-deps  install missing prerequisites (winget/brew/apt/dnf); otherwise only reported
+#   No dir: the current directory, or the project the bundle sits in when run from inside it.
+# Env: MX_VERSION, APP_NAME (new app); MDL_ASSUME_YES=1; MDL_DEPS_DRY_RUN=1 (print installs only);
+#   MDL_NO_UPDATE_CHECK=1; MXCLI_TAG, MXCLI_SHA256; MDL_DB_HOST, MDL_DB_USER, MDL_DB_PASSWORD,
+#   PGPASSWORD; DOCKER_WAIT, DOCKER_PROBE_TIMEOUT (seconds); NO_COLOR.
+# Exit: 0 installed; 1 ui_fail (bad argument, no project, no Python, app creation failed);
+#   other non-zero = unexpected command failure. Missing prerequisites do not fail the install.
 #
-# With no path it installs into the current directory -- and running it from
-# inside the bundle installs into the project the bundle sits in, because that
-# is what someone means who has just copied mxcodr/ into their app and cd'd there.
-#
-# What lands where, and why each copy is needed:
-#
-#   .claude/skills/<name>/       Claude Code reads this
-#   .agents/skills/<name>/       Codex, and other tools on the open SKILL.md standard
-#   .ai-context/skills/<name>/   mxcli, Cursor, OpenCode, Windsurf, Aider, Vibe
-#   .claude/lint-rules/          picked up by `mxcli lint`
-#   tools/mdl-checks/            the Python checkers, at one path every host can cite
-#
-# The three skill directories hold identical files. They are copies rather than
-# symlinks so a teammate who clones only the app still gets them.
-#
-# Nothing here edits .claude/settings.json or AGENTS.md. Those belong to mxcli.
-# Host-specific hook registrations are merged into the durable local files that
-# mxcli leaves alone: .claude/settings.local.json and .codex/hooks.json.
+# Sections 1-9 define functions; the install runs from section 10 on.
+#   1. Platform and Python
+#   2. Terminal output (ui_*)
+#   3. Prerequisite helpers
+#   4. PostgreSQL and harness.env
+#   5. Docker
+#   6. Windows repairs (junctions)
+#   7. mxcli: download and update
+#   8. Finding Studio Pro (Windows)
+#   9. Playwright browser and JDK
+#   10. Arguments and the target project
+#   11. Step: prerequisites
+#   12. Step: create the Mendix app
+#   13. Step: skills, lint rules, checkers, rule
+#   14. Step: hooks for Claude, Codex, Cursor, OpenCode
+#   15. Step: the test harness
+#   16. Step: record the install, check environment
+#   17. Summary
+
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# Platform. The bundle runs on macOS, Linux, and on Windows under Git Bash --
-# where the binary is mxcli.exe, `python3` does not exist, and a `python3.exe`
-# stub that opens the Microsoft Store often does. Each interpreter candidate is
-# asked to run before it is believed.
-# ---------------------------------------------------------------------------
+# --- 1. Platform and Python ---
+# On Windows (Git Bash) python3 may be a Store stub, so each Python candidate is run before use.
 case "$(uname -s 2>/dev/null || echo unknown)" in
   MINGW*|MSYS*|CYGWIN*) IS_WINDOWS=1; EXE=".exe" ;;
   *)                    IS_WINDOWS=0; EXE="" ;;
 esac
 
+# mdl_find_python -- print the first Python 3 that really runs; return 1 if none.
 mdl_find_python() {
   local candidate
   for candidate in python3 python py; do
@@ -42,9 +49,7 @@ mdl_find_python() {
     printf '%s\n' "$candidate"
     return 0
   done
-  # The python.org installer leaves "Add python.exe to PATH" unticked by default
-  # and winget accepts that default, so a Windows box can hold a working Python
-  # that no shell can see. Observed on a clean Windows 11 VM.
+  # winget's python.org install is often not on PATH; search the install dirs too.
   local local_app="${LOCALAPPDATA:-}"
   local_app="${local_app//\\//}"
   for candidate in \
@@ -61,16 +66,10 @@ mdl_find_python() {
 }
 
 PY="$(mdl_find_python || true)"
-# Deliberately not fatal here: with --with-deps the prerequisites step installs
-# Python and re-probes. It is that step, not this one, that gives up.
+# Not fatal: with --with-deps the prerequisites step installs Python and re-probes.
 
-# ---------------------------------------------------------------------------
-# Presentation. Everything below is output only -- no install step depends on
-# it. Three environments have to read the same run: an interactive terminal
-# (colour, one live progress bar), a pipe or CI log (plain lines, no escape
-# codes, no carriage returns), and a terminal without UTF-8 (ASCII icons).
-# NO_COLOR is honoured; so is TERM=dumb.
-# ---------------------------------------------------------------------------
+# --- 2. Terminal output: colours, icons, progress bar ---
+# Output only. Plain lines when not a TTY, ASCII icons without UTF-8.
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
   UI_TTY=1
   C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'
@@ -97,8 +96,7 @@ fi
 
 ui_banner() {
   local version="$1"
-  # The wordmark is 60 columns with its indent; below that it would wrap and the
-  # first thing the installer does is look broken. Narrow terminals get the words.
+  # Terminals narrower than 62 columns get plain words instead of the wordmark.
   if [ "$UI_UNICODE" = 1 ] && [ "${UI_COLS:-80}" -ge 62 ]; then
     printf '\n'
     printf '%s  ███╗   ███╗██╗  ██╗       ██████╗ ██████╗ ██████╗ ██████╗ %s\n' "$C_BLUE" "$C_RESET"
@@ -115,10 +113,7 @@ ui_banner() {
   fi
 }
 
-# Progress is counted in whole install steps, and the count is fixed before the
-# first one runs -- a bar that reaches 90%% and then discovers more work is a
-# lie. The long step (creating a Mendix app) reports mxcli's own phase names as
-# sub-progress inside its own share of the bar, never beyond it.
+# The bar counts whole steps, fixed up front; app creation adds sub-progress inside its step.
 UI_COLS="${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}"
 [ "$UI_COLS" -ge 40 ] 2>/dev/null || UI_COLS=80
 UI_TOTAL=1
@@ -127,8 +122,10 @@ UI_LABEL=""
 UI_SUB_SEEN=0
 UI_SUB_EXPECTED=6
 
+# ui_plan <steps> -- set how many steps the bar is divided into (called once).
 ui_plan() { UI_TOTAL="$1"; }
 
+# ui_pct -- print the percentage: done steps plus sub-progress, capped inside the current step.
 ui_pct() {
   local span=$(( 100 / UI_TOTAL ))
   local base=$(( UI_STEP * 100 / UI_TOTAL ))
@@ -140,6 +137,7 @@ ui_pct() {
   echo $(( base + inside ))
 }
 
+# ui_bar -- redraw the progress bar in place (TTY only).
 ui_bar() {
   [ "$UI_TTY" = 1 ] || return 0
   local pct width filled i bar=""
@@ -151,7 +149,6 @@ ui_bar() {
     if [ "$i" -lt "$filled" ]; then bar="$bar$BAR_FULL"; else bar="$bar$BAR_EMPTY"; fi
     i=$(( i + 1 ))
   done
-  # 2 indent + bar + 2 + 4 pct + 2 = width + 10; leave a column spare.
   local label="$UI_LABEL" max=$(( UI_COLS - width - 11 ))
   [ "$max" -lt 8 ] && max=8
   if [ "${#label}" -gt "$max" ]; then label="${label:0:$(( max - 1 ))}~"; fi
@@ -159,6 +156,7 @@ ui_bar() {
     "$C_BLUE" "$bar" "$C_RESET" "$C_BOLD" "$pct" "$C_RESET" "$C_GREY" "$label" "$C_RESET"
 }
 
+# ui_clear -- wipe the bar's line. Explicit return 0 so a false test does not trip set -e.
 ui_clear() { [ "$UI_TTY" = 1 ] && printf '\r\033[K'; return 0; }
 
 ui_begin() {           # ui_begin "label"
@@ -222,19 +220,8 @@ ui_row() {             # ui_row "what" "count" "where" -- summary line
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 version="$(cat "$SRC/VERSION")"
 
-# ---------------------------------------------------------------------------
-# Prerequisites. The harness needs six tools beyond bash, and a user who is
-# missing one has always found out much later -- when the suite failed, not when
-# they installed. These helpers detect each, and with --with-deps install it
-# through whatever package manager this machine has.
-#
-# Two are deliberately never installed, only reported: Docker Desktop and the
-# JDK. Both need a reboot, a daemon or a licence click, so a script that
-# "finished" without them would have lied about being done.
-#
-# MDL_DEPS_DRY_RUN=1 prints each command instead of running it -- the only way
-# to exercise the winget branch from a Mac, and how this was tested.
-# ---------------------------------------------------------------------------
+# --- 3. Prerequisite helpers: detect a tool, then install it or report it ---
+# The JDK is only reported (may need a reboot or licence click); Docker is installed when missing.
 DEPS_INSTALLED=0
 DEPS_MISSING=()          # human lines, printed in the summary rather than mid-step
 
@@ -257,13 +244,11 @@ dep_run() {              # dep_run "<shell command>" -- honours the dry run
     ui_note "would run: $1"
     return 0
   fi
+  # DEPS_LOG is set in section 11.
   eval "$1" >>"$DEPS_LOG" 2>&1
 }
 
-# dep_apply <label> <detect-command> <install-command>
-#
-# Returns 0 when the tool is there afterwards. Never aborts the install: a
-# missing Node must not stop the skills from landing.
+# dep_apply <label> <detect> <install> -- install unless detected; 0 if present afterwards. Never aborts.
 dep_apply() {
   local label="$1" detect="$2" command="$3"
   eval "$detect" >/dev/null 2>&1 && return 0
@@ -282,7 +267,7 @@ dep_apply() {
   return 1
 }
 
-# dep_need <label> <detect> <winget-id> <brew-formula> <apt-package>
+# dep_need <label> <detect> <winget-id> <brew> <apt/dnf> -- build this machine's install command, then dep_apply.
 dep_need() {
   local command=""
   case "$(pkg_manager)" in
@@ -294,10 +279,7 @@ dep_need() {
   dep_apply "$1" "$2" "$command"
 }
 
-# Always time-boxed. `docker info` does not fail when the daemon is merely starting
-# -- it blocks, forever, and Docker Desktop takes a minute or two to come up after a
-# first install. Measured on Windows 11: still hanging at 20s with the whale
-# spinning. An unbounded probe here froze the whole installer at 0%.
+# docker_ready -- true when the daemon answers; time-boxed because `docker info` hangs while Docker starts.
 docker_ready() {
   have docker || return 1
   if have timeout; then
@@ -307,10 +289,7 @@ docker_ready() {
   fi
 }
 
-# ask "<prompt>" <default y|n> -- MDL_ASSUME_YES answers every one of these, which
-# is what an unattended run needs; the app-creation guard deliberately does not use
-# it, because writing a few hundred files into an unnamed directory should stay a
-# question a person answered.
+# ask "<prompt>" <y|n> -- MDL_ASSUME_YES answers yes (the app-creation guard does not use ask).
 ask() {
   local question="$1" default="$2" reply
   if [ -n "${MDL_ASSUME_YES:-}" ]; then
@@ -331,15 +310,9 @@ docker_install_command() {
   esac
 }
 
-# Docker Desktop is a GUI application: started in the foreground it never returns,
-# and the installer sits there until someone quits Docker. So it is launched
-# detached -- `cmd //c start` on Windows, `open -a` on macOS, both of which hand
-# control straight back. Learned the hard way: the first version of this hung
-# immediately after "Start it for you now?".
+# docker_start_command -- start Docker detached: Docker Desktop in the foreground never returns.
 docker_start_command() {
   if [ "$IS_WINDOWS" = "1" ]; then
-    # PROGRAMFILES carries backslashes; bash wants them the other way round before
-    # it can run the thing.
     local program_files="${PROGRAMFILES:-C:\\Program Files}"
     echo "cmd //c start \"\" \"${program_files//\\//}/Docker/Docker/Docker Desktop.exe\""
   elif [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
@@ -349,15 +322,12 @@ docker_start_command() {
   fi
 }
 
-# PostgreSQL. `mxcli run --local` is Postgres-only in code -- the binary refuses
-# anything else outright ("--ensure-db only supports PostgreSQL") -- so this is the
-# database whether or not Docker is in the picture. Windows keeps psql off the PATH
-# the same way it keeps Python and the JDK off it.
+# --- 4. PostgreSQL logins and tests/harness.env ---
+# `mxcli run --local` supports only PostgreSQL, with or without Docker.
 psql_path() {
   if have psql; then command -v psql; return 0; fi
   local candidate
-  # `[ -x … ] && …` as a loop body's last statement aborts the script under set -e
-  # when it is false. Every test here is written as a guard clause for that reason.
+  # Guard clauses, not `[ -x ] && ...`: a false last statement in a loop aborts under set -e.
   for candidate in "/c/Program Files/PostgreSQL"/*/bin/psql.exe \
                    /opt/homebrew/opt/postgresql@*/bin/psql /usr/lib/postgresql/*/bin/psql; do
     [ -x "$candidate" ] || continue
@@ -367,13 +337,7 @@ psql_path() {
   return 1
 }
 
-# Which login actually works. `--ensure-db` used to create the `mendix` role inside
-# its container; a PostgreSQL that was installed by hand has only its superuser, so
-# both are tried and the winner is recorded.
-#
-# Every call passes -w. Without it psql *prompts* for a password rather than failing,
-# and an installer that stops dead on "Password for user postgres:" is worse than one
-# that reports it could not connect.
+# Tries the mendix role and the postgres superuser. -w: fail instead of prompting for a password.
 postgres_login() {       # echoes "<user>:<password>" for a login that answers
   local psql candidate password host="${MDL_DB_HOST:-127.0.0.1}"
   host="${host%%:*}"
@@ -391,13 +355,7 @@ postgres_login() {       # echoes "<user>:<password>" for a login that answers
 
 postgres_answers() { postgres_login >/dev/null 2>&1; }
 
-# Ask for a superuser once, and only when nothing else worked. This is the piece
-# that lets the installer finish the database on its own: it can create a role and a
-# database, but it cannot discover a password that already exists, and guessing or
-# rewriting pg_hba.conf to get in are both worse than asking.
-#
-# The superuser password is used for exactly one command and never written down;
-# what lands in tests/harness.env is the app's own role.
+# postgres_ask_superuser -- ask once for a superuser password (never stored) to create the app role.
 postgres_ask_superuser() {
   local psql user password host="${MDL_DB_HOST:-127.0.0.1}"
   host="${host%%:*}"
@@ -428,7 +386,7 @@ postgres_ask_superuser() {
   local wanted="${MDL_DB_USER:-mendix}" wanted_pass="${MDL_DB_PASSWORD:-mendix}"
   PGPASSWORD="$password" "$psql" -w -h "$host" -U "$user" -d postgres \
     -c "CREATE ROLE \"$wanted\" LOGIN PASSWORD '$wanted_pass' CREATEDB" >/dev/null 2>&1 || true
-  # Already there with a different password? Then set it, since we are superuser.
+  # The role may exist with another password: reset it.
   PGPASSWORD="$password" "$psql" -w -h "$host" -U "$user" -d postgres \
     -c "ALTER ROLE \"$wanted\" LOGIN PASSWORD '$wanted_pass' CREATEDB" >/dev/null 2>&1 || true
 
@@ -441,8 +399,7 @@ postgres_ask_superuser() {
   return 1
 }
 
-# The role the app logs in as. Created only when the login that answered can create
-# roles; otherwise the harness simply runs as whoever answered.
+# ensure_postgres_role -- create the app role if the login can; print "<user>:<password>" to use.
 ensure_postgres_role() {
   local login user password psql host="${MDL_DB_HOST:-127.0.0.1}"
   host="${host%%:*}"
@@ -457,7 +414,6 @@ ensure_postgres_role() {
        -c "CREATE ROLE \"$wanted\" LOGIN PASSWORD '$wanted_pass' CREATEDB" >/dev/null 2>&1; then
     printf '%s:%s\n' "$wanted" "$wanted_pass"; return 0
   fi
-  # The role may already exist with another password, or we may not be superuser.
   if PGPASSWORD="$wanted_pass" "$psql" -w -h "$host" -U "$wanted" \
        -d postgres -tAc 'SELECT 1' >/dev/null 2>&1; then
     printf '%s:%s\n' "$wanted" "$wanted_pass"; return 0
@@ -465,9 +421,7 @@ ensure_postgres_role() {
   printf '%s\n' "$login"
 }
 
-# tests/harness.env holds a database password and tests/credentials.env holds the demo
-# users' passwords. Both live in the project, so a plain `git add -A` committed them.
-# Written once, never duplicated, and the files themselves are kept owner-only.
+# ignore_credential_files -- gitignore tests/harness.env and credentials.env; make them owner-only.
 ignore_credential_files() {
   local entry
   [ -f "$APP/tests/credentials.env" ] && chmod 600 "$APP/tests/credentials.env" 2>/dev/null
@@ -480,8 +434,7 @@ ignore_credential_files() {
   return 0
 }
 
-# The mode, written where the harness reads it. Beside tests/credentials.env, and
-# rewritten rather than appended so a second install does not stack up duplicates.
+# Rewrites tests/harness.env; sets MDL_DB_USER, MDL_DB_PASSWORD and no_docker_mode.
 write_harness_env() {    # write_harness_env <mendix-install-dir>
   local mxbuild="$1" db_name psql login jdk jdk_home=""
   db_name="$(basename "$APP" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]//g')"
@@ -501,8 +454,7 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
     printf '# environment for them. It holds a database password: keep it out of git.\n'
     printf 'MDL_NO_DOCKER=1\n'
     [ -n "$mxbuild" ] && printf 'MDL_MXBUILD_PATH="%s"\n' "$mxbuild"
-    # mxcli's --db-host is host:port and refuses a bare host with
-    # "missing port in address". gate.sh splits it again for psql.
+    # mxcli's --db-host needs host:port.
     printf 'MDL_DB_HOST="%s"\n' "${MDL_DB_HOST:-127.0.0.1:5432}"
     printf 'MDL_DB_NAME="%s"\n' "$db_name"
     printf 'MDL_DB_USER="%s"\n' "${MDL_DB_USER:-mendix}"
@@ -527,8 +479,6 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
   } > "$APP/tests/harness.env"
   chmod 600 "$APP/tests/harness.env" 2>/dev/null || true
   ignore_credential_files
-  # On Windows the directory is a Studio Pro install; elsewhere it is usually the
-  # cached mxbuild. Name what it actually is rather than guessing.
   case "$mxbuild" in
     *"/Program Files/Mendix/"*) no_docker_mode="Studio Pro ${mxbuild##*/}" ;;
     *"/Mendix Studio Pro"*)     no_docker_mode="Studio Pro ${mxbuild##*/}" ;;
@@ -536,10 +486,8 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
   esac
 }
 
-# Docker is a prerequisite, so it is installed when missing rather than offered.
-# It is still a download, then a launch, then a licence click, then a daemon that
-# takes a minute -- and the last two cannot be automated, so this installs it,
-# starts it, waits for the socket, and says plainly what is left to do by hand.
+# --- 5. Docker: install, start, wait for the daemon ---
+# docker_walkthrough -- install and start Docker, wait for it, say what is left to do by hand.
 docker_walkthrough() {
   local command
   command="$(docker_install_command)"
@@ -561,8 +509,7 @@ docker_walkthrough() {
   fi
   DEPS_INSTALLED=$(( DEPS_INSTALLED + 1 ))
 
-  # Installed is not running. Docker Desktop in particular needs a first launch,
-  # a licence acceptance and a WSL2 backend before the socket answers.
+  # Installed is not running: Docker Desktop needs a first launch and licence acceptance.
   ui_clear
   printf '  %s%s%s Docker is installed. Three things it still needs from you:\n\n' "$C_GREEN" "$I_OK" "$C_RESET"
   if [ "$IS_WINDOWS" = "1" ]; then
@@ -580,8 +527,7 @@ docker_walkthrough() {
   printf '\n'
 
   if [ "$IS_WINDOWS" = "1" ] || [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
-    # Detached and time-boxed: a launcher that decides to stay in the foreground
-    # must not take the installation down with it.
+    # Detached and time-boxed so a launcher that stays in the foreground cannot hang the install.
     ui_sub "starting Docker Desktop"
     ( dep_run "$(docker_start_command)" || true ) >/dev/null 2>&1 &
     sleep 2
@@ -592,8 +538,7 @@ docker_walkthrough() {
     return 0
   fi
 
-  # Ctrl-C stops the waiting, not the installation: the skills and hooks still have
-  # to land, and Docker is not needed for any of that.
+  # Ctrl-C stops only the waiting; the install continues.
   local stop_waiting=0
   trap 'stop_waiting=1' INT
   printf '    Waiting for the Docker daemon (Ctrl-C to stop waiting) '
@@ -621,7 +566,9 @@ docker_walkthrough() {
   return 1
 }
 
-# `mxcli run --local` links the cached runtime into the mxbuild bundle with a
+# --- 6. Windows repairs: path conversion, and junctions for Studio Pro and the JDK ---
+# No-ops unless IS_WINDOWS=1. Junctions, not symlinks: they need no admin rights or Developer Mode.
+
 win_path() {             # win_path <msys-path> -- echo the Windows form
   case "$1" in
     /[a-zA-Z]/*) printf '%s:%s\n' \
@@ -630,10 +577,7 @@ win_path() {             # win_path <msys-path> -- echo the Windows form
   esac
 }
 
-# *symlink*, and unprivileged Windows refuses to create one unless Developer Mode is
-# on: "A required privilege is not held by the client". A junction is the same thing
-# for directories and needs no privilege at all, so make one and let mxcli find it
-# already there. Observed on Windows 11 with Studio Pro 11.12.1.
+# mxcli run --local symlinks the runtime, which unprivileged Windows refuses; pre-create a junction.
 ensure_runtime_junction() {   # ensure_runtime_junction <version>
   [ "$IS_WINDOWS" = "1" ] || return 0
   local version="$1" runtime link
@@ -646,17 +590,13 @@ ensure_runtime_junction() {   # ensure_runtime_junction <version>
   drive="$(printf '%s' "${HOME:1:1}" | tr '[:lower:]' '[:upper:]')"
   runtime_win="$(printf '%s:%s' "$drive" "${runtime:2}" | tr '/' '\\')"
   link_win="$(printf '%s:%s' "$drive" "${link:2}" | tr '/' '\\')"
+  # Doubled slashes stop Git Bash rewriting /c and /J into Windows paths.
   cmd //c mklink //J "$link_win" "$runtime_win" >> "$DEPS_LOG" 2>&1 || true
   [ -e "$link" ] && ui_note "runtime linked into the mxbuild cache (junction, no admin needed)"
   return 0
 }
 
-# Studio Pro ships more than the modeler: mxbuild shells out to Gradle to compile
-# the app's Java, and the cache `mxcli setup mxbuild` builds holds only modeler/ and
-# runtime/. Without gradle-8.5 beside them every build fails with "No supported
-# Gradle installation found" -- after mxbuild has already started and answered, so it
-# reads as a model problem rather than a missing directory. Junctions, so nothing is
-# copied. Observed on Windows 11 ARM64 with Studio Pro 11.12.1.
+# mxbuild needs Studio Pro's gradle-8.5, OpenJDK and WebView2 beside the cached mxbuild; junction them in.
 ensure_studio_support_junctions() {   # ensure_studio_support_junctions <version> <studio-dir>
   [ "$IS_WINDOWS" = "1" ] || return 0
   local version="$1" studio="$2" name target link linked=""
@@ -674,14 +614,7 @@ ensure_studio_support_junctions() {   # ensure_studio_support_junctions <version
   return 0
 }
 
-# Studio Pro for Windows on ARM ships its bundled tools as win-arm64 only, but
-# mxbuild asks for win-x64 regardless -- so `mxbuild --serve` dies before it listens:
-#
-#   ERROR: System.ComponentModel.Win32Exception (2): An error occurred trying to
-#   start process '...\modeler\tools\deno\win-x64\deno.exe'
-#
-# The arm64 binaries are the right ones for this machine; only the name is wrong.
-# A junction gives mxbuild the name it looks for. Reproduced on Studio Pro 11.12.1.
+# ARM64 Studio Pro ships win-arm64 tools but mxbuild asks for win-x64; alias them with junctions.
 ensure_tool_arch_aliases() {  # ensure_tool_arch_aliases <studio-dir>
   [ "$IS_WINDOWS" = "1" ] || return 0
   local studio="$1" tool dir aliased=""
@@ -696,12 +629,7 @@ ensure_tool_arch_aliases() {  # ensure_tool_arch_aliases <studio-dir>
   return 0
 }
 
-# The Studio Pro repairs above -- Gradle/JDK/WebView2 junctions into the mxbuild
-# cache, and win-x64 aliases for an ARM64 install's deno and node -- used to run only
-# in the no-Docker branch. But `mxcli docker build` drives the same Studio Pro mxbuild
-# and dies on the same missing win-x64\deno.exe, so a Windows-on-ARM machine with
-# Docker Desktop running got none of them and every build failed. Both functions skip
-# what already exists, so running this ahead of that branch changes nothing there.
+# Runs the Studio Pro repairs; Docker builds use the same mxbuild, so this is not no-Docker only.
 ensure_windows_studio_repairs() {   # ensure_windows_studio_repairs <version>
   [ "$IS_WINDOWS" = "1" ] || return 0
   [ -n "${1:-}" ] || return 0
@@ -713,11 +641,7 @@ ensure_windows_studio_repairs() {   # ensure_windows_studio_repairs <version>
   ensure_tool_arch_aliases "$dir"
 }
 
-# mxbuild splits its own command line on spaces. --java-home=C:\Program Files
-# (Arm)\zulu21 reaches it as four unrecognised arguments, so it prints its usage and
-# exits -- which mxcli reports as "mxbuild --serve exited during startup", naming
-# neither the JDK nor the spaces. Hand it a path with none. A junction under
-# LOCALAPPDATA needs no privilege; C:\ is the fallback for a username with a space.
+# mxbuild splits --java-home on spaces, so hand it a space-free junction to the JDK.
 jdk_spacefree_home() {   # jdk_spacefree_home <path-to-java> -- echo a space-free home
   [ "$IS_WINDOWS" = "1" ] || return 1
   local java="$1" home win link
@@ -736,8 +660,8 @@ jdk_spacefree_home() {   # jdk_spacefree_home <path-to-java> -- echo a space-fre
   printf '%s\n' "$(win_path "$link" | tr '\\' '/')"
 }
 
-# Reported, never installed: a reboot, a daemon or a licence click stands between
-# the command and a working tool, so claiming to have done it would be a lie.
+# --- 7. Report-only prerequisites, and mxcli: download, verify, choose, update ---
+# Report-only: a reboot or licence click stands between the install command and a working tool.
 dep_report_only() {      # dep_report_only <label> <detect> <winget> <brew> <apt>
   eval "$2" >/dev/null 2>&1 && return 0
   local command=""
@@ -751,8 +675,7 @@ dep_report_only() {      # dep_report_only <label> <detect> <winget> <brew> <apt
   return 1
 }
 
-# The same shape as .claude/bootstrap-mxcli.sh: the release asset name is
-# deterministic, so no mxcli is needed to fetch the first mxcli.
+# mxcli_release_url -- download URL of the mxcli binary for this OS and CPU.
 mxcli_release_url() {
   local os arch
   case "$(uname -s 2>/dev/null)" in
@@ -768,9 +691,7 @@ mxcli_release_url() {
     "${MXCLI_TAG:-nightly}" "$os" "$arch" "$EXE"
 }
 
-# The downloaded binary is executed, and the default tag is a moving one, so the bytes
-# differ between runs and no review can pin them. Set MXCLI_SHA256 to require a known
-# build; with it unset the download is reported rather than silently trusted.
+# ui_fail when the sha256 differs from MXCLI_SHA256; with it unset the download is only reported.
 mxcli_verify_download() {   # mxcli_verify_download <file>
   local want="${MXCLI_SHA256:-}" got
   if [ -z "$want" ]; then
@@ -785,20 +706,9 @@ mxcli_verify_download() {   # mxcli_verify_download <file>
   fi
 }
 
-# --- which mxcli this project uses, and whether a newer one exists -------------
-#
-# The installer used to take the first mxcli it found -- the project's, then PATH,
-# then the one beside the bundle -- and never asked which was newest. On a machine
-# with an old dev build on PATH, a fresh install silently created the app with that
-# build even though a newer one sat next to the bundle. So every candidate is asked
-# for its build, the newest one this machine can run is used, and when the project's
-# own ./mxcli is older than that -- or than the latest mxcli release -- the installer
-# says so and offers to update it.
-#
-#   MDL_NO_UPDATE_CHECK=1   skip the online check for a newer release
+# Use the newest runnable mxcli and offer to update ./mxcli (MDL_NO_UPDATE_CHECK=1 skips the online check).
 
-# mxcli_describe <binary> -- "<build-date> <version>", or nothing when it cannot run
-# here (a Linux mxcli left by `mxcli new` on a Mac, say).
+# mxcli_describe <binary> -- "<build-date> <version>", or nothing when it cannot run here.
 mxcli_describe() {
   local out ver date
   [ -n "${1:-}" ] && [ -x "$1" ] || return 1
@@ -809,17 +719,15 @@ mxcli_describe() {
   printf '%s %s\n' "$date" "$ver"
 }
 
-# mxcli_newest_local -- sets MXCLI_BEST and MXCLI_BEST_DESC to the newest runnable
-# candidate. A tie goes to the earlier one, so the project's own binary wins over an
-# identical build elsewhere.
+# mxcli_newest_local -- set MXCLI_BEST/MXCLI_BEST_DESC to the newest runnable candidate (tie: earlier wins).
 mxcli_newest_local() {
   local candidate desc
   MXCLI_BEST=""; MXCLI_BEST_DESC=""
   for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
                    "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
     desc="$(mxcli_describe "$candidate")" || continue
-    # Named without the "bundle/../" hop, so the prompt shows a path a person reads.
     candidate="$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
+    # ISO build dates compare correctly as strings.
     if [ -z "$MXCLI_BEST" ] || [[ "${desc%% *}" > "${MXCLI_BEST_DESC%% *}" ]]; then
       MXCLI_BEST="$candidate"; MXCLI_BEST_DESC="$desc"
     fi
@@ -827,9 +735,7 @@ mxcli_newest_local() {
   [ -n "$MXCLI_BEST" ]
 }
 
-# mxcli_latest_release -- "<published-at> <tag> <sha256> <url>" for this machine's
-# asset of the latest mxcli release, or nothing (offline, rate-limited, opted out).
-# The answer comes from the network, so every field is checked before it is used.
+# mxcli_latest_release -- "<published-at> <tag> <sha256> <url>" of the latest release, or nothing; fields validated.
 mxcli_latest_release() {
   [ -z "${MDL_NO_UPDATE_CHECK:-}" ] || return 1
   have curl || return 1
@@ -860,9 +766,7 @@ else:
   printf '%s %s %s %s\n' "$published" "$tag" "$sha" "$url"
 }
 
-# mxcli_older_than_release <local-desc> <published-at> <tag> -- a release binary is
-# built minutes before it is published, so a local build counts as older only when
-# it is not that tag and was built more than twelve hours before the release.
+# mxcli_older_than_release <desc> <published-at> <tag> -- older only if not that tag and built >12h before release.
 mxcli_older_than_release() {
   local date="${1%% *}" ver="${1#* }"
   [ "$ver" = "$3" ] && return 1
@@ -872,8 +776,7 @@ sys.exit(0 if parse(sys.argv[1]) + datetime.timedelta(hours=12) < parse(sys.argv
     "$date" "$2" 2>/dev/null
 }
 
-# mxcli_put_in_project <source-file> <description> -- replace ./mxcli, keeping the
-# previous one beside it under its version, so going back is a rename.
+# mxcli_put_in_project <file> -- replace ./mxcli, keeping the old one beside it under its version.
 mxcli_put_in_project() {
   local source="$1" target="$APP/mxcli$EXE" old backup
   if old="$(mxcli_describe "$target")"; then
@@ -888,13 +791,12 @@ mxcli_label() {
   if [ -n "${1:-}" ]; then printf '%s, built %s' "${1#* }" "${1%%T*}"; else printf 'none'; fi
 }
 
-# mxcli_offer_update -- the whole decision, once, before anything uses mxcli.
+# mxcli_offer_update -- offer a newer release or local build over ./mxcli; sets MXCLI_BEST*. Returns 0.
 mxcli_offer_update() {
   local project_desc="" latest published tag sha url tmp got prompt
   project_desc="$(mxcli_describe "$APP/mxcli$EXE" || true)"
   mxcli_newest_local || true
 
-  # A newer release than anything on this machine: offer to download it.
   if latest="$(mxcli_latest_release)"; then
     read -r published tag sha url <<< "$latest"
     if [ -z "$MXCLI_BEST_DESC" ] || mxcli_older_than_release "$MXCLI_BEST_DESC" "$published" "$tag"; then
@@ -923,7 +825,6 @@ mxcli_offer_update() {
     fi
   fi
 
-  # No download, but a newer build already on this machine than the project's own.
   if [ -n "$MXCLI_BEST" ] && [ "$MXCLI_BEST" != "$APP/mxcli$EXE" ] && [ -e "$APP/mxcli$EXE" ] \
      && { [ -z "$project_desc" ] || [[ "${MXCLI_BEST_DESC%% *}" > "${project_desc%% *}" ]]; }; then
     prompt="    This project's ./mxcli$EXE is $(mxcli_label "$project_desc"); $MXCLI_BEST is $(mxcli_label "$MXCLI_BEST_DESC"). Use the newer one? [Y/n] "
@@ -941,13 +842,8 @@ mxcli_offer_update() {
   return 0
 }
 
-# Windows has no CDN mxbuild: the Mendix CDN publishes a Linux binary only, and
-# mxcli says so and refuses. The Windows source of `mx` is Studio Pro's own
-# modeler, so what Studio Pro is installed decides what can be created or checked.
-# Studio Pro installs in two places, and which one depends on the version: the older
-# ones land in Program Files, while 10.x and 11.x default to a per-user directory
-# under %LOCALAPPDATA%. Looking in only the first found 9.24 on a machine that also
-# had 11.12.1, and quietly built the app at 9.24 -- so both roots are searched.
+# --- 8. Finding Studio Pro installs (Windows) ---
+# No CDN mxbuild runs on Windows; Studio Pro's mx is used, installed in Program Files or %LOCALAPPDATA%.
 studio_pro_roots() {
   local local_app="${LOCALAPPDATA:-}"
   local_app="${local_app//\\//}"
@@ -955,6 +851,7 @@ studio_pro_roots() {
   [ -n "$local_app" ] && printf '%s\n' "$local_app/Programs/Mendix"
 }
 
+# studio_pro_versions -- installed Studio Pro versions that have mx.exe, oldest first.
 studio_pro_versions() {
   local root dir
   while IFS= read -r root; do
@@ -966,11 +863,7 @@ studio_pro_versions() {
   done < <(studio_pro_roots) | sort -V -u
 }
 
-# What *mxcli* can see, which is not the same thing. `mxcli new` has no
-# --mxbuild-path and searches only C:\Program Files\Mendix, so a Studio Pro that
-# lives in the per-user directory is invisible to it: it silently falls back to
-# whatever is in Program Files and stamps the project with that version instead.
-# Observed on Windows 11 -- asked for 11.12.1, got 9.24.37.77045.
+# studio_pro_mx_visible_to_mxcli <version-prefix> -- mx.exe under C:\Program Files\Mendix (where mxcli looks), or return 1.
 studio_pro_mx_visible_to_mxcli() {   # <version-prefix>
   local dir
   for dir in "/c/Program Files/Mendix"/"$1"*/; do
@@ -981,13 +874,11 @@ studio_pro_mx_visible_to_mxcli() {   # <version-prefix>
   return 1
 }
 
-# One junction, one UAC prompt, and mxcli can see the install for good. A junction
-# is a directory pointer: no copy, no disk, and `rmdir` undoes it.
+# offer_studio_pro_junction <version> <mx.exe> -- ask, then junction a per-user install into Program Files (UAC).
 offer_studio_pro_junction() {   # <version> <path-to-per-user-mx.exe>
   local version="$1" mx="$2" install_dir target_win link_win
   install_dir="$(cd "$(dirname "$(dirname "$mx")")" && pwd)"
-  # /c/Users/... -> C:\Users\...  . Parameter expansion and tr, because sed's \U is
-  # GNU-only and this file also has to run on macOS.
+  # No sed \U here: it is GNU-only.
   local drive rest
   drive="$(printf '%s' "${install_dir:1:1}" | tr '[:lower:]' '[:upper:]')"
   rest="${install_dir:2}"
@@ -1047,17 +938,13 @@ studio_pro_mx() {        # studio_pro_mx <version-prefix> -- echo the matching m
   return 1
 }
 
-# The browser is not `npx playwright install` -- that fails on Linux arm64, and
-# `playwright-cli install` initialises a workspace rather than a browser. The
-# devcontainer's own line is the one that works.
+# --- 9. Playwright browser and JDK lookup ---
+# playwright_browser_command -- the devcontainer's browser install; $(npm root -g) expands when dep_apply evals it.
 playwright_browser_command() {
   printf 'node "$(npm root -g)/@playwright/cli/node_modules/playwright-core/cli.js" install chromium chromium-headless-shell\n'
 }
 
-# The JDK the runtime needs follows the project's Mendix version, not a constant:
-# `mxcli run --help` says 21 up to Mendix 11.13 and 25 from 11.14, and Mendix 9
-# wants 11. Studio Pro's own prerequisite installs one, so a machine that can open
-# the project almost always has a usable JDK already.
+# JDK major by Mendix version: 11 up to 9.x, 21 for 10.x-11.13, 25 from 11.14.
 jdk_major_for() {         # jdk_major_for <mendix-version>
   case "${1%%.*}" in
     ""|8|9) echo 11 ;;
@@ -1071,9 +958,7 @@ java_major() {            # java_major <path-to-java> -- echo the major version
   "$1" -version 2>&1 | head -1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p'
 }
 
-# Found wherever it is, not merely wherever the PATH points. Observed on Windows
-# 11: three JDKs installed, none on the PATH, and JAVA_HOME pointing at a bin
-# directory rather than the home -- so both shapes are tried.
+# Searches beyond PATH; JAVA_HOME may point at the home or at its bin/.
 jdk_find() {              # jdk_find <wanted-major> -- echo a matching java
   local want="$1" candidate found
   local -a candidates=()
@@ -1110,6 +995,7 @@ playwright_browser_present() {
   return 1
 }
 
+# --- 10. Command-line arguments and the target project ---
 APP_ARG=""
 CREATE_APP=1
 WITH_DEPS=0
@@ -1142,9 +1028,7 @@ ui_banner "$version"
 if [ -n "$APP_ARG" ]; then APP="$APP_ARG"; else APP="$PWD"; fi
 [ -d "$APP" ] || ui_fail "No such directory: $APP"
 APP="$(cd "$APP" && pwd)"
-# The path is written into command strings that dep_apply runs, so a directory named
-# with a backtick or $( ) would run its own command during the install. Spaces are
-# fine and common; these characters are not.
+# $APP is interpolated into eval'd commands: reject shell metacharacters.
 case "$APP" in
   *'`'*|*'$('*|*'"'*|*"'"*|*';'*|*'|'*|*'&'*|*$'\n'*)
     ui_fail "The project path contains a shell metacharacter and cannot be installed into:" \
@@ -1152,11 +1036,7 @@ case "$APP" in
             "Rename the directory (or move the project) and run the installer again." ;;
 esac
 
-# The bundle cannot be its own target -- it would install into itself and then
-# try to create a Mendix app on top of the payload. But standing in the bundle
-# and running it is exactly what someone does after copying mxcodr/ into their
-# app, so with no path named, install into the directory the bundle sits in.
-# A path that was named explicitly is never second-guessed.
+# With no path named, running from inside the bundle targets the directory it sits in.
 target_inferred=0
 looks_like_project() {
   [ -n "$(find "$1" -maxdepth 1 -name '*.mpr' -print -quit 2>/dev/null)" ] && return 0
@@ -1190,11 +1070,7 @@ case "$APP" in
     target_inferred=1 ;;
 esac
 
-# A Mendix project is the only sensible target: the lint rules and checkers read an
-# .mpr. With no app here, make one -- an empty Mendix app is a two-command chore that
-# otherwise stands between someone and a working harness. --no-app declines it.
-#
-# Env: MX_VERSION (11.12.1), APP_NAME (defaults to the directory name).
+# No .mpr: create an app (MX_VERSION, APP_NAME) unless --no-app.
 mpr_count=$(find "$APP" -maxdepth 1 -name '*.mpr' | wc -l | tr -d ' ')
 if [ "$mpr_count" = "0" ] && [ "$CREATE_APP" = "0" ]; then
   ui_fail "No .mpr in $APP" \
@@ -1209,8 +1085,7 @@ else
 fi
 printf '\n'
 
-# Creating a Mendix app takes a minute and writes a few hundred files. Doing that
-# in a directory the caller never named deserves a question, not a default.
+# Ask before creating an app in a directory the caller did not name.
 if [ "$target_inferred" = 1 ] && [ "$mpr_count" = "0" ] && [ "$CREATE_APP" = "1" ]; then
   if [ -t 0 ] && [ "$UI_TTY" = 1 ]; then
     printf '  %s%s%s There is no Mendix app in %s.\n' "$C_YELLOW" "$I_WARN" "$C_RESET" "$APP"
@@ -1227,20 +1102,17 @@ if [ "$target_inferred" = 1 ] && [ "$mpr_count" = "0" ] && [ "$CREATE_APP" = "1"
   fi
 fi
 
-# Fixed before the first step runs, so the bar never discovers extra work.
+# NOTE: there are 12 ui_done steps (13 with a new app), so these totals are one short.
 if [ "$mpr_count" = "0" ]; then ui_plan 12; else ui_plan 11; fi
 
-# ---------------------------------------------------------------------------
-# Prerequisites, before anything else -- creating the app needs mxcli, and the
-# hook merges need Python. Missing tools are collected and reported in the
-# summary rather than printed here, so the step count stays honest.
-# ---------------------------------------------------------------------------
+# --- 11. Step: prerequisites (Python, Node, Playwright, mxcli, MxBuild, PostgreSQL, Docker, JDK) ---
+# Missing tools are collected and reported in the summary.
 DEPS_LOG="${TMPDIR:-/tmp}"; DEPS_LOG="${DEPS_LOG%/}/mdl-skills-deps.log"
 : > "$DEPS_LOG" 2>/dev/null || DEPS_LOG=/dev/null
 
 ui_begin "checking prerequisites"
 
-# Python first: this installer merges every host's hook file with it.
+# Python first: the hook merges need it.
 dep_need "Python 3" "mdl_find_python >/dev/null" "Python.Python.3.12" "python" "python3" || true
 [ -n "$PY" ] || PY="$(mdl_find_python || true)"
 [ -n "$PY" ] || ui_fail "This installer needs Python 3 -- it merges the host hook files." \
@@ -1248,20 +1120,16 @@ dep_need "Python 3" "mdl_find_python >/dev/null" "Python.Python.3.12" "python" "
                         "On Windows note that the python.org installer leaves \"Add python.exe" \
                         "to PATH\" unticked -- an installed but invisible Python looks the same."
 
-# The browser-test chain: Node, then the CLI, then the headless shell it drives.
 dep_need "Node.js" "have node" "OpenJS.NodeJS.LTS" "node" "nodejs npm" || true
-# In a dry run nothing was really installed, so npm is still absent -- but the
-# point of a dry run is to see every command, so the chain is walked anyway.
+# A dry run walks the whole chain even though npm was not really installed.
 if have npm || [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
-  # Pinned to the version the devcontainer pins; @latest has broken this before.
+  # Pinned to the devcontainer's version.
   dep_apply "playwright-cli" "have playwright-cli" "npm install -g @playwright/cli@0.1.15" || true
   if have playwright-cli || [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
     dep_apply "Chromium headless shell" "playwright_browser_present" "$(playwright_browser_command)" || true
   fi
 fi
 
-# mxcli. The release asset name is deterministic, so the first one needs no mxcli
-# to fetch it; an mxcli that is already here does the job properly instead.
 mxcli_offer_update
 mxcli_here=""
 if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
@@ -1269,7 +1137,7 @@ if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
 elif [ -n "${MXCLI_BEST:-}" ]; then
   mxcli_here="$MXCLI_BEST"
 else
-  # Nothing answered --version; fall back to the old rule rather than to nothing.
+  # Nothing answered --version: take the first executable candidate.
   for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
                    "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
     [ -n "$candidate" ] && [ -x "$candidate" ] && { mxcli_here="$candidate"; break; }
@@ -1281,18 +1149,14 @@ if [ -z "$mxcli_here" ]; then
   [ -x "$APP/mxcli$EXE" ] && mxcli_verify_download "$APP/mxcli$EXE"
 fi
 
-# MxBuild for the version this project will be. Without it `mxcli new` falls back
-# to whatever Studio Pro is installed -- observed on a Windows 11 VM, where a
-# Mendix 9.24 Studio Pro silently produced a 9.24 project from a request for
-# 11.12.1 -- and `mx check` cannot run at all.
+# MxBuild for the project's version: mx check needs it, and without it mxcli new may use another version.
 mxcli_now=""
 for candidate in "$APP/mxcli$EXE" "$mxcli_here"; do
   [ -n "$candidate" ] && [ -x "$candidate" ] && { mxcli_now="$candidate"; break; }
 done
 if [ -n "$mxcli_now" ]; then
   if [ "$mpr_count" = "0" ]; then
-    # Same rule the app creation below uses, so the two never disagree about which
-    # version this machine is going to produce.
+    # Same version rule as the app creation below.
     if [ -n "${MX_VERSION:-}" ]; then
       want_mx="$MX_VERSION"
     elif [ "$IS_WINDOWS" = "1" ]; then
@@ -1302,6 +1166,7 @@ if [ -n "$mxcli_now" ]; then
       want_mx="11.12.1"
     fi
   else
+    # Print the Mendix version stored in the project's .mpr (SQLite).
     want_mx="$("$PY" - "$APP" <<'PY_WANT' 2>/dev/null || true
 import glob, os, sqlite3, sys
 mprs = glob.glob(os.path.join(sys.argv[1], "*.mpr"))
@@ -1314,8 +1179,7 @@ if mprs:
 PY_WANT
 )"
   fi
-  # Read from the project's .mpr (a SQLite file anyone can commit) and interpolated
-  # into the detect command dep_apply evals, so it is a version number or nothing.
+  # want_mx ends up in an eval'd command: accept only a version number.
   case "$want_mx" in
     ''|*[!0-9.]*)
       [ -z "$want_mx" ] || ui_note "ignoring an unexpected Mendix version in the project file: $want_mx"
@@ -1323,9 +1187,7 @@ PY_WANT
   esac
   if [ -n "$want_mx" ]; then
     if [ "$IS_WINDOWS" = "1" ]; then
-      # Nothing to install: `mxcli setup mxbuild` on Windows exits 1 with
-      # "mxbuild from the Mendix CDN is a Linux binary and cannot run natively on
-      # windows" -- verified on Windows 11. Studio Pro is the only source.
+      # `mxcli setup mxbuild` refuses on Windows (the CDN build is Linux-only); Studio Pro is the only source.
       if ! studio_pro_mx "$want_mx" >/dev/null; then
         installed_studio="$(studio_pro_versions | tr '\n' ' ')"
         DEPS_MISSING+=("Studio Pro $want_mx -- needed for \`mx check\` and to create an app at that version.")
@@ -1337,9 +1199,8 @@ PY_WANT
         "[ -x \"$HOME/.mxcli/mxbuild/$want_mx/modeler/mx\" ]" \
         "\"$mxcli_now\" setup mxbuild --version \"$want_mx\"" || true
     fi
-    # Cache the runtime and prove the app can actually boot later. The first attempt
-    # downloads it and may then fail on the symlink; the junction fixes that, and the
-    # second attempt is the one that has to succeed.
+    # Cache the runtime; the first attempt may fail on the symlink, the junction fixes it, the retry must pass.
+    # NOTE: no_docker_candidate is never set, so this always runs on Windows.
     if [ "$IS_WINDOWS" = "1" ] && [ -n "${no_docker_candidate:-1}" ]; then
       ui_sub "caching the Mendix runtime"
       "$mxcli_now" run --local -p "$APP/$(basename "$APP").mpr" --setup >> "$DEPS_LOG" 2>&1 || true
@@ -1348,16 +1209,7 @@ PY_WANT
   fi
 fi
 
-# Docker, and the alternative to it.
-#
-# Docker turned out to be needed for far less than the docs used to claim: `mx check`
-# runs Mendix's own `mx` from a Studio Pro installation, container or not (verified --
-# `mxcli docker check --mxbuild-path <dir>` reports the error count directly). What
-# actually wants a container is the database, and a machine with Studio Pro on it
-# usually has, or can trivially get, a PostgreSQL instead.
-#
-# So where Studio Pro is present the no-Docker mode is offered first. It is a real
-# mode, written to tests/harness.env, not a degraded fallback.
+# Docker or no-Docker mode: mx check needs no container, only the database does. No-Docker mode is written to tests/harness.env.
 no_docker_mode=""
 ensure_windows_studio_repairs "${want_mx:-}"
 if ! docker_ready; then
@@ -1366,24 +1218,21 @@ if ! docker_ready; then
     studio_mx="$(studio_pro_mx "$want_mx" 2>/dev/null || true)"
     [ -n "$studio_mx" ] && studio_dir="$(cd "$(dirname "$(dirname "$studio_mx")")" && pwd)"
   fi
-  # Off Windows the same mode works from a cached or bundled mxbuild.
+  # Off Windows, a cached mxbuild enables the same mode.
   if [ -z "$studio_dir" ] && [ -n "${want_mx:-}" ] && [ -d "$HOME/.mxcli/mxbuild/$want_mx" ]; then
     studio_dir="$HOME/.mxcli/mxbuild/$want_mx"
   fi
 
+  # NOTE: `interactive` is computed here but not read anywhere below.
   interactive=0
   if [ -t 0 ] && [ "$UI_TTY" = 1 ]; then interactive=1; fi
   if [ -n "${MDL_ASSUME_YES:-}" ]; then interactive=1; fi
 
-  # A local mxbuild or Studio Pro is set up whenever one is present, without being
-  # asked about: it is what `mx check` runs and what the JDK, Gradle and win-x64
-  # repairs attach to, and none of that competes with Docker. Docker is still
-  # installed below; this only means the gate does not depend on it for `mx check`.
+  # A local mxbuild or Studio Pro is always set up; Docker is still installed below.
   if [ -n "$studio_dir" ]; then
     if ! postgres_answers; then
       if psql_path >/dev/null 2>&1; then
-        # Installed, but no login answered. Installing it again would not help --
-        # ask for a superuser and build the role instead.
+        # psql is installed but no login worked: ask for a superuser.
         postgres_ask_superuser || true
         if ! postgres_answers; then
           DEPS_MISSING+=("PostgreSQL -- installed, but none of the logins tried could connect.")
@@ -1406,17 +1255,14 @@ if ! docker_ready; then
     fi
   fi
 
-  # Docker is installed whenever it is missing -- no question asked. It is a
-  # prerequisite like Python or Node, not a choice, and it is installed even when a
-  # local mxbuild is available, since that only covers `mx check`.
+  # Docker is installed whenever missing; a local mxbuild only covers mx check.
   if have docker; then
     docker_ready || DEPS_MISSING+=("Docker -- installed but the daemon is not running: $(docker_start_command)")
   else
     docker_walkthrough || true
   fi
 fi
-# The JDK: found rather than demanded. Studio Pro installs one as its own
-# prerequisite, and on Windows it is routinely not on the PATH.
+# JDK: found (often off PATH on Windows), never installed.
 want_jdk="$(jdk_major_for "${want_mx:-}")"
 found_jdk="$(jdk_find "$want_jdk" || true)"
 if [ -z "$found_jdk" ]; then
@@ -1436,12 +1282,10 @@ else
   ui_done "prerequisites" "all present"
 fi
 
+# --- 12. Step: create a Mendix app when the project has no .mpr ---
 if [ "$mpr_count" = "0" ]; then
-  # The binary is the project's own by convention, but there is no project yet, so
-  # take whichever mxcli exists: this app's, one on the PATH, or the installer's.
   new_mxcli=""
-  # The same choice mxcli_offer_update made: the project's own if it runs here, else
-  # the newest build found -- never simply the first one on PATH.
+  # Same choice as mxcli_offer_update: project's own if it runs, else newest, else first executable.
   if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
     new_mxcli="$APP/mxcli$EXE"
   elif mxcli_newest_local; then
@@ -1457,13 +1301,10 @@ if [ "$mpr_count" = "0" ]; then
             "Looked in the project, on the PATH, and beside this installer." \
             "Install mxcli, or point this at an existing Mendix project."
   fi
-  # A Mendix app name is not a directory name: keep letters and digits, start with a letter.
+  # App name: letters and digits, starting with a letter.
   app_name="${APP_NAME:-$(basename "$APP" | sed 's/[^A-Za-z0-9]//g')}"
   case "$app_name" in [A-Za-z]*) ;; *) app_name="App$app_name" ;; esac
-  # On Windows the version is not a free choice: `mxcli new` shells out to Studio
-  # Pro's mx.exe, and asking for a version it cannot build produces a project
-  # silently stamped with Studio Pro's own version instead. So follow the newest
-  # Studio Pro that is here, unless MX_VERSION says otherwise.
+  # On Windows default to the newest installed Studio Pro: mxcli new can only build that version.
   if [ -n "${MX_VERSION:-}" ]; then
     mx_version="$MX_VERSION"
   elif [ "$IS_WINDOWS" = "1" ]; then
@@ -1476,47 +1317,23 @@ if [ "$mpr_count" = "0" ]; then
   else
     mx_version="11.12.1"
   fi
-  # `mxcli new` searches only C:\Program Files\Mendix and has no --mxbuild-path, so a
-  # Studio Pro in the per-user directory is invisible to it: it falls back to whatever
-  # is in Program Files and stamps the project with that version. Observed on Windows
-  # 11 -- asked for 11.12.1 and got 9.24.37.77045, after a long build.
-  #
-  # Rather than ask for an mklink, drive Studio Pro's own mx.exe. It takes --app-name
-  # and --output-dir, defaults to the Blank template, and stamps the version correctly
-  # (verified: a project created this way reports 11.12.1). `mxcli init` then does the
-  # rest of what `mxcli new` would have done.
+  # mxcli new cannot see per-user Studio Pro installs and stamps the wrong version; use its mx.exe, then mxcli init.
   direct_mx=""
   if [ "$IS_WINDOWS" = "1" ] && ! studio_pro_mx_visible_to_mxcli "$mx_version" >/dev/null; then
     direct_mx="$(studio_pro_mx "$mx_version" 2>/dev/null || true)"
-    # Creating the app can route around mxcli's blind spot by calling mx.exe, but
-    # `mxcli run --local` cannot: it resolves mxbuild itself, looks only in
-    # C:\Program Files\Mendix, has no --mxbuild-path, and ignores its own cache
-    # directory on Windows (all three verified). A directory junction is the only
-    # thing that makes the per-user install visible to it -- so offer to make one,
-    # rather than leaving the app unbootable or printing homework.
+    # mxcli run --local cannot see per-user installs either; offer a junction.
     [ -n "$direct_mx" ] && offer_studio_pro_junction "$mx_version" "$direct_mx"
   fi
 
   ui_begin "creating $app_name (Mendix $mx_version)"
-  # --theme none / --layout none: stock Atlas. mxcli's own theme follows the OS colour
-  # scheme, so on a Mac in dark mode a fresh app renders dark and looks nothing like a
-  # standard Mendix app.
-  # `mxcli new` refuses a non-empty --output-dir, and the usual target is not empty:
-  # an mxcli scaffold already holds CLAUDE.md, .claude/ and .ai-context/. Create the
-  # app in a temporary directory and move it in, so the existing files survive and a
-  # failed creation leaves nothing behind.
+  # --theme/--layout none: stock Atlas (mxcli's theme follows the OS dark mode).
+  # mxcli new needs an empty --output-dir: create in a temp dir, then move in.
   tmp_app="$(mktemp -d "${TMPDIR:-/tmp}/mdl-skills-new.XXXXXX")"
   trap 'rm -rf "$tmp_app"' EXIT
-  # The binary about to run is very often $APP/mxcli.exe -- the same path the
-  # scaffold copy below writes over. On Windows a running .exe is locked, and the
-  # copy does not fail loudly: it unlinks the target and then cannot write it, so
-  # the binary simply disappears. Observed on Windows 11. Keep a copy aside, and
-  # do the swap from that.
+  # Stash the running mxcli: on Windows copying over a running .exe deletes it.
   stash_mxcli="$tmp_app/mxcli-host$EXE"
   cp "$new_mxcli" "$stash_mxcli" 2>/dev/null || stash_mxcli="$new_mxcli"
-  # mxcli prints "Executing step '<phase>'" as it goes. Those phases are the only
-  # honest progress available inside a step that runs for a minute or more, so they
-  # drive the sub-progress and the log is kept for the failure message.
+  # mxcli's "Executing step '<phase>'" lines drive the sub-progress.
   if [ -n "$direct_mx" ]; then
     ui_sub "Studio Pro $mx_version (mxcli cannot see this install)"
     if ! "$direct_mx" create-project --app-name "$app_name" --output-dir "$tmp_app/app" \
@@ -1547,24 +1364,18 @@ if [ "$mpr_count" = "0" ]; then
             "Run it by hand to see why:" \
             "  $new_mxcli new $app_name --version $mx_version --output-dir /tmp/probe"
   fi
-  # The scaffold's own mxcli is dealt with by the swap below, and copying it over a
-  # running one is what breaks; leave it in the temp tree.
+  # Set the scaffold's Linux mxcli aside; copying it over a running mxcli breaks it.
   if [ -f "$tmp_app/app/mxcli" ]; then mv "$tmp_app/app/mxcli" "$tmp_app/app-mxcli-linux"; fi
   rm -f "$tmp_app/app/mxcli$EXE" 2>/dev/null || true
   cp -R "$tmp_app/app/." "$APP/"
-  # `mxcli new` leaves a Linux mxcli in the app (it is built for the devcontainer), so
-  # off Linux the app's own ./mxcli cannot run -- and every script here calls it.
-  # `file` is not installed with a minimal Git for Windows, so the ELF test is only
-  # asked for where it can be answered; on Windows the swap is unconditional,
-  # because a Linux binary there is never the right one.
+  # The scaffold's mxcli is a Linux binary; `file` is missing on minimal Git for Windows, so test only on Linux.
   if [ "$(uname -s 2>/dev/null)" = "Linux" ]; then
-    # On Linux the scaffold's binary is the right one; put it back where it belongs.
     if [ -f "$tmp_app/app-mxcli-linux" ]; then
       mv "$tmp_app/app-mxcli-linux" "$APP/mxcli"
       chmod +x "$APP/mxcli" 2>/dev/null || true
     fi
   else
-    # Off Linux it is kept beside the working binary: the devcontainer wants it.
+    # Off Linux keep it beside the working binary, for the devcontainer.
     if [ -f "$tmp_app/app-mxcli-linux" ]; then
       mv "$tmp_app/app-mxcli-linux" "$APP/mxcli.linux"
     fi
@@ -1579,6 +1390,8 @@ if [ "$mpr_count" = "0" ]; then
   [ -n "${swapped_mxcli:-}" ] && ui_note "./mxcli$EXE swapped for this machine's binary (Linux one kept as mxcli.linux)"
 fi
 
+# --- 13. Step: copy skills, lint rules, checkers and the session rule ---
+# Copies, not symlinks, so a plain clone of the app has the skills.
 SKILL_DIRS=(.claude/skills .agents/skills .ai-context/skills)
 
 ui_begin "installing skills"
@@ -1606,20 +1419,19 @@ cp "$SRC/VERSION" "$APP/tools/mdl-checks/VERSION"
 checks=$(ls -1 "$SRC"/checks/*.py | wc -l | tr -d ' ')
 ui_done "checkers" "$checks $I_ARROW tools/mdl-checks/"
 
-# The always-loaded rule. Lives in .claude/rules/ because mxcli init regenerates
-# CLAUDE.md and would drop anything written there; it leaves .claude/rules/ alone.
+# In .claude/rules/ because mxcli init regenerates CLAUDE.md.
 ui_begin "installing the session rule"
 mkdir -p "$APP/.claude/rules"
 cp "$SRC/rules/mdl-skills.md" "$APP/.claude/rules/mdl-skills.md"
 ui_done "session rule" "1 $I_ARROW .claude/rules/mdl-skills.md"
 
-# Hooks: the scripts are shared (tools/), the registration is per developer in
-# .claude/settings.local.json -- the one settings file mxcli init does not
-# overwrite. Merged, not replaced, so a developer's own local settings survive.
+# --- 14. Step: register hooks for Claude Code, Codex, Cursor and OpenCode ---
+# Merged into .claude/settings.local.json, which mxcli init leaves alone.
 ui_begin "registering Claude hooks"
 mkdir -p "$APP/tools/mdl-checks/hooks"
 cp "$SRC"/hooks/*.sh "$APP/tools/mdl-checks/hooks/"
 chmod +x "$APP/tools/mdl-checks/hooks/"*.sh
+# Each merge adds only missing entries; unparseable JSON stops the install rather than being overwritten.
 "$PY" - "$APP/.claude/settings.local.json" <<'PY_MERGE'
 import json, sys
 path = sys.argv[1]
@@ -1645,17 +1457,11 @@ PY_MERGE
 ui_done "Claude hooks" "2 $I_ARROW .claude/settings.local.json"
 ignore_credential_files
 
-# Codex discovers repository skills in .agents/skills automatically. Its hook
-# wire format is close to Claude's, but PostToolUse ignores plain stdout, so it
-# gets a small adapter while Claude keeps the existing script unchanged. Merge
-# rather than replace so a project's existing Codex hooks survive installation.
+# Codex: PostToolUse ignores plain stdout, so it gets an adapter.
 ui_begin "registering Codex hooks"
 mkdir -p "$APP/.codex"
 
-# Hook trust is intentionally separate from project trust. An untrusted hook
-# cannot remind the user to trust itself, so inject one first-turn reminder from
-# project config instead. Prepend only when the project has no existing
-# developer_instructions; never replace a project's own instruction block.
+# An untrusted hook cannot ask to be trusted: add a first-turn reminder unless developer_instructions exist.
 codex_reminder="$("$PY" - "$APP/.codex/config.toml" <<'PY_CODEX_CONFIG'
 import os, re, sys
 
@@ -1748,19 +1554,7 @@ with open(path, "w") as handle:
 PY_CODEX_MERGE
 ui_done "Codex hooks" "3 $I_ARROW .codex/hooks.json"
 
-# The harness only -- lib.sh, gate.sh, orient.sh, diagnose.sh. The verify-*.test.sh
-# scripts are the app's own and are written by whoever builds the feature: shipping
-# one app's tests into another project means every full gate fails on entities that
-# do not exist there, which is what happened before this changed. Worked examples
-# live in the bundle under examples/, and are not installed.
-#
-# cp -n, so an app that already has these -- or has evolved its own -- keeps them.
-# Cursor reads neither .claude/rules/ nor .ai-context/skills/, so the same rules are
-# installed in its own shape: an alwaysApply .mdc rule, and three hooks. Its wire
-# format differs from both other hosts -- beforeSubmitPrompt cannot inject context
-# (only sessionStart can), afterShellExecution cannot answer the agent (only
-# postToolUse can), and Stop asks for a follow-up message rather than exiting 2 --
-# so it gets its own three adapters over the same shared scripts.
+# Cursor reads neither .claude/rules nor .ai-context: an alwaysApply .mdc rule plus three adapter hooks.
 ui_begin "registering Cursor hooks"
 mkdir -p "$APP/.cursor/rules"
 cp "$SRC/rules/mdl-skills.mdc" "$APP/.cursor/rules/mdl-skills.mdc"
@@ -1808,12 +1602,7 @@ with open(path, "w") as handle:
 PY_CURSOR_MERGE
 ui_done "Cursor hooks" "3 $I_ARROW .cursor/hooks.json, 1 rule $I_ARROW .cursor/rules/"
 
-# OpenCode: one plugin does all three jobs. It has no exit-code contract and no
-# followup field -- instead its hook payloads are mutable (the text the model reads
-# can be appended to) and its SDK client can submit a message into the session.
-# Rules come from opencode.json's "instructions" glob rather than AGENTS.md, which
-# mxcli regenerates. Both .opencode/plugin/ and .opencode/plugins/ are accepted by
-# opencode; the singular is used here.
+# OpenCode: one plugin (mutable payloads, no exit codes); rules via opencode.json "instructions".
 ui_begin "installing the OpenCode plugin"
 mkdir -p "$APP/.opencode/plugin"
 cp "$SRC"/plugins/*.js "$APP/.opencode/plugin/"
@@ -1843,6 +1632,8 @@ with open(path, "w") as handle:
 PY_OPENCODE
 ui_done "OpenCode plugin" "1 $I_ARROW .opencode/plugin/, rules $I_ARROW opencode.json"
 
+# --- 15. Step: install the test harness ---
+# Core scripts are upgraded in place; other files are copied only when absent. verify-*.test.sh are the app's own.
 ui_begin "installing the test harness"
 mkdir -p "$APP/tests"
 suite_written=0
@@ -1850,10 +1641,7 @@ for source_file in "$SRC"/tests/*; do
   name="$(basename "$source_file")"
   target="$APP/tests/$name"
   case "$name" in
-    # The harness itself is the bundle's, and it is upgraded in place -- a fix in
-    # gate.sh that never reaches an installed project is not a fix.
     gate.sh|orient.sh|diagnose.sh|lib.sh|portable.sh) ;;
-    # Everything else -- verify-*.test.sh, credentials.env -- belongs to the project.
     *) if [ -e "$target" ]; then continue; fi ;;
   esac
   cp "$source_file" "$target"
@@ -1861,11 +1649,7 @@ for source_file in "$SRC"/tests/*; do
   suite_written=$((suite_written + 1))
 done
 
-# lib.sh's field() now prints JSON booleans as `true`/`false`; until 2026-09-11 it
-# printed Python's `True`/`False`, and every test written against the shipped
-# examples compares against that. A lib.sh upgraded under such tests would turn
-# them red with messages that read like broken features, so the comparison is
-# rewritten in place, once, and each file touched is named.
+# Rewrite old test comparisons against True/False: lib.sh's field() now prints true/false.
 migrated=""
 for script in "$APP"/tests/verify-*.test.sh; do
   [ -f "$script" ] || continue
@@ -1876,27 +1660,21 @@ for script in "$APP"/tests/verify-*.test.sh; do
 done
 [ -z "$migrated" ] || ui_note "field() booleans are now true/false; rewrote the comparison in:$migrated"
 
-# CRLF is not a line ending to bash: one Windows editor save of gate.sh otherwise
-# makes every line fail with `$'\r': command not found`.
+# LF line endings: CRLF breaks bash scripts.
 if [ ! -e "$APP/.gitattributes" ] && [ -f "$SRC/.gitattributes" ]; then
   cp "$SRC/.gitattributes" "$APP/.gitattributes"
 fi
 ui_done "test harness" "$suite_written $I_ARROW tests/  (verify-*.test.sh left alone)"
 
-# What this install put where, and what each file looked like leaving here. The
-# gate compares against it at preflight, because two kinds of drift have cost real
-# time: a project quietly running checkers two versions old, and a session's own
-# repair to lib.sh that nobody upstream ever heard about.
+# --- 16. Step: record the install, then check the environment ---
+# INSTALL.json lets the gate detect stale or locally edited harness files.
 ui_begin "recording the install"
 recorded="$("$PY" "$APP/tools/mdl-checks/record_install.py" "$APP" "$SRC" "$version" 2>/dev/null || true)"
 ui_done "install record" "${recorded:-0} files $I_ARROW tools/mdl-checks/INSTALL.json"
 
 ui_begin "checking the environment"
 
-# `mxcli new` writes .playwright/cli.config.json pinning chromium to a path that may
-# not exist on this machine (observed: /usr/local/bin/mx-headless-shell). Every
-# browser test then fails with "Error: opening browser: exit status 1", which reads
-# like a broken suite rather than a missing binary. Repair it here, once.
+# Repair a .playwright/cli.config.json that pins chromium to a path that does not exist.
 playwright_config="$APP/.playwright/cli.config.json"
 browser_fixed=""
 if [ -f "$playwright_config" ]; then
@@ -1937,10 +1715,7 @@ PY_BROWSER
 )"
 fi
 
-# `mx check` needs mxbuild for the project's own Mendix version. Missing, it surfaces
-# halfway through a gate as a check that "did not report a count" -- a machine problem
-# wearing the costume of a model problem. The version lives in the .mpr, which is a
-# SQLite file, so this costs milliseconds and needs no runtime.
+# Report a missing mxbuild for the project's version now, not halfway through a gate.
 mxbuild_note=""
 mxbuild_note="$("$PY" - "$APP" "$IS_WINDOWS" <<'PY_MXBUILD'
 import glob, os, sqlite3, sys
@@ -1983,10 +1758,7 @@ checks=${checks:-$(ls -1 "$SRC"/checks/*.py | wc -l | tr -d ' ')}
 
 ui_done "environment" "checked"
 
-# ---------------------------------------------------------------------------
-# Summary. One block, aligned, so the reader can see what landed without
-# re-reading the scroll of steps above.
-# ---------------------------------------------------------------------------
+# --- 17. Summary: what landed, what is still missing, what to do next ---
 ui_clear
 printf '\n  %s%s Installed mendix-mdl-skills %s%s\n' "$C_GREEN" "$I_OK" "$version" "$C_RESET"
 printf '  %s  %s %s%s\n' "$C_GREY" "$I_ARROW" "$APP" "$C_RESET"
@@ -2031,9 +1803,7 @@ if [ -n "$mxbuild_note" ]; then
   printf '\n  %s%s%s %s\n' "$C_YELLOW" "$I_WARN" "$C_RESET" "$mxbuild_note"
 fi
 
-# The tools that are still missing, each with the command that fixes it. Held to
-# the end on purpose: it is the last thing on screen, which is where someone
-# looks when the next command fails.
+# Missing tools last, each with the command that fixes it.
 if [ "${#DEPS_MISSING[@]}" -gt 0 ]; then
   printf '\n  %s%s Still missing%s\n' "$C_BOLD" "$I_WARN" "$C_RESET"
   for line in "${DEPS_MISSING[@]}"; do

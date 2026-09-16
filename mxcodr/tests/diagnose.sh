@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# Why is that row not on the page? -- every fact worth having, in one call.
-#
-#   bash tests/diagnose.sh                     # the standard picture
-#   bash tests/diagnose.sh Invoice             # plus access rules and XPath for one entity
-#   bash tests/diagnose.sh Invoice demo_customer   # plus that user's roles
-#
-# This exists because diagnosing a red test used to cost three or four round trips
-# (row counts, then the user link, then the access rules), and a shell round trip in
-# an agent session has a 1.9s median while the queries themselves cost 0.02s. The
-# lookups are independent, so they run concurrently and the whole thing is ~1s.
-#
-# Facts, not judgement: nothing here decides what is wrong, it just stops the model
-# guessing about state it can cheaply know.
+# diagnose.sh -- state facts for a red test: security, row counts, live sessions, runtime
+# errors, and optionally one entity's access and one user's roles. Changes nothing.
+#   bash tests/diagnose.sh [Entity] [user]    (pass "" as Entity to skip it)
+# Env: RUNTIME_LOG, ADMIN_PORT (8090), ADMIN_PASSWORD, APP_PORT. Exit 2 without a .mpr, else 0.
+# Lookups run in parallel into numbered files; no set -e so one failure doesn't stop the rest.
 set -uo pipefail
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,6 +18,7 @@ RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
 WORK="$(mdl_tmpdir mdl-diagnose)"
 trap 'rm -rf "$WORK"' EXIT
 
+# The app's own modules: not System, MyFirstModule or Marketplace (those have a Source).
 module_list() {
   "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null \
     | "$PY" -c 'import json,sys
@@ -34,7 +27,6 @@ for row in json.load(sys.stdin):
         print(row["Module"])' 2>/dev/null
 }
 
-# --- every fact as its own background job ------------------------------------
 {
   echo "== security"
   "$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>&1 | grep -iE 'security level|demo users|guest|admin user'
@@ -43,8 +35,7 @@ for row in json.load(sys.stdin):
 
 {
   echo "== rows in the database"
-  # OQL reads through the running runtime: with the app down every count comes back
-  # empty, and "0 invoices" would read as missing data rather than a missing app.
+  # OQL needs the runtime: with the app down, counts would read as missing data.
   probe="$("$MXCLI" oql -p "$MPR" --json "SELECT COUNT(*) AS n FROM System.User" 2>&1)"
   case "$probe" in
     *'"n"'*) ;;
@@ -53,7 +44,6 @@ for row in json.load(sys.stdin):
        exit 0 ;;
   esac
   for module in $(module_list); do
-    # SHOW ENTITIES reports the qualified name in "Entity" and the kind in "Type".
     "$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $module" 2>/dev/null \
       | "$PY" -c 'import json,sys
 for row in json.load(sys.stdin):
@@ -128,6 +118,5 @@ fi
 wait
 cat "$WORK"/[0-9]-* 2>/dev/null
 
-# Last, because it is usually silent: a local database a deploy build left
-# half-written, or a lock a killed runtime left behind.
+# Last, as it is usually silent: a half-written or locked local database.
 mdl_check_local_database

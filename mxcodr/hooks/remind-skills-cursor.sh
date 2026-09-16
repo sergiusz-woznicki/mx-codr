@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# Cursor sessionStart hook. Cursor has no per-prompt injection point --
-# beforeSubmitPrompt can only allow or block a prompt, it cannot add context --
-# so the rules are stated once, at the start of the session, through
-# additional_context. The .cursor/rules/mdl-skills.mdc rule (alwaysApply) is what
-# keeps them attached to every later request.
-#
-# Output contract: JSON on stdout, exit 0.
+# Cursor sessionStart hook (Cursor has no per-prompt context injection): prints {"additional_context": "<rules>"}. Exit 0.
+# .cursor/rules/mdl-skills.mdc keeps the rules attached to later requests.
 set -uo pipefail
 
-# Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
-# Microsoft Store instead of running anything is common, so each candidate is asked
-# to run before it is believed. Inlined rather than sourced: a hook has to work with
-# nothing else on disk but itself.
+# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
 mdl_find_python() {
   local candidate
   for candidate in python3 python py; do
@@ -20,9 +12,7 @@ mdl_find_python() {
     printf '%s\n' "$candidate"
     return 0
   done
-  # The python.org installer leaves "Add python.exe to PATH" unticked by default
-  # and winget accepts that default, so a Windows box can hold a working Python
-  # that no shell can see. Observed on a clean Windows 11 VM.
+  # The python.org installer does not add Python to PATH by default.
   local local_app="${LOCALAPPDATA:-}"
   local_app="${local_app//\\//}"
   for candidate in \

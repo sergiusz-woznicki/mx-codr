@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.ACT_Customer_ShowUnpaid, InvoiceDesk.SUB_Invoice_CountUnpaid
-#
-# The customer list reports how many of a customer's invoices are still owed. The
-# expected number comes from the invoices themselves, so the count is checked
-# against the data rather than against a hard-coded figure.
+# The customer list reports the unpaid invoice count the database holds.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 

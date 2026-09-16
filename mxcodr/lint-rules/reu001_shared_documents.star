@@ -1,12 +1,5 @@
-# REU001: Shared Documents
-#
-# The reuse-and-snippets rules that the model can actually answer:
-#   - a snippet exists to be used more than once
-#   - a SUB_ microflow with fewer than two callers is an extra hop, not reuse
-#
-# Both are reference counts, so this is the Starlark twin of the reuse half of
-# tests/skills/check_mdl.py. Requires FULL catalog for refs_to(); mxcli lint
-# detects that and builds it automatically.
+# REU001: reports snippets used by fewer than two documents and SUB_ microflows with fewer than two callers.
+# Loaded by `mxcli lint`; severity info, never fails. refs_to() needs the FULL catalog, which mxcli lint builds.
 
 RULE_ID = "REU001"
 RULE_NAME = "SharedDocuments"
@@ -14,6 +7,7 @@ DESCRIPTION = "A snippet is used on more than one page, and a SUB_ microflow has
 CATEGORY = "architecture"
 SEVERITY = "info"
 
+# Mendix and Marketplace modules.
 SKIP_MODULES = [
     "System",
     "Atlas_Core",
@@ -26,7 +20,7 @@ SKIP_MODULES = [
     "Administration",
 ]
 
-# Reference kinds that mean "something runs this microflow".
+# Reference kinds that run a microflow; snippets count any kind (None).
 CALL_KINDS = ["call", "schedule", "datasource", "action", "calculate"]
 
 def distinct_sources(references, kinds):

@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.ACT_Invoice_Escalate
-#
-# Escalate writes the invoice off and explains what that means. It acts on a
-# seeded invoice that verify-000-reset restores, so no invoice is created here.
+# Escalate writes a seeded invoice off and explains what that means.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 

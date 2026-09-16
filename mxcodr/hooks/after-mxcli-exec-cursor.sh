@@ -1,26 +1,13 @@
 #!/usr/bin/env bash
-# Cursor postToolUse hook. afterShellExecution sees the command and its output but
-# is fire-and-forget -- it cannot talk back to the agent -- so coverage feedback
-# goes through postToolUse, which returns additional_context that lands in the
-# conversation.
-#
-# postToolUse supports no matcher, so this fires after every tool call and filters
-# for `mxcli exec` itself. The filter reads the whole stdin payload rather than one
-# named field: the terminal command sits in tool_input, whose shape differs between
-# Cursor's shell tool versions, and a missed field would silently disable coverage.
-#
-# Output contract: JSON on stdout, exit 0. Exit codes do not carry meaning here.
+# Cursor postToolUse hook (no matcher, so it filters for `mxcli exec` itself): marks the conversation
+# for stop-gate-cursor.sh and prints {"additional_context": "<after-mxcli-exec.sh output>"}, or {}. Exit 0.
 set -uo pipefail
 
-# Almost every event is not an `mxcli exec`; answer that on the raw text before
-# looking for a Python to parse it with (see after-mxcli-exec.sh).
+# Cheap substring test first: almost no event is an `mxcli exec`.
 input="$(cat)"
 case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
 
-# Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
-# Microsoft Store instead of running anything is common, so each candidate is asked
-# to run before it is believed. Inlined rather than sourced: a hook has to work with
-# nothing else on disk but itself.
+# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
 mdl_find_python() {
   local candidate
   for candidate in python3 python py; do
@@ -29,9 +16,7 @@ mdl_find_python() {
     printf '%s\n' "$candidate"
     return 0
   done
-  # The python.org installer leaves "Add python.exe to PATH" unticked by default
-  # and winget accepts that default, so a Windows box can hold a working Python
-  # that no shell can see. Observed on a clean Windows 11 VM.
+  # The python.org installer does not add Python to PATH by default.
   local local_app="${LOCALAPPDATA:-}"
   local_app="${local_app//\\//}"
   for candidate in \
@@ -50,8 +35,7 @@ PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
 
-# Resolved before anything changes directory: BASH_SOURCE may be relative, and the
-# cwd moves to the project below.
+# Resolve before cd: BASH_SOURCE may be relative.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 emit() {  # emit "<text>" -- or nothing at all when there is nothing to say
@@ -60,6 +44,7 @@ emit() {  # emit "<text>" -- or nothing at all when there is nothing to say
   exit 0
 }
 
+# Move to the project the event is about: the reported cwd, then its git root.
 cwd="$(printf '%s' "$input" | "$PY" -c 'import json,sys
 try: print(json.load(sys.stdin).get("cwd") or "")
 except Exception: print("")' 2>/dev/null)"
@@ -67,9 +52,7 @@ except Exception: print("")' 2>/dev/null)"
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$repo_root" 2>/dev/null || true
 
-# Remember that this session changed the model, so the stop hook knows whether the
-# full gate is owed. Keyed by conversation, and the file records the project, so a
-# marker from another checkout cannot gate this one.
+# Marker per conversation, recording the project, so the stop hook knows the gate is owed.
 conversation="$(printf '%s' "$input" | "$PY" -c 'import json,sys
 try: print(json.load(sys.stdin).get("conversation_id") or "")
 except Exception: print("")' 2>/dev/null)"
@@ -83,14 +66,8 @@ fi
 
 [ -f "$script_dir/after-mxcli-exec.sh" ] || emit ""
 
-# The shared script reads a Claude-shaped payload and reports failures on stdout.
-# Hand it the command it expects rather than duplicating the coverage logic.
-# The real command, so the shared hook can tell a logic change from an entity or
-# security change. Cursor's shell tool has moved tool_input's shape around, so it
-# is lifted out of the raw payload rather than read from a named field.
-# Found by walking the parsed payload for the string that holds the exec, then
-# re-encoded with json.dumps -- the old grep stopped at the first escaped quote, so
-# `./mxcli exec "x.mdl"` arrived as `./mxcli exec \` and printf built invalid JSON.
+# Build a Claude-shaped payload for the shared hook; the command is found anywhere in the event
+# because tool_input's shape varies across Cursor versions.
 _payload="$(printf '%s' "$input" | "$PY" -c 'import json, sys
 def strings(value):
     if isinstance(value, str):

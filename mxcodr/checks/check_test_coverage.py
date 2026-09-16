@@ -1,32 +1,10 @@
 #!/usr/bin/env python3
-"""Check that every user-facing feature in a module has an end-to-end test.
+"""Check that every page and ACT_ microflow of a module is named by a `# covers:` line in tests/verify-*.test.sh.
 
-The inventory comes from the model itself, never from a hand-kept list: pages and
-`ACT_` microflows are the surface a user can actually reach, so each one needs a
-`tests/verify-*.test.sh` script that names it.
-
-A script declares what it exercises in a header comment, which is the whole
-contract:
-
-    #!/usr/bin/env bash
-    # covers: InvoiceDesk.Invoice_Overview, InvoiceDesk.ACT_Invoice_SendReminder
-
-Two things fail the check: an element no test covers, and a `covers:` naming an
-element that is not in the model any more -- a test left behind after a rename,
-which otherwise keeps passing while testing nothing.
-
-A module with no page and no ACT_ microflow has nothing a user can reach, and
-passes. A model that cannot be read is neither a pass nor a finding: the check
-prints ERROR and exits 2.
-
-Every module to check can be named in one call, and should be. A test may cover a
-page in another module; whether that claim is real or left behind by a rename can
-only be told against the whole project, so the stale-claim check always reads
-every user module, whichever modules were asked about.
-
-    check_test_coverage.py <app-dir> <Module> [<Module>...] [--tests-dir tests] [--json]
-
-Exit 0 all covered, 1 something uncovered or stale, 2 the model could not be read.
+Also fails on covers: names no longer in the model. Run by tests/gate.sh, tests/orient.sh and the exec hook.
+Usage: check_test_coverage.py <app-dir> <Module> [<Module>...] [--tests-dir tests] [--json]
+--json keys: verdict, module, elements, tests, untested, stale_covers (several modules: modules, stale_covers).
+Exit: 0 all covered, 1 something uncovered or stale, 2 the model could not be read.
 """
 
 from __future__ import annotations
@@ -39,11 +17,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+# `# covers: A, B, C`; group 1 is the comma list.
 COVERS_RE = re.compile(r"^\s*#\s*covers\s*:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
 
 
 def mxcli_binary(app_dir: Path) -> str:
-    """The project's own mxcli, under whichever name this platform uses."""
     if (app_dir / "mxcli").exists():
         return "./mxcli"
     if (app_dir / "mxcli.exe").exists():
@@ -52,24 +30,18 @@ def mxcli_binary(app_dir: Path) -> str:
 
 
 class ModelReadError(RuntimeError):
-    """The model could not be read -- which is not the same as an empty module."""
+    """The model could not be read (distinct from an empty module)."""
 
 
 def mxcli_json(app_dir: Path, mpr: str, command: str) -> list[dict]:
-    """Run one MDL command and read its --json rows.
-
-    A failed command used to come back as an empty list, so an unreadable model
-    looked exactly like a module with nothing in it. It raises instead.
-    """
+    """Rows of one MDL command's --json output; raises ModelReadError rather than returning []."""
     try:
         result = subprocess.run(
             [mxcli_binary(app_dir), "-p", mpr, "--json", "-c", command],
             cwd=app_dir,
             capture_output=True,
             text=True,
-            # The exec hook runs this checker after every terminal command, so an
-            # mxcli that never returns would hold the agent's turn open with no
-            # message. A read of the model takes well under a second.
+            # Runs after every command via the exec hook; a hung mxcli must not block the turn.
             timeout=float(os.environ.get("MDL_MXCLI_TIMEOUT", "120")),
         )
     except subprocess.TimeoutExpired as exc:
@@ -89,7 +61,7 @@ def mxcli_json(app_dir: Path, mpr: str, command: str) -> list[dict]:
 
 
 def project_modules(app_dir: Path, mpr: str) -> tuple[set[str], list[str]]:
-    """Every module name in the model, and the ones that are the project's own."""
+    """(all module names, the project's own modules)."""
     rows = mxcli_json(app_dir, mpr, "SHOW MODULES")
     every = {row.get("Module") for row in rows if row.get("Module")}
     own = sorted(
@@ -112,13 +84,7 @@ def qualified_names(rows: list[dict]) -> list[str]:
 
 
 def inventory(app_dir: Path, mpr: str, module: str) -> tuple[list[str], set[str]]:
-    """Two sets: what must be covered, and what may legitimately be named.
-
-    Required is the surface a user can reach -- every page and every ACT_
-    microflow. Known is everything a test could reasonably say it exercises, so a
-    `covers:` naming a SUB_ or VAL_ flow is extra credit rather than an error;
-    only a name that is in neither is a test left behind by a rename.
-    """
+    """(required: pages and ACT_ microflows, known: any page, microflow or snippet a test may name)."""
     pages = qualified_names(mxcli_json(app_dir, mpr, f"SHOW PAGES IN {module}"))
     flows = qualified_names(mxcli_json(app_dir, mpr, f"SHOW MICROFLOWS IN {module}"))
     snippets = qualified_names(mxcli_json(app_dir, mpr, f"SHOW SNIPPETS IN {module}"))
@@ -128,7 +94,6 @@ def inventory(app_dir: Path, mpr: str, module: str) -> tuple[list[str], set[str]
 
 
 def covered(tests_dir: Path) -> dict[str, list[str]]:
-    """Element -> the test scripts claiming to cover it."""
     claims: dict[str, list[str]] = {}
     if not tests_dir.is_dir():
         return claims
@@ -183,8 +148,7 @@ def main() -> int:
         untested = [element for element in required if element not in claims]
         prefix = module + "."
         mine = [name for name in stale if name.startswith(prefix)]
-        # A stale claim naming no module being checked -- a typo, a deleted module --
-        # still has to fail somewhere. With one module asked about, it is that one's.
+        # With one module, every stale claim is reported under it.
         if len(args.modules) == 1:
             mine = stale
         reports.append({
@@ -196,6 +160,7 @@ def main() -> int:
             "untested": untested,
             "stale_covers": mine,
         })
+    # With several modules, stale names outside all of them are reported once, separately.
     orphans = [] if len(args.modules) == 1 else [
         name for name in stale if name.split(".")[0] not in checked]
 

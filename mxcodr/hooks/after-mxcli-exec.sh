@@ -1,22 +1,13 @@
 #!/usr/bin/env bash
-# PostToolUse hook (matcher: Bash). After any `mxcli exec` that wrote the model,
-# run the test-coverage check for every user module and feed the result back as
-# context. The model still decides what to do with it -- but it can no longer
-# claim not to have known.
+# Claude Code PostToolUse hook (matcher Bash); also run from the project root by the Codex/Cursor adapters
+# and the OpenCode plugin with a Claude-shaped payload. After an `mxcli exec` prints restart advice (if the
+# app answers on $APP_PORT or 8080) and any failing coverage report; otherwise nothing. Exit 0.
 
-# This hook runs after EVERY Bash tool call, and almost none of them are an
-# `mxcli exec`. So the cheap question comes first, on the raw event, before any
-# Python is looked for: a plain substring test costs nothing, the Python probe
-# below runs up to three interpreters. (A false positive here -- the words in a
-# comment, say -- only means the precise check below runs; a miss is impossible,
-# since the command text is inside the event.)
+# Cheap substring test first: almost no Bash call is an `mxcli exec`.
 input="$(cat)"
 case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 
-# Windows (Git Bash) has no `python3`, and a `python3.exe` stub that opens the
-# Microsoft Store instead of running anything is common, so each candidate is asked
-# to run before it is believed. Inlined rather than sourced: a hook has to work with
-# nothing else on disk but itself.
+# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
 mdl_find_python() {
   local candidate
   for candidate in python3 python py; do
@@ -25,9 +16,7 @@ mdl_find_python() {
     printf '%s\n' "$candidate"
     return 0
   done
-  # The python.org installer leaves "Add python.exe to PATH" unticked by default
-  # and winget accepts that default, so a Windows box can hold a working Python
-  # that no shell can see. Observed on a clean Windows 11 VM.
+  # The python.org installer does not add Python to PATH by default.
   local local_app="${LOCALAPPDATA:-}"
   local_app="${local_app//\\//}"
   for candidate in \
@@ -46,28 +35,16 @@ PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
 command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
-# Only a real model write. Matching read-only queries too (mxcli -c "SHOW ...")
-# ran the coverage checker after every lookup a session made, for nothing.
+# Precise check on the command field; read-only `mxcli -c` queries are skipped.
 case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
-# --- does the running app still match the model? -----------------------------
-# Entity, association, enumeration and security changes do NOT hot-apply: the
-# runtime keeps serving the model it booted with, so a correct fix reads as a
-# failing feature -- one session chased that twice. Microflow, page, nanoflow and
-# snippet changes DO hot-apply under `mxcli run --watch`, in about two seconds,
-# and restarting for those costs ~35s each -- another session did it ten times.
-# One line, saying which of the two this exec was.
+# Restart advice: schema, module and security changes need a reboot; logic and pages hot-apply under `mxcli run --watch`.
 _app_running=0
 for _port in "${APP_PORT:-8081}" 8080; do
   [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 "http://localhost:$_port/" 2>/dev/null)" = "200" ] \
     && { _app_running=1; break; }
 done
 if [ "$_app_running" = "1" ]; then
-  # What the exec actually carried. The command is split the way a shell splits it
-  # -- by Python's shlex, which parses and never runs anything -- so a quoted path is
-  # a path, not a word with quote marks on it, and a glob is expanded. Every .mdl it
-  # names is read. A name that cannot be opened means the hook does not know what
-  # changed, and it says so instead of guessing: a wrong "no restart needed" is what
-  # sent one session chasing a correct fix for twenty minutes.
+  # Split the command like a shell (shlex, no execution; globs expanded) and read every .mdl it names.
   _words="$(printf '%s' "$command" | "$PY" -c 'import glob, shlex, sys
 text = sys.stdin.read()
 try:
@@ -103,24 +80,18 @@ $(cat "$_word" 2>/dev/null)"
   done <<HOOK_WORDS
 $_words
 HOOK_WORDS
-  # No script named: the MDL, if any, is in the command itself (a heredoc on stdin).
+  # No script named: the MDL, if any, is inline in the command.
   [ "$_named" = "1" ] || _changed="$command"
 
-  # A project booted by MDL_BOOT_COMMAND (run-app.sh, a deploy build) is not under
-  # `mxcli run --watch`, so nothing it serves hot-applies.
+  # An app booted by MDL_BOOT_COMMAND is not under `mxcli run --watch`, so nothing hot-applies.
   _custom_boot=""
   if [ -n "${MDL_BOOT_COMMAND:-}" ] \
      || grep -qE '^[[:space:]]*(export[[:space:]]+)?MDL_BOOT_COMMAND=' tests/harness.env 2>/dev/null; then
     _custom_boot=1
   fi
 
-  # Document-level access -- `grant execute on microflow`, `grant view on page` --
-  # is dropped first: `describe microflow` prints those grants under almost every
-  # flow, so counting them made nearly every exec look like a security change.
-  # What actually needs a reboot is the schema (entities, associations,
-  # enumerations), a module created or dropped (measured: the watched app rebuilds
-  # and the next test times out), the row-level rules on an entity, the roles behind
-  # them, and runtime settings.
+  # Drop document-level grants first (describe prints them under every flow); the rest matches schema,
+  # module, entity-access, role and settings changes, which need a reboot.
   if printf '%s' "$_changed" \
      | grep -viE '(grant|revoke)[[:space:]]+(execute|view)[[:space:]]+on[[:space:]]+(microflow|nanoflow|page|snippet)' \
      | grep -qiE '(create|alter|drop)[[:space:]]+(or[[:space:]]+(modify|replace)[[:space:]]+)?((non-)?persistent[[:space:]]+)?(entity|association|enumeration)|alter[[:space:]]+project[[:space:]]+security|alter[[:space:]]+settings|(create|drop)[[:space:]]+module[[:space:]]|(grant|revoke)[[:space:]]|(create|drop)[[:space:]]+(or[[:space:]]+modify[[:space:]]+)?(module[[:space:]]+role|user[[:space:]]+role|demo[[:space:]]+user)'; then
@@ -135,9 +106,11 @@ HOOK_WORDS
   fi
 fi
 
+# Test coverage; skipped without the checker or an .mpr.
 [ -f tools/mdl-checks/check_test_coverage.py ] || exit 0
 mpr="$(ls -1 *.mpr 2>/dev/null | head -1)"; [ -n "$mpr" ] || exit 0
 
+# Own modules: not System, MyFirstModule or Marketplace (non-empty Source).
 MXCLI="./mxcli"; [ -x "$MXCLI" ] || { [ -x "./mxcli.exe" ] && MXCLI="./mxcli.exe"; }
 modules="$("$MXCLI" -p "$mpr" --json -c "SHOW MODULES" 2>/dev/null \
   | "$PY" -c 'import json,sys
@@ -146,8 +119,7 @@ for row in json.load(sys.stdin):
         print(row["Module"])' 2>/dev/null)"
 [ -n "$modules" ] || exit 0
 
-# All modules in one call, so a test covering another module's page is not reported
-# as stale.
+# All modules in one call, so cross-module covers are not reported as stale.
 # shellcheck disable=SC2086
 out="$("$PY" tools/mdl-checks/check_test_coverage.py . $modules 2>&1)" || true
 case "$out" in

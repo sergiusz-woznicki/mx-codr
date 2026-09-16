@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.ACT_TestData_Reset
-#
-# Runs first (alphabetical order) and puts the data back to its seeded state, so
-# every test after it starts from the same 3 customers / 10 invoices.
+# Runs first and restores the seeded 3 customers / 10 invoices.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 

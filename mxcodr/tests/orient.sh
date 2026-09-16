@@ -1,15 +1,8 @@
 #!/usr/bin/env bash
-# What is in this app, and what state is it in -- in one call, at session start.
-#
-#   bash tests/orient.sh
-#
-# A session that starts by reading the brain, the structure, the security matrix and
-# the existing tests spends four or five minutes and twenty shell calls establishing
-# facts that cost milliseconds each. The lookups are independent, so they run
-# concurrently; the whole thing is about a second.
-#
-# Facts only. What to build with them is the session's job, and `docs/brain/` is
-# still where the decisions live -- read it, this does not replace it.
+# orient.sh -- app facts at session start: app state, security, tests and coverage, lint,
+# navigation, module structure. Run by the agent (or you) once per session.
+#   bash tests/orient.sh        (env: APP_PORT, default 8081)
+# Lookups run in parallel into numbered files. Exit 2 without a .mpr, else 0.
 set -uo pipefail
 
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,6 +15,7 @@ APP_PORT="${APP_PORT:-8081}"
 WORK="$(mdl_tmpdir mdl-orient)"
 trap 'rm -rf "$WORK"' EXIT
 
+# The app's own modules: not System, MyFirstModule or Marketplace (those have a Source).
 user_modules() {
   "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null \
     | "$PY" -c 'import json,sys
@@ -85,6 +79,5 @@ for row in json.load(sys.stdin):
 } > "$WORK/0-app" 2>&1 &
 
 wait
-# 0-app first, 9-structure last: the structure dump is the long one, and a
-# session that pipes this through `head` must not lose the rest behind it.
+# Structure last: it is long, and output piped through `head` must keep the rest.
 cat "$WORK"/[0-9]-* 2>/dev/null

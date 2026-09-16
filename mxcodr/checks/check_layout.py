@@ -1,44 +1,18 @@
 #!/usr/bin/env python3
-"""Check that screens are laid out with the theme's own spacing.
+"""Check that page widgets are spaced with Atlas Spacing design properties.
 
-A page can pass every other verdict and still look broken. Measured: a gate that
-reported 10/10 tests, `mx check` 0 errors, lint 0 errors, coverage 12/12 and naming
-clean, on a page whose heading, two buttons and grid were welded together with no
-gap at all -- because the widgets were emitted as bare siblings:
-
-    column col1 (DesktopWidth: 12) {
-      dynamictext heading (Content: 'Chase overdue invoices', RenderMode: H2)
-      actionbutton btnRefresh (Caption: 'Refresh statuses', ...)   <-- touching
-      datagrid ChaseGrid (...)
-    }
-
-Mendix has a property for this and it needs no CSS. Atlas Core declares a `Spacing`
-design property on the `Widget`, `LayoutGridRow` and `LayoutGridColumn` scopes, with
-`margin-` and `padding-` on each of the four sides. In MDL:
-
-    actionbutton btnRemind (
-      Caption: 'Send reminder',
-      Action: microflow Mod.ACT_Remind(Invoice: $currentObject),
-      DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
-
-Two errors and one warning, all read out of `describe page` -- which prints
-`DesignProperties`, where mxcli's Starlark rules cannot help: a `page` object there
-exposes only `widget_count`.
-
-    SPACE01  error    two inline widgets side by side, neither carrying a margin
-    SPACE02  error    a spacing value Atlas does not define (it offers None, S, M, L)
-    SPACE03  error    widgets on one line with different vertical margins, so they
-                      render at different heights
-    HEAD01   warning  the page renders no heading widget
-
-SPACE02 exists because `mxcli check` accepts any value here -- `'XL'` passes -- and
-only `mx check` catches it, late, as CE6083 "Design property Spacing is not
-supported by your theme".
-
-    python3 check_layout.py <dir-of-describe-dumps>|<file.mdl> [--json]
-
-Exit 0 when no error survives; warnings never fail the run.
+Input: `describe page` dumps (.mdl files or directories), normally from tests/gate.sh.
+Usage: check_layout.py <file.mdl|dir> ... [--json]
+--json keys: verdict, pages, sources, failures, warnings.
+Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 """
+
+# Rule codes:
+#   SPACE01  FAIL  inline sibling (not last) without margin-right, or H1-H3 heading with a sibling below and no margin-bottom
+#   SPACE02  FAIL  margin/padding value other than None, S, M, L (mxcli check accepts it; mx check fails with CE6083)
+#   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
+#   HEAD01   WARN  page with no H1-H3 text, no header widget and no header/title/masthead snippet
+
 from __future__ import annotations
 
 import argparse
@@ -47,28 +21,17 @@ import re
 import sys
 from pathlib import Path
 
-# Atlas Core's own vocabulary, read from
-# themesource/atlas_core/web/design-properties.json: the Spacing property offers
-# exactly these four on every side, for both margin and padding.
+# Spacing values Atlas Core's design-properties.json defines.
 SPACING_VALUES = {"None", "S", "M", "L"}
 
-# Structural widgets: a grid row, a grid column and a layout region carry the
-# spacing of the thing they lay out, and a datagrid's columns are table cells --
-# asking any of them for a margin of its own is wrong, not merely unnecessary.
+# Layout containers never take a margin of their own.
 STRUCTURAL = {"row", "column", "region", "placeholder", "controlbar", "header", "footer"}
 
-# Only these collide. Atlas renders them on one line, so two in a row touch unless
-# one carries a margin -- which is exactly the defect this file exists for. Everything
-# else (a textbox, a datagrid, a layoutgrid, a snippetcall, a dataview) is block-level
-# and already spaced by the theme's form and container styles; flagging those produced
-# 20 findings on an app whose screens look right, so they are not flagged.
+# Rendered on one line, so they touch unless spaced; block-level widgets are spaced by the theme.
 INLINE = {"actionbutton", "linkbutton", "dynamictext", "text", "image", "staticimage",
           "dynamicimage", "checkbox", "radiobuttons"}
 
-# A dynamictext in a heading render mode is a block: measured on a real screen, an H1
-# and an H2 each take their own line while a paragraph shares one with the buttons
-# beside it. So a heading is never part of a line-run -- it only needs a margin under
-# it -- and the widgets that do share a line are grouped without it.
+# A heading renders as a block, so it never joins a line run; it only needs margin-bottom.
 HEADING_MODE = re.compile(r"RenderMode:\s*(H1|H2|H3)", re.IGNORECASE)
 
 
@@ -77,7 +40,7 @@ def is_heading(widget) -> bool:
 
 
 def runs_of(group: list) -> list[list]:
-    """Split siblings into the runs that actually end up on one line."""
+    """Split siblings into the runs of inline widgets that share one line."""
     runs, current = [], []
     for widget in group:
         if widget.type not in INLINE or widget.type in STRUCTURAL or is_heading(widget):
@@ -90,12 +53,14 @@ def runs_of(group: list) -> list[list]:
         runs.append(current)
     return runs
 
+# `<indent><type> <name> (` or `{`; name may be "double-quoted".
 WIDGET_RE = re.compile(r"^(?P<indent>\s*)(?P<type>[a-z][a-z0-9_]*)\s+(?P<name>\"[^\"]+\"|[A-Za-z_][\w/]*)\s*[({]")
-# A widget can also be written without a name (rare, and mxcli prints one anyway),
-# or as `type (` -- caught here so it still counts as a sibling.
+# Unnamed widget: `<type> (` or `{`.
 ANON_RE = re.compile(r"^(?P<indent>\s*)(?P<type>[a-z][a-z0-9_]*)\s*[({]")
 PAGE_RE = re.compile(r"^create (?:or (?:replace|modify) )?page\s+(?P<name>[\w.\"]+)", re.IGNORECASE)
+# Group "body": the inside of `'Spacing': [ ... ]`.
 SPACING_RE = re.compile(r"'Spacing'\s*:\s*\[(?P<body>[^\]]*)\]")
+# One `'margin-right': 'S'` pair.
 PAIR_RE = re.compile(r"'(?P<key>margin|padding)-(?P<side>top|right|bottom|left)'\s*:\s*'(?P<value>[^']*)'")
 
 
@@ -112,13 +77,7 @@ class Widget:
 
 
 def parse(lines: list[str]) -> list[Widget]:
-    """Every widget in the dump, each carrying its own property text.
-
-    Indentation is the structure: `describe` emits two spaces per level, a widget's
-    properties deeper than the widget, and a nested widget deeper again. A line that
-    opens a widget is `type name (` or `type name {`; anything else is a property,
-    a closing brace, or a comment.
-    """
+    """Widgets in the dump with their property text; indentation gives the nesting."""
     widgets: list[Widget] = []
     page = ""
     open_widget: Widget | None = None
@@ -139,18 +98,16 @@ def parse(lines: list[str]) -> list[Widget]:
             widgets.append(widget)
             open_widget = widget
             continue
-        # A property line belongs to the widget it is indented under -- that is where
-        # a multi-line DesignProperties block lives.
+        # Deeper lines (e.g. multi-line DesignProperties) belong to the open widget.
         if open_widget is not None and len(line) - len(line.lstrip()) > open_widget.indent:
             open_widget.text += " " + line.strip()
     return widgets
 
 
 def siblings(widgets: list[Widget]) -> dict[tuple[str, int, int], list[Widget]]:
-    """Group widgets by parent: same page, same indentation, no shallower widget between."""
+    """Group widgets by (page, parent line, indent)."""
     groups: dict[tuple[str, int, int], list[Widget]] = {}
     for index, widget in enumerate(widgets):
-        # The parent is the nearest preceding widget with less indentation.
         parent_line = 0
         for earlier in reversed(widgets[:index]):
             if earlier.page == widget.page and earlier.indent < widget.indent:
@@ -161,6 +118,7 @@ def siblings(widgets: list[Widget]) -> dict[tuple[str, int, int], list[Widget]]:
 
 
 def spacing_of(widget: Widget) -> dict[str, str]:
+    """Spacing as {"margin-right": "S", ...}; unset sides are absent."""
     found = SPACING_RE.search(widget.text)
     if not found:
         return {}
@@ -169,10 +127,12 @@ def spacing_of(widget: Widget) -> dict[str, str]:
 
 
 def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
+    """Return (failures, warnings, page count)."""
     widgets = parse(lines)
     failures: list[dict] = []
     warnings: list[dict] = []
 
+    # SPACE02
     for widget in widgets:
         for key, value in spacing_of(widget).items():
             if value not in SPACING_VALUES:
@@ -188,8 +148,7 @@ def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
         if len(group) < 2:
             continue
 
-        # A heading with anything under it needs a margin beneath, or the next widget
-        # starts against its descenders.
+        # SPACE01: heading with a sibling below.
         for index, widget in enumerate(group[:-1]):
             if not is_heading(widget):
                 continue
@@ -206,8 +165,7 @@ def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
         for run in runs_of(group):
             if len(run) < 2:
                 continue
-            # Side by side, so the gap is margin-right. The last one needs nothing:
-            # there is nothing after it to collide with.
+            # SPACE01: the last widget in a run has nothing to collide with.
             for widget in run[:-1]:
                 if spacing_of(widget).get("margin-right", "None") != "None":
                     continue
@@ -220,16 +178,7 @@ def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
                                 f" -- add DesignProperties: ['Spacing': ['margin-right': 'S']]"),
                 })
 
-            # One line, one baseline, and one more thing: the line wraps. Two defects
-            # measured on real screens, both from the same omission --
-            #   * a bottom margin on one inline-block and not its neighbour lifts it,
-            #     about ten pixels out of line;
-            #   * narrow the window until three buttons wrap onto two lines and the
-            #     second line sits against the first, because nothing carries a bottom
-            #     margin at all.
-            # So every member of a run needs the SAME bottom margin, and it has to be
-            # a real one. That is what the demo app already does: margin-right and
-            # margin-bottom on each of a row's action buttons.
+            # SPACE03: unequal vertical margins misalign the run; no margin-bottom makes wrapped rows touch.
             vertical = {w.name: (spacing_of(w).get("margin-top", "None"),
                                  spacing_of(w).get("margin-bottom", "None")) for w in run}
             shown = ", ".join(f"{name} {top}/{bottom}" for name, (top, bottom) in vertical.items())
@@ -253,18 +202,13 @@ def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
                                 f" (the last one needs the bottom margin only)"),
                 })
 
-    # Per page, from the parsed widgets -- not from slicing the text on "page <name>",
-    # which also matches the `grant view on page <name>` line printed after the body
-    # and so reported every page as heading-less, including ones with an H2.
+    # HEAD01: use parsed widgets; text "page <name>" also matches `grant view on page`.
     headed: dict[str, bool] = {}
     for widget in widgets:
         if not widget.page:
             continue
         headed.setdefault(widget.page, False)
-        # Three conventions all count as headed, because all three put a title on
-        # the screen: an H1-H3 in the page, a `header` region, or a shared snippet
-        # that carries the heading -- InvoiceDesk uses SNIPPET_AppHeader with an H1
-        # inside, which is the reuse-first way and must not be reported as missing.
+        # A shared header snippet counts as a heading.
         if (
             widget.type == "header"
             or (widget.type in ("dynamictext", "text")
@@ -287,6 +231,7 @@ def check(lines: list[str]) -> tuple[list[dict], list[dict], int]:
 
 
 def collect(sources: list[Path]) -> tuple[str, list[Path]]:
+    """Joined text of every .mdl under sources, and the files read."""
     chunks, used = [], []
     for source in sources:
         files = sorted(source.rglob("*.mdl")) if source.is_dir() else ([source] if source.exists() else [])

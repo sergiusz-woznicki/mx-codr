@@ -1,16 +1,15 @@
 <#
 .SYNOPSIS
-  Sets a Windows machine up for the Mendix MDL harness, then installs it.
+  Windows bootstrap: installs Git, Python and Node with winget, then runs install.sh --with-deps in Git Bash.
 
-.DESCRIPTION
-  install.sh does everything else, but it is a bash script, so it cannot install
-  the shell it needs. That is the one job of this file: get Git for Windows,
-  Python and Node in place with winget, then hand over to bash install.sh
-  --with-deps, which installs the rest (playwright-cli, its browser, mxcli,
-  MxBuild) and lands the harness.
+.PARAMETER Target
+  Mendix project to install into (created if missing). Default: parent of the bundle folder.
 
-  Docker Desktop and the JDK are reported, never installed: both want a reboot
-  or a licence click, so a script that "finished" without them would have lied.
+.PARAMETER SkipWinget
+  Skip the winget stage.
+
+.OUTPUTS
+  Exit 1 when winget or Git Bash is missing; otherwise install.sh's exit code.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File mxcodr\bootstrap.ps1 C:\Mendix\MyApp
@@ -18,22 +17,20 @@
 
 [CmdletBinding()]
 param(
-  # Where to install. Defaults to the directory the bundle sits in.
   [Parameter(Position = 0)]
   [string]$Target = (Split-Path -Parent $PSScriptRoot),
 
-  # Skip the winget stage; only refresh PATH and run install.sh.
   [switch]$SkipWinget
 )
 
+# Native programs exiting non-zero do not stop the script; check $LASTEXITCODE.
 $ErrorActionPreference = 'Stop'
 
 function Write-Step($text) { Write-Host "  - $text" -ForegroundColor Cyan }
 function Write-Ok($text)   { Write-Host "  + $text" -ForegroundColor Green }
 function Write-Warn($text) { Write-Host "  ! $text" -ForegroundColor Yellow }
 
-# winget only writes the new PATH to the registry; this process still has the old
-# one, so a freshly installed python is invisible until the value is re-read.
+# winget writes PATH only to the registry; re-read it into this process.
 function Update-PathFromRegistry {
   $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
   $user    = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -44,12 +41,8 @@ function Test-Command($name) {
   $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
 }
 
-# Get-Command is not enough for Python. Windows ships an App Execution Alias at
-# WindowsApps\python.exe that resolves, does nothing, and opens the Microsoft
-# Store -- so the interpreter is asked to run. And winget accepts the python.org
-# default of *not* adding python to the PATH, so a real Python may be installed
-# and invisible; those directories are searched too, and the winner is put on the
-# PATH for the bash that follows.
+# Resolve-Python -- path of a Python that really runs, or $null.
+# Skips the WindowsApps Store alias; also searches install dirs not on PATH.
 function Resolve-Python {
   foreach ($name in @('python3', 'python', 'py')) {
     $command = Get-Command $name -ErrorAction SilentlyContinue
@@ -74,6 +67,7 @@ function Resolve-Python {
   return $null
 }
 
+# --- main ---
 Write-Host ''
 Write-Host '  MX-CODR  ' -ForegroundColor White -NoNewline
 Write-Host 'Windows bootstrap' -ForegroundColor DarkGray
@@ -88,7 +82,6 @@ if (-not $SkipWinget) {
     exit 1
   }
 
-  # id, the command that proves it is there, and what it is for.
   $packages = @(
     @{ Id = 'Git.Git';             Probe = 'git';    Why = 'Git Bash - the shell the harness runs in' },
     @{ Id = 'Python.Python.3.12';  Probe = 'python'; Why = 'the hook merges and the model checkers'; Resolver = 'Resolve-Python' },
@@ -117,8 +110,7 @@ if (-not $SkipWinget) {
 
 Update-PathFromRegistry
 
-# A Python that is installed but not on the PATH is invisible to bash, so put its
-# directory on the PATH of the process that is about to launch bash.
+# Put the resolved Python on PATH so bash sees it.
 $python = Resolve-Python
 if ($python) {
   $pythonDir = Split-Path -Parent $python
@@ -135,10 +127,7 @@ if ($python) {
 }
 
 # --- 2. find a real Git Bash -------------------------------------------------
-# `where bash` answers C:\Windows\System32\bash.exe on Windows 11, and that is the
-# WSL launcher, not Git Bash: a different filesystem, no mxcli.exe, and a baffling
-# failure ten minutes later. So Git's own directories come first, and anything
-# under System32 is rejected outright.
+# `where bash` can return System32\bash.exe, the WSL launcher: reject it, prefer Git's own.
 $bashCandidates = @(
   (Join-Path $env:ProgramFiles 'Git\bin\bash.exe'),
   (Join-Path ${env:ProgramFiles(x86)} 'Git\bin\bash.exe'),
@@ -156,9 +145,9 @@ if (-not $bash) {
 Write-Ok "bash: $bash"
 
 # --- 3. hand over to install.sh ---------------------------------------------
+# ConvertTo-BashPath <path> -- C:\Mendix\App -> /c/Mendix/App
 function ConvertTo-BashPath($path) {
   $full = (Resolve-Path -LiteralPath $path).Path
-  # C:\Mendix\App -> /c/Mendix/App, the form Git Bash uses for a drive.
   '/' + $full.Substring(0, 1).ToLower() + $full.Substring(2).Replace('\', '/')
 }
 
@@ -171,13 +160,9 @@ Write-Host ''
 & $bash -c "cd '$bundlePath' && bash install.sh '$targetPath' --with-deps"
 $installExit = $LASTEXITCODE
 
-# --- 4. the two this script will not install ---------------------------------
+# --- 4. follow-up: the two this script does not install ----------------------
 Write-Host ''
-# install.sh offers to install Docker and waits with you for the daemon, but only
-# when it can ask -- which needs a console. Say so rather than repeating the offer.
-# Only mention Docker when the installer did not already settle the question. Saying
-# "Docker is still missing" to someone who just chose the no-Docker mode is noise,
-# and the old wording also claimed mx check needs a container, which it never did.
+# install.sh installs Docker; only warn if it neither did nor chose no-Docker mode.
 $harnessEnv = Join-Path $Target 'tests\harness.env'
 $noDocker = (Test-Path $harnessEnv) -and (Select-String -Path $harnessEnv -Pattern 'MDL_NO_DOCKER=1' -Quiet)
 if ($noDocker) {
@@ -188,9 +173,7 @@ if ($noDocker) {
   Write-Warn 'Studio Pro and a PostgreSQL, then re-run:'
   Write-Warn '  bash mxcodr/install.sh . --with-deps'
 }
-# Studio Pro installs a JDK as its own prerequisite, and on Windows it is routinely
-# not on the PATH -- three of them were installed on the test machine and none was.
-# So look before telling anyone to install anything.
+# Studio Pro's JDK is often installed but not on PATH, so search before advising an install.
 if (-not (Test-Command 'java')) {
   $javaRoots = @($env:JAVA_HOME, 'C:\Program Files', 'C:\Program Files (Arm)', 'C:\Program Files (x86)') |
                Where-Object { $_ -and (Test-Path $_) }

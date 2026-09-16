@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.ACT_Invoice_SendReminder
-#
-# Send reminder stamps the invoice and says so on screen.
+# Send reminder raises ReminderCount and confirms on screen.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
 number="INV-1001"   # seeded, guaranteed present by verify-000-reset
+
 before="$(oql_value Invoice ReminderCount "InvoiceNumber = '$number'")"
 [ "$before" = "no-such-row" ] && fail "seeded invoice $number is missing"
 [ "$before" = "empty" ] && before=0

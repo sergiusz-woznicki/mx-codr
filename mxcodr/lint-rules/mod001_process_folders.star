@@ -1,12 +1,5 @@
-# MOD001: Process Folders
-#
-# The module-structure skill's rule, made mechanical: every document lives in a
-# folder that names a business process, and no folder is named after a document
-# type. A module root full of loose documents is the state a module decays into.
-#
-# This is the Starlark twin of tests/skills/check_module_structure.py. It reads
-# the model rather than mxcli's --json output, so it needs no Python and runs
-# inside `mxcli lint`.
+# MOD001: every document sits in a process-named folder, not at module root or in a type folder (any path segment).
+# Loaded by `mxcli lint` from .claude/lint-rules; warnings only, the gate does not fail on them.
 
 RULE_ID = "MOD001"
 RULE_NAME = "ProcessFolders"
@@ -14,9 +7,7 @@ DESCRIPTION = "Documents live in process-named folders, never at module root or 
 CATEGORY = "architecture"
 SEVERITY = "warning"
 
-# Folder names that describe a document type rather than a process. The ACT_/SUB_/
-# DS_/VAL_ prefixes already say the type, so a type folder splits one process
-# across four places and adds nothing.
+# Type folders split a process; the ACT_/SUB_/DS_/VAL_ prefixes already give the type.
 TYPE_FOLDER_NAMES = [
     "microflows",
     "nanoflows",
@@ -32,7 +23,7 @@ TYPE_FOLDER_NAMES = [
     "javaactions",
 ]
 
-# Modules that ship with Mendix or the Marketplace are nobody's convention to fix.
+# Mendix and Marketplace modules.
 SKIP_MODULES = [
     "System",
     "Atlas_Core",
@@ -53,6 +44,7 @@ def is_type_folder(folder):
             return True
     return False
 
+# kind: label for messages ("Microflow", "Page", "Snippet").
 def check_documents(documents, kind, violations):
     for document in documents:
         if document.module_name in SKIP_MODULES:
