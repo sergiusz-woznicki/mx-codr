@@ -248,6 +248,12 @@ behind. Two conventions keep the suite honest:
   app). Every run starts from the same rows.
 - Anything that asserts **exact counts** is named `verify-001-…`, so it runs right
   after the reset — the only moment those counts are true.
+- **A test that changes a seeded row owns that row.** Nothing resets between scripts,
+  so a test that reports `INV-A-004` paid changes what every later script sees: the
+  overdue test after it, alphabetically, found `PaymentReported` instead of `Overdue`
+  and failed only in the full run. Give such a test its own seeded row (add one to the
+  reset, and name it for the test) or a row it creates itself — never a row another
+  test reads. A test that passes with `--only` and fails in the suite is this, first.
 
 Two rules the harness enforces, because a green suite can otherwise be measuring the
 wrong page or a signed-out session:
@@ -509,6 +515,7 @@ it in an installed project.)
 - [ ] An acceptance criterion was stated before any code
 - [ ] The test existed and **failed** before the implementation — for the right reason — and the failure was quoted
 - [ ] Exact-count assertions run right after `verify-000-reset`
+- [ ] A test that changes seeded data uses a row no other test reads
 - [ ] The test is one `scenario` call, not a chain of browser calls
 - [ ] The test declares a `# covers:` header naming real model elements
 - [ ] No test was edited, skipped or deleted to reach green
