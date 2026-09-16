@@ -126,7 +126,7 @@ if ($python) {
     $env:Path = "$pythonDir;$env:Path"
     Write-Ok "python: $python  (added to PATH for this run)"
     Write-Warn "That directory is not on your permanent PATH. To fix it for good:"
-    Write-Warn "  setx PATH \"$pythonDir;%PATH%\""
+    Write-Warn "  setx PATH `"$pythonDir;%PATH%`""
   } else {
     Write-Ok "python: $python"
   }
@@ -203,7 +203,7 @@ if (-not (Test-Command 'java')) {
   if ($java) {
     Write-Warn "A JDK is installed but not on the PATH: $($java.FullName)"
     Write-Warn "  `./mxcli.exe run --local` needs it there. To fix it for good:"
-    Write-Warn "  setx PATH \"$(Split-Path -Parent $java.FullName);%PATH%\""
+    Write-Warn "  setx PATH `"$(Split-Path -Parent $java.FullName);%PATH%`""
   } else {
     Write-Warn 'No JDK found. Running the app locally needs one matching the project:'
     Write-Warn '  winget install -e --id EclipseAdoptium.Temurin.21.JDK'
