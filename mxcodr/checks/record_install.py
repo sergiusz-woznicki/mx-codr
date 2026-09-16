@@ -30,6 +30,9 @@ def destinations(src):
     for name in HARNESS_SCRIPTS:
         yield os.path.join(src, "tests", name), "tests/" + name
 
+    for name in listdir(os.path.join(src, "tests", "gate"), ".sh"):
+        yield os.path.join(src, "tests", "gate", name), "tests/gate/" + name
+
     for name in listdir(os.path.join(src, "checks"), ".py"):
         yield os.path.join(src, "checks", name), "tools/mdl-checks/" + name
 

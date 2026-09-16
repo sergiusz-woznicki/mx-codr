@@ -15,7 +15,7 @@ VERSION           date-based version, copied to tools/mdl-checks/VERSION in the 
 rules/            mdl-skills.md (Claude) and mdl-skills.mdc (Cursor) — the always-loaded rule
 hooks/            host-specific prompt/PostToolUse adapters plus the Codex and Cursor gates
 plugins/          mendix-mdl-harness.js — the same three jobs as one OpenCode plugin
-tests/            lib.sh, scenario-helpers.js, gate.sh, orient.sh, diagnose.sh, portable.sh — the harness, upgraded in
+tests/            lib.sh, scenario-helpers.js, gate.sh + gate/, orient.sh, diagnose.sh, portable.sh — the harness, upgraded in
                   place on every install (gate.sh is the done gate — tests, mx check, lint, coverage
                   and naming; orient.sh and diagnose.sh gather facts in parallel; portable.sh holds
                   the three platform differences and nothing else)
