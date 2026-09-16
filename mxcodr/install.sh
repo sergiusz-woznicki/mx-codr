@@ -1258,7 +1258,7 @@ if [ "$target_inferred" = 1 ] && [ "$mpr_count" = "0" ] && [ "$CREATE_APP" = "1"
 fi
 
 # NOTE: there are 12 ui_done steps (13 with a new app), so these totals are one short.
-if [ "$mpr_count" = "0" ]; then ui_plan 12; else ui_plan 11; fi
+if [ "$mpr_count" = "0" ]; then ui_plan 13; else ui_plan 12; fi
 
 # --- 11. Step: prerequisites (Python, Node, Playwright, mxcli, MxBuild, PostgreSQL, Docker, JDK) ---
 # Missing tools are collected and reported in the summary.
