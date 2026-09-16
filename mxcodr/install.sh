@@ -1677,7 +1677,7 @@ for source_file in "$SRC"/tests/*; do
   name="$(basename "$source_file")"
   target="$APP/tests/$name"
   case "$name" in
-    gate.sh|orient.sh|diagnose.sh|lib.sh|portable.sh) ;;
+    gate.sh|orient.sh|diagnose.sh|lib.sh|portable.sh|scenario-helpers.js) ;;
     *) if [ -e "$target" ]; then continue; fi ;;
   esac
   cp "$source_file" "$target"
