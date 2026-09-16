@@ -215,8 +215,7 @@ def headed_pages(widgets: list[Widget]) -> dict[str, bool]:
         # A shared header snippet counts as a heading.
         if (
             widget.type == "header"
-            or (widget.type in ("dynamictext", "text")
-                and re.search(r"RenderMode:\s*(H1|H2|H3)", widget.text))
+            or is_heading(widget)
             or (widget.type == "snippetcall"
                 and re.search(r"Snippet:\s*[\w.]*(header|title|masthead)", widget.text, re.I))
         ):
