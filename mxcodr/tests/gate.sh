@@ -95,18 +95,23 @@ trap cleanup_work EXIT
 answers() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$1" 2>/dev/null)" = "200" ]; }
 
 # True when the boot log already shows a failure, so the wait loop stops early.
+# The boot log lines that mean the boot failed (mxcli, mxbuild and the runtime).
+boot_error_re() {
+  printf '%s' '^Error:|initial build failed|cannot be deployed, because it contains errors|is already in use|exited during startup|BUILD FAILED'
+}
 boot_failed() {   # boot_failed <log>
   [ -f "$1" ] || return 1
-  grep -qE '^Error:|initial build failed|cannot be deployed, because it contains errors|is already in use|exited during startup|BUILD FAILED' "$1" 2>/dev/null
+  grep -qE "$(boot_error_re)" "$1" 2>/dev/null
 }
 # Prints the error lines, and the indented lines under an `Error:` line: mxbuild lists one build
 # error per indented line, and not every one carries a [CE] code ("Invalid token ...").
 report_boot_failure() {   # report_boot_failure <log> <waited>
   echo "the app did not start (${2}s): the boot reported an error rather than coming up" >&2
-  awk '/^Error:/ { under = 1; print; next }
+  awk -v failure="$(boot_error_re)|\\[CE[0-9]+\\]" \
+      '/^Error:/ { under = 1; print; next }
        under && /^[[:space:]]+[^[:space:]]/ { print; next }
        { under = 0 }
-       /\[CE[0-9]+\]|initial build failed|is already in use|exited during startup/ { print }' "$1" 2>/dev/null \
+       $0 ~ failure { print }' "$1" 2>/dev/null \
     | head -12 >&2
   echo "   full log: $1" >&2
   exit 2
@@ -129,22 +134,10 @@ wait_for_boot() {   # wait_for_boot <log>
 }
 GATE_START=$SECONDS
 
-# This project's own modules (not System, MyFirstModule or marketplace); 2 if unreadable.
-user_modules() {
-  local listing
-  listing="$("$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
-  printf '%s' "$listing" | "$PY" -c 'import json,sys
-rows = json.load(sys.stdin)
-if not isinstance(rows, list):
-    sys.exit(1)
-for row in rows:
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
-        print(row["Module"])' 2>/dev/null || return 2
-}
 # USER_MODULES_READ=0 tells a failed SHOW MODULES apart from a project with no module.
 USER_MODULES=""; USER_MODULES_READ=1
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
-  USER_MODULES="$(user_modules)" || USER_MODULES_READ=0
+  USER_MODULES="$(mdl_user_modules "$MPR")" || USER_MODULES_READ=0
 fi
 
 # PIDs of this project's runtime and `mxcli run`, matched on the project path; oldest first.
@@ -824,7 +817,7 @@ export_test_module() {
     return 0
   fi
   MDL_DEFAULT_MODULE="$(printf '%s\n' "$USER_MODULES" | head -1)"
-  [ -n "$MDL_DEFAULT_MODULE" ] || MDL_DEFAULT_MODULE="$(user_modules | head -1)"
+  [ -n "$MDL_DEFAULT_MODULE" ] || MDL_DEFAULT_MODULE="$(mdl_user_modules "$MPR" | head -1)"
   export MDL_DEFAULT_MODULE
 }
 

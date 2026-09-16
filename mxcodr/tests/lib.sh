@@ -75,15 +75,9 @@ if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
 fi
 MODULE="${MODULE:-${MDL_DEFAULT_MODULE:-}}"
 if [ -z "${MODULE:-}" ]; then
-  MODULE="$("$MXCLI" -p "$APP_DIR/$MPR" --json -c "SHOW MODULES" 2>/dev/null \
-    | "$PY" -c 'import json,sys
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    rows = []
-for row in rows:
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
-        print(row["Module"]); break' 2>/dev/null)"
+  # `|| true`: under set -e an unreadable module list must not end the test here; oql_count
+  # then fails with "needs a module", which says what is missing.
+  MODULE="$(mdl_user_modules "$APP_DIR/$MPR" | sed -n 1p)" || true
 fi
 
 # --- 4. fail and the runtime log ---
