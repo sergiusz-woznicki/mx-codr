@@ -37,7 +37,8 @@ PY="${PY:-python3}"
 command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
 # Precise check on the command field; read-only `mxcli -c` queries are skipped.
 case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
-# Restart advice: schema, module and security changes need a reboot; logic and pages hot-apply under `mxcli run --watch`.
+# Restart advice: under `mxcli run --watch` every change applies by itself (logic and pages by reload,
+# schema, module and security by an in-place restart); without it, schema and security need a restart.
 _app_running=0
 for _port in "${APP_PORT:-8081}" 8080; do
   [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 1 "http://localhost:$_port/" 2>/dev/null)" = "200" ] \
@@ -90,6 +91,20 @@ HOOK_WORDS
     _custom_boot=1
   fi
 
+  # A `mxcli run --watch` of this project (same .mpr, same directory) applies every change itself.
+  _watching=""
+  _mpr_name="$(ls -1 *.mpr 2>/dev/null | head -1)"
+  if [ -z "$_custom_boot" ] && [ -n "$_mpr_name" ] && command -v pgrep >/dev/null 2>&1; then
+    for _pid in $(pgrep -f 'mxcli(\.exe)? run ' 2>/dev/null); do
+      case "$(ps -o command= -p "$_pid" 2>/dev/null)" in *"$_mpr_name"*--watch*) ;; *) continue ;; esac
+      if command -v lsof >/dev/null 2>&1; then
+        _cwd="$(lsof -a -p "$_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+        [ -z "$_cwd" ] || [ "$(cd "$_cwd" 2>/dev/null && pwd -P)" = "$(pwd -P)" ] || continue
+      fi
+      _watching=1
+    done
+  fi
+
   # Drop document-level grants first (describe prints them under every flow); the rest matches schema,
   # module, entity-access, role and settings changes, which need a reboot.
   _document_grant='(grant|revoke)[[:space:]]+(execute|view)[[:space:]]+on[[:space:]]+(microflow|nanoflow|page|snippet)'
@@ -101,9 +116,11 @@ HOOK_WORDS
   _restart_needed="$_schema_change|$_security_or_settings_change|$_module_change|$_access_change|$_role_change"
   # Any statement at all; without one the exec's effect is unknown.
   _any_statement='(create|alter|drop|grant|revoke|move|rename)[[:space:]]'
-  if printf '%s' "$_changed" \
-     | grep -viE "$_document_grant" \
-     | grep -qiE "$_restart_needed"; then
+  _schema_or_security=""
+  printf '%s' "$_changed" | grep -viE "$_document_grant" | grep -qiE "$_restart_needed" && _schema_or_security=1
+  if [ -n "$_schema_or_security" ] && [ -n "$_watching" ]; then
+    printf 'That exec touched entities, associations, enumerations, modules or security. This project runs under `mxcli run --watch`, which applies those itself with an in-place runtime restart in about 10 seconds (its log .mxcli/gate-boot.log says "applied via restart"), so do not restart by hand. Run the test: bash tests/gate.sh --only <feature> -- the gate waits for the change to be applied and warns if it was not.\n'
+  elif [ -n "$_schema_or_security" ]; then
     printf 'That exec touched entities, associations, enumerations, modules or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart --only <feature>\n'
   elif [ -n "$_unreadable" ] || ! printf '%s' "$_changed" | grep -qiE "$_any_statement"; then
     if [ -n "$_unreadable" ]; then _why="could not open${_unreadable}"; else _why="no script path or MDL in the command"; fi

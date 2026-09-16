@@ -216,8 +216,11 @@ Three things decide how long the loop takes:
   (before `mxcli fix widgets`, say): `bash tests/gate.sh --stop`.
 
   **Check which loop you are in before planning around it.** With `--watch` and a
-  live model, only entity and association changes need a reboot and everything else
-  hot-applies in about a second. Where the runtime serves a *built deployment* there
+  live model, **nothing needs a restart by hand**: logic and pages reload in about two
+  seconds, and entity, association, module and security changes apply through an
+  in-place runtime restart in about ten (`.mxcli/gate-boot.log` says `applied via
+  reload` or `applied via restart`). Run the test straight after the exec -- the gate
+  waits for the change to land. `--restart` is for when the gate says nothing applied it. Where the runtime serves a *built deployment* there
   is no hot reload at all: every model change costs a rebuild and a restart, one to
   two minutes. The red-green loop still works and `--only <feature>` is still the
   right command, but batch your model edits instead of making them one at a time,

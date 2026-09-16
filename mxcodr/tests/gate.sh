@@ -682,11 +682,23 @@ MSG
 preflight_stale_model() {
   local started
 
-  # Nothing is stale when the --watch boot log's last line says the change was reloaded.
-  local boot_log="$APP_DIR/.mxcli/gate-boot.log"
-  if [ -f "$boot_log" ] && [ ! "$MPR" -nt "$boot_log" ] \
-     && tail -1 "$boot_log" 2>/dev/null | grep -q 'applied via reload'; then
-    return 0
+  # A --watch boot rebuilds and applies every model change itself -- pages by reload, entities
+  # and security by an in-place restart. Wait for that instead of warning in the middle of it.
+  local boot_log="$APP_DIR/.mxcli/gate-boot.log" waited=0
+  if [ -f "$boot_log" ] && grep -q 'Watching model' "$boot_log" 2>/dev/null; then
+    # The watcher notices a change a moment after the exec: give it a few seconds to start.
+    while [ "$MPR" -nt "$boot_log" ] && [ "$waited" -lt "${MDL_WATCH_SETTLE_SECONDS:-5}" ]; do
+      sleep 1; waited=$((waited + 1))
+    done
+    waited=0
+    while [ "$waited" -lt 120 ] && tail -1 "$boot_log" 2>/dev/null \
+          | grep -qE 'Change detected, rebuilding|re-bundling|Web client bundled'; do
+      [ "$waited" = "0" ] && echo "   (waiting for --watch to apply the latest model change)"
+      sleep 1; waited=$((waited + 1))
+    done
+    if [ ! "$MPR" -nt "$boot_log" ] && tail -1 "$boot_log" 2>/dev/null | grep -qE 'applied via (reload|restart)'; then
+      return 0
+    fi
   fi
 
   # Primary signal, needs no pgrep (Git Bash): .mpr newer than the built deployment.
@@ -725,8 +737,8 @@ except ValueError:
 changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
 gap = (changed - boot).total_seconds()
 if gap > 5:
-    print("   !! the model changed %ds after the runtime started -- security and entity"
-          " changes need a restart, or this run measures the old app:" % gap)
+    print("   !! the model changed %ds after the runtime started and nothing applied it"
+          " (no --watch reload or restart logged) -- this run measures the old app:" % gap)
     print("      bash tests/gate.sh --restart")
 PY_STALE
 }
