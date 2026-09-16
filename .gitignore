@@ -3,11 +3,11 @@
 
 # AI agent configuration at the repo root.
 #
-# The MXCLI installer (dist/install.sh) generates these itself. Keeping them
+# The MXCLI installer (mxcodr/install.sh) generates these itself. Keeping them
 # untracked means git never overwrites what the installer wrote, and local
 # agent tweaks never end up in a commit. The canonical sources live under
-# dist/ and stay tracked - every pattern below is anchored to the repo root
-# with a leading slash so nothing inside dist/ is affected.
+# mxcodr/ and stay tracked - every pattern below is anchored to the repo root
+# with a leading slash so nothing inside mxcodr/ is affected.
 
 # Claude Code
 /CLAUDE.md

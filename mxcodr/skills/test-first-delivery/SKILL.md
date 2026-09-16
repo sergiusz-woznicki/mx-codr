@@ -35,6 +35,21 @@ bash tests/gate.sh --only <feature>
 bash tests/gate.sh
 ```
 
+What a test script can call, so there is no need to read `tests/lib.sh` to find out
+(one session spent its first minute grepping it). A complete script is under
+*Write it as one scenario* below.
+
+```bash
+source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
+# shell:  scenario '<js body>'   field "$result" key   fields "$result" a b   fail "msg"
+#         oql "SELECT ..."   oql_count Entity ["where"]   oql_value Entity Attr "where"
+#         await_row Entity "where" [seconds]            (entity names without module)
+# inside a scenario body: await open_app()  menu('Invoices', 'invoiceGrid')
+#         fill('txtName', 'x')  pick_combo('cmbCustomer', 'Northwind')
+#         row_action('invoiceGrid', 'INV-1', 'btnSend')  await_message(/sent/i)
+#         dismiss_dialog()  page_text()  reopen_app()   -- plus Playwright's `page`
+```
+
 Non-negotiable, in order of how often they get skipped:
 
 1. **The test fails before the implementation exists.** A test that has never been red
@@ -88,6 +103,19 @@ makes "everything is tested" a fact rather than a claim:
 # covers: InvoiceDesk.Invoice_Overview, InvoiceDesk.ACT_Invoice_SendReminder
 set -euo pipefail
 ```
+
+**A `verify-*.test.sh` is a browser test, and only a browser test.** The gate hands
+every one of them to `mxcli playwright verify`, which waits for a browser result. A
+script that never calls `scenario()` -- a bash wrapper around `mxcli test`, say --
+gives it none: one session saw such a script hang for the full timeout and report
+only `timeout after 30s`, with nothing naming the cause, and went down the wrong path
+before building the UI the feature needed anyway.
+
+Logic with no screen in front of it -- a microflow's return value, a calculation --
+is tested in a `tests/*.test.mdl` file run with `mxcli test` (skill: `test-microflows`).
+Know two limits of that route: the gate does not run `.test.mdl` files, and coverage
+counts only `verify-*.test.sh`. So anything a user reaches from a page or a button
+still needs its browser test, and a `.test.mdl` is an extra check, not a substitute.
 
 ### 2. Run it and watch it fail
 

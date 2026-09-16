@@ -21,7 +21,7 @@ directories, and tracking those would report every mxcli upgrade as harness drif
 Run it by hand after copying harness files into a project without going through
 install.sh, so the baseline matches what is actually on disk:
 
-    python3 tools/mdl-checks/record_install.py . dist "$(cat dist/VERSION)"
+    python3 tools/mdl-checks/record_install.py . mxcodr "$(cat mxcodr/VERSION)"
 """
 
 import hashlib

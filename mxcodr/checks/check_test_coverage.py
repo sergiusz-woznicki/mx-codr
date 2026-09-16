@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -66,7 +67,13 @@ def mxcli_json(app_dir: Path, mpr: str, command: str) -> list[dict]:
             cwd=app_dir,
             capture_output=True,
             text=True,
+            # The exec hook runs this checker after every terminal command, so an
+            # mxcli that never returns would hold the agent's turn open with no
+            # message. A read of the model takes well under a second.
+            timeout=float(os.environ.get("MDL_MXCLI_TIMEOUT", "120")),
         )
+    except subprocess.TimeoutExpired as exc:
+        raise ModelReadError(f"`{command}` did not finish within {exc.timeout:.0f}s") from exc
     except OSError as exc:
         raise ModelReadError(f"could not start mxcli: {exc}") from exc
     if result.returncode != 0:

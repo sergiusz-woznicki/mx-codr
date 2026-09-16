@@ -29,8 +29,11 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
-set -a; . "$APP_DIR/tests/harness.env"; set +a
+# harness.env is read as data, not sourced -- see the note in tests/portable.sh. The
+# keys below are the ones this script needs in the environment of mxbuild, java and
+# the admin calls; the rest stay shell variables, exactly as before.
 . "$APP_DIR/tests/portable.sh"
+mdl_load_harness_env "$APP_DIR/tests/harness.env" export
 
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE_SUFFIX=".exe" ;; *) EXE_SUFFIX="" ;; esac
 
@@ -56,7 +59,7 @@ ADMIN_PORT="${ADMIN_PORT:-8090}"
 # mxcli oql and tests/diagnose.sh authenticate with this exact password by default, so
 # the runtime must be started with it or every data assertion fails with
 # "OQL error: Authentication failed."
-ADMIN_PASS="${ADMIN_PASS:-mxcli-local-dev}"
+ADMIN_PASS="${ADMIN_PASSWORD:-${ADMIN_PASS:-mxcli-local-dev}}"
 DB_HOST="${MDL_DB_HOST:-127.0.0.1:5432}"
 DB_NAME="${MDL_DB_NAME:-$(basename "$MPR" .mpr | tr '[:upper:]' '[:lower:]')}"
 DB_USER="${MDL_DB_USER:-mendix}"

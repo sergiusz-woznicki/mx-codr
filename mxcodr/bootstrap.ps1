@@ -75,7 +75,7 @@ function Resolve-Python {
 }
 
 Write-Host ''
-Write-Host '  MENDFIXER  ' -ForegroundColor White -NoNewline
+Write-Host '  MX-CODR  ' -ForegroundColor White -NoNewline
 Write-Host 'Windows bootstrap' -ForegroundColor DarkGray
 Write-Host ''
 
@@ -186,7 +186,7 @@ if ($noDocker) {
   Write-Warn 'No Docker and no local Mendix installation were found, so the app has'
   Write-Warn 'no database to run against. Install Docker Desktop, or install Mendix'
   Write-Warn 'Studio Pro and a PostgreSQL, then re-run:'
-  Write-Warn '  bash dist/install.sh . --with-deps'
+  Write-Warn '  bash mxcodr/install.sh . --with-deps'
 }
 # Studio Pro installs a JDK as its own prerequisite, and on Windows it is routinely
 # not on the PATH -- three of them were installed on the test machine and none was.

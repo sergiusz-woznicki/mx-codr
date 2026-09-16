@@ -53,7 +53,9 @@ if [ -z "${TEST_PASSWORD:-}" ] && [ -f "$CREDENTIALS" ]; then
   # Read as data, not sourced: a credentials file must not be able to run commands.
   # `|| true` matters: no match makes grep exit 1, and under `set -e` with pipefail
   # the failed pipeline would end the script during `source`, silently.
-  _per_user="$(grep -E "^TEST_PASSWORD_${TEST_USER}=" "$CREDENTIALS" 2>/dev/null | tail -1 || true)"
+  # -F, not -E: TEST_USER is data, and a value like `.*` matched another user's line.
+  _per_user="$(grep -F -- "TEST_PASSWORD_${TEST_USER}=" "$CREDENTIALS" 2>/dev/null \
+    | grep -F -v -e '#' | tail -1 || true)"
   _shared="$(grep -E '^TEST_PASSWORD=' "$CREDENTIALS" 2>/dev/null | tail -1 || true)"
   TEST_PASSWORD="${_per_user#*=}"
   [ -n "$TEST_PASSWORD" ] || TEST_PASSWORD="${_shared#*=}"
@@ -76,6 +78,17 @@ except Exception:
 for row in rows:
     if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
         print(row["Module"]); break' 2>/dev/null)"
+fi
+# Test first means the test exists before the module does, and then neither gate.sh
+# nor SHOW MODULES has a name to give. Every oql_* call then failed with "needs a
+# module ... or run through tests/gate.sh" -- although it was run through the gate --
+# so the red-first run went red for a reason that had nothing to do with the missing
+# feature (seen in the 2026-09-13 benchmark, two tests of seven). The script's own
+# `# covers:` header already names the module it is about; take it from there, and
+# the query then fails on the entity that does not exist yet, which is the real reason.
+if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
+  MODULE="$(sed -nE 's/^#[[:space:]]*covers:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)\..*/\1/p' \
+    "${BASH_SOURCE[1]}" 2>/dev/null | head -1)"
 fi
 
 # The runtime log is where a licence refusal is explained; the browser only shows a
@@ -203,6 +216,9 @@ _release_session() {
     status=124
   fi
   rm -f "$_MDL_TIMEOUT_FLAG"
+  # A scenario cut short by the watchdog never reached its own `rm`, and that file
+  # holds the password, so it would have sat in $TMPDIR until the next reboot.
+  [ -n "${_MDL_SCENARIO_FILE:-}" ] && rm -f "$_MDL_SCENARIO_FILE"
   # A scenario that ran to its `finally` has already signed out. Only a scenario
   # cut short by the watchdog has not -- and then the browser that just hung is
   # the one being asked, so the request is bounded rather than trusted.
@@ -264,10 +280,18 @@ scenario() {
   # scenarios contain double quotes, which would terminate the outer shell string.
   {
     printf 'async () => {\n'
-    printf "  const BASE = '%s';\n" "$BASE_URL"
-    printf "  const USER = '%s';\n" "$TEST_USER"
-    printf "  const PASSWORD = '%s';\n" "$TEST_PASSWORD"
-    printf '  const ACTION_TIMEOUT = %s;\n' "${ACTION_TIMEOUT_MS:-8000}"
+    # The four values below come from tests/credentials.env and the environment, so
+    # they are project data, not code. Written straight into a quoted JS literal, an
+    # apostrophe in a password ended the string and the rest ran as JavaScript in the
+    # playwright process -- and an ordinary apostrophe produced a syntax error that
+    # printed the password into the failure line. JSON.parse of one encoded blob has
+    # neither problem, and the constants below it are the same four names as before.
+    printf '  const MDL_CFG = JSON.parse(%s);\n' "$(mdl_json_string \
+      "$(mdl_json_object BASE "$BASE_URL" USER "$TEST_USER" PASSWORD "$TEST_PASSWORD")")"
+    printf '  const BASE = MDL_CFG.BASE;\n'
+    printf '  const USER = MDL_CFG.USER;\n'
+    printf '  const PASSWORD = MDL_CFG.PASSWORD;\n'
+    printf '  const ACTION_TIMEOUT = %s;\n' "$(mdl_json_number "${ACTION_TIMEOUT_MS:-8000}" 8000)"
     printf '  const RELEASE = %s;\n' "$_MDL_RELEASE"
     printf '  const REUSE = %s;\n' "$_MDL_REUSE"
     cat <<'PRELUDE'
@@ -522,8 +546,9 @@ CATCH
     printf '}\n'
   } > "$code_file"
 
+  _MDL_SCENARIO_FILE="$code_file"
   output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
-  rm -f "$code_file"
+  rm -f "$code_file"; _MDL_SCENARIO_FILE=""
 
   if printf '%s' "$output" | grep -q '^### Error'; then
     # The full block goes to stderr for a human reading the script's own output,
