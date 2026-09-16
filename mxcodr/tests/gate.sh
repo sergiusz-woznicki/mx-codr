@@ -92,6 +92,10 @@ trap cleanup_work EXIT
 
 
 # --- 2. App helpers ---
+# The gate's Python (digests, JSON, timestamps) lives in tools/mdl-checks/gate_helpers.py.
+gate_py() {
+  "$PY" tools/mdl-checks/gate_helpers.py "$@"
+}
 answers() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$1" 2>/dev/null)" = "200" ]; }
 
 # True when the boot log already shows a failure, so the wait loop stops early.
@@ -262,14 +266,7 @@ check_mx() {
 
 # Names from a `SHOW ... --json` listing on stdin; non-zero when it is not JSON.
 qualified_names() {
-  "$PY" -c 'import json,sys
-rows = json.load(sys.stdin)
-if not isinstance(rows, list):
-    sys.exit(1)
-for row in rows:
-    name = row.get("Qualified Name") or row.get("QualifiedName")
-    if name:
-        print(name)' 2>/dev/null
+  gate_py qualified-names 2>/dev/null
 }
 
 # 0 passed, 1 findings, 2 broken. A traceback also exits 1, so 1 needs a FAIL line first.
@@ -461,42 +458,7 @@ check_layout() {
 # Only passes are cached, keyed on the bytes of every input the check reads plus the .mpr
 # and mprcontents/; meta:<path> keys on size + mtime, env:NAME=value on the value.
 fingerprint() {   # fingerprint <path>... -> one digest line; meta:<path> keys on size + mtime, env:NAME=value on the value
-  "$PY" - "$MPR" mprcontents "$@" <<'PY_FP'
-import hashlib, os, sys
-h = hashlib.sha256()
-def add(path, content):
-    try:
-        st = os.stat(path)
-    except OSError:
-        h.update(("missing %s\n" % path).encode()); return
-    if os.path.isdir(path):
-        for root, dirs, files in os.walk(path):
-            dirs.sort()
-            for name in sorted(files):
-                add(os.path.join(root, name), content)
-        return
-    if not content:
-        h.update(("%s %d %d\n" % (path, st.st_size, st.st_mtime_ns)).encode())
-        return
-    h.update(("%s %d\n" % (path, st.st_size)).encode())
-    try:
-        with open(path, "rb") as handle:
-            for chunk in iter(lambda: handle.read(1 << 20), b""):
-                h.update(chunk)
-    except OSError:
-        h.update(("unreadable %s\n" % path).encode())
-for arg in sys.argv[1:]:
-    if arg.startswith("env:"):
-        # env:NAME=value -- a setting read from the environment rather than a file.
-        # The value is expanded by the caller, so it counts whether or not it was
-        # exported.
-        h.update(("%s\n" % arg).encode())
-    elif arg.startswith("meta:"):
-        add(arg[5:], False)
-    else:
-        add(arg, True)
-print(h.hexdigest()[:24])
-PY_FP
+  gate_py fingerprint "$MPR" mprcontents "$@"
 }
 CACHE_DIR="$APP_DIR/.mxcli/gate-cache"
 # The key includes a secret kept outside the project, so a forged cache entry cannot replay.
@@ -504,7 +466,7 @@ mdl_cache_secret() {
   local file="${MDL_CACHE_SECRET_FILE:-$HOME/.mxcli/gate-cache.secret}"
   if [ ! -s "$file" ]; then
     mkdir -p "$(dirname "$file")" 2>/dev/null || { echo none; return 0; }
-    ( umask 077; "$PY" -c 'import secrets; print(secrets.token_hex(16))' > "$file" 2>/dev/null ) \
+    ( umask 077; gate_py secret > "$file" 2>/dev/null ) \
       || { echo none; return 0; }
   fi
   cat "$file" 2>/dev/null || echo none
@@ -534,6 +496,10 @@ run_cached() {
 }
 
 # --- 5. Start checks ---
+if [ "$STOP" = "0" ] && [ ! -f tools/mdl-checks/gate_helpers.py ]; then
+  echo "tools/mdl-checks/gate_helpers.py is missing -- re-run the installer" >&2
+  exit 2
+fi
 if [ "$STOP" = "1" ]; then
   echo "== stopping this project's app"
   stop_project_app
@@ -541,7 +507,7 @@ if [ "$STOP" = "1" ]; then
 fi
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   # Upgrading the gate, its config or mxcli must not replay an old pass.
-  cache_inputs=(tests/gate.sh tests/harness.env "meta:$MXCLI")
+  cache_inputs=(tests/gate.sh tools/mdl-checks/gate_helpers.py tests/harness.env "meta:$MXCLI")
   ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
@@ -632,28 +598,13 @@ preflight_session() {
   users="$(curl -s -m 5 -X POST "http://localhost:${ADMIN_PORT:-8090}/" \
       -H "X-M2EE-Authentication: $(printf '%s' "${ADMIN_PASSWORD:-mxcli-local-dev}" | base64)" \
       -H 'Content-Type: application/json' -d '{"action":"get_logged_in_user_names"}' 2>/dev/null \
-    | "$PY" -c 'import json,sys
-try:
-    f = json.load(sys.stdin).get("feedback", {})
-except Exception:
-    sys.exit(0)
-users = f.get("users") or []
-if users:
-    print(",".join(users))' 2>/dev/null)"
+    | gate_py signed-in-users 2>/dev/null)"
   [ -n "$users" ] && echo "   already signed in: $users"
 
   local refusal=""
   if [ -f "$log" ]; then
     refusal="$(tail -400 "$log" 2>/dev/null | grep 'Maximum number of sessions exceeded' | tail -1 \
-      | "$PY" -c "
-import datetime, re, sys
-line = sys.stdin.read().strip()
-stamp = re.match(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', line) if line else None
-if not stamp:
-    sys.exit(0)
-when = datetime.datetime.strptime(stamp.group(1), '%Y-%m-%d %H:%M:%S')
-if (datetime.datetime.now() - when).total_seconds() <= 120:
-    print(stamp.group(1))" 2>/dev/null)"
+      | gate_py recent-refusal 120 2>/dev/null)"
   fi
   [ -n "$refusal" ] || return 0
   if [ "${ALLOW_BUSY_SESSION:-0}" = "1" ]; then
@@ -698,18 +649,7 @@ preflight_stale_model() {
   local built
   for built in deployment/model/model.mdp deployment/model/metadata.json; do
     [ -f "$built" ] || continue
-    "$PY" - "$MPR" "$built" <<'PY_BUILT' | tee -a "$WORK/stale.note"
-import os, sys
-mpr, built = sys.argv[1], sys.argv[2]
-try:
-    gap = int(os.path.getmtime(mpr) - os.path.getmtime(built))
-except OSError:
-    sys.exit(0)
-if gap > 5:
-    print("   !! the model is %ds newer than the built deployment -- this run measures"
-          " the OLD app" % gap)
-    print("      rebuild before trusting anything green here")
-PY_BUILT
+    gate_py deployment-age "$MPR" "$built" | tee -a "$WORK/stale.note"
     break
   done
 
@@ -720,20 +660,7 @@ PY_BUILT
   [ -n "$oldest" ] || return 0
   started="$(ps -o lstart= -p "$oldest" 2>/dev/null)"
   [ -n "$started" ] || return 0
-  "$PY" - "$MPR" "$started" <<'PY_STALE' | tee -a "$WORK/stale.note"
-import datetime, os, sys
-mpr, started = sys.argv[1], sys.argv[2]
-try:
-    boot = datetime.datetime.strptime(" ".join(started.split()), "%a %b %d %H:%M:%S %Y")
-except ValueError:
-    sys.exit(0)
-changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
-gap = (changed - boot).total_seconds()
-if gap > 5:
-    print("   !! the model changed %ds after the runtime started and nothing applied it"
-          " (no --watch reload or restart logged) -- this run measures the old app:" % gap)
-    print("      bash tests/gate.sh --restart")
-PY_STALE
+  gate_py runtime-age "$MPR" "$started" | tee -a "$WORK/stale.note"
 }
 
 # Warns about a missing browser binary, a broken local database, and missing credentials.
@@ -741,16 +668,7 @@ preflight_environment() {
   local config="$APP_DIR/.playwright/cli.config.json"
   if [ -f "$config" ]; then
     local browser
-    browser="$("$PY" -c "
-import json, os, sys
-try:
-    options = json.load(open(sys.argv[1]))['browser']['launchOptions']
-except Exception:
-    sys.exit(0)
-path = options.get('executablePath')
-if path and not os.path.exists(path):
-    print(path)
-" "$config" 2>/dev/null)"
+    browser="$(gate_py missing-browser "$config" 2>/dev/null)"
     if [ -n "$browser" ]; then
       echo "   !! the browser binary in .playwright/cli.config.json does not exist: $browser"
       echo "      every test will fail with 'opening browser: exit status 1' -- re-run the"
