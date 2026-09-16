@@ -92,15 +92,20 @@ try:
 except Exception:
     print("   admin port did not answer")' 2>/dev/null
   if [ -f "$RUNTIME_LOG" ]; then
-    refusals="$(tail -400 "$RUNTIME_LOG" | grep -c 'Maximum number of sessions exceeded')"
+    refusals="$(current_run_log | tail -400 | grep -c 'Maximum number of sessions exceeded')"
     [ "$refusals" != "0" ] && echo "   session-cap refusals in the last 400 log lines: $refusals"
   fi
 }
 
+# The runtime log since its last "=== runtime start" marker (the whole log when it has none).
+current_run_log() {
+  awk '/^=== runtime start /{n=0; delete kept; next} {kept[++n]=$0} END{for (i=1; i<=n; i++) print kept[i]}' "$RUNTIME_LOG"
+}
+
 errors_section() {
-  echo "== last runtime errors"
+  echo "== last runtime errors (since the runtime last started)"
   if [ -f "$RUNTIME_LOG" ]; then
-    grep -E ' (ERROR|CRITICAL) ' "$RUNTIME_LOG" | tail -5 | cut -c1-160
+    current_run_log | grep -E ' (ERROR|CRITICAL) ' | tail -5 | cut -c1-160
   else
     echo "   no runtime log at $RUNTIME_LOG"
   fi
