@@ -8,7 +8,7 @@ customer="Northwind Traders"
 expected_unpaid="$(oql "SELECT COUNT(*) AS Total FROM InvoiceDesk.Invoice AS i
   JOIN i/InvoiceDesk.Invoice_Customer/InvoiceDesk.Customer AS c
   WHERE c/Name = '$customer' AND (i/Status = 'Sent' OR i/Status = 'Overdue')" \
-  | python3 -c "import json,sys; rows=json.load(sys.stdin); print(rows[0]['Total'] if rows else 0)")"
+  | "$PY" -c "import json,sys; rows=json.load(sys.stdin); print(rows[0]['Total'] if rows else 0)")"
 
 result="$(scenario '
   await open_app();
@@ -24,6 +24,6 @@ result="$(scenario '
 ')"
 
 [ "$(field "$result" reported)" = "true" ] || fail "no unpaid-count message shown for $customer"
-printf '%s' "$(field "$result" text)" | grep -q "$expected_unpaid" || fail "message does not report the expected count of $expected_unpaid"
+printf '%s' "$(field "$result" text)" | grep -q "has $expected_unpaid unpaid invoice" || fail "message does not report the expected count of $expected_unpaid"
 
 echo "OK: $customer reported $expected_unpaid unpaid invoice(s)"
