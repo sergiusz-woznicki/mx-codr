@@ -653,7 +653,8 @@ await_row() {
   return 0
 }
 
-# oql_value <Entity> <Attr> "<where>" -- 'no-such-row' if none; 'empty' for empty, 0 or false.
+# oql_value <Entity> <Attr> "<where>" -- 'no-such-row' if none; 'empty' for null or "";
+# booleans print true/false, numbers as they are (0 stays 0).
 oql_value() {
   local entity="$1" attribute="$2" where="$3"
   local json
@@ -662,6 +663,15 @@ oql_value() {
   printf '%s' "$json" | "$PY" -c "
 import json, sys
 rows = json.load(sys.stdin)
-print((rows[0].get(sys.argv[1]) or 'empty') if rows else 'no-such-row')
+if not rows:
+    print('no-such-row')
+else:
+    value = rows[0].get(sys.argv[1])
+    if value is None or value == '':
+        print('empty')
+    elif isinstance(value, bool):
+        print('true' if value else 'false')
+    else:
+        print(value)
 " "$attribute"
 }
