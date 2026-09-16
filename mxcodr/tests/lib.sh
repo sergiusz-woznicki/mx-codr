@@ -639,10 +639,13 @@ print(rows[0].get('Total', 0) if rows else 0)
 "
 }
 
-# await_row <Entity> "<where>" [seconds] -- 0 once a row matches, 1 after <seconds> (default 8).
+# await_row <Entity> "<where>" [seconds] -- 0 once a row matches, 1 after <seconds> (default 8)
+# or when the query itself fails.
 await_row() {
-  local entity="$1" where="$2" limit="${3:-8}" waited=0
-  while [ "$(oql_count "$entity" "$where")" = "0" ]; do
+  local entity="$1" where="$2" limit="${3:-8}" waited=0 count
+  while :; do
+    count="$(oql_count "$entity" "$where")" || return 1
+    [ "$count" = "0" ] || return 0
     waited=$((waited + 1))
     [ "$waited" -ge "$((limit * 4))" ] && return 1
     perl -e 'select undef, undef, undef, 0.25'
