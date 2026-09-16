@@ -8,7 +8,7 @@ gate that fails. Neither half is useful alone: the prose without the gate is adv
 an agent drifts from by the third feature, and the gate without the prose only ever
 says no.
 
-`dist/` is the whole bundle. Everything below is about installing and using it.
+`mxcodr/` is the whole bundle. Everything below is about installing and using it.
 
 ## You run the installer. That is the only command you have to run.
 
@@ -70,14 +70,14 @@ a JDK — that wants a licence click.
 
 ## Install
 
-Copy `dist/` into your Mendix project, `cd` into it, and run:
+Copy `mxcodr/` into your Mendix project, `cd` into it, and run:
 
 ```bash
 bash install.sh --with-deps
 ```
 
 Run from inside the bundle it installs into the project the bundle sits in, which
-is what you mean when you have just copied `dist/` into your app.
+is what you mean when you have just copied `mxcodr/` into your app.
 
 ```
 bash install.sh [path-to-project] [--no-app] [--with-deps]
@@ -224,5 +224,5 @@ was, so note it before running tests against a project you care about.
 
 ## Rebuilding the bundle
 
-`dist/` is a copy of files that live in the harness repo — `dist/README.md` has the
+`mxcodr/` is a copy of files that live in the harness repo — `mxcodr/README.md` has the
 table of which file comes from where. Edit it there, not here.
