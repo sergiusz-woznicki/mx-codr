@@ -1,16 +1,100 @@
-# The Mendix delivery harness
+# mx-codr
 
-A drop-in bundle that makes an AI coding agent follow five project rules while it
-builds a Mendix app, and gives one command that says whether the work is done.
+**Your AI agent builds the Mendix app. mx-codr makes sure it is actually finished.**
 
-The rules are prose the agent reads. The enforcement is lint rules, checkers and a
-gate that fails. Neither half is useful alone: the prose without the gate is advice
-an agent drifts from by the third feature, and the gate without the prose only ever
-says no.
+Claude Code, Codex, Cursor and OpenCode can already write Mendix domain models,
+microflows and pages. What they don't do on their own is *prove* the work: a test
+for every screen, a model that passes Mendix's own checks, microflows a colleague can
+read, screens that aren't glued together. mx-codr adds exactly that — one installer,
+and one command that answers **DONE** or **NOT DONE**.
+
+## What you get
+
+- **Test-first, automatically.** The agent writes a failing browser test before each
+  feature, and every page and action ends up with one.
+- **One command decides "done".** `bash tests/gate.sh` runs the browser tests,
+  `mx check`, lint, test coverage, naming and layout together, in under half a minute.
+- **Rules the agent keeps following.** Hooks repeat them on every prompt and after
+  every model change, so they don't fade by the third feature.
+- **A model people can read.** Business captions on every activity, process folders,
+  shared snippets and sub-microflows instead of copies, spacing from the Atlas theme.
+- **Your agent, your OS.** Claude Code, Codex, Cursor and OpenCode, on macOS, Linux
+  and Windows — Windows on ARM included.
+
+## Get started
+
+Copy the `mxcodr/` folder into your Mendix project — or into an empty folder, and the
+installer creates the app for you. Then, from that folder:
+
+**macOS and Linux**
+
+```bash
+bash mxcodr/install.sh --with-deps
+```
+
+**Windows** — open PowerShell **as administrator** and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File mxcodr\bootstrap.ps1
+```
+
+Windows has no bash out of the box, so `bootstrap.ps1` first installs Git for Windows
+(which brings Git Bash), Python and Node with winget, then runs the same installer.
+Administrator rights are needed because winget installs Docker Desktop. Already have
+Git Bash? Run `bash mxcodr/install.sh --with-deps` from Git Bash instead.
+
+Start a new agent session and ask for a feature. That's it.
+
+## The installer sets everything up
+
+You don't install the pieces one by one. The installer checks what this machine has,
+fetches what is missing, and tells you plainly about anything it could not do.
+
+| | What the installer does |
+|---|---|
+| **Your Mendix app** | Creates one with `mxcli new` if the folder has none (Mendix 11.12.1 unless you set `MX_VERSION`) |
+| **mxcli** | Uses the newest mxcli on the machine, offers the latest release when it is newer, and verifies the download's checksum |
+| **Docker** | Installs it when it is missing |
+| **Python, Node, Playwright and its browser** | Installs them with `--with-deps` — the checkers and browser tests run on them |
+| **MxBuild** | Downloads the one for your Mendix version with `--with-deps`, so `mx check` runs |
+| **PostgreSQL** | Sets it up when you work without Docker, with `--with-deps` |
+| **Skills, lint rules, checkers, hooks** | Puts them where each of the four agents looks for them |
+| **Windows** | Applies the junctions and ARM64 fixes that Studio Pro's mxbuild needs |
+
+What cannot be installed unattended — a JDK, a Docker daemon that has to be started —
+is listed at the end with the command to run.
+
+## How a feature gets built
+
+```
+ you ask ─▶ agent writes a test ─▶ test fails (red) ─▶ agent builds it in MDL
+                                                              │
+      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout ◀── test passes
+```
+
+You never run the checks yourself. The agent runs the gate, and the hooks make sure
+it does.
+
+## Does it make a difference?
+
+Two A/B runs: the same prompt, the same model, a fresh app each time — once without
+mx-codr, once with it.
+
+| | Without mx-codr | With mx-codr |
+|---|---|---|
+| Browser tests written | 0 | 5–7 |
+| Gate at the end | **NOT DONE** (no tests, no coverage, spacing errors) | **DONE** |
+| First verified DONE | never | after 11.6–12.2 min |
+| Whole session | 11.0–11.4 min | 15.2–15.9 min |
+
+About a minute more to reach a *verified* result; the rest of the extra time was the
+agent polishing after DONE.
+
+---
+
+## How the pieces fit together
 
 `mxcodr/` is the whole bundle. Everything below is about installing and using it.
-
-## You run the installer. That is the only command you have to run.
 
 Nothing in this harness is a tool you operate. There is no Python script to invoke,
 no checker to remember the arguments of, no order to run things in. After
@@ -18,7 +102,7 @@ no checker to remember the arguments of, no order to run things in. After
 
 | What | How the agent finds it |
 |---|---|
-| The five rules, in prose | `SKILL.md` files in the three directories each host looks in |
+| The six rules, in prose | `SKILL.md` files in the three directories each host looks in |
 | The always-loaded reminder | `.claude/rules/` and `.cursor/rules/`, loaded on every turn |
 | `MOD001`, `REU001` | `mxcli lint` discovers `.claude/lint-rules/*.star` by itself |
 | `check_mdl.py`, `check_test_coverage.py` | the skills that need them name the exact command; the gate runs them too |
@@ -51,6 +135,7 @@ and then working with your agent as usual.
 | `naming-and-captions` | PascalCase, `ENUM_`/`SNIPPET_` prefixes, `_NewEdit`/`_View`/`_Overview` pages, a business caption on every activity |
 | `reuse-and-snippets` | a snippet used on more than one page, a `SUB_` microflow with more than one caller |
 | `organize-project` | nothing orphaned, nothing left at module root |
+| `spacing-and-layout` | widgets on one line spaced with Atlas design properties, never custom CSS |
 
 ## Requirements
 

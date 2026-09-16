@@ -13,7 +13,7 @@
   or a licence click, so a script that "finished" without them would have lied.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File dist\bootstrap.ps1 C:\Mendix\MyApp
+  powershell -ExecutionPolicy Bypass -File mxcodr\bootstrap.ps1 C:\Mendix\MyApp
 #>
 
 [CmdletBinding()]
