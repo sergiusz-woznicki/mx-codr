@@ -25,7 +25,7 @@
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # Sections (2-4, 8 and 9 only define functions):
-#   1. Setup          find the .mpr, source portable.sh, parse flags
+#   1. Setup          source portable.sh, parse flags, find the .mpr (or MPR=)
 #   2. App helpers    answers, boot failure, wait_for_boot, user modules, pids, database
 #   3. Model checks   check_mx, check_lint, check_coverage, check_naming, check_layout
 #   4. Cache          fingerprint, run_cached
@@ -44,24 +44,6 @@ HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
 cd "$APP_DIR"
 . "$HARNESS_DIR/portable.sh"
-MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
-[ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
-# The name ends up in a pgrep pattern whose matches get killed: safe characters only.
-case "$MPR" in
-  *[!A-Za-z0-9._-]*|-*|.*)
-    echo "refusing to run: the .mpr name must be letters, digits, dot, dash or underscore: $MPR" >&2
-    exit 2 ;;
-esac
-if [ "$(ls -1 *.mpr 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
-  echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
-fi
-SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
-APP_PORT="${APP_PORT:-8081}"
-BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
-# Scratch directory for this run's result files; removed on exit.
-WORK="$(mdl_tmpdir mdl-gate)"
-trap 'rm -rf "$WORK"' EXIT
-
 ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
 booted_by_command=""   # set to 1 once MDL_BOOT_COMMAND has booted the app
 while [ $# -gt 0 ]; do
@@ -71,10 +53,33 @@ while [ $# -gt 0 ]; do
     --boot-if-needed) BOOT=1; shift ;;
     --restart) RESTART=1; BOOT=1; shift ;;
     --no-cache) USE_CACHE=0; shift ;;
-    -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$HARNESS_DIR/gate.sh"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+# MPR=<name>.mpr picks one when the directory holds several; otherwise the first one found.
+if [ -z "${MPR:-}" ]; then
+  MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
+  [ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
+  if [ "$(ls -1 *.mpr 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
+    echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
+  fi
+fi
+# The name ends up in a pgrep pattern whose matches get killed: safe characters only.
+case "$MPR" in
+  *[!A-Za-z0-9._-]*|-*|.*)
+    echo "refusing to run: the .mpr name must be letters, digits, dot, dash or underscore: $MPR" >&2
+    exit 2 ;;
+esac
+[ -f "$MPR" ] || { echo "no $MPR in $APP_DIR" >&2; exit 2; }
+SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
+APP_PORT="${APP_PORT:-8081}"
+BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
+# Scratch directory for this run's result files; removed on exit.
+WORK="$(mdl_tmpdir mdl-gate)"
+trap 'rm -rf "$WORK"' EXIT
+
 
 # --- 2. App helpers ---
 answers() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$1" 2>/dev/null)" = "200" ]; }
