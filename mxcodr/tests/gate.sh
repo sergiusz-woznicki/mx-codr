@@ -679,13 +679,13 @@ preflight_environment() {
     browser="$("$PY" -c "
 import json, os, sys
 try:
-    options = json.load(open('$config'))['browser']['launchOptions']
+    options = json.load(open(sys.argv[1]))['browser']['launchOptions']
 except Exception:
     sys.exit(0)
 path = options.get('executablePath')
 if path and not os.path.exists(path):
     print(path)
-" 2>/dev/null)"
+" "$config" 2>/dev/null)"
     if [ -n "$browser" ]; then
       echo "   !! the browser binary in .playwright/cli.config.json does not exist: $browser"
       echo "      every test will fail with 'opening browser: exit status 1' -- re-run the"
