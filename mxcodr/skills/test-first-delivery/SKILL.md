@@ -40,6 +40,10 @@ What a test script can call, so there is no need to read `tests/lib.sh` to find 
 *Write it as one scenario* below.
 
 ```bash
+export TEST_USER=demo_customer       # optional, BEFORE lib.sh: sign in as this user (default
+                                     # demo_administrator); its password comes from
+                                     # tests/credentials.env: TEST_PASSWORD_demo_customer=...
+                                     # (DESCRIBE DEMO USER masks it -- write down what you set)
 source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
 # shell:  scenario '<js body>'   field "$result" key   fields "$result" a b   fail "msg"
 #         oql "SELECT ..."   oql_count Entity ["where"]   oql_value Entity Attr "where"
