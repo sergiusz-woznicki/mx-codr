@@ -1,48 +1,62 @@
 #!/usr/bin/env bash
-# Shared helpers for the verify-*.test.sh scripts.
+# lib.sh -- shared helpers for browser tests. A test sources it after its `# covers:` line:
+#   source "$(dirname "$0")/lib.sh"
+# Rule: ONE scenario per test -- each playwright-cli process costs ~0.6s to start; oql is ~0.03s.
+# Exit codes: pass 0, fail() 1, SCRIPT_TIMEOUT 124.
 #
-# The design rule here is about speed, and it is the only thing that matters for
-# how these tests are written:
+# Shell helpers:
+#   scenario '<js body>'                 run one browser journey; print its return value as JSON
+#   field "$result" <key>                print one value (true/false/null spelled as JSON)
+#   fields "$result" <key>...            print several values, one per line
+#   oql "<OQL>"                          query the app's database; rows as JSON
+#   oql_count <Entity> ["<where>"]       count matching rows of $MODULE.<Entity>
+#   oql_value <Entity> <Attr> "<where>"  first match's value ('empty' / 'no-such-row')
+#   await_row <Entity> "<where>" [s]     wait up to s seconds (default 8) for a row; 1 if none
+#   fail "<message>"                     "FAIL: <message>" on stderr, exit 1
+#   release_session                      sign the browser out (gate.sh, end of run)
 #
-#   ONE browser scenario per test, not one call per click.
+# JS helpers (inside a scenario; 'widget' = Mendix name, i.e. .mx-name-<widget>; `page` = Playwright):
+#   open_app()                         open the app, sign in as TEST_USER if asked
+#   reopen_app()                       start over (page.goto is refused once the app is open)
+#   menu('Label'[, 'widget'])          click a menu item; the widget proves arrival
+#   landed('widget', 'what')           throw unless the widget appears
+#   fill('widget', value)              type into a text box/area, then tab out
+#   pick_combo('widget', 'option')     choose a combo box option
+#   row_action('grid', 'text', 'btn')  click a button in the first grid row containing text
+#   await_message(/regex/[, ms])       wait for an app message; returns the page text
+#   dismiss_dialog()                   click OK on an open dialog
+#   page_text()                        all visible page text
+#   BASE, USER, PASSWORD, ACTION_TIMEOUT  constants from the settings
 #
-# `playwright-cli eval` costs about 0.66s per invocation -- process launch and
-# connect, before any browser work happens. A test written as twenty helper calls
-# therefore pays ~13s of pure process spawning; measured, `verify-escalate` spent
-# roughly half its 35.6s that way. `scenario` runs the whole flow in a single
-# `playwright-cli run-code` process instead, so a test costs one spawn plus the
-# browser work it actually needs.
+# Env (all optional):
+#   BASE_URL                               app address (default http://localhost:8081)
+#   APP_DIR, MPR                           project folder and .mpr (default: folder above tests/)
+#   MXCLI, PY                              mxcli and Python (default: tests/portable.sh)
+#   TEST_USER, TEST_PASSWORD, CREDENTIALS  sign-in (default: tests/credentials.env)
+#   MODULE                                 module for oql_count/oql_value (default: the
+#                                          test's `# covers:` module, then MDL_DEFAULT_MODULE)
+#   RUNTIME_LOG                            read for licence refusals (default .mxcli/runtime.log)
+#   SCRIPT_TIMEOUT                         per-script limit, "90" or "90s"
+#   ACTION_TIMEOUT_MS                      wait per browser step (default 8000)
+#   KEEP_SESSION, MDL_SESSION_REUSE, FRESH_SESSION  session reuse (section 6)
+#   ADMIN_HOST, ADMIN_PORT                 admin API for oql (default localhost:8090)
 #
-# Data assertions stay in the shell, where they are cheap: `mxcli oql` costs
-# ~0.03s, so asserting against the database is effectively free.
+# Sections: 1 Paths  2 Credentials  3 Module  4 fail  5 Time limit  6 Sessions
+#           7 scenario  8 field/fields  9 Data assertions
+
+# --- 1. Paths and tools ---
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8081}"
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 MPR="${MPR:-$(cd "$APP_DIR" && ls -1 *.mpr | head -1)}"
-# mxcli.exe vs mxcli, python vs python3, GNU vs BSD mktemp -- see tests/portable.sh.
-# MXCLI from the environment still wins; portable.sh only fills a blank.
+# MXCLI and PY come from portable.sh unless already set.
 PORTABLE_APP_DIR="$APP_DIR"
 . "$(dirname "${BASH_SOURCE[0]}")/portable.sh"
 
-# Credentials, used only when the app has security on and shows a login page.
-#
-# The password cannot be discovered from the model -- it is not in the .mpr, and
-# `SHOW DEMO USERS` reports names and roles only (checked). So rather than have every
-# session patch this file by hand (two sessions did, with two different passwords),
-# it is read from the project, in this order:
-#
-#   1. TEST_PASSWORD / TEST_USER in the environment            (one run)
-#   2. tests/credentials.env                                   (the project's answer)
-#        TEST_USER=demo_collector
-#        TEST_PASSWORD=SomePass12345
-#        TEST_PASSWORD_demo_customer=OtherPass12345   # per-user, optional
-#   3. nothing -- correct for an app with Security Level: Off
-#
-# TEST_USER belongs there too, not as a default here: the canonical tests drive the
-# staff screens, and which role may open those is a decision each app makes. An app
-# that switches security on with the wrong user gets five red tests whose real cause
-# is "this user cannot see the button".
+# --- 2. Credentials ---
+# From the environment, else tests/credentials.env (TEST_USER=, TEST_PASSWORD=,
+# TEST_PASSWORD_<user>=), else none (Security Level: Off).
 CREDENTIALS="${CREDENTIALS:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/credentials.env}"
 if [ -z "${TEST_USER:-}" ] && [ -f "$CREDENTIALS" ]; then
   _user_line="$(grep -E '^TEST_USER=' "$CREDENTIALS" 2>/dev/null | tail -1 || true)"
@@ -50,10 +64,7 @@ if [ -z "${TEST_USER:-}" ] && [ -f "$CREDENTIALS" ]; then
 fi
 TEST_USER="${TEST_USER:-demo_administrator}"
 if [ -z "${TEST_PASSWORD:-}" ] && [ -f "$CREDENTIALS" ]; then
-  # Read as data, not sourced: a credentials file must not be able to run commands.
-  # `|| true` matters: no match makes grep exit 1, and under `set -e` with pipefail
-  # the failed pipeline would end the script during `source`, silently.
-  # -F, not -E: TEST_USER is data, and a value like `.*` matched another user's line.
+  # Read as data, never sourced. -F: TEST_USER is a literal, not a pattern.
   _per_user="$(grep -F -- "TEST_PASSWORD_${TEST_USER}=" "$CREDENTIALS" 2>/dev/null \
     | grep -F -v -e '#' | tail -1 || true)"
   _shared="$(grep -E '^TEST_PASSWORD=' "$CREDENTIALS" 2>/dev/null | tail -1 || true)"
@@ -63,11 +74,15 @@ if [ -z "${TEST_PASSWORD:-}" ] && [ -f "$CREDENTIALS" ]; then
 fi
 TEST_PASSWORD="${TEST_PASSWORD:-}"
 
-# The module oql_count and oql_value query. It used to be the demo app's name, written
-# into the helpers, so `oql_count Invoice` worked in exactly one project and every
-# other app had to spell out full OQL -- a session building `InvoiceChase` found this
-# and patched its own copy. gate.sh exports MODULE (it has already read the app's
-# modules); a script run on its own resolves it here, once.
+# --- 3. Module ---
+# MODULE if set; else the module on the test's `# covers:` line (so an app with several modules
+# works, and a red-first test runs before the module exists); else the gate's MDL_DEFAULT_MODULE;
+# else the project's first own module.
+if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
+  MODULE="$(sed -nE 's/^#[[:space:]]*covers:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)\..*/\1/p' \
+    "${BASH_SOURCE[1]}" 2>/dev/null | head -1)"
+fi
+MODULE="${MODULE:-${MDL_DEFAULT_MODULE:-}}"
 if [ -z "${MODULE:-}" ]; then
   MODULE="$("$MXCLI" -p "$APP_DIR/$MPR" --json -c "SHOW MODULES" 2>/dev/null \
     | "$PY" -c 'import json,sys
@@ -79,45 +94,23 @@ for row in rows:
     if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
         print(row["Module"]); break' 2>/dev/null)"
 fi
-# Test first means the test exists before the module does, and then neither gate.sh
-# nor SHOW MODULES has a name to give. Every oql_* call then failed with "needs a
-# module ... or run through tests/gate.sh" -- although it was run through the gate --
-# so the red-first run went red for a reason that had nothing to do with the missing
-# feature (seen in the 2026-09-13 benchmark, two tests of seven). The script's own
-# `# covers:` header already names the module it is about; take it from there, and
-# the query then fails on the entity that does not exist yet, which is the real reason.
-if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
-  MODULE="$(sed -nE 's/^#[[:space:]]*covers:[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)\..*/\1/p' \
-    "${BASH_SOURCE[1]}" 2>/dev/null | head -1)"
-fi
 
-# The runtime log is where a licence refusal is explained; the browser only shows a
-# failed sign-in. Read from it rather than guessing at the cause.
+# --- 4. fail and the runtime log ---
 RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
 
+# Inside $(...) fail ends only that subshell; callers add `|| exit 1`.
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-# --- the script's own time limit ---------------------------------------------
-#
-# `mxcli playwright verify` kills a script at --timeout, but a script run by hand
-# (`bash tests/verify-x.test.sh`) had no limit at all: one session's hand-run test
-# hung for 801s on a browser call that never returned, and another for 1141s. And
-# the runner's kill is a bare SIGKILL of bash -- the stuck `playwright-cli run-code`
-# child survives it, keeps the shared browser busy, and the NEXT script hangs the
-# same way.
-#
-# So every script carries its own limit. SCRIPT_TIMEOUT -- the gate's knob, "90s"
-# or "90" -- sets it, and it fires 5s before the runner would, so it is this trap,
-# which kills the child and names the cause, that reports -- not the runner's bare
-# "timeout after 1m30s".
+# --- 5. Time limit ---
+# The runner's SIGKILL leaves playwright-cli running, so each script kills its own tree 5s earlier.
 _MDL_LIMIT="${SCRIPT_TIMEOUT:-90}"; _MDL_LIMIT="${_MDL_LIMIT%s}"
 case "$_MDL_LIMIT" in ''|*[!0-9]*) _MDL_LIMIT=90 ;; esac
 if [ "$_MDL_LIMIT" -gt 15 ]; then _MDL_LIMIT=$((_MDL_LIMIT - 5)); fi
 
-# Every process under <pid>, deepest first, except the caller. pgrep where it
-# exists; Git Bash has only `ps -ef` (PID, PPID as the first two columns).
+# Print every process under <pid>, deepest first (pgrep, or ps -ef on Git Bash).
 _mdl_descendants() {
   local child
+  # Skip $BASHPID: the watchdog subshell must not kill itself.
   if command -v pgrep >/dev/null 2>&1; then
     for child in $(pgrep -P "$1" 2>/dev/null); do
       [ "$child" = "$BASHPID" ] && continue
@@ -141,23 +134,24 @@ _mdl_kill_tree() {   # _mdl_kill_tree <pid>
   kill -KILL $victims 2>/dev/null || true
 }
 
-# The timeout is delivered in two steps because of how bash handles signals: a
-# trapped signal that arrives while a foreground command runs -- and a test body
-# is one long `result="$(scenario ...)"` -- is held until that command ends. So
-# the sleeper first leaves a marker, then ends every process under this script
-# (the stuck playwright-cli among them), which lets the deferred TERM trap run.
+# Bash defers a trapped TERM until the foreground command ends, so the watchdog also kills the children.
+# The flag file appearing tells the EXIT trap the watchdog fired.
 _MDL_TIMEOUT_FLAG="$(mdl_tmpfile mdl-watchdog)"; rm -f "$_MDL_TIMEOUT_FLAG"
 _MDL_TIMED_OUT=0
-_mdl_timed_out() {
-  _MDL_TIMED_OUT=1
+# The timeout report, on stderr; both the TERM and the EXIT handler print it.
+_mdl_timeout_message() {
   echo "FAIL: test exceeded ${_MDL_LIMIT}s (SCRIPT_TIMEOUT): a browser call or a polling loop never returned." \
        "If the next test hangs too, the browser is stuck: playwright-cli close && playwright-cli open" >&2
+}
+# TERM handler: report, kill the children, exit 124.
+_mdl_timed_out() {
+  _MDL_TIMED_OUT=1
+  _mdl_timeout_message
   _mdl_kill_tree $$
   exit 124
 }
 trap _mdl_timed_out TERM
-# The sleeper dies with its subshell, so a finished script leaves no `sleep`
-# behind for the rest of the limit.
+# Watchdog: sleep, set the flag, TERM the script, kill its process tree.
 ( trap 'kill $! 2>/dev/null; exit 0' TERM
   sleep "$_MDL_LIMIT" & wait $!
   : > "$_MDL_TIMEOUT_FLAG"
@@ -165,9 +159,7 @@ trap _mdl_timed_out TERM
   _mdl_kill_tree $$ ) 2>/dev/null &
 _MDL_WATCHDOG=$!
 
-# _mdl_bounded <seconds> <command...> -- run it, but give up after <seconds>. For the
-# clean-up that runs after a timeout: the browser that just hung is the one being
-# asked to log out, so the request must not be allowed to hang as well.
+# _mdl_bounded <seconds> <command...> -- run it, give up after <seconds> (the browser may be hung).
 _mdl_bounded() {
   local limit="$1" pid waited=0; shift
   "$@" >/dev/null 2>&1 &
@@ -180,48 +172,31 @@ _mdl_bounded() {
   wait "$pid" 2>/dev/null
 }
 
-# --- sessions -----------------------------------------------------------------
-#
-# A developer/trial licence caps concurrent sessions -- measured on this runtime, the
-# 7th live session was refused, and the app logged 60 refusals of "Maximum number of
-# sessions exceeded! (You are currently using a trial license)" in one evening. Every
-# session a test leaves behind counts towards that cap until it times out, so a
-# scenario signs out in its own `finally`, in-process (a second `playwright-cli`
-# spawn for it cost 0.6s per script). The EXIT trap below only covers the case
-# where the script died mid-scenario and the `finally` never ran.
-#
-# Two knobs relax that:
-#   KEEP_SESSION=1       leave the session signed in after the script -- for looking
-#                        at a page by hand, and what `gate.sh --only` sets so the
-#                        next iteration of the same test skips the sign-in.
-#   MDL_SESSION_REUSE=1  what gate.sh sets for a full run: scripts leave the session
-#                        signed in, open_app reuses it when it belongs to the same
-#                        TEST_USER, and the gate signs out once at the end. Five
-#                        tests then pay for one sign-in instead of five sign-outs
-#                        and five sign-ins.
-# FRESH_SESSION=1 overrides both: every open_app starts from the login page.
-_MDL_RELEASE=1
-if [ "${KEEP_SESSION:-0}" = "1" ] || [ "${MDL_SESSION_REUSE:-0}" = "1" ]; then _MDL_RELEASE=0; fi
-_MDL_REUSE=$((1 - _MDL_RELEASE))
-[ "${FRESH_SESSION:-0}" = "1" ] && _MDL_REUSE=0
+# --- 6. Sessions ---
+# The licence caps concurrent sessions, so a scenario signs out in its own `finally`.
+# KEEP_SESSION=1 / MDL_SESSION_REUSE=1: stay signed in, reused for the same TEST_USER. FRESH_SESSION=1: never reuse.
+# Both flags are 1 or 0: they are written into the scenario's JavaScript as numbers.
+if [ "${KEEP_SESSION:-0}" = "1" ] || [ "${MDL_SESSION_REUSE:-0}" = "1" ]; then
+  _MDL_RELEASE=0   # stay signed in after the scenario
+  _MDL_REUSE=1     # and pick that session up in the next one
+else
+  _MDL_RELEASE=1
+  _MDL_REUSE=0
+fi
+if [ "${FRESH_SESSION:-0}" = "1" ]; then _MDL_REUSE=0; fi
+# EXIT handler: stop the watchdog, report a timeout set -e hid, remove temp files, sign out after a timeout.
 _release_session() {
   local status=$?
   kill "$_MDL_WATCHDOG" 2>/dev/null || true
   if [ "$_MDL_TIMED_OUT" = "0" ] && [ -f "$_MDL_TIMEOUT_FLAG" ]; then
-    # The sleeper fired but `set -e` ended the script on the killed child before
-    # the TERM trap could run: same failure, same message.
-    echo "FAIL: test exceeded ${_MDL_LIMIT}s (SCRIPT_TIMEOUT): a browser call or a polling loop never returned." \
-         "If the next test hangs too, the browser is stuck: playwright-cli close && playwright-cli open" >&2
+    _mdl_timeout_message
     _MDL_TIMED_OUT=1
     status=124
   fi
   rm -f "$_MDL_TIMEOUT_FLAG"
-  # A scenario cut short by the watchdog never reached its own `rm`, and that file
-  # holds the password, so it would have sat in $TMPDIR until the next reboot.
+  # The scenario file holds the password.
   [ -n "${_MDL_SCENARIO_FILE:-}" ] && rm -f "$_MDL_SCENARIO_FILE"
-  # A scenario that ran to its `finally` has already signed out. Only a scenario
-  # cut short by the watchdog has not -- and then the browser that just hung is
-  # the one being asked, so the request is bounded rather than trusted.
+  # Only a timed-out scenario skipped its sign-out; bounded because that browser hung.
   if [ "$_MDL_TIMED_OUT" = "1" ] && [ "$_MDL_RELEASE" = "1" ] && [ -n "$TEST_PASSWORD" ]; then
     _mdl_bounded 5 playwright-cli run-code \
       "async () => { try { await page.evaluate(() => { if (window.mx && mx.logout) mx.logout(); }); } catch (e) {} return true; }" || true
@@ -230,15 +205,13 @@ _release_session() {
 }
 trap _release_session EXIT
 
-# The same sign-out, callable from a runner: gate.sh ends a MDL_SESSION_REUSE run
-# with it. A no-op where nothing is signed in.
+# release_session -- sign out within 10s, never fails; gate.sh calls it after a reuse run.
 release_session() {
   _mdl_bounded 10 playwright-cli run-code \
     "async () => { try { await page.evaluate(() => { if (window.mx && mx.logout) mx.logout(); }); await page.waitForSelector('#usernameInput, input[name=username]', {timeout: 5000}); } catch (e) {} return true; }" || true
 }
 
-# Did the runtime just refuse a session? Only a refusal in the last two minutes is
-# about this run.
+# Print a session refusal logged in the last 2 minutes; return 1 if none.
 _licence_refusal() {
   [ -f "$RUNTIME_LOG" ] || return 1
   tail -400 "$RUNTIME_LOG" 2>/dev/null | grep "Maximum number of sessions exceeded" | tail -1 \
@@ -257,44 +230,55 @@ print('the runtime refused a session: Maximum number of sessions exceeded (devel
 "
 }
 
-# --- the one browser call ----------------------------------------------------
-#
-# Runs a JavaScript body in Node with Playwright's `page` in scope, and prints
-# whatever it returns as JSON. The body may use `await` freely.
-#
-#   result="$(scenario '
-#     await open_app();
-#     await page.click(".mx-name-btnNewInvoice");
-#     return {open: await page.locator(".mx-name-txtNumber").count()};
-#   ')"
-#
-# Helpers available inside the body: open_app, fill, pick_combo, row_action,
-# page_text, dismiss_dialog, menu. They are plain Playwright underneath -- the
-# point is that they run in-process, so they cost milliseconds rather than a
-# process launch each.
+# --- 7. scenario ---
+# scenario '<js body>' -- run the body in one playwright-cli process; print its return as JSON, fail() on error.
+# Steps: write the JavaScript to a file, run it, fail on an error, print the result.
 scenario() {
   local body="$1"
   local code_file output
   code_file="$(mdl_tmpfile mdl-scenario)"
-  # The body is written to a file rather than interpolated into a command string:
-  # scenarios contain double quotes, which would terminate the outer shell string.
-  {
-    printf 'async () => {\n'
-    # The four values below come from tests/credentials.env and the environment, so
-    # they are project data, not code. Written straight into a quoted JS literal, an
-    # apostrophe in a password ended the string and the rest ran as JavaScript in the
-    # playwright process -- and an ordinary apostrophe produced a syntax error that
-    # printed the password into the failure line. JSON.parse of one encoded blob has
-    # neither problem, and the constants below it are the same four names as before.
-    printf '  const MDL_CFG = JSON.parse(%s);\n' "$(mdl_json_string \
-      "$(mdl_json_object BASE "$BASE_URL" USER "$TEST_USER" PASSWORD "$TEST_PASSWORD")")"
-    printf '  const BASE = MDL_CFG.BASE;\n'
-    printf '  const USER = MDL_CFG.USER;\n'
-    printf '  const PASSWORD = MDL_CFG.PASSWORD;\n'
-    printf '  const ACTION_TIMEOUT = %s;\n' "$(mdl_json_number "${ACTION_TIMEOUT_MS:-8000}" 8000)"
-    printf '  const RELEASE = %s;\n' "$_MDL_RELEASE"
-    printf '  const REUSE = %s;\n' "$_MDL_REUSE"
-    cat <<'PRELUDE'
+  # Written to a file: bodies contain double quotes.
+  _mdl_scenario_js "$body" > "$code_file"
+
+  # So the EXIT trap can delete it (it holds the password) after a timeout.
+  _MDL_SCENARIO_FILE="$code_file"
+  output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
+  rm -f "$code_file"; _MDL_SCENARIO_FILE=""
+
+  # Called directly, not in $(...): fail() must end the script, not a subshell.
+  _mdl_fail_on_scenario_error "$output"
+  _mdl_scenario_result "$output"
+}
+
+# _mdl_scenario_js <body> -- the whole async function: settings, helpers, then the body in try/catch.
+_mdl_scenario_js() {
+  local body="$1"
+  printf 'async () => {\n'
+  _mdl_js_settings
+  _mdl_js_helpers
+  # verify shows only the last stderr line, so the catch adds url and user to the error.
+  printf '  try {\n'
+  printf '%s\n' "$body"
+  _mdl_js_catch_and_sign_out
+  printf '}\n'
+}
+
+# The JS constants: BASE, USER, PASSWORD, ACTION_TIMEOUT, RELEASE, REUSE.
+_mdl_js_settings() {
+  # JSON-encoded: these values are data, and an apostrophe must not end the JS string.
+  printf '  const MDL_CFG = JSON.parse(%s);\n' "$(mdl_json_string \
+    "$(mdl_json_object BASE "$BASE_URL" USER "$TEST_USER" PASSWORD "$TEST_PASSWORD")")"
+  printf '  const BASE = MDL_CFG.BASE;\n'
+  printf '  const USER = MDL_CFG.USER;\n'
+  printf '  const PASSWORD = MDL_CFG.PASSWORD;\n'
+  printf '  const ACTION_TIMEOUT = %s;\n' "$(mdl_json_number "${ACTION_TIMEOUT_MS:-8000}" 8000)"
+  printf '  const RELEASE = %s;\n' "$_MDL_RELEASE"
+  printf '  const REUSE = %s;\n' "$_MDL_REUSE"
+}
+
+# The JS helpers a body calls: open_app, menu, fill, ... (listed at the top of this file).
+_mdl_js_helpers() {
+  cat <<'PRELUDE'
   // Playwright waits 30s by default for a missing element. During development the
   // failing case is the normal case, so fail in 8s instead -- red runs are what
   // cost time, not green ones. Override per call where a step is genuinely slow.
@@ -504,13 +488,11 @@ scenario() {
   };
   const page_text = async () => (await page.locator('body').innerText());
 PRELUDE
-    # The body runs inside a try, so a throw can be re-raised carrying the page it
-    # happened on and who was signed in. `mxcli playwright verify` shows only the
-    # last stderr line of a script, so everything needed to diagnose has to be in
-    # that one line -- otherwise the next step is re-running the script by hand.
-    printf '  try {\n'
-    printf '%s\n' "$body"
-    cat <<'CATCH'
+}
+
+# The end of the try: the catch adds url, user and login message; the finally signs out.
+_mdl_js_catch_and_sign_out() {
+  cat <<'CATCH'
   } catch (e) {
     const url = page.url();  // synchronous in Playwright; do not await or .catch it
     // mx is absent on login.html, so asking for the user there throws. Neither
@@ -543,46 +525,41 @@ PRELUDE
     page.goto = page.__mdl_raw_goto;
   }
 CATCH
-    printf '}\n'
-  } > "$code_file"
+}
 
-  _MDL_SCENARIO_FILE="$code_file"
-  output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
-  rm -f "$code_file"; _MDL_SCENARIO_FILE=""
-
+# _mdl_fail_on_scenario_error <output> -- fail() when playwright-cli reported an error or no result.
+# playwright-cli prints its answer in sections headed "### Result" or "### Error".
+_mdl_fail_on_scenario_error() {
+  local output="$1"
   if printf '%s' "$output" | grep -q '^### Error'; then
-    # The full block goes to stderr for a human reading the script's own output,
-    # and the same text is collapsed into the fail() line, because that line is
-    # all `mxcli playwright verify` reprints. "browser scenario threw" on its own
-    # cost this project several debugging rounds per failure.
+    # Full block to stderr; a one-line summary in fail(), the only line verify reprints.
     printf '%s\n' "$output" | sed -n '/^### Error/,/^###/p' | head -8 >&2
     local why
-    why="$(printf '%s\n' "$output" \
-      | sed -n '/^### Error/,/^### [A-Z]/p' | sed '1d;/^### /d' \
-      | sed $'s/\033\[[0-9;]*m//g' | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//' | cut -c1-400)"
+    why="$(_mdl_error_summary "$output")"
     local refusal
     refusal="$(_licence_refusal || true)"
     fail "browser scenario failed: ${why:-no error text}${refusal:+ -- $refusal}"
   fi
-  # No result and no error means playwright-cli never ran the code -- most often
-  # "The browser 'default' is not open", which it reports without the ### Error
-  # marker. Left unchecked, `scenario` returns an empty string, every `field` reads
-  # empty, and the test fails on an assertion that had nothing to assert against.
+  # Neither marker: the code never ran (e.g. browser not open).
   if ! printf '%s' "$output" | grep -q '^### Result'; then
     fail "browser scenario produced no result: $(printf '%s' "$output" | tr '\n' ' ' | tr -s ' ' | cut -c1-200) (running a test outside the runner needs: playwright-cli open)"
   fi
-  printf '%s' "$output" | awk '/^### Result/{flag=1; next} /^### /{flag=0} flag' | sed '/^$/d'
 }
 
-# Read one field out of a scenario's JSON result.
-#
-#   [ "$(field "$result" confirmed)" = "true" ] || fail "..."
-#
-# Booleans come back as JSON spells them, `true`/`false`, and null as `null`.
-# Python's own str() gave `True` here for a long time, so every test had to compare
-# against "True" -- and one that compared against "true" could never pass, which
-# looked exactly like a broken feature. Strings, numbers, lists and objects come
-# back as JSON too, except that a plain string is unquoted.
+# _mdl_error_summary <output> -- the "### Error" text on one line, colours removed, at most 400 chars.
+_mdl_error_summary() {
+  printf '%s\n' "$1" \
+    | sed -n '/^### Error/,/^### [A-Z]/p' | sed '1d;/^### /d' \
+    | sed $'s/\033\[[0-9;]*m//g' | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//' | cut -c1-400
+}
+
+# _mdl_scenario_result <output> -- print the "### Result" section without blank lines.
+_mdl_scenario_result() {
+  printf '%s' "$1" | awk '/^### Result/{flag=1; next} /^### /{flag=0} flag' | sed '/^$/d'
+}
+
+# --- 8. Reading the result ---
+# field <json> <key> -- booleans and null as JSON spells them; plain strings unquoted.
 field() {
   local json="$1" key="$2"
   printf '%s' "$json" | "$PY" -c "
@@ -595,15 +572,12 @@ except json.JSONDecodeError:
     sys.exit()
 if isinstance(data, str):
     data = json.loads(data)
-value = data.get('$key', '')
+value = data.get(sys.argv[1], '')
 print(value if isinstance(value, str) else json.dumps(value))
-"
+" "$key"
 }
 
-# Read several fields in one process: `fields "\$result" a b c` prints one line per
-# key, in order, in the same form as field(). Each field() call costs a Python
-# start (~0.03s); a test that reads six keys reads them here once.
-#
+# fields <json> <key...> -- one line per key, as field(), in one Python start:
 #   { read -r opened; read -r count; } <<< "$(fields "$result" opened count)"
 fields() {
   local json="$1"; shift
@@ -623,23 +597,16 @@ for key in keys:
 " "$@"
 }
 
-# --- data assertions, ~0.03s each --------------------------------------------
-#
-# A failing query prints its error on stderr and nothing on stdout, so parsing the
-# output blind turns "your OQL is wrong" or "the app is not running" into a Python
-# traceback. Surface mxcli's own message instead.
+# --- 9. Data assertions (~0.03s each) ---
+# oql "<query>" -- rows as JSON, or fail with mxcli's own error. Qualify entities: $MODULE.Invoice.
 oql() {
   local query="$1" output
-  # --port matters: `mxcli oql` talks to the admin API on 8090 unless told otherwise,
-  # so on a machine running a second app -- which is how these tests get a port of
-  # their own -- every data assertion failed with "cannot connect to Mendix admin API
-  # at localhost:8090". Found by a session whose app was on 8091.
+  # `if !` keeps the output and stops set -e exiting before the error is reported.
   if ! output="$("$MXCLI" oql -p "$APP_DIR/$MPR" --host "${ADMIN_HOST:-localhost}" \
                  --port "${ADMIN_PORT:-8090}" --json "$query" 2>&1)"; then
     fail "OQL failed: $(printf '%s' "$output" | grep -v '^$' | head -2 | tr '\n' ' ')"
   fi
-  # mxcli prints the JSON and then a human line -- "(1 rows)", or "[]" and "(0 rows)"
-  # for an empty result -- so decode the first JSON value rather than matching lines.
+  # mxcli appends a "(n rows)" line, so decode only the first JSON value.
   local json
   json="$(printf '%s' "$output" | "$PY" -c "
 import json, sys
@@ -656,14 +623,7 @@ print(json.dumps(value))
   printf '%s' "$json"
 }
 
-# oql_count Invoice "InvoiceNumber = 'INV-1001'"  ->  a number
-#
-# The WHERE is OQL, not XPath: an association is reached with a JOIN, not with a
-# path. To count a customer's invoices, join and constrain on the joined alias:
-#
-#   oql "SELECT COUNT(*) AS Total FROM $MODULE.Invoice AS i
-#        JOIN i/$MODULE.Invoice_Customer/$MODULE.Customer AS c
-#        WHERE c/Name = 'Northwind Traders'"
+# oql_count <Entity> ["<where>"] -- WHERE is OQL: reach associations with JOIN, not paths.
 oql_count() {
   local entity="$1" where="${2:-}"
   [ -n "${MODULE:-}" ] || fail "oql_count needs a module: set MODULE=<YourModule> or run through tests/gate.sh"
@@ -672,8 +632,7 @@ oql_count() {
   if [ -n "$where" ]; then
     query="$query WHERE $where"
   fi
-  # Capture rather than pipe: `oql` fails inside a subshell, and a pipeline would
-  # carry on and hand empty input to python, turning a clear error into a traceback.
+  # Captured, not piped: a failing oql must stop here, not feed python empty input.
   local json
   json="$(oql "$query")" || exit 1
   printf '%s' "$json" | "$PY" -c "
@@ -683,13 +642,13 @@ print(rows[0].get('Total', 0) if rows else 0)
 "
 }
 
-# Wait for a row to appear, polling the database. An OQL call is ~0.03s, so this
-# is far cheaper than waiting in the browser, and it asserts on what was stored
-# rather than on what was rendered.
-# await_row Invoice "InvoiceNumber = 'TEST-1'" [seconds]
+# await_row <Entity> "<where>" [seconds] -- 0 once a row matches, 1 after <seconds> (default 8)
+# or when the query itself fails.
 await_row() {
-  local entity="$1" where="$2" limit="${3:-8}" waited=0
-  while [ "$(oql_count "$entity" "$where")" = "0" ]; do
+  local entity="$1" where="$2" limit="${3:-8}" waited=0 count
+  while :; do
+    count="$(oql_count "$entity" "$where")" || return 1
+    [ "$count" = "0" ] || return 0
     waited=$((waited + 1))
     [ "$waited" -ge "$((limit * 4))" ] && return 1
     perl -e 'select undef, undef, undef, 0.25'
@@ -697,7 +656,8 @@ await_row() {
   return 0
 }
 
-# oql_value Invoice Status "InvoiceNumber = 'INV-1001'"  ->  the value, or 'empty'
+# oql_value <Entity> <Attr> "<where>" -- 'no-such-row' if none; 'empty' for null or "";
+# booleans print true/false, numbers as they are (0 stays 0).
 oql_value() {
   local entity="$1" attribute="$2" where="$3"
   local json
@@ -706,6 +666,15 @@ oql_value() {
   printf '%s' "$json" | "$PY" -c "
 import json, sys
 rows = json.load(sys.stdin)
-print((rows[0].get('$attribute') or 'empty') if rows else 'no-such-row')
-"
+if not rows:
+    print('no-such-row')
+else:
+    value = rows[0].get(sys.argv[1])
+    if value is None or value == '':
+        print('empty')
+    elif isinstance(value, bool):
+        print('true' if value else 'false')
+    else:
+        print(value)
+" "$attribute"
 }

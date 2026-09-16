@@ -1,35 +1,26 @@
 #!/usr/bin/env python3
-"""Assert that MDL follows the rules the new skills state.
+"""Check flow MDL against the naming-and-captions rules (captions, variable names, positions).
 
-Input is MDL text -- normally the model dump `run.sh` produces with
-`describe microflow` / `describe page` / `describe snippet`, which is ground truth:
-it is what actually landed in the .mpr, not what a script file claimed. Authored
-`mdlsource/*.mdl` works too and is used as a fallback.
-
-Only the naming-and-captions rules live here, because they need the MDL text --
-captions, annotations and positions are not in the model catalog, so no lint rule
-can see them:
-
-    - every if / case / while carries an @caption
-    - decision captions are phrased as a question, not a copy of the expression
-    - every retrieve / create / change / commit / delete / call / show-page / set
-      carries a business-operation @caption, not the Mendix default
-    - every loop carries an @annotation and never an @caption (MDL042)
-    - no placeholder variable names ($Int1, $List2, $tmp, $x)
-    - no variable name that only restates its type ($Invoice_List)
-    - no two activities at the same @position
-    - a flow no wider than one screen: activities wrap into rows instead of
-      marching off to the right (FLOW01)
-    - a loop box that is not mostly empty: Mendix sizes it to hold its body, and
-      body positions are offsets from the loop, so a canvas coordinate used there
-      inflates the box around one small activity (FLOW02)
-
-The reuse-and-snippets and module-structure rules read the model, so they are
-Starlark lint rules instead: .claude/lint-rules/reu001_shared_documents.star,
-mod001_process_folders.star, and the existing conv005_snippet_prefix.star.
-
-Exit 0 when every selected check passes, 1 otherwise.
+Input: .mdl files or directories (searched recursively), normally the `describe` dump from tests/gate.sh.
+Usage: check_mdl.py <file.mdl|dir> ... --skill naming [--json]
+--json keys: verdict, warnings, skills, sources, lines, failures.
+Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad arguments.
 """
+
+# Rule codes (FAIL counts against the run, WARN does not):
+#   decision-caption             FAIL  if/case/while without @caption
+#   caption-restates-expression  FAIL  decision caption contains $, <, >, != or " = "
+#   caption-not-a-question       FAIL  decision caption does not end in "?"
+#   case-caption-dropped         WARN  case caption equals its expression (mxcli overwrote it)
+#   caption-on-loop              FAIL  loop with @caption (Mendix drops it, MDL042)
+#   loop-annotation              FAIL  loop without @annotation
+#   action-caption               FAIL  retrieve/create/change/commit/delete/set/show page/call without @caption
+#   action-caption-is-default    FAIL  caption is the Mendix default ("Retrieve Invoice", "Commit object")
+#   placeholder-variable         FAIL  $Int1, $List2, $tmp, $x ...
+#   type-echo-variable           FAIL  name ends in _List, _Object or _Obj
+#   overlapping-position         FAIL  two activities at the same @position in one flow
+#   loop-box-empty               FAIL  loop body fills under 8% of its box (FLOW02)
+#   flow-width                   FAIL  @position x values span more than 1600px (FLOW01)
 
 from __future__ import annotations
 
@@ -39,13 +30,12 @@ import re
 import sys
 from pathlib import Path
 
-# Annotation lines that may sit between an @caption and the statement it binds to.
+# Any `@word rest`; group 1 is the word (caption, annotation, position).
 ANNOTATION_RE = re.compile(r"^\s*@(\w+)\s*(.*)$")
 CAPTION_RE = re.compile(r"^\s*@caption\s+'(.*)'\s*$", re.IGNORECASE)
 DECISION_RE = re.compile(r"^\s*(if|case|while)\b", re.IGNORECASE)
 LOOP_RE = re.compile(r"^\s*loop\b", re.IGNORECASE)
-# Object/page/call activities. `create or modify microflow` is a document head,
-# not a create-object, so it is excluded by requiring a qualified entity or `$`.
+# Activity lines; `create` needs a qualified entity so `create microflow` is not matched.
 ACTION_RE = re.compile(
     r"^\s*(?:"
     r"retrieve\b|"
@@ -59,6 +49,7 @@ ACTION_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+# Mendix default captions: verb + one name ("Retrieve Invoice") or a fixed phrase ("Commit object").
 DEFAULT_ACTION_CAPTION_RE = re.compile(
     r"^(?:"
     r"(?:Retrieve|Change|Commit|Delete|Create)\s+[A-Z][\w.]*|"
@@ -71,21 +62,37 @@ DEFAULT_ACTION_CAPTION_RE = re.compile(
     re.IGNORECASE,
 )
 POSITION_RE = re.compile(r"^\s*@position\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)", re.IGNORECASE)
+# `create [or modify|replace] microflow|nanoflow Mod.Name`; group 1 is the name.
 MICROFLOW_START_RE = re.compile(
     r"^\s*create (?:or (?:modify|replace) )?(?:microflow|nanoflow)\s+([\w.]+)", re.IGNORECASE
 )
+# Type word plus digits: $Int1, $List2, $Var10.
 PLACEHOLDER_VAR_RE = re.compile(
     r"\$(?:int|bool|boolean|str|string|dec|decimal|date|datetime|list|obj|object|var|num|item)\d+\b",
     re.IGNORECASE,
 )
 THROWAWAY_VAR_RE = re.compile(r"\$(?:tmp|temp|foo|bar|x|y|z|aa)\b", re.IGNORECASE)
 TYPE_ECHO_VAR_RE = re.compile(r"\$\w+_(?:list|object|obj)\b", re.IGNORECASE)
-MICROFLOW_HEAD_RE = re.compile(
-    r"^\s*create (?:or (?:modify|replace) )?microflow\s+([\w.]+)", re.IGNORECASE
+# A comparison in a caption: <, >, <=, >=, != or " = ".
+COMPARISON_RE = re.compile(r"[<>]=?|!=|\s=\s")
+
+# (regex, rule code, message label) for variable names.
+VARIABLE_RULES = (
+    (PLACEHOLDER_VAR_RE, "placeholder-variable", "placeholder variable name"),
+    (THROWAWAY_VAR_RE, "placeholder-variable", "throwaway variable name"),
+    (TYPE_ECHO_VAR_RE, "type-echo-variable", "variable name only restates its type"),
 )
 
+# FLOW01: Studio Pro shows about 1600px at a readable zoom.
+MAX_FLOW_WIDTH = 1600
 
-WARNINGS: list = []
+# FLOW02: loop box estimate, in px.
+ACTIVITY_AREA = 120 * 60        # one activity
+EMPTY_LOOP_WIDTH = 200          # an empty loop box
+EMPTY_LOOP_HEIGHT = 180
+LOOP_PADDING_RIGHT = 150        # furthest child + one activity
+LOOP_PADDING_BOTTOM = 80
+MIN_LOOP_FILL = 0.08            # under 8% filled reads as empty
 
 
 class Failure(dict):
@@ -94,7 +101,7 @@ class Failure(dict):
 
 
 class Warning_(dict):
-    """Something the author cannot fix -- reported, but not counted against them."""
+    """A finding the author cannot fix; reported but does not fail the run."""
 
     def __init__(self, check: str, message: str, line: int | None = None):
         super().__init__(check=check, message=message, line=line)
@@ -102,16 +109,14 @@ class Warning_(dict):
 
 def strip_comments(text: str) -> str:
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    # CLAUDE.md tells authors to quote every identifier (Module."Name"). Describe
-    # output comes back unquoted, an authored script does not; MDL strings are
-    # single-quoted, so dropping double quotes is safe and makes both parse alike.
+    # Authored scripts quote identifiers, describe output does not; MDL strings use single quotes.
     text = text.replace('"', "")
     kept = [line for line in text.splitlines() if not line.lstrip().startswith("--")]
     return "\n".join(kept)
 
 
 def preceding_annotations(lines: list[str], index: int) -> list[tuple[str, str]]:
-    """Annotations attached to lines[index], walking back over @position etc."""
+    """(kind, raw line) of the @-annotations directly above lines[index]."""
     found = []
     cursor = index - 1
     while cursor >= 0:
@@ -127,182 +132,148 @@ def preceding_annotations(lines: list[str], index: int) -> list[tuple[str, str]]
     return found
 
 
-def caption_text(annotation_lines: list[tuple[str, str]]) -> str | None:
+def caption_text(annotation_lines: list[tuple[str, str]]) -> str:
+    """Text of the parsable @caption, else ""."""
     for kind, raw in annotation_lines:
         if kind == "caption":
             match = CAPTION_RE.match(raw)
             if match:
                 return match.group(1)
-    return ""  # @caption present but unparsable
+    return ""  # no @caption, or one that does not parse
 
 
-def check_naming(lines: list[str]) -> list[Failure]:
-    failures: list[Failure] = []
+def annotation_kinds(annotations: list[tuple[str, str]]) -> list[str]:
+    return [kind for kind, _ in annotations]
 
-    # Two activities at the same coordinates are drawn on top of each other, and
-    # one of them is simply not visible in Studio Pro. Positions are per flow.
-    seen_positions: dict[tuple[int, int], int] = {}
-    current_flow = "(unknown)"
 
-    # FLOW01/FLOW02 need the shape of each flow, not just one line at a time: how
-    # far right it runs, and where a loop's body sits relative to the loop.
-    flow_points: dict[str, list[tuple[int, int, int]]] = {}   # flow -> (x, y, line)
-    loop_stack: list[dict] = []                               # loops currently open
-    finished_loops: list[dict] = []
+def position_findings(point: tuple[int, int], line_number: int, flow: str,
+                      seen_positions: dict[tuple[int, int], int]) -> list[Failure]:
+    """overlapping-position; records the point in seen_positions when it is new."""
+    if point in seen_positions:
+        return [
+            Failure(
+                "overlapping-position",
+                f"two activities in {flow} sit at @position{point} "
+                f"(also line {seen_positions[point]}); one hides the other",
+                line_number,
+            )
+        ]
+    seen_positions[point] = line_number
+    return []
 
-    for index, line in enumerate(lines):
-        head = MICROFLOW_START_RE.match(line)
-        if head:
-            current_flow = head.group(1)
-            seen_positions = {}
-            loop_stack = []
 
-        position = POSITION_RE.match(line)
-        if position:
-            point = (int(position.group(1)), int(position.group(2)))
-            if point in seen_positions:
-                failures.append(
-                    Failure(
-                        "overlapping-position",
-                        f"two activities in {current_flow} sit at @position{point} "
-                        f"(also line {seen_positions[point]}); one hides the other",
-                        index + 1,
-                    )
-                )
-            else:
-                seen_positions[point] = index + 1
-            flow_points.setdefault(current_flow, []).append((point[0], point[1], index + 1))
-            if loop_stack:
-                loop_stack[-1]["children"].append((point[0], point[1], index + 1))
+def decision_findings(lines: list[str], index: int) -> tuple[list[Failure], list[Warning_], bool]:
+    """Caption rules for an if/case/while; the bool is False when it has no @caption."""
+    line = lines[index]
+    annotations = preceding_annotations(lines, index)
+    if "caption" not in annotation_kinds(annotations):
+        failure = Failure(
+            "decision-caption",
+            f"decision without @caption: {line.strip()[:70]}",
+            index + 1,
+        )
+        return [failure], [], False
 
-        stripped = line.strip().lower()
+    text = caption_text(annotations)
+    if not text:
+        return [], [], True
+    expression = line.strip()[len(line.strip().split()[0]):].strip()
+    is_enum_split = line.strip().lower().startswith("case")
+    if is_enum_split and text.strip() == expression:
+        # mxcli overwrites an enum case's @caption with its expression.
+        warning = Warning_(
+            "case-caption-dropped",
+            "mxcli wrote this split's own expression as its caption "
+            f"('{text}'); measured on 11.13.0 it discards both @caption "
+            "and @annotation on a split, so this is not the author's doing",
+            index + 1,
+        )
+        return [], [warning], True
+    if "$" in text or COMPARISON_RE.search(text):
+        failure = Failure(
+            "caption-restates-expression",
+            f"caption restates the expression: '{text}'",
+            index + 1,
+        )
+        return [failure], [], True
+    if not text.rstrip().endswith("?"):
+        failure = Failure(
+            "caption-not-a-question",
+            f"decision caption is not phrased as a question: '{text}'",
+            index + 1,
+        )
+        return [failure], [], True
+    return [], [], True
 
-        # A loop is a container, and Mendix sizes it to hold its body: measured on the
-        # stored model, a loop whose only child sat at 560;360 came out 670x440, while
-        # the same child at 40;100 gave 200x180, and a loop holding eight children
-        # spread to 520;580 came out 590x660. So the body's positions decide the box,
-        # and what goes wrong is not a particular coordinate -- it is a box far bigger
-        # than the thing inside it.
-        if stripped.startswith("loop ") or stripped.startswith("while "):
-            loop_stack.append({"flow": current_flow, "line": index + 1, "children": []})
-        elif stripped.startswith("end loop") or stripped.startswith("end while"):
-            if loop_stack:
-                finished_loops.append(loop_stack.pop())
 
-        if stripped.startswith("end ") or stripped == "end":
-            continue
+def loop_findings(lines: list[str], index: int) -> list[Failure]:
+    """A loop needs @annotation and must not carry @caption."""
+    line = lines[index]
+    kinds = annotation_kinds(preceding_annotations(lines, index))
+    failures = []
+    if "caption" in kinds:
+        failures.append(
+            Failure(
+                "caption-on-loop",
+                "loop carries @caption; Mendix drops it (MDL042) -- use @annotation",
+                index + 1,
+            )
+        )
+    if "annotation" not in kinds:
+        failures.append(
+            Failure(
+                "loop-annotation",
+                f"loop without @annotation: {line.strip()[:70]}",
+                index + 1,
+            )
+        )
+    return failures
 
-        if DECISION_RE.match(line):
-            annotations = preceding_annotations(lines, index)
-            kinds = [kind for kind, _ in annotations]
-            if "caption" not in kinds:
-                failures.append(
-                    Failure(
-                        "decision-caption",
-                        f"decision without @caption: {line.strip()[:70]}",
-                        index + 1,
-                    )
-                )
-                continue
-            text = caption_text(annotations)
-            if text is not None and text != "":
-                expression = line.strip()[len(line.strip().split()[0]):].strip()
-                is_enum_split = line.strip().lower().startswith("case")
-                if is_enum_split and text.strip() == expression:
-                    # mxcli writes the split expression over whatever @caption the
-                    # script gave an enum `case`, so a question caption cannot
-                    # survive here. Reported, not held against the author.
-                    WARNINGS.append(
-                        Warning_(
-                            "case-caption-dropped",
-                            "mxcli wrote this split's own expression as its caption "
-                            f"('{text}'); measured on 11.13.0 it discards both @caption "
-                            "and @annotation on a split, so this is not the author's doing",
-                            index + 1,
-                        )
-                    )
-                elif "$" in text or re.search(r"[<>]=?|!=|\s=\s", text):
-                    failures.append(
-                        Failure(
-                            "caption-restates-expression",
-                            f"caption restates the expression: '{text}'",
-                            index + 1,
-                        )
-                    )
-                elif not text.rstrip().endswith("?"):
-                    failures.append(
-                        Failure(
-                            "caption-not-a-question",
-                            f"decision caption is not phrased as a question: '{text}'",
-                            index + 1,
-                        )
-                    )
 
-        elif LOOP_RE.match(line):
-            annotations = preceding_annotations(lines, index)
-            kinds = [kind for kind, _ in annotations]
-            if "caption" in kinds:
-                failures.append(
-                    Failure(
-                        "caption-on-loop",
-                        "loop carries @caption; Mendix drops it (MDL042) -- use @annotation",
-                        index + 1,
-                    )
-                )
-            if "annotation" not in kinds:
-                failures.append(
-                    Failure(
-                        "loop-annotation",
-                        f"loop without @annotation: {line.strip()[:70]}",
-                        index + 1,
-                    )
-                )
+def action_findings(lines: list[str], index: int) -> list[Failure]:
+    """An action needs a @caption that is not the Mendix default."""
+    line = lines[index]
+    annotations = preceding_annotations(lines, index)
+    if "caption" not in annotation_kinds(annotations):
+        return [
+            Failure(
+                "action-caption",
+                f"action without business-operation @caption: {line.strip()[:70]}",
+                index + 1,
+            )
+        ]
+    text = caption_text(annotations)
+    if text and DEFAULT_ACTION_CAPTION_RE.match(text.strip()):
+        return [
+            Failure(
+                "action-caption-is-default",
+                f"action caption restates the Mendix default: '{text}'",
+                index + 1,
+            )
+        ]
+    return []
 
-        elif ACTION_RE.match(line):
-            annotations = preceding_annotations(lines, index)
-            kinds = [kind for kind, _ in annotations]
-            snippet = line.strip()[:70]
-            if "caption" not in kinds:
-                failures.append(
-                    Failure(
-                        "action-caption",
-                        f"action without business-operation @caption: {snippet}",
-                        index + 1,
-                    )
-                )
-            else:
-                text = caption_text(annotations)
-                if text is not None and text != "" and DEFAULT_ACTION_CAPTION_RE.match(text.strip()):
-                    failures.append(
-                        Failure(
-                            "action-caption-is-default",
-                            f"action caption restates the Mendix default: '{text}'",
-                            index + 1,
-                        )
-                    )
 
-        for regex, check, label in (
-            (PLACEHOLDER_VAR_RE, "placeholder-variable", "placeholder variable name"),
-            (THROWAWAY_VAR_RE, "placeholder-variable", "throwaway variable name"),
-            (TYPE_ECHO_VAR_RE, "type-echo-variable", "variable name only restates its type"),
-        ):
-            for hit in regex.findall(line):
-                failures.append(Failure(check, f"{label}: {hit}", index + 1))
+def variable_findings(line: str, line_number: int) -> list[Failure]:
+    failures = []
+    for regex, check, label in VARIABLE_RULES:
+        for hit in regex.findall(line):
+            failures.append(Failure(check, f"{label}: {hit}", line_number))
+    return failures
 
-    # FLOW02: a loop box that is mostly empty. Mendix grows the box to hold the body,
-    # and body positions are offsets from the loop, so a canvas coordinate written
-    # there inflates the box around one small activity -- 2.4% of it filled, measured,
-    # against 13% for a loop holding eight and 20% for a correctly placed single one.
-    # Density, not coordinates: a big body legitimately makes a big box, and fills it.
-    ACTIVITY_AREA = 120 * 60
+
+def loop_box_findings(finished_loops: list[dict]) -> list[Failure]:
+    """FLOW02: body positions are offsets from the loop and Mendix sizes the box to fit them,
+    so judge fill density, not coordinates."""
+    failures = []
     for frame in finished_loops:
         children = frame["children"]
         if not children:
             continue
-        box_width = max(200, max(x for x, _y, _l in children) + 150)
-        box_height = max(180, max(y for _x, y, _l in children) + 80)
+        box_width = max(EMPTY_LOOP_WIDTH, max(x for x, _y, _l in children) + LOOP_PADDING_RIGHT)
+        box_height = max(EMPTY_LOOP_HEIGHT, max(y for _x, y, _l in children) + LOOP_PADDING_BOTTOM)
         filled = len(children) * ACTIVITY_AREA / (box_width * box_height)
-        if filled >= 0.08:
+        if filled >= MIN_LOOP_FILL:
             continue
         widest = max(children, key=lambda c: c[0] * c[1])
         failures.append(
@@ -318,18 +289,19 @@ def check_naming(lines: list[str]) -> list[Failure]:
                 widest[2],
             )
         )
+    return failures
 
-    # FLOW01: a flow that runs off the screen. Studio Pro shows roughly 1600px at a
-    # readable zoom; measured, a 17-activity flow written as one row spanned 2400px
-    # and had to be read at 75% and scrolled. Activities wrap into rows instead:
-    # y += 160 and back to the left margin.
+
+def flow_width_findings(flow_points: dict[str, list[tuple[int, int, int]]]) -> list[Failure]:
+    """FLOW01: a flow wider than MAX_FLOW_WIDTH has to be scrolled."""
+    failures = []
     for flow, points in flow_points.items():
         if len(points) < 2:
             continue
         xs = [x for x, _y, _line in points]
         rows = {y for _x, y, _line in points}
         width = max(xs) - min(xs)
-        if width > 1600:
+        if width > MAX_FLOW_WIDTH:
             widest = max(points, key=lambda p: p[0])
             failures.append(
                 Failure(
@@ -341,14 +313,72 @@ def check_naming(lines: list[str]) -> list[Failure]:
                     widest[2],
                 )
             )
-
     return failures
+
+
+def check_naming(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
+    """Return (failures, warnings) for all naming rules."""
+    failures: list[Failure] = []
+    warnings: list[Warning_] = []
+
+    seen_positions: dict[tuple[int, int], int] = {}          # reset per flow
+    current_flow = "(unknown)"
+
+    flow_points: dict[str, list[tuple[int, int, int]]] = {}   # flow -> (x, y, line)
+    loop_stack: list[dict] = []                               # loops currently open
+    finished_loops: list[dict] = []
+
+    for index, line in enumerate(lines):
+        line_number = index + 1
+        head = MICROFLOW_START_RE.match(line)
+        if head:
+            current_flow = head.group(1)
+            seen_positions = {}
+            loop_stack = []
+
+        position = POSITION_RE.match(line)
+        if position:
+            point = (int(position.group(1)), int(position.group(2)))
+            failures.extend(position_findings(point, line_number, current_flow, seen_positions))
+            flow_points.setdefault(current_flow, []).append((point[0], point[1], line_number))
+            if loop_stack:
+                loop_stack[-1]["children"].append((point[0], point[1], line_number))
+
+        stripped = line.strip().lower()
+
+        # `while` is also a decision below.
+        if stripped.startswith("loop ") or stripped.startswith("while "):
+            loop_stack.append({"flow": current_flow, "line": line_number, "children": []})
+        elif stripped.startswith("end loop") or stripped.startswith("end while"):
+            if loop_stack:
+                finished_loops.append(loop_stack.pop())
+
+        if stripped.startswith("end ") or stripped == "end":
+            continue
+
+        if DECISION_RE.match(line):
+            found, warned, has_caption = decision_findings(lines, index)
+            failures.extend(found)
+            warnings.extend(warned)
+            if not has_caption:
+                continue  # skips the variable-name rules for this line
+        elif LOOP_RE.match(line):
+            failures.extend(loop_findings(lines, index))
+        elif ACTION_RE.match(line):
+            failures.extend(action_findings(lines, index))
+
+        failures.extend(variable_findings(line, line_number))
+
+    failures.extend(loop_box_findings(finished_loops))
+    failures.extend(flow_width_findings(flow_points))
+    return failures, warnings
 
 
 CHECKS = {"naming": check_naming}
 
 
 def collect_text(sources: list[Path]) -> tuple[str, list[Path]]:
+    """Joined text of every .mdl under sources, and the files read; missing paths are skipped."""
     chunks, used = [], []
     for source in sources:
         if source.is_dir():
@@ -382,12 +412,15 @@ def main() -> int:
     lines = strip_comments(text).splitlines()
 
     failures: list[Failure] = []
+    warnings: list[Warning_] = []
     for skill in args.skill:
-        failures.extend(CHECKS[skill](lines))
+        skill_failures, skill_warnings = CHECKS[skill](lines)
+        failures.extend(skill_failures)
+        warnings.extend(skill_warnings)
 
     report = {
         "verdict": "PASS" if not failures else "FAIL",
-        "warnings": WARNINGS,
+        "warnings": warnings,
         "skills": args.skill,
         "sources": [str(path) for path in used],
         "lines": len(lines),
@@ -401,7 +434,7 @@ def main() -> int:
         for failure in failures:
             location = f"line {failure['line']}" if failure["line"] else "-"
             print(f"  - [{failure['check']}] {location}: {failure['message']}")
-        for warning in WARNINGS:
+        for warning in warnings:
             location = f"line {warning['line']}" if warning["line"] else "-"
             print(f"  ! [{warning['check']}] {location}: {warning['message']}")
 

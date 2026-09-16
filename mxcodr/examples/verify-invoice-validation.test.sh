@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.VAL_Invoice
-#
-# Saving an empty invoice is refused: the popup stays open, all three messages
-# appear, and nothing is written.
+# Saving an empty invoice is refused with all three messages and nothing stored.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-before="$(oql_count Invoice)"
+invoices_before="$(oql_count Invoice)"
 
 result="$(scenario '
   await open_app();
@@ -31,13 +29,12 @@ result="$(scenario '
   };
 ')"
 
-# One Python start for all four keys, not four.
 { read -r stillOpen; read -r number; read -r amount; read -r customer; } \
   <<< "$(fields "$result" stillOpen number amount customer)"
 [ "$stillOpen" = "true" ] || fail "the popup closed on an invalid invoice — validation did not block the save"
 [ "$number" = "true" ] || fail "missing the 'invoice number is required' message"
 [ "$amount" = "true" ] || fail "missing the amount validation message"
 [ "$customer" = "true" ] || fail "missing the customer validation message"
-[ "$(oql_count Invoice)" = "$before" ] || fail "invoice count changed despite failed validation"
+[ "$(oql_count Invoice)" = "$invoices_before" ] || fail "invoice count changed despite failed validation"
 
 echo "OK: invalid invoice refused with all three messages, nothing stored"

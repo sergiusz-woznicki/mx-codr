@@ -1,27 +1,9 @@
 """Record what the installer put in this project, and what each file looked like.
 
-Two kinds of drift have each cost a day, and neither announced itself. A project
-ran checkers from 2026.09.09 against a bundle at 2026.09.11 and reported
-`naming: PASS` where the current checker finds 37 problems -- a gate that passes
-because it is out of date is worse than no gate, because the green is still
-printed. Separately, files hand-copied into a live project, some of them but not
-all, left gate.sh current and check_mdl.py two versions behind while the VERSION
-stamp claimed both were new.
-
-So install.sh writes tools/mdl-checks/INSTALL.json here: the bundle version, the
-date, and a sha256 per installed file. tests/portable.sh compares against it at
-every gate preflight.
-
-    python3 record_install.py <app-dir> <bundle-dir> <version>
-
-The file list comes from the bundle, never from a glob over the app: an installed
-Mendix project also holds ~50 mxcli skills and 27 mxcli lint rules in the same
-directories, and tracking those would report every mxcli upgrade as harness drift.
-
-Run it by hand after copying harness files into a project without going through
-install.sh, so the baseline matches what is actually on disk:
-
-    python3 tools/mdl-checks/record_install.py . mxcodr "$(cat mxcodr/VERSION)"
+Called by install.sh; tests/portable.sh compares against the result at gate preflight.
+Usage: record_install.py <app-dir> <bundle-dir> <version>; prints the number of files recorded.
+Writes <app>/tools/mdl-checks/INSTALL.json with keys version, installed, files ({path: sha256}).
+Exit 0; 1 on wrong argument count, printing this docstring's first line as usage (keep it).
 """
 
 import hashlib
@@ -30,14 +12,13 @@ import os
 import sys
 import time
 
-# Bundle path -> where install.sh puts it. A file the installer only writes when
-# absent (run-app.sh, the example tests) belongs to the project once it is there,
-# and is deliberately not tracked.
+# Files are listed from the bundle, not globbed in the app, so mxcli's own skills and rules are not tracked.
 SKILL_DIRS = (".claude/skills", ".agents/skills", ".ai-context/skills")
 HARNESS_SCRIPTS = ("gate.sh", "orient.sh", "diagnose.sh", "lib.sh", "portable.sh")
 
 
 def listdir(path, suffix):
+    """Sorted names ending in `suffix`; [] if the directory is missing."""
     try:
         return sorted(n for n in os.listdir(path) if n.endswith(suffix))
     except OSError:
@@ -86,15 +67,13 @@ def main(argv):
     for source, relative in destinations(src):
         if not os.path.isfile(source):
             continue
-        # Keys stay forward-slashed so a manifest written on Windows still reads
-        # on a Mac, and the other way round.
+        # Keys stay forward-slashed so manifests are portable across Windows and macOS.
         path = os.path.join(app, *relative.split("/"))
         try:
             with open(path, "rb") as handle:
                 files[relative] = hashlib.sha256(handle.read()).hexdigest()
         except OSError:
-            # Not installed in this project -- a host whose directory is absent,
-            # for instance. Nothing to compare, so nothing to record.
+            # Not installed in this project.
             continue
 
     manifest = os.path.join(app, "tools", "mdl-checks", "INSTALL.json")

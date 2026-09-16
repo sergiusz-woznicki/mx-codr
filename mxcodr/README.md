@@ -630,12 +630,12 @@ exercised there. A JDK *is* installed — three of them — so
 
 ## Publishing it as a repo
 
-`install.sh` resolves its own location, so the contents of this directory work
-unchanged as the root of a standalone repo:
+`install.sh` resolves its own location, so the bundle runs from wherever it sits. In the
+mx-codr repo it is the `mxcodr/` directory:
 
 ```bash
-git clone https://github.com/<you>/mendix-mdl-skills /tmp/mdl-skills
-bash /tmp/mdl-skills/install.sh ~/CloudeCodeProjects/YourApp
+git clone https://github.com/<you>/mx-codr /tmp/mx-codr
+bash /tmp/mx-codr/mxcodr/install.sh ~/CloudeCodeProjects/YourApp
 ```
 
 ## What it deliberately does not touch

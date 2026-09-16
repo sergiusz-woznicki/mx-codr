@@ -31,7 +31,7 @@ bash tests/gate.sh --only <feature> --boot-if-needed
 #    never `bash tests/verify-x.test.sh`: the gate keeps the browser and the session
 #    warm and it is where the timeout and the facts-on-failure live
 bash tests/gate.sh --only <feature>
-# 5. the whole gate: suite + mx check + lint + coverage, ends in DONE or NOT DONE
+# 5. the whole gate: suite + mx check + lint + coverage + naming + layout, ends in DONE or NOT DONE
 bash tests/gate.sh
 ```
 
@@ -40,6 +40,10 @@ What a test script can call, so there is no need to read `tests/lib.sh` to find 
 *Write it as one scenario* below.
 
 ```bash
+export TEST_USER=demo_customer       # optional, BEFORE lib.sh: sign in as this user (default
+                                     # demo_administrator); its password comes from
+                                     # tests/credentials.env: TEST_PASSWORD_demo_customer=...
+                                     # (DESCRIBE DEMO USER masks it -- write down what you set)
 source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
 # shell:  scenario '<js body>'   field "$result" key   fields "$result" a b   fail "msg"
 #         oql "SELECT ..."   oql_count Entity ["where"]   oql_value Entity Attr "where"
@@ -208,11 +212,15 @@ Three things decide how long the loop takes:
   `MDL_BOOT_COMMAND` (the file exists only on such machines; do not go looking for
   it elsewhere). When the gate says the model changed after the runtime started,
   `bash tests/gate.sh --restart` stops this project's runtime, boots it again and
-  runs the gate -- one command, not a pgrep-and-kill improvisation.
+  runs the gate -- one command, not a pgrep-and-kill improvisation. To only stop it
+  (before `mxcli fix widgets`, say): `bash tests/gate.sh --stop`.
 
   **Check which loop you are in before planning around it.** With `--watch` and a
-  live model, only entity and association changes need a reboot and everything else
-  hot-applies in about a second. Where the runtime serves a *built deployment* there
+  live model, **nothing needs a restart by hand**: logic and pages reload in about two
+  seconds, and entity, association, module and security changes apply through an
+  in-place runtime restart in about ten (`.mxcli/gate-boot.log` says `applied via
+  reload` or `applied via restart`). Run the test straight after the exec -- the gate
+  waits for the change to land. `--restart` is for when the gate says nothing applied it. Where the runtime serves a *built deployment* there
   is no hot reload at all: every model change costs a rebuild and a restart, one to
   two minutes. The red-green loop still works and `--only <feature>` is still the
   right command, but batch your model edits instead of making them one at a time,
@@ -240,6 +248,12 @@ behind. Two conventions keep the suite honest:
   app). Every run starts from the same rows.
 - Anything that asserts **exact counts** is named `verify-001-…`, so it runs right
   after the reset — the only moment those counts are true.
+- **A test that changes a seeded row owns that row.** Nothing resets between scripts,
+  so a test that reports `INV-A-004` paid changes what every later script sees: the
+  overdue test after it, alphabetically, found `PaymentReported` instead of `Overdue`
+  and failed only in the full run. Give such a test its own seeded row (add one to the
+  reset, and name it for the test) or a row it creates itself — never a row another
+  test reads. A test that passes with `--only` and fails in the suite is this, first.
 
 Two rules the harness enforces, because a green suite can otherwise be measuring the
 wrong page or a signed-out session:
@@ -501,6 +515,7 @@ it in an installed project.)
 - [ ] An acceptance criterion was stated before any code
 - [ ] The test existed and **failed** before the implementation — for the right reason — and the failure was quoted
 - [ ] Exact-count assertions run right after `verify-000-reset`
+- [ ] A test that changes seeded data uses a row no other test reads
 - [ ] The test is one `scenario` call, not a chain of browser calls
 - [ ] The test declares a `# covers:` header naming real model elements
 - [ ] No test was edited, skipped or deleted to reach green

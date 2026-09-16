@@ -1,45 +1,23 @@
 #!/usr/bin/env bash
-# Start the app WITHOUT `mxcli run --local`, for machines where that cannot boot.
-#
-# Why this exists: on Windows, `mxcli run --local` fails in four places before it
-# ever reaches the app, none of which it reports.
-#   0. On ARM, Studio Pro ships tools/deno and tools/node as win-arm64 only while
-#      mxbuild launches win-x64, so `mxbuild --serve` dies with Win32Exception (2).
-#      install.sh aliases the directory names.
-#   1. mxbuild splits its own command line on spaces, so --java-home="C:\Program
-#      Files (Arm)\zulu21" arrives as four unrecognised arguments and it exits
-#      printing its usage. install.sh works around this with a space-free junction.
-#   2. The mxbuild cache holds only modeler/ and runtime/; Java compilation needs
-#      Studio Pro's gradle-8.5 beside them. install.sh junctions it in.
-#   3. mxcli's liveness probe is os.Process.Signal(0), which Windows rejects for
-#      every signal but Kill -- so a perfectly healthy mxbuild and a perfectly
-#      healthy runtime both read as "exited during startup" on the first poll.
-#      Only a patched mxcli fixes this (see mxcli-windows-serve-fix.patch).
-# Until that patch ships, this does what mxcli would have done anyway: build a
-# deployment with mxbuild, boot the standalone runtime, and drive it over the M2EE
-# admin API. Slower than the warm loop (a model change needs `--rebuild`, ~1-2 min),
-# but it actually runs.
-#
-#   bash tests/run-app.sh              # boot from the existing deployment
-#   bash tests/run-app.sh --rebuild    # rebuild the deployment from the .mpr first
-#
-# Everything it needs comes from tests/harness.env -- the JDK (JAVA_HOME, which must
-# have no spaces), the Studio Pro directory (MDL_MXBUILD_PATH) and the database.
+# run-app.sh -- boot the app without `mxcli run --local` (which cannot boot on Windows):
+# mxbuild deployment, standalone runtime, M2EE admin API. Run by gate.sh --boot-if-needed
+# (MDL_BOOT_COMMAND in tests/harness.env) or by hand. Settings from tests/harness.env.
+#   bash tests/run-app.sh [--rebuild]    (rebuilds anyway when the .mpr is newer; MPR= picks one)
+# Prints "== step" lines; exit 0 with "== app up on ...", exit 1 with "== start FAILED".
 set -euo pipefail
 
+# --- 1. Paths and settings ---
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
-# harness.env is read as data, not sourced -- see the note in tests/portable.sh. The
-# keys below are the ones this script needs in the environment of mxbuild, java and
-# the admin calls; the rest stay shell variables, exactly as before.
+# harness.env is read as data, not sourced (see tests/portable.sh).
 . "$APP_DIR/tests/portable.sh"
 mdl_load_harness_env "$APP_DIR/tests/harness.env" export
 
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) EXE_SUFFIX=".exe" ;; *) EXE_SUFFIX="" ;; esac
 
-# Paths are derived, not hardcoded: the cache is keyed by Mendix version and the
-# JDK by whatever install.sh found. Override any of them in the environment.
-MPR="$(ls -1 "$APP_DIR"/*.mpr | head -1)"
+# All paths derived from the Mendix version and harness.env; override in the environment.
+mdl_find_mpr || exit 1
+case "$MPR" in /*) ;; *) MPR="$APP_DIR/$MPR" ;; esac
 MX_VERSION="${MX_VERSION:-$(basename "${MDL_MXBUILD_PATH:-}")}"
 if [ -z "$MX_VERSION" ] || [ ! -d "$HOME/.mxcli/mxbuild/$MX_VERSION" ]; then
   for _d in "$HOME"/.mxcli/mxbuild/*/; do [ -d "$_d" ] && MX_VERSION="$(basename "$_d")"; done
@@ -48,17 +26,14 @@ MXCACHE="${MXCACHE:-$HOME/.mxcli/mxbuild/$MX_VERSION}"
 MXBUILD="${MXBUILD:-$MXCACHE/modeler/mxbuild$EXE_SUFFIX}"
 MXBUILD_TOOLS="${MXBUILD_TOOLS:-$MXCACHE/modeler/tools/node}"
 RUNTIME="${RUNTIME:-$HOME/.mxcli/runtime/$MX_VERSION}"
-# JAVA_HOME comes from harness.env and is already space-free there; mxbuild is given
-# the same one, because it is the argument that breaks when it has spaces.
+# JAVA_HOME must be space-free: mxbuild splits its arguments on spaces.
 JAVA_DIR="${JAVA_HOME:-}"
 JAVA="${JAVA:-$JAVA_DIR/bin/java$EXE_SUFFIX}"
 GRADLE_HOME="${GRADLE_HOME:-$MXCACHE/gradle-8.5}"
 [ -d "$GRADLE_HOME" ] || GRADLE_HOME="${MDL_MXBUILD_PATH:-}/gradle-8.5"
 APP_PORT="${APP_PORT:-8081}"
 ADMIN_PORT="${ADMIN_PORT:-8090}"
-# mxcli oql and tests/diagnose.sh authenticate with this exact password by default, so
-# the runtime must be started with it or every data assertion fails with
-# "OQL error: Authentication failed."
+# mxcli oql and diagnose.sh use this password by default.
 ADMIN_PASS="${ADMIN_PASSWORD:-${ADMIN_PASS:-mxcli-local-dev}}"
 DB_HOST="${MDL_DB_HOST:-127.0.0.1:5432}"
 DB_NAME="${MDL_DB_NAME:-$(basename "$MPR" .mpr | tr '[:upper:]' '[:lower:]')}"
@@ -66,53 +41,57 @@ DB_USER="${MDL_DB_USER:-mendix}"
 DB_PASSWORD="${MDL_DB_PASSWORD:-mendix}"
 PY="${PY:-$(mdl_find_python)}"
 
+# Fixed values, named here so they read as what they are.
+ADMIN_WAIT_SECONDS=90         # how long to wait for the admin API after starting java
+ADMIN_REQUEST_SECONDS=300     # the longest wait for one admin action
+DEPLOYMENT="$APP_DIR/deployment"
+BUILT_MODEL="$DEPLOYMENT/model/model.mdp"
+HSQLDB_DIR="$DEPLOYMENT/data/database"
+
+# --- Helpers ---
+
+# admin <json-body> -- send one M2EE admin action, print the JSON answer.
 admin() {                                   # admin <json-body>
-  curl -s -m 300 -H "X-M2EE-Authentication: $(printf '%s' "$ADMIN_PASS" | base64)" \
+  curl -s -m "$ADMIN_REQUEST_SECONDS" -H "X-M2EE-Authentication: $(printf '%s' "$ADMIN_PASS" | base64)" \
     -H 'Content-Type: application/json' -d "$1" "http://127.0.0.1:$ADMIN_PORT/"
 }
 
+# Kill every Mendix runtime java process (Windows/PowerShell).
 stop_runtime() {
   powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='java.exe'\" | Where-Object { \$_.CommandLine -like '*runtimelauncher*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" >/dev/null 2>&1 || true
   sleep 2
 }
 
-# There is no hot reload here: the runtime reads a BUILT deployment, so a model change
-# that has not been rebuilt is invisible to it and the suite quietly measures the old
-# app. Rebuild whenever the .mpr is newer than what was built, not only when asked.
+# needs_rebuild [--rebuild] -- true when asked or the .mpr is newer than the built deployment (no hot reload).
 needs_rebuild() {
   [ "${1:-}" = "--rebuild" ] && return 0
-  [ -f "$APP_DIR/deployment/model/model.mdp" ] || return 0
-  [ "$MPR" -nt "$APP_DIR/deployment/model/model.mdp" ]
+  [ -f "$BUILT_MODEL" ] || return 0
+  [ "$MPR" -nt "$BUILT_MODEL" ]
 }
 
-if needs_rebuild "${1:-}"; then
+# --- 2. Build the deployment ---
+# --target=deploy cleans deployment/ and can corrupt Studio Pro's HSQLDB there: save and restore it.
+build_deployment() {
+  local saved_db=""
   echo "== building deployment (this is the slow part)"
   stop_runtime
-  # --target=deploy runs a Clean up step over the whole of deployment/, and Studio
-  # Pro's own HSQLDB lives in deployment/data/database/. A build has been seen
-  # leaving it half-written -- the version table with no row in it -- after which
-  # Studio Pro cannot open the project until the database is thrown away. The
-  # runtime here talks to PostgreSQL, so that database is nobody's business but
-  # Studio Pro's: copy it out of the way and put it back afterwards.
-  SAVED_DB=""
-  if [ -d "$APP_DIR/deployment/data/database" ]; then
-    SAVED_DB="$(mdl_tmpdir mdl-hsqldb)"
-    cp -R "$APP_DIR/deployment/data/database/." "$SAVED_DB/" 2>/dev/null || SAVED_DB=""
+  if [ -d "$HSQLDB_DIR" ]; then
+    saved_db="$(mdl_tmpdir mdl-hsqldb)"
+    cp -R "$HSQLDB_DIR/." "$saved_db/" 2>/dev/null || saved_db=""
   fi
   "$MXBUILD" "--java-home=$JAVA_DIR" "--java-exe-path=$JAVA" \
     "--gradle-home=$GRADLE_HOME" --target=deploy "$MPR" 2>&1 | tail -3
-  if [ -n "$SAVED_DB" ]; then
-    mkdir -p "$APP_DIR/deployment/data/database"
-    cp -R "$SAVED_DB/." "$APP_DIR/deployment/data/database/" 2>/dev/null || true
-    rm -rf "$SAVED_DB"
+  if [ -n "$saved_db" ]; then
+    mkdir -p "$HSQLDB_DIR"
+    cp -R "$saved_db/." "$HSQLDB_DIR/" 2>/dev/null || true
+    rm -rf "$saved_db"
     echo "   (Studio Pro's local database kept across the build)"
   fi
-fi
+}
 
-# mxbuild writes the project's own configuration into the deployment, and this
-# project is configured for HSQLDB. The runtime here talks to the local Postgres,
-# so the built config is repointed rather than the project changed.
-"$PY" - "$APP_DIR" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$APP_PORT" <<'PY'
+# --- 3. Point the built configuration at PostgreSQL ---
+point_config_at_postgres() {
+  "$PY" - "$APP_DIR" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$APP_PORT" <<'PY'
 import json, pathlib, sys
 app, host, name, user, password, port = sys.argv[1:7]
 p = pathlib.Path(app) / 'deployment' / 'model' / 'config.json'
@@ -125,57 +104,60 @@ cfg['Configuration'].update({
 })
 p.write_text(json.dumps(cfg, indent=2))
 PY
+}
 
-# mxbuild's "Bundle application" step compiles Java and then stops -- it never runs
-# rollup, so deployment/web/dist/ is missing and index.html's <script src="dist/index.js">
-# 404s. The app boots, serves 200, and renders a blank page: no .mx-page, so every
-# browser test times out on a selector rather than saying what is wrong.
-# mxbuild has already WRITTEN the bundle inputs (index.js, rollup.config.mjs with
-# absolute paths into the cached modeler), so running rollup by hand finishes the job
-# in ~3s.
-if [ ! -f "$APP_DIR/deployment/web/dist/index.js" ] \
-   || [ "$APP_DIR/deployment/web/index.js" -nt "$APP_DIR/deployment/web/dist/index.js" ]; then
-  echo "== bundling the web client (mxbuild skips this)"
-  # Studio Pro on ARM ships node as win-arm64 only; x64 machines have win-x64. Take
-  # whichever is actually there rather than assuming the one mxbuild asks for.
-  NODE=""
-  for _a in win-x64 win-arm64 linux-x64 darwin-arm64; do
-    [ -x "$MXBUILD_TOOLS/$_a/node$EXE_SUFFIX" ] && { NODE="$MXBUILD_TOOLS/$_a/node$EXE_SUFFIX"; break; }
+# --- 4. Bundle the web client ---
+# mxbuild never runs rollup; without dist/index.js the app renders a blank page.
+web_client_needs_bundling() {
+  [ ! -f "$DEPLOYMENT/web/dist/index.js" ] \
+    || [ "$DEPLOYMENT/web/index.js" -nt "$DEPLOYMENT/web/dist/index.js" ]
+}
+
+# Print the first bundled node that exists (ARM Studio Pro ships win-arm64 only); nothing if none.
+find_bundled_node() {
+  local platform
+  for platform in win-x64 win-arm64 linux-x64 darwin-arm64; do
+    if [ -x "$MXBUILD_TOOLS/$platform/node$EXE_SUFFIX" ]; then
+      echo "$MXBUILD_TOOLS/$platform/node$EXE_SUFFIX"
+      return 0
+    fi
   done
-  [ -n "$NODE" ] || { echo "no bundled node under $MXBUILD_TOOLS" >&2; exit 1; }
-  ( cd "$APP_DIR/deployment/web" && NODE_ENV=production "$NODE" \
+}
+
+bundle_web_client() {
+  local node
+  echo "== bundling the web client (mxbuild skips this)"
+  node="$(find_bundled_node)"
+  [ -n "$node" ] || { echo "no bundled node under $MXBUILD_TOOLS" >&2; exit 1; }
+  ( cd "$DEPLOYMENT/web" && NODE_ENV=production "$node" \
       "$MXBUILD_TOOLS/node_modules/rollup/dist/bin/rollup" -c rollup.config.mjs 2>&1 | tail -2 )
-fi
+}
 
-echo "== starting the runtime container"
-stop_runtime
-# -Dmendix.running.locally.by.studiopro=true registers the /dev/ servlets, including
-# preview_execute_oql -- the endpoint `mxcli oql` needs. Without it the runtime answers
-# "Action not found" and every await_row/oql_value in the suite fails.
-MX_INSTALL_PATH="$RUNTIME" M2EE_ADMIN_PASS="$ADMIN_PASS" M2EE_ADMIN_PORT="$ADMIN_PORT" \
-  nohup "$JAVA" -Dmendix.running.locally.by.studiopro=true \
-  -jar "$RUNTIME/runtime/launcher/runtimelauncher.jar" \
-  "$(cygpath -w "$APP_DIR/deployment" 2>/dev/null || echo "$APP_DIR/deployment")" \
-  > "$APP_DIR/.mxcli/runtime.log" 2>&1 &
+# --- 5. Start the runtime ---
+start_runtime() {
+  echo "== starting the runtime container"
+  stop_runtime
+  # studiopro=true registers the /dev/ servlets `mxcli oql` needs.
+  MX_INSTALL_PATH="$RUNTIME" M2EE_ADMIN_PASS="$ADMIN_PASS" M2EE_ADMIN_PORT="$ADMIN_PORT" \
+    nohup "$JAVA" -Dmendix.running.locally.by.studiopro=true \
+    -jar "$RUNTIME/runtime/launcher/runtimelauncher.jar" \
+    "$(cygpath -w "$DEPLOYMENT" 2>/dev/null || echo "$DEPLOYMENT")" \
+    > "$APP_DIR/.mxcli/runtime.log" 2>&1 &
+}
 
-for _ in $(seq 1 90); do
-  curl -s -m 2 -o /dev/null "http://127.0.0.1:$ADMIN_PORT/" && break
-  sleep 1
-done
+# Poll once a second until the admin API answers; carry on after ADMIN_WAIT_SECONDS regardless.
+wait_for_admin_api() {
+  local attempt
+  for attempt in $(seq 1 "$ADMIN_WAIT_SECONDS"); do
+    curl -s -m 2 -o /dev/null "http://127.0.0.1:$ADMIN_PORT/" && break
+    sleep 1
+  done
+}
 
-# The Jetty server does not exist until this is called, and it needs all three
-# parameters -- runtime_port alone leaves `start` failing with
-# "No Runtime Jetty server available".
-admin "{\"action\":\"update_appcontainer_configuration\",\"params\":{\"runtime_port\":$APP_PORT,\"runtime_listen_addresses\":\"127.0.0.1\",\"runtime_jetty_options\":{}}}" >/dev/null
-
-# BasePath and RuntimePath have no defaults in the standalone launcher: without
-# them `start` fails with "BasePath should be defined" and then
-# "Cannot initialize, RuntimePath has no value yet."
-# Windows paths carry backslashes, which are JSON escapes -- building this by hand in
-# the shell produced an empty BasePath and a bare RuntimeException. json.dumps does the
-# escaping correctly.
+# --- 6. Configure and start through the admin API ---
+# BasePath/RuntimePath have no defaults; json.dumps escapes Windows backslashes.
 config_json() {
-  "$PY" - "$(cygpath -w "$APP_DIR/deployment")" "$(cygpath -w "$RUNTIME/runtime")" "$APP_PORT" \
+  "$PY" - "$(cygpath -w "$DEPLOYMENT")" "$(cygpath -w "$RUNTIME/runtime")" "$APP_PORT" \
         "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" <<'PY'
 import json, sys
 base, runtime, port, host, name, user, password = sys.argv[1:8]
@@ -193,16 +175,38 @@ print(json.dumps({"action": "update_configuration", "params": {
 }}))
 PY
 }
-admin "$(config_json)" >/dev/null
 
-result="$(admin '{"action":"start"}')"
-# result 3 = the database schema is behind the model; apply the DDL and start again.
-case "$result" in
-  *'"result":3'*) admin '{"action":"execute_ddl_commands"}' >/dev/null
-                  result="$(admin '{"action":"start"}')" ;;
-esac
+configure_runtime() {
+  # Jetty needs all three params, or `start` fails with "No Runtime Jetty server available".
+  admin "{\"action\":\"update_appcontainer_configuration\",\"params\":{\"runtime_port\":$APP_PORT,\"runtime_listen_addresses\":\"127.0.0.1\",\"runtime_jetty_options\":{}}}" >/dev/null
+  admin "$(config_json)" >/dev/null
+}
 
-case "$result" in
-  *'"result":0'*) echo "== app up on http://localhost:$APP_PORT/" ;;
-  *) echo "$result" | head -c 600; echo; echo "== start FAILED" >&2; exit 1 ;;
-esac
+# Start the app; exit 0 with "== app up on ...", or print the answer and exit 1.
+start_app() {
+  local result
+  result="$(admin '{"action":"start"}')"
+  # result 3: schema behind the model -- apply DDL and start again.
+  case "$result" in
+    *'"result":3'*) admin '{"action":"execute_ddl_commands"}' >/dev/null
+                    result="$(admin '{"action":"start"}')" ;;
+  esac
+
+  case "$result" in
+    *'"result":0'*) echo "== app up on http://localhost:$APP_PORT/" ;;
+    *) echo "$result" | head -c 600; echo; echo "== start FAILED" >&2; exit 1 ;;
+  esac
+}
+
+# --- Main: the steps in order ---
+if needs_rebuild "${1:-}"; then
+  build_deployment
+fi
+point_config_at_postgres
+if web_client_needs_bundling; then
+  bundle_web_client
+fi
+start_runtime
+wait_for_admin_api
+configure_runtime
+start_app

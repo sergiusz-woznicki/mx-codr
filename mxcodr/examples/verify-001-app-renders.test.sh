@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.Invoice_Overview, InvoiceDesk.Customer_Overview, InvoiceDesk.ACT_DemoData_Seed
-#
-# One page load proves what three separate tests used to: the app opens on the
-# invoice list with its header, the seeded rows render, the grid has every column
-# and row action, and both menu items reach their page.
+# The app opens on the invoice list with header, seeded rows, columns, actions, and both menu items work.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -35,7 +32,6 @@ result="$(scenario '
   };
 ')"
 
-# One Python start for all six keys, not eight.
 { read -r header; read -r columns; read -r seeded; read -r missing; read -r rows; read -r navigated; } \
   <<< "$(fields "$result" header columns seeded missing rows navigated)"
 [ "$header" = "true" ] || fail "header snippet missing from the home page"

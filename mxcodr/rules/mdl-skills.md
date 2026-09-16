@@ -37,7 +37,8 @@ until a rebuild. On such machines the installer writes `tests/harness.env` with 
 this project boots (`MDL_BOOT_COMMAND`); where the file is absent, `mxcli run` works
 and nothing needs recording. Either way the gate is the one command that is right
 everywhere, and `bash tests/gate.sh --restart` is the one way to restart the app when
-the gate says the model changed after the runtime started.
+the gate says the model changed after the runtime started. To stop it (before
+`mxcli fix widgets`, say), `bash tests/gate.sh --stop` -- never a hand-written kill loop.
 
 `./mxcli syntax` with no argument lists every topic. After that, **ask for the leaf
 topic directly and ask for everything you need in one command** -- each lookup costs

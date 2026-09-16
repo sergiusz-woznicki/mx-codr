@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.Customer_NewEdit
-#
-# A customer can be created from the customer list and lands in the database.
+# A customer created from the list is stored with its email.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 

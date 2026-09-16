@@ -1,98 +1,135 @@
 #!/usr/bin/env bash
-# The done gate: everything "finished" means, in one command.
+# tests/gate.sh -- the done gate: everything "finished" means, in one command.
 #
 #   bash tests/gate.sh                    # suite + mx check + lint + coverage + naming + layout
 #   bash tests/gate.sh --only crud        # one script by name fragment, warm browser
 #   bash tests/gate.sh --tests-only       # the suite alone
 #   bash tests/gate.sh --boot-if-needed   # start the app first if nothing answers
 #   bash tests/gate.sh --restart          # stop this project's runtime, boot it again, then gate
-#   bash tests/gate.sh --no-cache         # re-run the four model checks even if nothing changed
+#   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
+#   bash tests/gate.sh --no-cache         # re-run the five model checks even if nothing changed
 #
-# Why one command rather than four: each shell round trip in an agent session costs
-# far more than the command inside it -- `mxcli oql` measured 0.02s against a 1.9s
-# median for a shell call. A session that ran the suite, `mx check`, lint and the
-# coverage checker separately spent most of that gate on the trips, not the checks.
+# Six verdicts: the browser suite (tests/verify-*.test.sh) and five model checks that
+# need no app -- mx check, lint, coverage, naming, layout. Every step runs even if
+# another fails; a passing model check is replayed while its inputs are unchanged.
+#   DONE — every check passed               exit 0
+#   NOT DONE — failed: <checks>             exit 1
+#   NOT DONE — could not run: <checks>      exit 2
+# Exit 2 also means the gate stopped early: no .mpr, bad argument, no app answering,
+# a boot that failed, or the runtime refusing sessions.
 #
-# The three model checks need neither the app nor the browser, so they run *while*
-# the suite runs: 25.5 + 9.0 + 1.7 + 1.0 serial becomes about max(25.5, 11.7).
-# With --boot-if-needed they also run while the runtime is still booting.
-#
-# Every step runs even if another fails, so one call reports the whole picture.
-# Exit code is 0 only when every step passed.
-#
-# The four model checks are cached on what they read: the model (size and mtime of
-# the .mpr and every file under mprcontents/) plus each check's own inputs -- the
-# lint rules, the test scripts, the checker. A re-run with nothing changed replays
-# the last green result, marked "(cached HH:MM)". A failure is never cached.
-#
-# Env: BASE_URL (else 8081 then 8080, whichever answers), APP_PORT (8081),
-#      SCRIPT_TIMEOUT (90s), BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT,
-#      ADMIN_PASSWORD, ALLOW_BUSY_SESSION, MDL_BOOT_COMMAND, MDL_GATE_CACHE=0,
-#      SERVE_PORT (mxbuild's port, for a second app on one machine).
-#
-# MDL_BOOT_COMMAND replaces `mxcli run --local` under --boot-if-needed, for machines
-# where that cannot boot. It is read from tests/harness.env like the rest.
+# Env: BASE_URL (else 8081 then 8080), APP_PORT (8081), SCRIPT_TIMEOUT (90s),
+#      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
+#      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
+#      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL -- MDL_* may also be set in tests/harness.env.
+# Lines 2-24 are printed by --help; keep them 23 lines.
+
+# Sections (2-4, 8 and 9 only define functions):
+#   1. Setup          source portable.sh, parse flags, find the .mpr (or MPR=)
+#   2. App helpers    answers, boot failure, wait_for_boot, user modules, pids, database
+#   3. Model checks   check_mx, check_lint, check_coverage, check_naming, check_layout
+#   4. Cache          fingerprint, run_cached
+#   5. Start checks   the five model checks, in the background
+#   6. --restart      stop this project's app
+#   7. The app        find it, or boot it
+#   8. Preflights     sessions, stale model, environment
+#   9. Tests          result arrays, record_red_first, step_tests
+#  10. Run            preflights, suite, wait, collect
+#  11. Summary        verdict lines, DONE / NOT DONE, exit code
+# No -e: a failing step must not end the gate.
 set -uo pipefail
 
+# --- 1. Setup ---
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(cd "$HARNESS_DIR/.." && pwd)"
 cd "$APP_DIR"
-# mxcli.exe vs mxcli, python vs python3, GNU vs BSD mktemp -- see tests/portable.sh.
 . "$HARNESS_DIR/portable.sh"
-MPR="$(ls -1 *.mpr 2>/dev/null | head -1)"
-[ -n "$MPR" ] || { echo "no .mpr in $APP_DIR" >&2; exit 2; }
-# The name ends up in a pgrep pattern whose matches are killed, and in mxcli's
-# arguments. A committed `0|.*|.mpr` turned that pattern into one matching every
-# process this user owns, and --restart would have killed all of them; a committed
-# `0-clean.mpr` sorts first and would have become the model every check ran against.
-case "$MPR" in
-  *[!A-Za-z0-9._-]*|-*|.*)
-    echo "refusing to run: the .mpr name must be letters, digits, dot, dash or underscore: $MPR" >&2
-    exit 2 ;;
-esac
-if [ "$(ls -1 *.mpr 2>/dev/null | wc -l | tr -d ' ')" != "1" ]; then
-  echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
-fi
-SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
-APP_PORT="${APP_PORT:-8081}"
-BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
-WORK="$(mdl_tmpdir mdl-gate)"
-trap 'rm -rf "$WORK"' EXIT
-
-ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
+ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
+booted_by_command=""   # set to 1 once MDL_BOOT_COMMAND has booted the app
 while [ $# -gt 0 ]; do
   case "$1" in
     --only) ONLY="$2"; shift 2 ;;
     --tests-only) TESTS_ONLY=1; shift ;;
     --boot-if-needed) BOOT=1; shift ;;
     --restart) RESTART=1; BOOT=1; shift ;;
+    --stop) STOP=1; shift ;;
     --no-cache) USE_CACHE=0; shift ;;
-    -h|--help) sed -n '2,24p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$HARNESS_DIR/gate.sh"; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
+mdl_find_mpr || exit 2
+# The name ends up in a pgrep pattern whose matches get killed: safe characters only.
+case "$MPR" in
+  *[!A-Za-z0-9._-]*|-*|.*)
+    echo "refusing to run: the .mpr name must be letters, digits, dot, dash or underscore: $MPR" >&2
+    exit 2 ;;
+esac
+SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
+APP_PORT="${APP_PORT:-8081}"
+BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
+# Scratch directory for this run's result files; removed on exit.
+WORK="$(mdl_tmpdir mdl-gate)"
+# On exit, end model checks still running in the background (an early exit -- no app, a failed
+# boot -- leaves them), so they do not write into the removed scratch directory.
+cleanup_work() {
+  local pid pids
+  pids="$(jobs -p)"
+  if [ -n "$pids" ]; then
+    for pid in $pids; do
+      if command -v pgrep >/dev/null 2>&1 && declare -F descendants >/dev/null; then
+        # shellcheck disable=SC2046
+        kill -TERM $(descendants "$pid") 2>/dev/null
+      fi
+      kill -TERM "$pid" 2>/dev/null
+    done
+    wait 2>/dev/null
+  fi
+  rm -rf "$WORK"
+}
+trap cleanup_work EXIT
+
+
+# --- 2. App helpers ---
 answers() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "$1" 2>/dev/null)" = "200" ]; }
 
-# A boot that cannot succeed, recognised from its own log. Without this the wait
-# loop below polls a port nothing will ever answer on until BOOT_TIMEOUT -- three
-# minutes, measured, for a model that fails `mxbuild` with CE1613 while the log
-# said so in the first two seconds. The reason is what the session needs, and it
-# needs it now, not at the timeout.
+# True when the boot log already shows a failure, so the wait loop stops early.
 boot_failed() {   # boot_failed <log>
   [ -f "$1" ] || return 1
   grep -qE '^Error:|initial build failed|cannot be deployed, because it contains errors|is already in use|exited during startup|BUILD FAILED' "$1" 2>/dev/null
 }
+# Prints the error lines, and the indented lines under an `Error:` line: mxbuild lists one build
+# error per indented line, and not every one carries a [CE] code ("Invalid token ...").
 report_boot_failure() {   # report_boot_failure <log> <waited>
   echo "the app did not start (${2}s): the boot reported an error rather than coming up" >&2
-  grep -E '^Error:|\[CE[0-9]+\]|initial build failed|is already in use|exited during startup' "$1" 2>/dev/null \
+  awk '/^Error:/ { under = 1; print; next }
+       under && /^[[:space:]]+[^[:space:]]/ { print; next }
+       { under = 0 }
+       /\[CE[0-9]+\]|initial build failed|is already in use|exited during startup/ { print }' "$1" 2>/dev/null \
     | head -12 >&2
   echo "   full log: $1" >&2
   exit 2
 }
+# Polls $BASE_URL once a second until it answers, then prints how long it took.
+# Exits 2 when <log> shows a boot error or BOOT_TIMEOUT seconds pass.
+wait_for_boot() {   # wait_for_boot <log>
+  local log="$1" waited=0
+  until answers "$BASE_URL"; do
+    perl -e 'select undef, undef, undef, 1' 2>/dev/null || sleep 1
+    waited=$((waited + 1))
+    boot_failed "$log" && report_boot_failure "$log" "$waited"
+    if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
+      echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of $log:" >&2
+      tail -15 "$log" >&2
+      exit 2
+    fi
+  done
+  echo "   up after ${waited}s"
+}
 GATE_START=$SECONDS
 
-# This project's own modules -- read once, used by coverage, naming and the cache.
+# This project's own modules (not System, MyFirstModule or marketplace); 2 if unreadable.
 user_modules() {
   local listing
   listing="$("$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
@@ -104,32 +141,57 @@ for row in rows:
     if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
         print(row["Module"])' 2>/dev/null || return 2
 }
-# USER_MODULES_READ says whether the list could be read at all. An empty list from a
-# model with no module of its own is a real answer; an empty list because SHOW
-# MODULES failed is not, and every model check below tells the two apart.
+# USER_MODULES_READ=0 tells a failed SHOW MODULES apart from a project with no module.
 USER_MODULES=""; USER_MODULES_READ=1
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   USER_MODULES="$(user_modules)" || USER_MODULES_READ=0
 fi
 
-# --- the processes that are this project's app ---------------------------------
-# Matched on the project, not on the program name: another app's runtime on the
-# same machine (a second agent, a second checkout) is not this one's, and its
-# start time says nothing about this model. Oldest first.
+# PIDs of this project's runtime and `mxcli run`, matched on the project path; oldest first.
 project_pids() {
   command -v pgrep >/dev/null 2>&1 || return 0
-  { pgrep -f "runtimelauncher.*$APP_DIR" 2>/dev/null
+  { pgrep -f "runtimelauncher.*$(mdl_ere_quote "$APP_DIR")" 2>/dev/null
     pgrep -f "mxcli(\.exe)? run .*$(mdl_ere_quote "$MPR")" 2>/dev/null; } | sort -un
 }
 descendants() {   # every process under <pid>, deepest first
   local child
   for child in $(pgrep -P "$1" 2>/dev/null); do descendants "$child"; echo "$child"; done
 }
+# `mxbuild --serve` processes started in this project's directory: left behind when `mxcli run`
+# is killed, they hold port 6543 and make the next boot fail. Needs lsof to read the directory.
+orphan_mxbuild_pids() {
+  command -v pgrep >/dev/null 2>&1 && command -v lsof >/dev/null 2>&1 || return 0
+  local pid dir
+  for pid in $(pgrep -f 'mxbuild.* --serve' 2>/dev/null); do
+    dir="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+    [ -n "$dir" ] && [ "$(cd "$dir" 2>/dev/null && pwd -P)" = "$(cd "$APP_DIR" && pwd -P)" ] && echo "$pid"
+  done
+}
 
-# The database the app boots against. `mxcli run --local --ensure-db` provisions one
-# through Docker; where there is no Docker there is usually a PostgreSQL already
-# installed, and this is the same job done with psql. Windows keeps psql off the
-# PATH, so the config may name it outright.
+# Stops this project's app: the runtime, `mxcli run` with everything under it, and orphaned
+# mxbuild. SIGTERM, up to 15s for a clean stop, then SIGKILL. Other projects are never touched.
+stop_project_app() {
+  local victims="" pid waited=0
+  for pid in $(project_pids) $(orphan_mxbuild_pids); do
+    victims="$victims $(descendants "$pid" | tr '\n' ' ') $pid"
+  done
+  # A child of `mxcli run` is also found on its own: list each pid once.
+  victims="$(printf '%s\n' $victims | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+  if [ -z "${victims// /}" ]; then
+    echo "   nothing of this project was running"
+    return 0
+  fi
+  # shellcheck disable=SC2086
+  kill -TERM $victims 2>/dev/null || true
+  while [ "$waited" -lt 15 ] && [ -n "$(project_pids)$(orphan_mxbuild_pids)" ]; do
+    sleep 1; waited=$((waited + 1))
+  done
+  # shellcheck disable=SC2086
+  [ -z "$(project_pids)$(orphan_mxbuild_pids)" ] || kill -KILL $victims 2>/dev/null || true
+  echo "   stopped:$(echo $victims)"
+}
+
+# Prints the psql to use (MDL_PSQL, PATH, Program Files); returns 1 if none.
 psql_binary() {
   if [ -n "${MDL_PSQL:-}" ] && [ -x "$MDL_PSQL" ]; then printf '%s\n' "$MDL_PSQL"; return 0; fi
   if command -v psql >/dev/null 2>&1; then printf 'psql\n'; return 0; fi
@@ -150,19 +212,17 @@ ensure_database() {      # the non-container equivalent of --ensure-db
     echo "      Install PostgreSQL, or set MDL_PSQL in tests/harness.env." >&2
     return 1
   }
-  # MDL_DB_HOST is stored in mxcli's shape, host:port. psql wants them apart.
+  # MDL_DB_HOST is host:port; psql wants them apart.
   local host="${MDL_DB_HOST:-127.0.0.1:5432}" port user="${MDL_DB_USER:-mendix}"
   port="${host##*:}"; host="${host%%:*}"
   case "$port" in ''|*[!0-9]*) port=5432 ;; esac
-  # The database name is interpolated into SQL, and psql -c accepts several
-  # statements, so a name carrying a quote could run DDL of its own choosing.
+  # The name is interpolated into SQL: safe characters only.
   case "$MDL_DB_NAME" in
     ''|*[!A-Za-z0-9_]*)
       echo "   !! MDL_DB_NAME must be letters, digits or underscore; leaving the database alone" >&2
       return 1 ;;
   esac
-  # Given per call, never exported: an exported PGPASSWORD is inherited by every
-  # verify-*.test.sh and every checker the gate starts.
+  # PGPASSWORD is given per call, never exported to the tests and checkers.
   local pass="${MDL_DB_PASSWORD:-mendix}"
   if PGPASSWORD="$pass" "$psql" -w -h "$host" -p "$port" -U "$user" -d postgres -tAc \
        "SELECT 1 FROM pg_database WHERE datname='$MDL_DB_NAME'" 2>/dev/null | grep -q 1; then
@@ -173,26 +233,15 @@ ensure_database() {      # the non-container equivalent of --ensure-db
     -c "CREATE DATABASE \"$MDL_DB_NAME\"" >/dev/null 2>&1
 }
 
-# --- the checks that need nothing but the .mpr -------------------------------
-# Each writes one summary line and an exit status, so the parent can read the
-# result after `wait` -- a background subshell cannot append to the parent's arrays.
+# --- 3. Model checks ---
+# Each check runs in a background subshell, so it reports through files: check_<name> writes
+# $WORK/<name>.summary and .detail and returns 0 pass / 1 problems / 2 could not run;
+# run_cached adds .status and .secs; collect reads them after `wait`.
 check_mx() {
-  local out
-  # `docker check` is a misleading name: it runs Mendix's own `mx`, and with
-  # --mxbuild-path it runs the one inside a Studio Pro installation. That is the
-  # whole of the no-Docker mode for this check -- see tests/harness.env.
-  #
-  # It runs on a COPY of the model, never the live tree. `mx check` saves the .mpr
-  # it checks (update-widgets runs first) -- bytes identical, mtime new -- and under
-  # `mxcli run --watch` that mtime is the reload trigger. Checking the live tree
-  # therefore restarted the runtime in the middle of the suite: a red test with no
-  # cause, and a "model changed after the runtime started" warning that sent one
-  # session into two needless restarts. What the copy needs, measured on
-  # InvoiceDesk: the .mpr, mprcontents/, widgets/ (update-widgets reads them) and
-  # theme/ + themesource/ (897 false CE6083 "not supported by your theme" errors
-  # without them); javasource/ rides along when present; userlib/ and resources/
-  # are not read. On APFS `cp -c` clones, so 25MB costs ~0.2s.
-  local scratch="$WORK/mxcheck" item
+  local out errors item
+  # mx check runs on a copy: it rewrites the .mpr and would trigger --watch rebuilds.
+  # The copy needs widgets/ and theme*/ as well; `cp -Rc` clones on APFS, else plain cp -R.
+  local scratch="$WORK/mxcheck"
   mkdir -p "$scratch"
   for item in "$MPR" mprcontents widgets theme themesource javasource; do
     [ -e "$item" ] || continue
@@ -202,14 +251,11 @@ check_mx() {
   local -a mx_args=(docker check -p "$scratch/$MPR")
   [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
   out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
-  local errors
-  # `mx check` exits 0 even with model errors, so read the count it prints.
+  # mx check exits 0 even with model errors, so read the count it prints.
   errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"
   if [ -z "$errors" ]; then
     printf '%s\n' "$out" | tail -3 > "$WORK/mx.detail"
     if [ -n "${MDL_MXBUILD_PATH:-}" ]; then
-      # Almost always the same cause: `mx` came from a Studio Pro whose version does
-      # not match this project. Say that rather than leaving a bare "no count".
       echo "   (using $MDL_MXBUILD_PATH -- it must match this project's Mendix version)" \
         >> "$WORK/mx.detail"
     fi
@@ -221,14 +267,7 @@ check_mx() {
   return 1
 }
 
-# --- the model checks ------------------------------------------------------------
-# Every check returns 0 (passed), 1 (found problems) or 2 (could not run). The third
-# is not a kind of pass. Until 2026.09.13 a lint that crashed, a model that could not
-# be described, or a worker that died all fell through to "return 0", and the gate
-# printed DONE over checks that had never looked at anything.
-
-# qualified_names: the names out of a `SHOW ... --json` listing on stdin. Exits
-# non-zero when the listing is not JSON, which is how a failed query shows up.
+# Names from a `SHOW ... --json` listing on stdin; non-zero when it is not JSON.
 qualified_names() {
   "$PY" -c 'import json,sys
 rows = json.load(sys.stdin)
@@ -240,9 +279,7 @@ for row in rows:
         print(name)' 2>/dev/null
 }
 
-# checker_verdict <exit> <output>: 0 passed, 1 findings, 2 the checker itself broke.
-# A Python traceback also exits 1, so a 1 only counts as findings when the checker
-# printed its FAIL verdict line first.
+# 0 passed, 1 findings, 2 broken. A traceback also exits 1, so 1 needs a FAIL line first.
 checker_verdict() {
   case "$1" in
     0) return 0 ;;
@@ -251,10 +288,8 @@ checker_verdict() {
   return 2
 }
 
-# describe_all <label> <dir> <kinds> <describe-type-from-kind>: describe every document
-# of those kinds in every user module into <dir>/<module>.mdl. Any failed listing or
-# describe is written to $WORK/<label>.broken -- not swallowed -- and the loop reads
-# from a here-string, not a pipe, so it runs in this shell and nothing is lost.
+# Describes every document of <kinds> into <dir>/<module>.mdl; failures go to
+# $WORK/<label>.broken. False when anything failed.
 describe_all() {
   local label="$1" dir="$2" kinds="$3" module kind listing names document
   local broken="$WORK/$label.broken"
@@ -278,8 +313,8 @@ describe_all() {
   [ ! -s "$broken" ]
 }
 
-# modules_or_status <label>: prints nothing and returns 0 when there are modules to
-# check; otherwise writes the summary and returns the status the check should end on.
+# 0 when there are user modules; else writes the summary and returns 2 (unreadable)
+# or 3 (none, which the caller turns into a pass).
 modules_or_status() {
   if [ "${USER_MODULES_READ:-1}" != "1" ]; then
     echo "$1: could not run -- SHOW MODULES failed" > "$WORK/$1.summary"; return 2
@@ -290,19 +325,17 @@ modules_or_status() {
   return 0
 }
 
+# Only lint errors fail; warnings and info do not.
 check_lint() {
   local out code line errors
   out="$("$MXCLI" lint -p "$MPR" 2>&1)"; code=$?
-  # A .star file that does not parse is skipped with a warning on stderr, and lint
-  # still exits 0 with a normal-looking summary -- measured on 2026-09-13 with a rule
-  # that had a syntax error. Its rules never ran, so this is not a pass.
+  # A .star file that fails to parse is skipped while lint still exits 0: not a pass.
   if printf '%s\n' "$out" | grep -qE 'rule file\(s\) skipped|rule file skipped'; then
     echo "lint: could not run -- $(printf '%s\n' "$out" | grep -cE '^Warning: rule file skipped') lint rule file(s) failed to load" > "$WORK/lint.summary"
     printf '%s\n' "$out" | grep -E '^Warning: rule file skipped' | sed 's/^Warning: rule file skipped: /  - /' | head -5 > "$WORK/lint.detail"
     return 2
   fi
   line="$(printf '%s\n' "$out" | grep -E '^[0-9]+ issues:' | tail -1)"
-  # A clean project prints no count at all, only this sentence.
   if [ -z "$line" ] && [ "$code" = "0" ] && printf '%s\n' "$out" | grep -qF 'No issues found.'; then
     echo "lint: No issues found." > "$WORK/lint.summary"
     return 0
@@ -314,21 +347,24 @@ check_lint() {
   fi
   echo "lint: $line" > "$WORK/lint.summary"
   errors="$(printf '%s\n' "$line" | grep -oE '[0-9]+ errors' | grep -oE '[0-9]+')"
-  # Warnings and info are for a human to weigh; only errors gate.
   [ -n "$errors" ] && [ "$errors" != "0" ] || return 0
   printf '%s\n' "$out" | grep -E '✖|\[error\]' | head -10 > "$WORK/lint.detail"
   return 1
 }
 
+# Every page and ACT_ microflow must be named by a verify-*.test.sh `# covers:` line.
 check_coverage() {
   [ -f tools/mdl-checks/check_test_coverage.py ] || {
     echo "coverage: could not run -- tools/mdl-checks/check_test_coverage.py is missing" > "$WORK/coverage.summary"
     return 2; }
   local gate out code
   modules_or_status coverage; gate=$?
-  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
-  # All modules in one call: a test may cover a page in another module, and only a
-  # checker that sees the whole project can tell that claim from a stale one.
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;   # no user modules: a real pass, summary already written
+    *) return "$gate" ;;
+  esac
+  # All modules in one call: a test may cover a page in another module.
   # shellcheck disable=SC2086
   out="$("$PY" tools/mdl-checks/check_test_coverage.py . $USER_MODULES 2>&1)"; code=$?
   printf '%s\n' "$out" | grep -E '^(PASS|FAIL|ERROR) ' | sed 's/^/coverage /' > "$WORK/coverage.summary"
@@ -337,34 +373,31 @@ check_coverage() {
     0) return 0 ;;
     1) grep -q '^coverage FAIL ' "$WORK/coverage.summary" && return 1 ;;
   esac
-  [ -s "$WORK/coverage.summary" ] && ! grep -q '^coverage ERROR ' "$WORK/coverage.summary" \
-    && : > "$WORK/coverage.summary"
-  [ -s "$WORK/coverage.summary" ] \
-    || echo "coverage: could not run -- check_test_coverage.py exited $code" > "$WORK/coverage.summary"
+  # The checker broke: keep its summary if it printed an ERROR line, else replace it.
+  if ! grep -q '^coverage ERROR ' "$WORK/coverage.summary"; then
+    echo "coverage: could not run -- check_test_coverage.py exited $code" > "$WORK/coverage.summary"
+  fi
   printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 >> "$WORK/coverage.detail"
   return 2
 }
 
-# The naming rules -- captions on decisions and on every action, real variable
-# names, no stacked positions -- live in check_mdl.py, which reads MDL text rather
-# than the model catalog. Nothing ran it before, so those rules were documentation
-# an agent could skip without the gate noticing. `describe module` is ground truth:
-# it is what actually landed in the .mpr, not what a script file claimed.
+# Runs check_mdl.py --skill naming over the described microflows and nanoflows.
 check_naming() {
   [ -f tools/mdl-checks/check_mdl.py ] || {
     echo "naming: could not run -- tools/mdl-checks/check_mdl.py is missing" > "$WORK/naming.summary"
     return 2; }
   local gate out code
   modules_or_status naming; gate=$?
-  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
-  # `describe module` emits the module and its roles only -- the documents have to be
-  # enumerated and described one by one. Thirteen microflows cost well under a second.
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;   # no user modules: a real pass, summary already written
+    *) return "$gate" ;;
+  esac
   if ! describe_all naming "$WORK/mdl" "MICROFLOWS NANOFLOWS"; then
     echo "naming: could not run -- $(head -1 "$WORK/naming.broken")" > "$WORK/naming.summary"
     head -5 "$WORK/naming.broken" | sed 's/^/  - /' > "$WORK/naming.detail"
     return 2
   fi
-  # A module with no microflow at all is a real, empty answer.
   if ! ls "$WORK"/mdl/*.mdl >/dev/null 2>&1; then
     echo "naming: no microflow or nanoflow to check" > "$WORK/naming.summary"; return 0
   fi
@@ -380,15 +413,60 @@ check_naming() {
   return "$gate"
 }
 
-# --- caching the model checks --------------------------------------------------
-# A check's key is a digest of every input it reads. The model, the tests, the
-# checkers, gate.sh and harness.env are keyed on their bytes: a same-size edit with
-# its timestamp restored must not replay an old green, and hashing all of it costs
-# about 10ms on InvoiceDesk. The mxcli binary (90MB) and the widget and theme trees
-# are keyed on size + mtime (meta:), where replacing a file always moves the
-# timestamp. Only a passing result is stored, so a cached line is always a line
-# that was green when it ran; a red check, and one that could not run, runs again
-# every time.
+# Widget spacing, read from `describe page` (Starlark lint rules cannot see widgets).
+# Sets nav_args for the Log out rule (NAV01): only when project security is on, since only then
+# do users sign in. Returns 1, with the summary written, when the navigation cannot be read.
+layout_sign_out_inputs() {
+  local level
+  level="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | grep -i 'Security Level' | head -1)"
+  case "$level" in
+    *[Oo]ff*|"") return 0 ;;
+  esac
+  if ! "$MXCLI" -p "$MPR" -c "DESCRIBE NAVIGATION" > "$WORK/navigation.mdl" 2>/dev/null; then
+    echo "layout: could not run -- DESCRIBE NAVIGATION failed" > "$WORK/layout.summary"
+    return 1
+  fi
+  # A sign-out button in a snippet (a shared header, say) also counts; unreadable snippets do not block.
+  describe_all layout-snippets "$WORK/snippets" "SNIPPETS" || true
+  nav_args=(--navigation "$WORK/navigation.mdl" --sign-out-sources "$WORK/snippets" --users-sign-in)
+}
+
+check_layout() {
+  [ -f tools/mdl-checks/check_layout.py ] || {
+    echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
+    return 2; }
+  local gate out code
+  modules_or_status layout; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;   # no user modules: a real pass, summary already written
+    *) return "$gate" ;;
+  esac
+  if ! describe_all layout "$WORK/pages" "PAGES"; then
+    echo "layout: could not run -- $(head -1 "$WORK/layout.broken")" > "$WORK/layout.summary"
+    head -5 "$WORK/layout.broken" | sed 's/^/  - /' > "$WORK/layout.detail"
+    return 2
+  fi
+  if ! ls "$WORK"/pages/*.mdl >/dev/null 2>&1; then
+    echo "layout: no page to check" > "$WORK/layout.summary"; return 0
+  fi
+  local -a nav_args=()
+  layout_sign_out_inputs || return 2
+  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" "${nav_args[@]}" 2>&1)"; code=$?
+  checker_verdict "$code" "$out"; gate=$?
+  if [ "$gate" = "2" ]; then
+    echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/layout.detail"
+    return 2
+  fi
+  echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
+  printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
+  return "$gate"
+}
+
+# --- 4. Cache ---
+# Only passes are cached, keyed on the bytes of every input the check reads plus the .mpr
+# and mprcontents/; meta:<path> keys on size + mtime, env:NAME=value on the value.
 fingerprint() {   # fingerprint <path>... -> one digest line; meta:<path> keys on size + mtime, env:NAME=value on the value
   "$PY" - "$MPR" mprcontents "$@" <<'PY_FP'
 import hashlib, os, sys
@@ -428,10 +506,7 @@ print(h.hexdigest()[:24])
 PY_FP
 }
 CACHE_DIR="$APP_DIR/.mxcli/gate-cache"
-# A cached summary is printed as a pass, and the cache lives in the project, so a
-# forged <check>.key/<check>.summary pair used to be enough to make any red check
-# report green. The key now also depends on a secret kept outside the project, so a
-# pair can only be produced by something that has already read this machine's files.
+# The key includes a secret kept outside the project, so a forged cache entry cannot replay.
 mdl_cache_secret() {
   local file="${MDL_CACHE_SECRET_FILE:-$HOME/.mxcli/gate-cache.secret}"
   if [ ! -s "$file" ]; then
@@ -441,7 +516,7 @@ mdl_cache_secret() {
   fi
   cat "$file" 2>/dev/null || echo none
 }
-# run_cached <name> <function> <extra input paths...>
+# Replays a cached pass with "(cached HH:MM)", otherwise runs <function> and stores a pass.
 run_cached() {
   local name="$1" fn="$2" key="" status; shift 2
   if [ "$USE_CACHE" = "1" ]; then
@@ -465,47 +540,15 @@ run_cached() {
   return "$status"
 }
 
-# Spacing is the one defect every other verdict lets through: a page can pass tests,
-# mx check, lint, coverage and naming and still render a label welded to two buttons,
-# because nothing in the model is wrong -- the widgets simply carry no margin. Read
-# from `describe page`, which prints DesignProperties; mxcli's Starlark rules cannot
-# see widgets at all (a page object there exposes only widget_count).
-check_layout() {
-  [ -f tools/mdl-checks/check_layout.py ] || {
-    echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
-    return 2; }
-  local gate out code
-  modules_or_status layout; gate=$?
-  [ "$gate" = "0" ] || { [ "$gate" = "3" ] && return 0; return "$gate"; }
-  if ! describe_all layout "$WORK/pages" "PAGES"; then
-    echo "layout: could not run -- $(head -1 "$WORK/layout.broken")" > "$WORK/layout.summary"
-    head -5 "$WORK/layout.broken" | sed 's/^/  - /' > "$WORK/layout.detail"
-    return 2
-  fi
-  if ! ls "$WORK"/pages/*.mdl >/dev/null 2>&1; then
-    echo "layout: no page to check" > "$WORK/layout.summary"; return 0
-  fi
-  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" 2>&1)"; code=$?
-  checker_verdict "$code" "$out"; gate=$?
-  if [ "$gate" = "2" ]; then
-    echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
-    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/layout.detail"
-    return 2
-  fi
-  echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
-  # Errors gate; the heading warning is printed but does not, the same way lint's
-  # warnings do not.
-  printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
-  return "$gate"
-}
-
-# --- start the slow, independent work first ---------------------------------
+# --- 5. Start checks ---
+if [ "$STOP" = "1" ]; then
+  echo "== stopping this project's app"
+  stop_project_app
+  exit 0
+fi
 if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
-  # Every result also depends on the gate that produced it, its configuration and
-  # the mxcli that read the model: upgrading any of them must not replay old greens.
+  # Upgrading the gate, its config or mxcli must not replay an old pass.
   cache_inputs=(tests/gate.sh tests/harness.env "meta:$MXCLI")
-  # MDL_MXBUILD_PATH picks which `mx` checks the model. Set in harness.env it is
-  # already in the key; set only in the shell it is not, so its value goes in too.
   ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
@@ -515,39 +558,20 @@ if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   echo "== mx check, lint, coverage, naming and layout started (they need no app; running while the suite does)"
 fi
 
-# --- --restart: this project's app, stopped and booted again -------------------
-# What an agent did by hand eleven times in one session, with pgrep and kill and a
-# port that would not free. The kill goes to the process tree under `mxcli run`
-# (SIGTERM to mxcli alone orphans mxbuild and the Java runtime, which then hold
-# the ports), then to any runtime still serving this project's deployment.
+# --- 6. --restart ---
+# Kill the whole tree under `mxcli run`: TERM on mxcli alone orphans mxbuild and Java.
 if [ "$RESTART" = "1" ]; then
   echo "== restarting this project's app"
-  victims=""
-  for pid in $(project_pids); do victims="$victims $(descendants "$pid") $pid"; done
-  if [ -n "${victims// /}" ]; then
-    # shellcheck disable=SC2086
-    kill -TERM $victims 2>/dev/null || true
-    waited=0
-    while [ "$waited" -lt 15 ] && [ -n "$(project_pids)" ]; do sleep 1; waited=$((waited + 1)); done
-    # shellcheck disable=SC2086
-    [ -z "$(project_pids)" ] || kill -KILL $victims 2>/dev/null || true
-    sleep 1
-    echo "   stopped:$victims"
-  else
-    echo "   nothing of this project was running"
-  fi
-  # Whatever answered on the port belonged to the old runtime; the boot below
-  # must not adopt it.
+  stop_project_app
+  sleep 1
+  # Whatever answered belonged to the old runtime; do not adopt it.
   BASE_URL=""
 fi
 
-# Checkers older than the bundle, or edited since they were installed. A gate that
-# passes because its checkers are out of date still prints the green, so this is
-# said before any verdict is -- and before the missing-app bail below, which would
-# otherwise swallow it.
+# Warn about drifted checkers before any verdict, and before the no-app exit below.
 mdl_check_install_freshness
 
-# --- the app ------------------------------------------------------------------
+# --- 7. The app ---
 if [ -z "${BASE_URL:-}" ]; then
   for candidate in "http://localhost:$APP_PORT" http://localhost:8080; do
     answers "$candidate" && { BASE_URL="$candidate"; break; }
@@ -555,79 +579,43 @@ if [ -z "${BASE_URL:-}" ]; then
 fi
 if [ -z "${BASE_URL:-}" ] || ! answers "$BASE_URL"; then
   if [ "$BOOT" = "1" ]; then
-    # An orphaned `mxbuild --serve` from a killed run holds port 6543, and mxcli
-    # refuses to adopt it -- correctly, since a stale build server makes edits look
-    # like they do nothing. Say so before the boot fails, because the symptom
-    # otherwise is an app that simply never answers.
+    # An orphaned `mxbuild --serve` holds port 6543 and makes the boot fail.
     if command -v pgrep >/dev/null 2>&1 && pgrep -f 'mxbuild' >/dev/null 2>&1; then
       echo "   !! an mxbuild process is already running. If this boot fails on"
       echo "      'port 6543 (mxbuild serve) is already in use', it is an orphan:"
       echo "      pgrep -af 'mxbuild|runtimelauncher'   then kill that pid"
     fi
-    # A project may have to boot some other way. On Windows `mxcli run --local` fails
-    # in three places before it ever reaches the app, all of them invisible: mxbuild
-    # splits --java-home on spaces and exits printing usage; the mxbuild cache has no
-    # gradle-8.5, so Java compilation dies with "No supported Gradle installation
-    # found"; and mxcli's own liveness probe is Process.Signal(0), which Windows
-    # rejects for every signal but Kill, so a healthy mxbuild and a healthy runtime
-    # both read as "exited during startup" on the first poll. install.sh fixes the
-    # first two; the third needs a patched mxcli (mxcli-windows-serve-fix.patch).
-    # Until that lands, put a working boot command in MDL_BOOT_COMMAND
-    # (tests/harness.env) and the gate uses it instead.
+    # MDL_BOOT_COMMAND replaces `mxcli run --local` where that cannot boot (Windows).
     if [ -n "${MDL_BOOT_COMMAND:-}" ]; then
       echo "== no app answering; booting with MDL_BOOT_COMMAND"
       ensure_database || true
       echo "   running: $MDL_BOOT_COMMAND"
+      # `( cmd & )` detaches the app: `wait` does not block on it and it outlives the gate.
       ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
       BASE_URL="http://localhost:$APP_PORT"
-      waited=0
-      until answers "$BASE_URL"; do
-        sleep 1
-        waited=$((waited + 1))
-        boot_failed .mxcli/gate-boot.log && report_boot_failure .mxcli/gate-boot.log "$waited"
-        if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
-          echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of .mxcli/gate-boot.log:" >&2
-          tail -15 .mxcli/gate-boot.log >&2
-          exit 2
-        fi
-      done
-      echo "   up after ${waited}s"
+      wait_for_boot .mxcli/gate-boot.log
       booted_by_command=1
     fi
-    if [ -z "${booted_by_command:-}" ]; then
-    echo "== no app answering; booting $MPR on port $APP_PORT with hot reload"
-    boot_args=(run --local -p "$MPR" --app-port "$APP_PORT" --watch)
-    # A second app on the same machine (another agent, another checkout) needs its
-    # own admin and mxbuild ports too, or the boot fails on a port the other holds.
-    [ -n "${ADMIN_PORT:-}" ] && boot_args+=(--admin-port "$ADMIN_PORT")
-    [ -n "${SERVE_PORT:-}" ] && boot_args+=(--serve-port "$SERVE_PORT")
-    if [ -n "${MDL_DB_NAME:-}" ]; then
-      ensure_database || true
-      boot_args+=(--db-name "$MDL_DB_NAME")
-      [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
-      [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
-      [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
-    else
-      # `mxcli new` creates no database, and `run --local` refuses to create one
-      # unasked: a fresh project's first boot died in 13s with "The database to be
-      # used does not exist", before any test ran. --ensure-db creates it when it is
-      # missing and does nothing when it is there, so it costs a check per boot.
-      boot_args+=(--ensure-db)
-    fi
-    ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
-    BASE_URL="http://localhost:$APP_PORT"
-    waited=0
-    until answers "$BASE_URL"; do
-      perl -e 'select undef, undef, undef, 1' 2>/dev/null || sleep 1
-      waited=$((waited + 1))
-      boot_failed .mxcli/gate-boot.log && report_boot_failure .mxcli/gate-boot.log "$waited"
-      if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
-        echo "the app did not answer within ${BOOT_TIMEOUT}s; last lines of .mxcli/gate-boot.log:" >&2
-        tail -15 .mxcli/gate-boot.log >&2
-        exit 2
+    # Default boot: `mxcli run --local --watch` (hot reload).
+    if [ -z "$booted_by_command" ]; then
+      echo "== no app answering; booting $MPR on port $APP_PORT with hot reload"
+      boot_args=(run --local -p "$MPR" --app-port "$APP_PORT" --watch)
+      # A second app on this machine needs its own admin and mxbuild ports.
+      [ -n "${ADMIN_PORT:-}" ] && boot_args+=(--admin-port "$ADMIN_PORT")
+      [ -n "${SERVE_PORT:-}" ] && boot_args+=(--serve-port "$SERVE_PORT")
+      if [ -n "${MDL_DB_NAME:-}" ]; then
+        ensure_database || true
+        boot_args+=(--db-name "$MDL_DB_NAME")
+        [ -n "${MDL_DB_HOST:-}" ] && boot_args+=(--db-host "$MDL_DB_HOST")
+        [ -n "${MDL_DB_USER:-}" ] && boot_args+=(--db-user "$MDL_DB_USER")
+        [ -n "${MDL_DB_PASSWORD:-}" ] && boot_args+=(--db-password "$MDL_DB_PASSWORD")
+      else
+        # A fresh project has no database; --ensure-db creates it only when missing.
+        boot_args+=(--ensure-db)
       fi
-    done
-    echo "   up after ${waited}s"
+      ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
+      BASE_URL="http://localhost:$APP_PORT"
+      wait_for_boot .mxcli/gate-boot.log
     fi
   else
     cat >&2 <<MSG
@@ -642,14 +630,9 @@ MSG
   fi
 fi
 
-# A developer/trial licence caps concurrent sessions -- measured on this runtime, the
-# 7th live session was refused, and every leftover test browser, CLI login and open
-# developer tab counts towards it. Nine scripts that all fail on a refused sign-in
-# look like nine broken features, so say what the runtime is holding, and stop
-# outright if it has already started refusing.
-#
-# Note m2ee reports distinct signed-in *users*, not sessions: four logins as one user
-# show up as one name. So the user list is a hint, and the runtime log is the fact.
+# --- 8. Preflights ---
+# Warnings before the tests; only preflight_session stops the gate (exit 2), on a
+# trial-licence session refusal in the runtime log within the last two minutes.
 preflight_session() {
   local log="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
   local users
@@ -666,7 +649,6 @@ if users:
     print(",".join(users))' 2>/dev/null)"
   [ -n "$users" ] && echo "   already signed in: $users"
 
-  # A refusal in the last two minutes is about now, not about last week.
   local refusal=""
   if [ -f "$log" ]; then
     refusal="$(tail -400 "$log" 2>/dev/null | grep 'Maximum number of sessions exceeded' | tail -1 \
@@ -695,38 +677,35 @@ MSG
   exit 2
 }
 
-# Security and entity changes do not hot-apply: the runtime keeps serving the model
-# it booted with, so a correct fix reads as a failing feature. Observed twice in one
-# session -- a portal test reported "shows 10 invoices, owns 4" until the restart,
-# then reported 3.
+# Warns when the runtime serves an older model: security and entity changes do not hot-apply.
+# The warning also goes to $WORK/stale.note, so record_red_first ignores this run.
 preflight_stale_model() {
   local started
 
-  # Primary signal: file dates, because they work everywhere.
-  #
-  # This check used to depend entirely on pgrep, which Git Bash does not have -- so
-  # on Windows it returned 0 and said nothing, every time. That is the worst kind of
-  # degradation: the gate still goes green while measuring a stale build. Caught in
-  # the field with a .mpr ~25 minutes newer than the deployment the runtime was
-  # serving.
-  #
-  # Where the runtime serves a built deployment there is no hot reload at all, so an
-  # MDL change is invisible until a rebuild. Comparing the .mpr against the built
-  # model catches exactly that, with no process tools involved.
-  # Under `mxcli run --watch` the watcher applies most model changes itself and
-  # reports so in the boot log; a change it has applied is not stale. The log's
-  # last line is the watcher's last word: "build #N applied via reload" means the
-  # runtime serves the model as it is now, and both signals below stay quiet.
-  local boot_log="$APP_DIR/.mxcli/gate-boot.log"
-  if [ -f "$boot_log" ] && [ ! "$MPR" -nt "$boot_log" ] \
-     && tail -1 "$boot_log" 2>/dev/null | grep -q 'applied via reload'; then
-    return 0
+  # A --watch boot rebuilds and applies every model change itself -- pages by reload, entities
+  # and security by an in-place restart. Wait for that instead of warning in the middle of it.
+  local boot_log="$APP_DIR/.mxcli/gate-boot.log" waited=0
+  if [ -f "$boot_log" ] && grep -q 'Watching model' "$boot_log" 2>/dev/null; then
+    # The watcher notices a change a moment after the exec: give it a few seconds to start.
+    while [ "$MPR" -nt "$boot_log" ] && [ "$waited" -lt "${MDL_WATCH_SETTLE_SECONDS:-5}" ]; do
+      sleep 1; waited=$((waited + 1))
+    done
+    waited=0
+    while [ "$waited" -lt 120 ] && tail -1 "$boot_log" 2>/dev/null \
+          | grep -qE 'Change detected, rebuilding|re-bundling|Web client bundled'; do
+      [ "$waited" = "0" ] && echo "   (waiting for --watch to apply the latest model change)"
+      sleep 1; waited=$((waited + 1))
+    done
+    if [ ! "$MPR" -nt "$boot_log" ] && tail -1 "$boot_log" 2>/dev/null | grep -qE 'applied via (reload|restart)'; then
+      return 0
+    fi
   fi
 
+  # Primary signal, needs no pgrep (Git Bash): .mpr newer than the built deployment.
   local built
   for built in deployment/model/model.mdp deployment/model/metadata.json; do
     [ -f "$built" ] || continue
-    "$PY" - "$MPR" "$built" <<'PY_BUILT'
+    "$PY" - "$MPR" "$built" <<'PY_BUILT' | tee -a "$WORK/stale.note"
 import os, sys
 mpr, built = sys.argv[1], sys.argv[2]
 try:
@@ -741,20 +720,14 @@ PY_BUILT
     break
   done
 
-  # Secondary signal: the runtime's own start time, which also catches a deployment
-  # that was rebuilt while the runtime kept serving the model it booted with. Only
-  # where the tools exist -- this one is genuinely an extra. This project's
-  # processes only: another app's runtime on the machine says nothing about this
-  # model, and matching on the program name alone once reported "changed 1426s
-  # after the runtime started" about a runtime that was serving a different app.
+  # Secondary signal: .mpr newer than this project's oldest runtime process.
   command -v pgrep >/dev/null 2>&1 || return 0
-  # Oldest running runtime process wins; its start time is when the model was read.
   local oldest
   oldest="$(project_pids | head -1)"
   [ -n "$oldest" ] || return 0
   started="$(ps -o lstart= -p "$oldest" 2>/dev/null)"
   [ -n "$started" ] || return 0
-  "$PY" - "$MPR" "$started" <<'PY_STALE'
+  "$PY" - "$MPR" "$started" <<'PY_STALE' | tee -a "$WORK/stale.note"
 import datetime, os, sys
 mpr, started = sys.argv[1], sys.argv[2]
 try:
@@ -764,14 +737,13 @@ except ValueError:
 changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
 gap = (changed - boot).total_seconds()
 if gap > 5:
-    print("   !! the model changed %ds after the runtime started -- security and entity"
-          " changes need a restart, or this run measures the old app:" % gap)
+    print("   !! the model changed %ds after the runtime started and nothing applied it"
+          " (no --watch reload or restart logged) -- this run measures the old app:" % gap)
     print("      bash tests/gate.sh --restart")
 PY_STALE
 }
 
-# Two machine-level facts worth knowing before nine scripts fail on them. Both are
-# instant: the browser path is a file test, the security level a model read.
+# Warns about a missing browser binary, a broken local database, and missing credentials.
 preflight_environment() {
   local config="$APP_DIR/.playwright/cli.config.json"
   if [ -f "$config" ]; then
@@ -779,13 +751,13 @@ preflight_environment() {
     browser="$("$PY" -c "
 import json, os, sys
 try:
-    options = json.load(open('$config'))['browser']['launchOptions']
+    options = json.load(open(sys.argv[1]))['browser']['launchOptions']
 except Exception:
     sys.exit(0)
 path = options.get('executablePath')
 if path and not os.path.exists(path):
     print(path)
-" 2>/dev/null)"
+" "$config" 2>/dev/null)"
     if [ -n "$browser" ]; then
       echo "   !! the browser binary in .playwright/cli.config.json does not exist: $browser"
       echo "      every test will fail with 'opening browser: exit status 1' -- re-run the"
@@ -793,12 +765,8 @@ if path and not os.path.exists(path):
     fi
   fi
 
-  # A local database a deploy build left half-written, or a lock a killed runtime
-  # left behind. Both stop a boot with a message about neither.
   mdl_check_local_database
 
-  # With security on, tests must sign in; without credentials they all fail the same
-  # way, and the failure reads as nine broken features.
   if [ -z "${TEST_PASSWORD:-}" ] && [ ! -f "$APP_DIR/tests/credentials.env" ]; then
     local level
     level="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | grep -i 'Security Level' | head -1)"
@@ -810,23 +778,22 @@ if path and not os.path.exists(path):
   fi
 }
 
+# --- 9. Tests ---
+# failures -> exit 1, cannot_run -> exit 2, summary -> the verdict lines.
 failures=()
 cannot_run=()
 summary=()
 
-# A test that has never failed may assert nothing at all, and nothing about its
-# text says which. So the gate keeps the record: the first red run of a script,
-# under --only, leaves .mxcli/red-first/<script>. A script that goes green under
-# --only with no such record is named once -- and only then is it worth breaking
-# the feature on purpose to see the test notice. Breaking every feature for every
-# test, as one session did, cost 15 minutes and proved what the red-first run had
-# already proved.
+# Records each script's first red run in .mxcli/red-first/. Under --only, a script that goes
+# green without one is flagged once: a test that never failed may assert nothing.
+# Nothing is recorded while the runtime serves an older model: that red is not the test's.
 record_red_first() {   # record_red_first <runner output> <environment cause or "">
-  # Under --only, and under --tests-only -- one session ran the whole suite red on
-  # purpose, before any model existed, exactly to have that on record.
   [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ] || return 0
-  # A failure the app or the browser caused proves nothing about the test.
   [ -z "${2:-}" ] || return 0
+  if [ -s "$WORK/stale.note" ]; then
+    echo "   !! red run not recorded: the app serves an older model. Restart, then watch the test go red"
+    return 0
+  fi
   local out="$1" dir="$APP_DIR/.mxcli/red-first" line name verdict
   mkdir -p "$dir" 2>/dev/null || return 0
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s' | while read -r verdict name _; do
@@ -838,10 +805,7 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
         [ -n "$ONLY" ] || continue
         if [ ! -f "$dir/$name" ] && [ ! -f "$dir/$name.green" ]; then
           date '+%Y-%m-%d %H:%M' > "$dir/$name.green"
-          # Written to a file, not just echoed: this runs inside a `while read`
-          # subshell, and the line matters enough to survive into the summary
-          # block -- a session whose own `grep -E "FAIL:|PASS|Total:"` dropped it
-          # went looking for the markers by hand instead.
+          # Also to a file: this runs in a `while read` subshell and must reach the summary.
           echo "$name: went green without ever being red -- break the feature once and watch it go red" \
             >> "$WORK/redfirst.note"
           echo "   !! $name went green without ever being red here. A test that has never"
@@ -852,8 +816,21 @@ record_red_first() {   # record_red_first <runner output> <environment cause or 
   done
 }
 
+# A MODULE set by the caller goes to every test. Otherwise each test takes the module on its own
+# `# covers:` line (lib.sh), and only a test without one falls back to MDL_DEFAULT_MODULE.
+export_test_module() {
+  if [ -n "${MODULE:-}" ]; then
+    export MODULE
+    return 0
+  fi
+  MDL_DEFAULT_MODULE="$(printf '%s\n' "$USER_MODULES" | head -1)"
+  [ -n "$MDL_DEFAULT_MODULE" ] || MDL_DEFAULT_MODULE="$(user_modules | head -1)"
+  export MDL_DEFAULT_MODULE
+}
+
+# Runs the suite (or the --only matches) in this shell, appending to the arrays directly.
 step_tests() {
-  local targets=("tests/")
+  local targets=("tests/") script
   if [ -n "$ONLY" ]; then
     targets=()
     for script in tests/verify-*"$ONLY"*.test.sh; do
@@ -863,42 +840,26 @@ step_tests() {
   fi
   echo "== tests: ${targets[*]}"
   local out status line
-  # The scripts inherit what is exported and nothing else. PY and MXCLI save each
-  # of them a Python probe; BASE_URL is the app the gate found, which lib.sh would
-  # otherwise default to :8081; SCRIPT_TIMEOUT sizes lib.sh's own watchdog to fire
-  # just before the runner's kill would.
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT
-  # The module oql_count and oql_value query, so a test need not spell it out and
-  # lib.sh need not look it up per script.
-  MODULE="${MODULE:-$(printf '%s\n' "$USER_MODULES" | head -1)}"
-  [ -n "$MODULE" ] || MODULE="$(user_modules | head -1)"
-  export MODULE
-  # Sessions: a full run signs in once and out once (MDL_SESSION_REUSE, see
-  # lib.sh); an --only loop leaves the session signed in between iterations
-  # (KEEP_SESSION), so the next run of the same script skips the sign-in. Either
-  # way the licence sees one session, not one per script.
+  export_test_module
+  # One licence session: a full run reuses it; --only keeps it signed in between runs.
   if [ -n "$ONLY" ]; then
     export KEEP_SESSION="${KEEP_SESSION:-1}"
   else
     export MDL_SESSION_REUSE="${MDL_SESSION_REUSE:-1}"
   fi
-  # --keep-open leaves the browser warm for the next call, which is the iterate
-  # loop's saving; inside one run the runner already reuses it.
   local started=$SECONDS
   out="$("$MXCLI" playwright verify "${targets[@]}" -p "$MPR" \
         --base-url "$BASE_URL" --timeout "$SCRIPT_TIMEOUT" --keep-open 2>&1)"
   status=$?
   echo $((SECONDS - started)) > "$WORK/tests.secs"
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)|^\s+FAIL:|^Total:'
-  # The one sign-out for the whole run. Not under --only: that session is the
-  # next iteration's saving, and the full gate ends it.
+  # One sign-out for a full run; lib.sh is sourced in a subshell to keep it out of the gate.
   if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
     ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
   fi
 
-  # A dead app or a closed browser fails every script that touches it, and those
-  # failures read exactly like broken features -- one session rewrote model access
-  # rules to chase five of them. Name the cause instead.
+  # Name an environment cause: a dead app or closed browser looks like broken features.
   local environment=""
   case "$out" in
     *ERR_CONNECTION_REFUSED*|*ECONNREFUSED*)
@@ -921,9 +882,7 @@ step_tests() {
       summary+=("tests: $line")
     fi
   else
-    # No Total line means the runner never ran the scripts -- "Error: opening
-    # browser: exit status 1", an unreachable app, a bad flag. Reporting "no result"
-    # hides the one sentence that explains it and costs a whole round trip.
+    # No Total line: the runner never ran the scripts; show the line that says why.
     local why
     why="$(printf '%s\n' "$out" | grep -iE '^error|error:|panic|unknown flag|no such file' | tail -1)"
     [ -n "$why" ] || why="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
@@ -932,9 +891,6 @@ step_tests() {
   fi
   if [ "$status" != "0" ]; then
     failures+=("tests")
-    # The facts a red test raises -- how many rows exist, who is signed in, what the
-    # access rules allow -- cost 0.2s and answer most of them. Print them here rather
-    # than leaving someone to remember diagnose.sh exists; three sessions did not.
     if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then
       echo "== facts (tests/diagnose.sh)"
       bash tests/diagnose.sh 2>&1 | sed 's/^/   /' | head -40
@@ -942,11 +898,12 @@ step_tests() {
   fi
 }
 
+# --- 10. Run ---
+# Reads one background check's files into summary, failures or cannot_run.
 collect() {
-  local name="$1" label="$2" status
+  local name="$1" label="$2" status line
   if [ ! -f "$WORK/$name.status" ]; then
-    # A worker that left no status died before it finished -- killed, out of
-    # memory, a syntax error. None of that is a pass.
+    # No status file: the worker died. Not a pass.
     summary+=("$label: could not run -- the check left no result")
     cannot_run+=("$label")
     return 0
@@ -983,6 +940,8 @@ if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
   collect layout "layout"
 fi
 
+# --- 11. Summary ---
+# Any failure exits 1; could-not-run alone exits 2; otherwise DONE, exit 0.
 echo
 echo "== gate"
 for line in "${summary[@]}"; do echo "   $line"; done

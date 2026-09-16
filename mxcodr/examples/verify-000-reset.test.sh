@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.ACT_TestData_Reset
-#
-# Runs first (alphabetical order) and puts the data back to its seeded state, so
-# every test after it starts from the same 3 customers / 10 invoices.
+# Runs first and restores the seeded 3 customers / 10 invoices.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
-before="$(oql_count Invoice)"
+invoices_before="$(oql_count Invoice)"
 
 result="$(scenario '
   await open_app();
@@ -29,7 +27,7 @@ result="$(scenario '
 [ "$(field "$result" confirmed)" = "true" ] || fail "no confirmation message after the reset"
 
 invoices="$(oql_count Invoice)"; customers="$(oql_count Customer)"
-[ "$invoices" = "10" ] || fail "expected exactly 10 invoices after reset, found $invoices (was $before)"
+[ "$invoices" = "10" ] || fail "expected exactly 10 invoices after reset, found $invoices (was $invoices_before)"
 [ "$customers" = "3" ] || fail "expected exactly 3 customers after reset, found $customers"
 
-echo "OK: reset restored 10 invoices / 3 customers (was $before)"
+echo "OK: reset restored 10 invoices / 3 customers (was $invoices_before)"

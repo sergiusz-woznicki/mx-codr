@@ -1,6 +1,6 @@
 ---
 name: module-structure
-description: "Whether new functionality belongs in an existing module or a new one, and the folder structure a module starts with — processes, not document types. Use before creating a module, before adding the first documents to one, and when deciding where a new page or microflow goes."
+description: "Whether new functionality belongs in an existing module or a new one, and the folder structure a module starts with — processes, not document types. Changes to a Marketplace module go in a <Module>Ext module. Use before creating a module, before adding the first documents to one, before changing a Marketplace module, and when deciding where a new page or microflow goes."
 ---
 
 # Module structure
@@ -19,6 +19,7 @@ skill is the decision, not the syntax.
 - Before adding the first pages or microflows to a module
 - When new functionality could plausibly go in two places
 - When a module has grown and someone suggests splitting it
+- Before changing anything in a Marketplace module (Administration, Atlas_Core, DataWidgets, …)
 
 ## When a new module is justified
 
@@ -107,6 +108,55 @@ PaymentsConnector/
 `UseMe` is the contract. If something needs to move out of `Private`, that is a
 deliberate act, and a version bump.
 
+## Changing a Marketplace module: always in `<Module>Ext`
+
+**Never edit a document inside a Marketplace module.** Updating the module from the
+Marketplace replaces the whole module, and every change made in it is gone without
+a warning. Instead, create a module named after it with `Ext` appended —
+`AdministrationExt` for `Administration` — and put the changed functionality there.
+
+Which modules are Marketplace modules: the `Source` column says so.
+
+```bash
+./mxcli -p app.mpr -c "SHOW MODULES"     # Source: "Marketplace v4.3.2" -> do not edit
+```
+
+How the change moves into `<Module>Ext`:
+
+- **A page, microflow or snippet to change:** copy it into `<Module>Ext`
+  (`DESCRIBE` the original, create it in the Ext module under the same process
+  folders), change the copy, and point the callers at it — navigation menu items,
+  buttons, other microflows. The original stays untouched, so an update cannot
+  undo the change.
+- **New behaviour around a Marketplace flow:** a new microflow in `<Module>Ext`
+  that calls the original one, rather than an edit inside it.
+- **More data on a Marketplace entity:** a new entity in `<Module>Ext` associated
+  with it (or a specialization of it), never a new attribute on the original.
+- **Access:** `<Module>Ext` gets its own module roles, mapped to the same user
+  roles as the module it extends.
+
+Example: the Roles filter on `Administration.Account_Overview` needed fixing. The
+fix belongs in `AdministrationExt.Account_Overview`, with the Accounts menu item
+pointing at that page — not in `Administration` itself, where the next Marketplace
+update brings the broken filter back.
+
+Two things that are easy to miss:
+
+- **Already changed the original?** Moving the fix into `<Module>Ext` is half the
+  job: the original must go back to what the Marketplace shipped, or it keeps a
+  change nobody knows about. Re-download the module from the Marketplace or undo it
+  in Studio Pro. Do not rewrite a Marketplace page through mxcli to restore it —
+  a page the vendor built in Studio Pro does not always survive a rewrite (a column
+  bound across an association, for one).
+- **The copy is now your code.** The gate does not check Marketplace modules, but it
+  checks `<Module>Ext` like any module of yours: expect layout findings (spacing
+  between buttons and badges that the vendor's page never had) and naming findings,
+  and fix them in the copy. A test for the copied page names it on its covers line:
+  `# covers: AdministrationExt.Account_Overview`.
+
+After a Marketplace update, open the originals once and compare: a fix the vendor
+has since shipped means the Ext copy can go.
+
 ## Dependencies between modules
 
 **No cycles.** If A needs B and B needs A, you have one module wearing two names, or
@@ -161,3 +211,5 @@ cycles and cross-module coupling that no single rule catches.
 - [ ] A consumable module exposes `UseMe/` and hides `Private/`
 - [ ] No cyclic dependency between modules (`graph-report`, ARCH001)
 - [ ] `./mxcli lint -p app.mpr` clean for the module, CONV008 included
+- [ ] No document in a Marketplace module was changed; changes live in `<Module>Ext`
+- [ ] A Marketplace document changed before the move is back to what the Marketplace shipped

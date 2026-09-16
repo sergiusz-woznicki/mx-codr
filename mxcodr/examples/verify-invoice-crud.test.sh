@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # covers: InvoiceDesk.Invoice_NewEdit, InvoiceDesk.ACT_Invoice_Save
-#
-# An invoice can be created from the list: the form saves, the popup closes, and
-# the row is in the database with the values that were typed.
+# An invoice created from the list is stored with the values typed.
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
@@ -23,8 +21,6 @@ scenario '
   return {saved: true};
 ' > /dev/null
 
-# The database is the proof that the form saved. Whether the new row is visible in
-# the grid depends on paging and sort order, and rendering is verify-001's job.
 await_row Invoice "InvoiceNumber = '$number'" || fail "invoice $number was not stored"
 [ "$(oql_value Invoice Amount "InvoiceNumber = '$number'")" = "42" ] || fail "invoice $number stored without its amount"
 [ "$(oql_value Invoice InvoiceNumber "InvoiceNumber = '$number'")" = "$number" ] || fail "invoice number not stored as typed"
