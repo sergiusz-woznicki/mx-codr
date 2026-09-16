@@ -611,6 +611,7 @@ MSG
 }
 
 # Warns when the runtime serves an older model: security and entity changes do not hot-apply.
+# The warning also goes to $WORK/stale.note, so record_red_first ignores this run.
 preflight_stale_model() {
   local started
 
@@ -625,7 +626,7 @@ preflight_stale_model() {
   local built
   for built in deployment/model/model.mdp deployment/model/metadata.json; do
     [ -f "$built" ] || continue
-    "$PY" - "$MPR" "$built" <<'PY_BUILT'
+    "$PY" - "$MPR" "$built" <<'PY_BUILT' | tee -a "$WORK/stale.note"
 import os, sys
 mpr, built = sys.argv[1], sys.argv[2]
 try:
@@ -647,7 +648,7 @@ PY_BUILT
   [ -n "$oldest" ] || return 0
   started="$(ps -o lstart= -p "$oldest" 2>/dev/null)"
   [ -n "$started" ] || return 0
-  "$PY" - "$MPR" "$started" <<'PY_STALE'
+  "$PY" - "$MPR" "$started" <<'PY_STALE' | tee -a "$WORK/stale.note"
 import datetime, os, sys
 mpr, started = sys.argv[1], sys.argv[2]
 try:
@@ -706,9 +707,14 @@ summary=()
 
 # Records each script's first red run in .mxcli/red-first/. Under --only, a script that goes
 # green without one is flagged once: a test that never failed may assert nothing.
+# Nothing is recorded while the runtime serves an older model: that red is not the test's.
 record_red_first() {   # record_red_first <runner output> <environment cause or "">
   [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ] || return 0
   [ -z "${2:-}" ] || return 0
+  if [ -s "$WORK/stale.note" ]; then
+    echo "   !! red run not recorded: the app serves an older model. Restart, then watch the test go red"
+    return 0
+  fi
   local out="$1" dir="$APP_DIR/.mxcli/red-first" line name verdict
   mkdir -p "$dir" 2>/dev/null || return 0
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s' | while read -r verdict name _; do
