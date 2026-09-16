@@ -71,7 +71,24 @@ APP_PORT="${APP_PORT:-8081}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
 # Scratch directory for this run's result files; removed on exit.
 WORK="$(mdl_tmpdir mdl-gate)"
-trap 'rm -rf "$WORK"' EXIT
+# On exit, end model checks still running in the background (an early exit -- no app, a failed
+# boot -- leaves them), so they do not write into the removed scratch directory.
+cleanup_work() {
+  local pid pids
+  pids="$(jobs -p)"
+  if [ -n "$pids" ]; then
+    for pid in $pids; do
+      if command -v pgrep >/dev/null 2>&1 && declare -F descendants >/dev/null; then
+        # shellcheck disable=SC2046
+        kill -TERM $(descendants "$pid") 2>/dev/null
+      fi
+      kill -TERM "$pid" 2>/dev/null
+    done
+    wait 2>/dev/null
+  fi
+  rm -rf "$WORK"
+}
+trap cleanup_work EXIT
 
 
 # --- 2. App helpers ---
