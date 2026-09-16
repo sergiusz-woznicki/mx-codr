@@ -785,6 +785,162 @@ mxcli_verify_download() {   # mxcli_verify_download <file>
   fi
 }
 
+# --- which mxcli this project uses, and whether a newer one exists -------------
+#
+# The installer used to take the first mxcli it found -- the project's, then PATH,
+# then the one beside the bundle -- and never asked which was newest. On a machine
+# with an old dev build on PATH, a fresh install silently created the app with that
+# build even though a newer one sat next to the bundle. So every candidate is asked
+# for its build, the newest one this machine can run is used, and when the project's
+# own ./mxcli is older than that -- or than the latest mxcli release -- the installer
+# says so and offers to update it.
+#
+#   MDL_NO_UPDATE_CHECK=1   skip the online check for a newer release
+
+# mxcli_describe <binary> -- "<build-date> <version>", or nothing when it cannot run
+# here (a Linux mxcli left by `mxcli new` on a Mac, say).
+mxcli_describe() {
+  local out ver date
+  [ -n "${1:-}" ] && [ -x "$1" ] || return 1
+  out="$("$1" --version 2>/dev/null | head -1)" || return 1
+  ver="$(printf '%s' "$out" | sed -n 's/^mxcli version \([^ ]*\).*/\1/p')"
+  date="$(printf '%s' "$out" | sed -n 's/.*(\([0-9][0-9-]*T[0-9:]*Z\)).*/\1/p')"
+  [ -n "$ver" ] && [ -n "$date" ] || return 1
+  printf '%s %s\n' "$date" "$ver"
+}
+
+# mxcli_newest_local -- sets MXCLI_BEST and MXCLI_BEST_DESC to the newest runnable
+# candidate. A tie goes to the earlier one, so the project's own binary wins over an
+# identical build elsewhere.
+mxcli_newest_local() {
+  local candidate desc
+  MXCLI_BEST=""; MXCLI_BEST_DESC=""
+  for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
+                   "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
+    desc="$(mxcli_describe "$candidate")" || continue
+    # Named without the "bundle/../" hop, so the prompt shows a path a person reads.
+    candidate="$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
+    if [ -z "$MXCLI_BEST" ] || [[ "${desc%% *}" > "${MXCLI_BEST_DESC%% *}" ]]; then
+      MXCLI_BEST="$candidate"; MXCLI_BEST_DESC="$desc"
+    fi
+  done
+  [ -n "$MXCLI_BEST" ]
+}
+
+# mxcli_latest_release -- "<published-at> <tag> <sha256> <url>" for this machine's
+# asset of the latest mxcli release, or nothing (offline, rate-limited, opted out).
+# The answer comes from the network, so every field is checked before it is used.
+mxcli_latest_release() {
+  [ -z "${MDL_NO_UPDATE_CHECK:-}" ] || return 1
+  have curl || return 1
+  local api="${MXCLI_RELEASES_API:-https://api.github.com/repos/mendixlabs/mxcli/releases/latest}"
+  local asset line published tag sha url
+  asset="$(basename "$(mxcli_release_url)")"
+  line="$(curl -fsSL -m 10 "$api" 2>/dev/null | "$PY" -c 'import json, sys
+asset = sys.argv[1]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+for item in data.get("assets") or []:
+    digest = str(item.get("digest") or "")
+    if item.get("name") == asset and digest.startswith("sha256:"):
+        print(data.get("published_at", ""), data.get("tag_name", ""), digest[7:],
+              item.get("browser_download_url", ""))
+        break
+else:
+    sys.exit(1)' "$asset" 2>/dev/null)" || return 1
+  read -r published tag sha url <<< "$line"
+  [[ "$published" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$ ]] || return 1
+  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [ -z "${MXCLI_RELEASES_API:-}" ]; then
+    case "$url" in https://github.com/mendixlabs/mxcli/releases/download/*) ;; *) return 1 ;; esac
+  fi
+  printf '%s %s %s %s\n' "$published" "$tag" "$sha" "$url"
+}
+
+# mxcli_older_than_release <local-desc> <published-at> <tag> -- a release binary is
+# built minutes before it is published, so a local build counts as older only when
+# it is not that tag and was built more than twelve hours before the release.
+mxcli_older_than_release() {
+  local date="${1%% *}" ver="${1#* }"
+  [ "$ver" = "$3" ] && return 1
+  "$PY" -c 'import datetime, sys
+parse = lambda text: datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
+sys.exit(0 if parse(sys.argv[1]) + datetime.timedelta(hours=12) < parse(sys.argv[2]) else 1)' \
+    "$date" "$2" 2>/dev/null
+}
+
+# mxcli_put_in_project <source-file> <description> -- replace ./mxcli, keeping the
+# previous one beside it under its version, so going back is a rename.
+mxcli_put_in_project() {
+  local source="$1" target="$APP/mxcli$EXE" old backup
+  if old="$(mxcli_describe "$target")"; then
+    backup="$APP/mxcli.$(printf '%s' "${old#* }" | tr -c 'A-Za-z0-9._-' '_')$EXE"
+    [ -e "$backup" ] || cp "$target" "$backup" 2>/dev/null || true
+  fi
+  cp "$source" "$target.new" && chmod +x "$target.new" && mv -f "$target.new" "$target"
+}
+
+# mxcli_label <desc> -- "v0.22.0, built 2026-09-14", or "none" for an empty one.
+mxcli_label() {
+  if [ -n "${1:-}" ]; then printf '%s, built %s' "${1#* }" "${1%%T*}"; else printf 'none'; fi
+}
+
+# mxcli_offer_update -- the whole decision, once, before anything uses mxcli.
+mxcli_offer_update() {
+  local project_desc="" latest published tag sha url tmp got prompt
+  project_desc="$(mxcli_describe "$APP/mxcli$EXE" || true)"
+  mxcli_newest_local || true
+
+  # A newer release than anything on this machine: offer to download it.
+  if latest="$(mxcli_latest_release)"; then
+    read -r published tag sha url <<< "$latest"
+    if [ -z "$MXCLI_BEST_DESC" ] || mxcli_older_than_release "$MXCLI_BEST_DESC" "$published" "$tag"; then
+      prompt="    mxcli $tag is available (this project uses $(mxcli_label "$project_desc")). Download it into ./mxcli$EXE? [Y/n] "
+      if [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
+        ui_note "would download mxcli $tag into ./mxcli$EXE"
+      elif [ -z "${MDL_ASSUME_YES:-}" ] && ! [ -t 0 ]; then
+        ui_note "mxcli $tag is available; this project uses $(mxcli_label "$project_desc"). Re-run interactively, or with MDL_ASSUME_YES=1, to update."
+      elif ask "$prompt" y; then
+        tmp="$(mktemp "${TMPDIR:-/tmp}/mxcli-download.XXXXXX")"
+        if curl -fsSL -m 600 -o "$tmp" "$url" 2>/dev/null; then
+          got="$(shasum -a 256 "$tmp" 2>/dev/null | cut -d" " -f1)"
+          [ -n "$got" ] || got="$(sha256sum "$tmp" 2>/dev/null | cut -d" " -f1)"
+          if [ "$got" = "$sha" ] && mxcli_put_in_project "$tmp"; then
+            ui_note "./mxcli$EXE updated to $tag (checksum verified against the release)"
+          else
+            DEPS_MISSING+=("mxcli $tag -- the download did not match the release checksum, so ./mxcli$EXE was left as it was.")
+          fi
+        else
+          DEPS_MISSING+=("mxcli $tag -- the download failed, so ./mxcli$EXE was left as it was.")
+        fi
+        rm -f "$tmp"
+        mxcli_newest_local || true
+        return 0
+      fi
+    fi
+  fi
+
+  # No download, but a newer build already on this machine than the project's own.
+  if [ -n "$MXCLI_BEST" ] && [ "$MXCLI_BEST" != "$APP/mxcli$EXE" ] && [ -e "$APP/mxcli$EXE" ] \
+     && { [ -z "$project_desc" ] || [[ "${MXCLI_BEST_DESC%% *}" > "${project_desc%% *}" ]]; }; then
+    prompt="    This project's ./mxcli$EXE is $(mxcli_label "$project_desc"); $MXCLI_BEST is $(mxcli_label "$MXCLI_BEST_DESC"). Use the newer one? [Y/n] "
+    if [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
+      ui_note "would copy mxcli ${MXCLI_BEST_DESC#* } into ./mxcli$EXE"
+    elif [ -z "${MDL_ASSUME_YES:-}" ] && ! [ -t 0 ]; then
+      ui_note "a newer mxcli ($(mxcli_label "$MXCLI_BEST_DESC")) is at $MXCLI_BEST; this project uses $(mxcli_label "$project_desc"). Re-run interactively, or with MDL_ASSUME_YES=1, to update."
+    elif ask "$prompt" y; then
+      if mxcli_put_in_project "$MXCLI_BEST"; then
+        ui_note "./mxcli$EXE updated to ${MXCLI_BEST_DESC#* }"
+        mxcli_newest_local || true
+      fi
+    fi
+  fi
+  return 0
+}
+
 # Windows has no CDN mxbuild: the Mendix CDN publishes a Linux binary only, and
 # mxcli says so and refuses. The Windows source of `mx` is Studio Pro's own
 # modeler, so what Studio Pro is installed decides what can be created or checked.
@@ -973,6 +1129,7 @@ for arg in "$@"; do
       printf '  MX_VERSION=11.12.1  APP_NAME=<name>   env overrides when an app is created\n'
       printf '  MDL_DEPS_DRY_RUN=1                    print the install commands, run none\n'
       printf '  MDL_ASSUME_YES=1                      answer the prerequisite prompts with yes\n'
+      printf '  MDL_NO_UPDATE_CHECK=1                 do not look online for a newer mxcli\n'
       exit 0 ;;
     -*) ui_fail "Unknown option: $arg" "Run with --help to see what this takes." ;;
     *)
@@ -1105,11 +1262,19 @@ fi
 
 # mxcli. The release asset name is deterministic, so the first one needs no mxcli
 # to fetch it; an mxcli that is already here does the job properly instead.
+mxcli_offer_update
 mxcli_here=""
-for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
-                 "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
-  [ -n "$candidate" ] && [ -x "$candidate" ] && { mxcli_here="$candidate"; break; }
-done
+if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
+  mxcli_here="$APP/mxcli$EXE"
+elif [ -n "${MXCLI_BEST:-}" ]; then
+  mxcli_here="$MXCLI_BEST"
+else
+  # Nothing answered --version; fall back to the old rule rather than to nothing.
+  for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
+                   "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] && { mxcli_here="$candidate"; break; }
+  done
+fi
 if [ -z "$mxcli_here" ]; then
   dep_apply "mxcli" '[ -x "$APP/mxcli$EXE" ]' \
     "curl -fsSL -o \"$APP/mxcli$EXE\" \"$(mxcli_release_url)\" && chmod +x \"$APP/mxcli$EXE\"" || true
@@ -1275,10 +1440,18 @@ if [ "$mpr_count" = "0" ]; then
   # The binary is the project's own by convention, but there is no project yet, so
   # take whichever mxcli exists: this app's, one on the PATH, or the installer's.
   new_mxcli=""
-  for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
-                   "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
-    [ -n "$candidate" ] && [ -x "$candidate" ] && { new_mxcli="$candidate"; break; }
-  done
+  # The same choice mxcli_offer_update made: the project's own if it runs here, else
+  # the newest build found -- never simply the first one on PATH.
+  if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
+    new_mxcli="$APP/mxcli$EXE"
+  elif mxcli_newest_local; then
+    new_mxcli="$MXCLI_BEST"
+  else
+    for candidate in "$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)" \
+                     "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE"; do
+      [ -n "$candidate" ] && [ -x "$candidate" ] && { new_mxcli="$candidate"; break; }
+    done
+  fi
   if [ -z "$new_mxcli" ]; then
     ui_fail "No .mpr here, and no mxcli to create one with." \
             "Looked in the project, on the PATH, and beside this installer." \
