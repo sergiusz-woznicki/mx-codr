@@ -99,8 +99,12 @@ mdl_load_harness_env() {
       \'*\') value="${value#\'}"; value="${value%\'}" ;;
     esac
     printf -v "$key" '%s' "$value"
-    [ "$mode" = "export" ] && export "${key?}"
+    if [ "$mode" = "export" ]; then export "${key?}"; fi
   done < "$file"
+  # Every caller sources this under `set -e` (lib.sh, run-app.sh). A loop whose last
+  # test came out false made this function return 1, and that ended every browser
+  # test silently in 17ms whenever a harness.env existed -- the no-Docker mode.
+  return 0
 }
 
 _mdl_harness_env="$(dirname "${BASH_SOURCE[0]}")/harness.env"
