@@ -99,9 +99,14 @@ boot_failed() {   # boot_failed <log>
   [ -f "$1" ] || return 1
   grep -qE '^Error:|initial build failed|cannot be deployed, because it contains errors|is already in use|exited during startup|BUILD FAILED' "$1" 2>/dev/null
 }
+# Prints the error lines, and the indented lines under an `Error:` line: mxbuild lists one build
+# error per indented line, and not every one carries a [CE] code ("Invalid token ...").
 report_boot_failure() {   # report_boot_failure <log> <waited>
   echo "the app did not start (${2}s): the boot reported an error rather than coming up" >&2
-  grep -E '^Error:|\[CE[0-9]+\]|initial build failed|is already in use|exited during startup' "$1" 2>/dev/null \
+  awk '/^Error:/ { under = 1; print; next }
+       under && /^[[:space:]]+[^[:space:]]/ { print; next }
+       { under = 0 }
+       /\[CE[0-9]+\]|initial build failed|is already in use|exited during startup/ { print }' "$1" 2>/dev/null \
     | head -12 >&2
   echo "   full log: $1" >&2
   exit 2
