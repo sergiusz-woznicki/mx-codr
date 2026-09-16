@@ -38,7 +38,7 @@ const RULES = [
   "Project rule: start by running `bash tests/orient.sh` (one call, ~0.3s: structure, security,",
   "navigation, tests and their covers, coverage, lint, app state) instead of exploring by hand.",
   "Before building or changing any feature read `.ai-context/skills/test-first-delivery/SKILL.md`",
-  "(failing test first). Before creating a module or placing documents: `module-structure`.",
+  "(failing test first). Before creating a module, placing documents or changing a Marketplace module (changes go in `<Module>Ext`): `module-structure`.",
   "Before writing a page: `spacing-and-layout` — two inline widgets side by side need",
   "`DesignProperties: ['Spacing': ['margin-right': 'S']]`, never CSS.",
   "Before writing a microflow: `naming-and-captions` — every decision AND every action",
