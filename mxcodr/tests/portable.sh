@@ -99,7 +99,7 @@ mdl_json_string() {   # mdl_json_string <text> -> "text", escaped for JS source
 }
 
 mdl_ere_quote() {     # mdl_ere_quote <text> -- match it literally inside an ERE
-  printf '%s' "$1" | sed 's/[][^$.*+?(){}|\\\\]/\\\\&/g'
+  printf '%s' "$1" | sed 's/[][^$.*+?(){}|\\]/\\&/g'
 }
 
 mdl_json_number() {   # mdl_json_number <value> <fallback> -- digits only, never code

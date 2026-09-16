@@ -130,7 +130,7 @@ fi
 # PIDs of this project's runtime and `mxcli run`, matched on the project path; oldest first.
 project_pids() {
   command -v pgrep >/dev/null 2>&1 || return 0
-  { pgrep -f "runtimelauncher.*$APP_DIR" 2>/dev/null
+  { pgrep -f "runtimelauncher.*$(mdl_ere_quote "$APP_DIR")" 2>/dev/null
     pgrep -f "mxcli(\.exe)? run .*$(mdl_ere_quote "$MPR")" 2>/dev/null; } | sort -un
 }
 descendants() {   # every process under <pid>, deepest first
