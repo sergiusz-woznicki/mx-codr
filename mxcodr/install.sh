@@ -1437,6 +1437,11 @@ for skill in "$SRC"/skills/*/; do
   for dest in "${SKILL_DIRS[@]}"; do
     mkdir -p "$APP/$dest/$name"
     cp "$skill/SKILL.md" "$APP/$dest/$name/SKILL.md"
+    # reference/*.md: the detail a skill's SKILL.md links to (read on demand, not up front).
+    if [ -d "$skill/reference" ]; then
+      mkdir -p "$APP/$dest/$name/reference"
+      cp "$skill/reference/"*.md "$APP/$dest/$name/reference/"
+    fi
   done
   installed_skills=$((installed_skills + 1))
 done

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Claude Code PostToolUse hook (matcher Bash); also run from the project root by the Codex/Cursor adapters
 # and the OpenCode plugin with a Claude-shaped payload. After an `mxcli exec` prints restart advice (if the
-# app answers on $APP_PORT or 8080) and any failing coverage report; otherwise nothing. Exit 0.
+# app answers on $APP_PORT or 8080) and a failing coverage report -- in full when it changed since the
+# previous exec, otherwise as one line of counts; otherwise nothing. Exit 0.
 
 # Cheap substring test first: almost no Bash call is an `mxcli exec`.
 input="$(cat)"
@@ -148,7 +149,28 @@ for row in json.load(sys.stdin):
 # All modules in one call, so cross-module covers are not reported as stale.
 # shellcheck disable=SC2086
 out="$("$PY" tools/mdl-checks/check_test_coverage.py . $modules 2>&1)" || true
+
+# The report rarely changes between two execs (a test-first session names elements it has not
+# built yet, exec after exec), so the full list is printed only when it differs from the previous
+# exec in this project and session; otherwise one line with the counts. The marker lives outside
+# the project, keyed by its path and the session.
+_state="${TMPDIR:-/tmp}/mendix-mdl-hooks"
+_session="$(printf '%s' "$input" | "$PY" -c 'import json,sys; print(json.load(sys.stdin).get("session_id") or "")' 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
+_key="$(printf '%s\n%s' "$(pwd -P)" "$_session" | "$PY" -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:20])' 2>/dev/null)"
+_marker="$_state/${_key:-none}.coverage"
 case "$out" in
-  *FAIL*) printf 'Test coverage after that mxcli exec:\n%s\nEvery page and ACT_ microflow needs a tests/verify-*.test.sh with a `# covers:` line naming it (skill: test-first-delivery).\n' "$out" ;;
+  *FAIL*) ;;
+  *) [ -z "$_key" ] || rm -f "$_marker" 2>/dev/null; exit 0 ;;
 esac
+_digest="$(printf '%s' "$out" | "$PY" -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())' 2>/dev/null)"
+if [ -n "$_key" ] && [ -n "$_digest" ] && [ "$(cat "$_marker" 2>/dev/null)" = "$_digest" ]; then
+  _untested="$(printf '%s\n' "$out" | grep -c 'no test covers')"
+  _stale="$(printf '%s\n' "$out" | grep -c 'covers: names')"
+  printf 'Test coverage: unchanged since the previous exec -- %s element(s) without a test, %s `covers:` name(s) not in the model yet. The full list prints when it changes; `bash tests/orient.sh` shows it any time.\n' "$_untested" "$_stale"
+  exit 0
+fi
+if [ -n "$_key" ] && [ -n "$_digest" ]; then
+  mkdir -p "$_state" 2>/dev/null && printf '%s\n' "$_digest" > "$_marker" 2>/dev/null
+fi
+printf 'Test coverage after that mxcli exec:\n%s\nEvery page and ACT_ microflow needs a tests/verify-*.test.sh with a `# covers:` line naming it (skill: test-first-delivery).\n' "$out"
 exit 0

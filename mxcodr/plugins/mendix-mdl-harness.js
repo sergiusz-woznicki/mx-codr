@@ -35,20 +35,19 @@ const NO_BASH =
   "Install Git for Windows and make sure bash.exe is on the PATH."
 
 const RULES = [
-  "Project rule: start by running `bash tests/orient.sh` (one call, ~0.3s: structure, security,",
-  "navigation, tests and their covers, coverage, lint, app state) instead of exploring by hand.",
-  "Before building or changing any feature read `.ai-context/skills/test-first-delivery/SKILL.md`",
-  "(failing test first). Before creating a module, placing documents or changing a Marketplace module (changes go in `<Module>Ext`): `module-structure`.",
-  "Before writing a page: `spacing-and-layout` — two inline widgets side by side need",
-  "`DesignProperties: ['Spacing': ['margin-right': 'S']]`, never CSS.",
-  "Before writing a microflow: `naming-and-captions` — every decision AND every action",
-  "(retrieve, create, change, commit, delete, call, show page, set) needs a business `@caption`,",
-  "never the Mendix default; the gate's naming check fails on either.",
-  "Run the new test and watch it FAIL before",
-  "implementing: `bash tests/gate.sh --only <feature> --boot-if-needed`. While you iterate run",
-  "that same ONE script; when it goes red the gate prints the facts under the failure by itself.",
-  "A feature is not done until `bash tests/gate.sh` (suite + mx check + lint + coverage + naming + layout) ends in",
-  "`DONE`.",
+  "Project rules (full text: `.claude/rules/mdl-skills.md`). 1. Start with `bash tests/orient.sh`,",
+  "not by exploring by hand. 2. Before building or changing any feature read",
+  "`.ai-context/skills/test-first-delivery/SKILL.md`: write tests/verify-<feature>.test.sh, run",
+  "`bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on",
+  "that ONE script. 3. Before creating a module or changing a Marketplace module (`<Module>Ext`):",
+  "`module-structure`; before a page: `spacing-and-layout` (side-by-side widgets need",
+  "`DesignProperties` Spacing, never CSS); before a microflow: `naming-and-captions` (a business",
+  "`@caption` on every decision AND action). Read exactly those four skill files up front and",
+  "nothing else, one file per command -- a combined `cat` of several crosses the output limit and",
+  "costs a second read from a saved file. 4. Syntax is a lookup when needed: `./mxcli syntax",
+  "<topic>`, then `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec; do not",
+  "sweep SKILL.md files. 5. Done = `bash tests/gate.sh` (suite + mx check + lint +",
+  "coverage + naming + layout) ends in `DONE`.",
 ].join(" ")
 
 // Per-session state on disk, so it survives reloads.

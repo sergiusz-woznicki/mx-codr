@@ -7,7 +7,9 @@ alwaysApply: true
 
 This app is built under six rules. They are **not** in the skill table mxcli writes
 into `AGENTS.md` — that table lists only mxcli's own skills. Read the skill before
-the work, not after; each lives at `.ai-context/skills/<name>/SKILL.md`.
+the work, not after; each lives at `.ai-context/skills/<name>/SKILL.md`. Read them one
+per command: a combined `cat` of several crosses the tool-output limit and the whole
+text is then read a second time from a saved file.
 
 | When | Rule |
 |---|---|

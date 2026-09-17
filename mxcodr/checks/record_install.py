@@ -59,6 +59,9 @@ def destinations(src):
             continue
         for skill_dir in SKILL_DIRS:
             yield source, "%s/%s/SKILL.md" % (skill_dir, skill)
+        for name in listdir(os.path.join(skills_root, skill, "reference"), ".md"):
+            for skill_dir in SKILL_DIRS:
+                yield os.path.join(skills_root, skill, "reference", name), "%s/%s/reference/%s" % (skill_dir, skill, name)
 
 
 def main(argv):
