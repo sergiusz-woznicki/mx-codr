@@ -125,6 +125,9 @@ record_suite_result() {
   fi
   [ "$status" != "0" ] || return 0
   failures+=("tests")
+  # The failing scripts' lines again under the verdict, with the other failures' details.
+  printf '%s\n' "$out" | grep -E '^\s+FAIL' | head -12 > "$WORK/tests.detail"
+  details+=("tests|tests")
   if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then
     echo "== facts (tests/diagnose.sh)"
     bash tests/diagnose.sh 2>&1 | sed 's/^/   /' | head -40

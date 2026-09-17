@@ -3,7 +3,10 @@
 Six skills are installed in `.claude/skills/` that are **not** in the skill table
 mxcli writes into `CLAUDE.md`. That table lists only mxcli's own skills; these are
 this project's, and they apply on top of it. Load them with the Skill tool, before
-the work, not after:
+the work, not after. Where the Skill tool does not list them, read the files one per
+command: a combined `cat` of several skills crosses the tool-output limit and the
+whole text is then read a second time from a saved file (54k characters for 47k).
+The table says which one to load:
 
 | When | Skill |
 |---|---|

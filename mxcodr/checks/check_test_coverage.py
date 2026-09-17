@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that every page and ACT_ microflow of a module is named by a `# covers:` line in tests/verify-*.test.sh.
 
-Also fails on covers: names no longer in the model. Run by tests/gate.sh, tests/orient.sh and the exec hook.
+Also fails on covers: names not in the model (not built yet, or renamed). Run by tests/gate.sh, tests/orient.sh and the exec hook.
 Usage: check_test_coverage.py <app-dir> <Module> [<Module>...] [--tests-dir tests] [--json]
 --json keys: verdict, module, elements, tests, untested, stale_covers (several modules: modules, stale_covers).
 Exit: 0 all covered, 1 something uncovered or stale, 2 the model could not be read.
@@ -135,11 +135,11 @@ def print_text(reports: list[dict], orphans: list[str]) -> None:
         for element in report["untested"]:
             print(f"  - no test covers {element}")
         for name in report["stale_covers"]:
-            print(f"  - covers: names {name}, which is not in the model any more")
+            print(f"  - covers: names {name}, which is not in the model (not built yet, or renamed)")
     if orphans:
         print("FAIL  covers: lines name elements in no module of this project")
         for name in orphans:
-            print(f"  - covers: names {name}, which is not in the model any more")
+            print(f"  - covers: names {name}, which is not in the model (not built yet, or renamed)")
 
 
 def main() -> int:

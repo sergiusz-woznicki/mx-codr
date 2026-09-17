@@ -114,15 +114,31 @@ print_verdict_and_exit() {
   if [ ${#failures[@]} -gt 0 ]; then
     echo "   NOT DONE — failed: ${failures[*]}"
     [ ${#cannot_run[@]} -eq 0 ] || echo "   and could not run: ${cannot_run[*]}"
+    print_failure_details
     exit 1
   fi
   if [ ${#cannot_run[@]} -gt 0 ]; then
     echo "   NOT DONE — could not run: ${cannot_run[*]}"
     echo "   A check that did not run has not passed. Fix what stopped it, then run the gate again."
+    print_failure_details
     exit 2
   fi
   echo "   DONE — every check passed"
   exit 0
+}
+
+# The cause of every failure, under the verdict: a session that reads only the last lines of
+# the output still sees why, instead of running the gate again to find out.
+print_failure_details() {
+  local entry name label
+  for entry in ${details[@]+"${details[@]}"}; do
+    name="${entry%%|*}"; label="${entry#*|}"
+    case "$label" in
+      *"(could not run)") echo "== $label" ;;
+      *) [ -s "$WORK/$name.detail" ] || continue; echo "== $label" ;;
+    esac
+    [ -s "$WORK/$name.detail" ] && cat "$WORK/$name.detail"
+  done
 }
 
 main() {
@@ -164,7 +180,7 @@ main() {
   mdl_check_install_freshness
   ensure_app
   # 3. Preflights, then the suite.
-  failures=(); cannot_run=(); summary=()
+  failures=(); cannot_run=(); summary=(); details=()
   preflight_session
   preflight_environment
   preflight_stale_model

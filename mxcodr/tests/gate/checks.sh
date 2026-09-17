@@ -277,7 +277,7 @@ start_model_checks() {
   echo "== mx check, lint, coverage, naming and layout started (they need no app; running while the suite does)"
 }
 
-# Reads one background check's files into summary, failures or cannot_run.
+# Reads one background check's files into summary, failures or cannot_run, and details.
 collect() {
   local name="$1" label="$2" status line
   if [ ! -f "$WORK/$name.status" ]; then
@@ -292,12 +292,13 @@ collect() {
       [ -n "$line" ] && summary+=("$line")
     done < "$WORK/$name.summary"
   fi
+  # The detail lines print under the verdict (print_verdict_and_exit), so the tail of the
+  # output holds both the verdict and its cause.
   case "$status" in
     0) ;;
-    2) echo "== $label (could not run)"
-       [ -s "$WORK/$name.detail" ] && cat "$WORK/$name.detail"
+    2) details+=("$name|$label (could not run)")
        cannot_run+=("$label") ;;
-    *) [ -s "$WORK/$name.detail" ] && { echo "== $label"; cat "$WORK/$name.detail"; }
+    *) details+=("$name|$label")
        failures+=("$label") ;;
   esac
 }
