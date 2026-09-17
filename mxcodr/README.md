@@ -192,14 +192,21 @@ delete skills mxcli never shipped.
 
 ## Running it
 
-Two ways in, because both are things people actually do:
+Run it from the project folder, one level above the bundle -- not from inside
+`mxcodr/`:
 
 ```bash
-bash mxcodr/install.sh .          # from the project root, naming the target
-cd dist && bash install.sh      # from the bundle, after copying it into the app
+cd <app> && bash mxcodr/install.sh     # the way to run it: the target is the folder you are in
 ```
 
-The second infers the target: the bundle cannot install into itself, so with no
+Running it from inside the bundle is still accepted, because people do it right
+after copying the folder in:
+
+```bash
+cd <app>/mxcodr && bash install.sh     # works, but the target is guessed
+```
+
+That second form infers the target: the bundle cannot install into itself, so with no
 path named it installs into the directory the bundle sits in. The target is
 printed before any work starts, and the run is identical either way.
 

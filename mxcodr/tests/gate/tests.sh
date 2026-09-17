@@ -55,7 +55,8 @@ step_tests() {
   out="$(run_suite "${targets[@]}")"
   status=$?
   echo $((SECONDS - started)) > "$WORK/tests.secs"
-  printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)|^\s+FAIL:|^Total:'
+  # Script verdicts only; each failure's cause line is printed once, under the gate verdict.
+  printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s|^Total:'
   # One sign-out for a full run; lib.sh is sourced in a subshell to keep it out of the gate.
   if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
     ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
@@ -126,7 +127,8 @@ record_suite_result() {
   [ "$status" != "0" ] || return 0
   failures+=("tests")
   # The failing scripts' lines again under the verdict, with the other failures' details.
-  printf '%s\n' "$out" | grep -E '^\s+FAIL' | head -12 > "$WORK/tests.detail"
+  # The runner prints a script's cause line before and after its verdict: keep one of each.
+  printf '%s\n' "$out" | grep -E '^\s+FAIL' | awk '!seen[$0]++' | head -12 > "$WORK/tests.detail"
   details+=("tests|tests")
   if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then
     echo "== facts (tests/diagnose.sh)"

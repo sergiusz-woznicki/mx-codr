@@ -84,12 +84,57 @@ show message 'Plain text' type info;                                          --
 validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
 ```
 
+Users who sign in (you, your customers, staff) need no login screen of your own. Two
+sessions each lost 15-25 minutes building one -- a login microflow calling a
+`System.Login` Java action that does not exist, grants on `Administration.Account`
+that break the build, jar files unpacked in search of an API:
+
+- **Security on is the whole login.** At `PROTOTYPE` or `PRODUCTION` level the
+  runtime serves its own sign-in page (`login.html`); anonymous visitors land there.
+- **A user is an `Administration.Account`** (it extends `System.User`) with a user
+  role. Give each kind of user its own user role, and include `Administration.User`
+  in it so the person can change their own password:
+  `create user role Customer (Invoicing.Customer, Administration.User);`
+- **Demo users are the seeded logins**, with their passwords set:
+  `create demo user 'demo_customer' password 'Customer1234!' entity Administration.Account (Customer);`
+  A password shorter than the project's policy fails the exec; an account committed
+  without one fails at runtime with "The password cannot be empty".
+- **Never grant your own module roles on `Administration.*` entities** -- an access
+  rule takes only its own module's roles (build error CE0007). To show whose data
+  is whose, link your entity to `Administration.Account` and constrain *your*
+  entity's access rule with XPath on that association -- full association names,
+  and the user token quoted `'[%CurrentUser%]'` (doubled quotes inside the MDL
+  string). `CurrentUser()` and `$currentUser` pass `mxcli check` and fail the build
+  with CE0161:
+  `grant Invoicing.Customer on Invoicing.Invoice (read *) where '[Invoicing.Invoice_Customer/Invoicing.Customer/Invoicing.Customer_Account = ''[%CurrentUser%]'']';`
+  The link itself goes to another module, so give it `ON DELETE SET NULL`: a PREVENT or
+  RESTRICT rule on it builds and then stops the runtime at startup with `None.get`:
+  `create or modify association Invoicing.Customer_Account from Invoicing.Customer to Administration.Account type Reference on delete set null;`
+- **Creating accounts in the app:** reuse the Administration module's account pages
+  (`SHOW PAGES IN Administration`); a change to them goes in `AdministrationExt`
+  (skill: `module-structure`). Once users sign in, the menu ends with Log out
+  (skill: `spacing-and-layout`).
+- **Tests sign in as that user:** `export TEST_USER=demo_customer` before sourcing
+  `tests/lib.sh`, and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`.
+
 Never run `mx check` (or `./mxcli docker check`) straight at the project while the
 app is up: it re-saves the `.mpr`, the `--watch` runtime rebuilds underneath the
 suite, and a green feature turns red for no reason. `bash tests/gate.sh` runs the
 same check against a scratch copy of the model, which is why the check belongs in
 the gate and not in a command of its own. CLAUDE.md's `docker check` line is for a
 project with nothing running.
+
+Keep every `mdlsource/*.mdl` re-runnable -- `create or modify`, `create entity if not
+exists` -- because `mxcli exec` stops at the first failing statement: a script that
+fails on "already exists" never runs the statements after it, and the model is left
+half-applied. After a failed exec, fix the script and exec it again rather than
+patching the model by other means.
+
+Never read or edit `mprcontents/` or the `.mpr` by hand (`strings`, `unzip`, a copied
+`.mpr` as backup): the `.mpr` is only an index, and a hand-repaired unit breaks the
+model in ways no check reports. `DESCRIBE` and `SHOW` read the model; MDL changes it.
+When the build names an element but not the cause, the gate prints a hint for the
+error code -- read that and the skill it names first.
 
 Never debug by rerunning the whole suite. A test that passes alone and fails in the
 suite is a test-isolation bug (sign-in identity, or data left behind) and is fixed in

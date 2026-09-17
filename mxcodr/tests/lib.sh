@@ -215,6 +215,19 @@ print('the runtime refused a session: Maximum number of sessions exceeded (devel
 "
 }
 
+# _runtime_errors_since <YYYY-MM-DD HH:MM:SS> -- the runtime's ERROR lines logged since then, each
+# with the exception message on the line after it, on one line (at most 2, 300 characters).
+_runtime_errors_since() {
+  [ -n "${1:-}" ] && [ -f "$RUNTIME_LOG" ] || return 0
+  tail -3000 "$RUNTIME_LOG" 2>/dev/null | awk -v since="$1" '
+    /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / { stamped = 1; if (substr($0, 1, 19) < since) { keep = 0; next } }
+    / ERROR - / { if (keep) print line; line = substr($0, 25); keep = 1; next }
+    stamped && keep == 1 && /^[^\t ]/ && !/^[0-9][0-9][0-9][0-9]-/ { line = line ": " $0; keep = 2; next }
+    /^[0-9][0-9][0-9][0-9]-/ { if (keep) print line; keep = 0 }
+    END { if (keep) print line }' \
+    | awk '!seen[$0]++' | tail -2 | tr '\n' ' ' | cut -c1-300 | sed 's/ *$//'
+}
+
 # --- 7. scenario ---
 # scenario '<js body>' -- run the body in one playwright-cli process; print its return as JSON, fail() on error.
 # Steps: write the JavaScript to a file, run it, fail on an error, print the result.
@@ -227,6 +240,7 @@ scenario() {
 
   # So the EXIT trap can delete it (it holds the password) after a timeout.
   _MDL_SCENARIO_FILE="$code_file"
+  _MDL_SCENARIO_START="$(date '+%Y-%m-%d %H:%M:%S')"
   output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
   rm -f "$code_file"; _MDL_SCENARIO_FILE=""
 
@@ -277,7 +291,14 @@ _mdl_js_catch_and_sign_out() {
     // getUserName() nor getUserAttribute() exists on mx.session in 11.12 -- the
     // name sits in sessionData, as {value: 'demo_administrator'}. Measured.
     const who = await current_user();
-    const why = String((e && e.message) || e).split('\n').map(l => l.trim()).filter(Boolean).slice(0, 3).join(' | ');
+    let why = String((e && e.message) || e).split('\n').map(l => l.trim()).filter(Boolean).slice(0, 3).join(' | ');
+    // An open dialog is usually the cause ("Password has an issue: ...") and sits behind
+    // the page text a timeout quotes, so it goes first.
+    const dialog = await page.locator('.modal-dialog:visible, .mx-dialog:visible').allInnerTexts()
+      .then(ts => ts.map(t => t.replace(/[\s×]+/g, ' ').replace(/ OK$/, '').trim()).filter(Boolean).join(' / '))
+      .catch(() => '');
+    if (dialog) why = 'open dialog: "' + dialog.slice(0, 300) + '" | ' + why;
+    if (/selectOption/.test(why)) why += ' | a Mendix combo box is not a <select>: use pick_combo(widget, option)';
     // A refused sign-in leaves a message on the login page; without it the failure
     // reads as a plain selector timeout and says nothing about the cause.
     let note = '';
@@ -314,9 +335,10 @@ _mdl_fail_on_scenario_error() {
     printf '%s\n' "$output" | sed -n '/^### Error/,/^###/p' | head -8 >&2
     local why
     why="$(_mdl_error_summary "$output")"
-    local refusal
+    local refusal logged
     refusal="$(_licence_refusal || true)"
-    fail "browser scenario failed: ${why:-no error text}${refusal:+ -- $refusal}"
+    logged="$(_runtime_errors_since "${_MDL_SCENARIO_START:-}")"
+    fail "browser scenario failed: ${logged:+runtime logged during this test: $logged | }${why:-no error text}${refusal:+ -- $refusal}"
   fi
   # Neither marker: the code never ran (e.g. browser not open).
   if ! printf '%s' "$output" | grep -q '^### Result'; then

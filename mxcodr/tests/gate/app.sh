@@ -17,14 +17,40 @@ boot_failed() {   # boot_failed <log>
 # error per indented line, and not every one carries a [CE] code ("Invalid token ...").
 report_boot_failure() {   # report_boot_failure <log> <waited>
   echo "the app did not start (${2}s): the boot reported an error rather than coming up" >&2
+  # A runtime that builds but fails to start says only "See logging output"; the cause is the
+  # runtime's own ERROR line, the step logged before it, and the exception's "Caused by".
   awk -v failure="$(boot_error_re)|\\[CE[0-9]+\\]" \
       '/^Error:/ { under = 1; print; next }
        under && /^[[:space:]]+[^[:space:]]/ { print; next }
        { under = 0 }
+       / ERROR - / { if (step != "") print step; step = ""; print; next }
+       /^Caused by:/ { print; next }
+       / INFO - / { step = $0; next }
        $0 ~ failure { print }' "$1" 2>/dev/null \
-    | head -12 >&2
+    | awk '!seen[$0]++' | head -14 >&2
+  build_error_hints "$1" >&2
   echo "   full log: $1" >&2
   exit 2
+}
+
+# build_error_hints <log> -- the build says where an error is, rarely what: one line per code
+# seen, naming the usual cause and the skill that has the syntax.
+build_error_hints() {
+  local code
+  for code in $(grep -oE '\[CE[0-9]+\]' "$1" 2>/dev/null | tr -d '[]' | awk '!seen[$0]++'); do
+    case "$code" in
+      CE0161) echo "   hint CE0161 (XPath): tokens are quoted -- '[%CurrentUser%]', '[%CurrentDateTime%]' -- never CurrentUser() or \$currentUser; paths use full names (Module.Assoc/Module.Entity); a token compares only to a value of its type. Skill: xpath-constraints" ;;
+      CE0117) echo "   hint CE0117 (expression): check each operand's type (a reference compares with = empty, a decimal does not fit an integer), function names, and enumeration values written Module.Enum.Value. Skill: write-microflows" ;;
+      CE1613) echo "   hint CE1613: a page or microflow names an attribute, association or document that does not exist (not created yet, or renamed) -- DESCRIBE the entity it points at" ;;
+      CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
+      CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;
+    esac
+  done
+  # Builds, then the runtime dies on start with no element named: seen twice from an association to
+  # another module whose delete rule carries an (empty) error message that mxcli did not store.
+  if grep -q 'NoSuchElementException: None.get' "$1" 2>/dev/null; then
+    echo "   hint None.get at startup: usually an association to another module's entity (e.g. to Administration.Account) with a PREVENT/RESTRICT delete rule -- recreate it with ON DELETE SET NULL, exec, then --restart. Do not repair mprcontents by hand"
+  fi
 }
 # Polls $BASE_URL once a second until it answers, then prints how long it took.
 # Exits 2 when <log> shows a boot error or BOOT_TIMEOUT seconds pass.

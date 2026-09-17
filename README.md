@@ -118,10 +118,10 @@ The same is true of `tests/gate.sh`. The hooks run it, and the skills tell the a
 to run it before claiming anything is finished. You can run it yourself when you
 want to see where a project stands — that is a convenience, not a step.
 
-So the whole of your involvement is:
+So the whole of your involvement is, from your project folder:
 
 ```bash
-bash install.sh --with-deps
+bash mxcodr/install.sh --with-deps
 ```
 
 and then working with your agent as usual.
@@ -155,17 +155,19 @@ a JDK — that wants a licence click.
 
 ## Install
 
-Copy `mxcodr/` into your Mendix project, `cd` into it, and run:
+Copy `mxcodr/` into your Mendix project and run the installer **from the project
+folder, one level above `mxcodr/`** — not from inside `mxcodr/`:
 
 ```bash
-bash install.sh --with-deps
+cd MyApp                              # the folder with MyApp.mpr and mxcodr/
+bash mxcodr/install.sh --with-deps
 ```
 
-Run from inside the bundle it installs into the project the bundle sits in, which
-is what you mean when you have just copied `mxcodr/` into your app.
+`cd mxcodr && bash install.sh` still installs into the folder above, but then the
+target is guessed rather than named, and with no app there it stops to ask.
 
 ```
-bash install.sh [path-to-project] [--no-app] [--with-deps]
+bash mxcodr/install.sh [path-to-project] [--no-app] [--with-deps]
 
   path-to-project  where to install (default: the current directory, or the
                    parent project when run from inside the bundle)
@@ -182,7 +184,7 @@ There is no bash on Windows until something installs it, so there is a second
 entry point for that one job:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File mxcodr\bootstrap.ps1     # from the project folder
 ```
 
 It installs Git for Windows, Python and Node with winget, then hands over to
@@ -192,7 +194,7 @@ It installs Git for Windows, Python and Node with winget, then hands over to
 administrator rights, and unelevated it fails with `exit code: 4294967291` and is
 reported as missing.
 
-If you already have Git Bash, skip `bootstrap.ps1` and use `install.sh` directly.
+If you already have Git Bash, skip `bootstrap.ps1` and run `bash mxcodr/install.sh` from the project folder.
 
 ### What lands in the project, and who reads it
 

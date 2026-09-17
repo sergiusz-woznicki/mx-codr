@@ -3,6 +3,8 @@
 # into a Mendix project, creating the app when there is none. Safe to re-run.
 #
 # Usage: bash install.sh [project-dir] [--no-app] [--with-deps] [-h|--help]
+#   Run it from the project folder, one level above the bundle:  cd <app> && bash mxcodr/install.sh
+#   (not from inside mxcodr/ -- that still works, but the target is then guessed, not named).
 #   --no-app     never create a Mendix app; stop when there is no .mpr
 #   --with-deps  install missing prerequisites (winget/brew/apt/dnf); otherwise only reported
 #   No dir: the current directory, or the project the bundle sits in when run from inside it.
@@ -114,8 +116,7 @@ ui_banner() {
     printf '%s  ██║╚██╔╝██║ ██╔██╗ ╚════╝██║     ██║   ██║██║  ██║██╔══██╗%s\n' "$C_CYAN" "$C_RESET"
     printf '%s  ██║ ╚═╝ ██║██╔╝ ██╗      ╚██████╗╚██████╔╝██████╔╝██║  ██║%s\n' "$C_CYAN" "$C_RESET"
     printf '%s  ╚═╝     ╚═╝╚═╝  ╚═╝       ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝%s\n' "$C_CYAN" "$C_RESET"
-    printf '\n%s  m x c l i%s   %s%s  %s%s\n\n' \
-      "$C_BOLD" "$C_RESET" "$C_GREY" "$I_DOT" "$version" "$C_RESET"
+    printf '\n  %sversion:%s %s\n\n' "$C_BOLD" "$C_RESET" "$version"
   else
     printf '\n  %smx-codr%s  %s\n' "$C_BOLD" "$C_RESET" "$version"
     printf '  mxcli %s MDL skills, lint rules, hooks and the delivery gate\n\n' "$I_DOT"
@@ -1158,7 +1159,11 @@ for arg in "$@"; do
     --no-app) CREATE_APP=0 ;;
     --with-deps) WITH_DEPS=1 ;;
     -h|--help)
-      printf 'bash install.sh [path-to-project] [--no-app] [--with-deps]\n\n'
+      printf 'bash mxcodr/install.sh [path-to-project] [--no-app] [--with-deps]\n\n'
+      printf '  Run it from the project folder, one level above mxcodr/:\n'
+      printf '    cd <app> && bash mxcodr/install.sh --with-deps\n'
+      printf '  not from inside mxcodr/ (cd mxcodr && bash install.sh): that still installs into\n'
+      printf '  the folder above, but the target is guessed instead of named.\n\n'
       printf '  path-to-project  where to install (default: the current directory,\n'
       printf '                   or the parent project when run from inside the bundle)\n'
       printf '  --no-app         never create a Mendix app; require one to be there already\n'
@@ -1212,14 +1217,20 @@ case "$APP" in
     fi
     parent="$(cd "$SRC/.." && pwd)"
     if [ "$parent" = "/" ] || [ "$parent" = "$HOME" ]; then
-      ui_fail "Run from inside the bundle, but $parent is not a project." \
-              "Name the project:  bash $SRC/install.sh /path/to/project"
+      ui_fail "Nothing installed: $parent is not a project folder." \
+              "" \
+              "Copy $(basename "$SRC")/ into your Mendix project (or an empty folder for a new app), then run this:" \
+              "" \
+              "  cd /path/to/project && bash $(basename "$SRC")/install.sh --with-deps"
     fi
     if ! looks_like_project "$parent"; then
-      ui_fail "Run from inside the bundle, and $parent does not look like a Mendix project." \
-              "No .mpr, CLAUDE.md, .claude/ or .ai-context/ there." \
+      ui_fail "Nothing installed: run the installer from the project folder, not from inside $(basename "$SRC")/." \
               "" \
-              "Name the project:  bash $SRC/install.sh /path/to/project"
+              "To install, run this:" \
+              "" \
+              "  cd $parent && bash $(basename "$SRC")/install.sh --with-deps" \
+              "" \
+              "There is no Mendix app in $parent yet, so that creates one first."
     fi
     APP="$parent"
     target_inferred=1 ;;
@@ -1235,6 +1246,8 @@ fi
 if [ "$target_inferred" = 1 ]; then
   printf '  %s%s target%s %s  %s(the project this bundle sits in)%s\n' \
     "$C_GREY" "$I_BOX" "$C_RESET" "$APP" "$C_GREY" "$C_RESET"
+  printf '  %s  next time run it from the project folder: cd %s && bash %s/install.sh%s\n' \
+    "$C_GREY" "$APP" "$(basename "$SRC")" "$C_RESET"
 else
   printf '  %s%s target%s %s\n' "$C_GREY" "$I_BOX" "$C_RESET" "$APP"
 fi
@@ -1251,9 +1264,13 @@ if [ "$target_inferred" = 1 ] && [ "$mpr_count" = "0" ] && [ "$CREATE_APP" = "1"
       *) ui_fail "Nothing installed." "Name a project with an app, or pass --no-app to install without creating one." ;;
     esac
   else
-    ui_fail "No Mendix app in $APP, and the target was inferred rather than named." \
-            "Name it, so creating an app is a deliberate choice:" \
-            "  bash $SRC/install.sh $APP"
+    ui_fail "Nothing installed: run the installer from the project folder, not from inside $(basename "$SRC")/." \
+            "" \
+            "To install, run this:" \
+            "" \
+            "  cd $APP && bash $(basename "$SRC")/install.sh --with-deps" \
+            "" \
+            "There is no Mendix app in $APP yet, so that creates one first."
   fi
 fi
 

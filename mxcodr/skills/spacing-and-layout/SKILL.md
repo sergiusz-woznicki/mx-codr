@@ -1,6 +1,6 @@
 ---
 name: spacing-and-layout
-description: "Spacing between widgets, using the theme's own Spacing design property rather than CSS — and the structure a screen is laid out with, including the main menu (a Log out item once users can sign in). Use before writing or altering any page, snippet or navigation menu, and when the gate's layout verdict fails."
+description: "Spacing between widgets, using the theme's own Spacing design property rather than CSS — and the structure a screen is laid out with, including the main menu (a Log out item once users can sign in) and whether a create/edit form is a modal pop-up or a full page. Use before writing or altering any page, snippet or navigation menu, and when the gate's layout verdict fails."
 ---
 
 # Spacing and layout
@@ -83,6 +83,73 @@ layoutgrid pageGrid {
 
 The last widget in a line needs no `margin-right` — nothing follows it — but it keeps
 the same `margin-bottom` as the rest, or a wrapped row lands against the one above.
+
+## Create and edit forms: pop-up or full page
+
+Every page that creates or edits a single object is either a **modal pop-up** or a
+**full page**, and the choice follows from what the form holds, not from habit. A form
+that fits comfortably in a dialog belongs in one: it opens over the list the user came
+from, keeps that context, and closes back to it. The same form as a full page fills the
+screen with a few inputs and empty space and takes the user somewhere else.
+
+**Pop-up** when the whole form is the object's own fields and fits a dialog without
+scrolling:
+- one data view over one object, its inputs in a single column,
+- no data grid, list view, tab container or nested data view -- nothing that shows or
+  edits *other* objects alongside it,
+- no long free-text areas or rich text that need the screen's width.
+
+**Full page** when any of these hold:
+- the object is edited together with related objects (a header with its lines, a
+  record with its history or attachments),
+- the form is split into tabs or sections, or needs a wide or multi-column layout,
+- the user has to scroll to reach Save.
+
+When in doubt, count what the user has to see at once: if it needs the screen, it is a
+page; if it needs a moment's attention and then returns the user to where they were, it
+is a pop-up.
+
+```sql
+create or modify page Module.Entity_NewEdit
+(
+  params: { $Entity: Module.Entity },
+  title: 'Edit entity',
+  layout: Atlas_Core.PopupLayout,
+  PopupWidth: 600, PopupResizable: true
+)
+{
+  layoutgrid formGrid {
+    row formRow {
+      column formCol (DesktopWidth: AutoFill) {
+        dataview dvEntity (DataSource: $Entity) {
+          -- the entity's own inputs, one per line
+          footer formFooter {
+            actionbutton btnSave (Caption: 'Save', Action: SAVE_CHANGES CLOSE_PAGE, ButtonStyle: Primary,
+              DesignProperties: ['Spacing': ['margin-right': 'S']])
+            actionbutton btnCancel (Caption: 'Cancel', Action: CANCEL_CHANGES CLOSE_PAGE)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+- **The layout decides, and it must be modal.** A pop-up form uses a layout of type
+  `ModalPopup` -- `Atlas_Core.PopupLayout` in a standard app -- which dims and blocks the
+  screen behind it until Save or Cancel. A layout of type `Popup` is **not** modal: the
+  page underneath stays clickable, so never use one for a create or edit form. Check
+  the type with `SHOW LAYOUTS` (column Type) before choosing a layout other than
+  `Atlas_Core.PopupLayout`. A full page uses the app's responsive layout
+  (`Atlas_Core.Atlas_Default`).
+- **Opening it does not change.** The button or microflow that shows the page works the
+  same for both; only the page's layout differs.
+- **Save and Cancel close it** (`CLOSE_PAGE`), and the page underneath shows the change
+  without a reload.
+- **No `url:`** on a pop-up -- it is opened from a page, never navigated to.
+- `PopupWidth` / `PopupHeight` are optional (default 600 x 600) and case-sensitive.
+- **Tests work unchanged.** A pop-up renders in the same browser page, so `landed()`,
+  `fill()` and `pick_combo()` find its widgets as before.
 
 ## The main menu: Log out once users can sign in
 
