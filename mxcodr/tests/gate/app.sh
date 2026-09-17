@@ -212,7 +212,11 @@ boot_with_command() {
   echo "== no app answering; booting with MDL_BOOT_COMMAND"
   ensure_database || true
   echo "   running: $MDL_BOOT_COMMAND"
-  # `( cmd & )` detaches the app: `wait` does not block on it and it outlives the gate.
+  # `( cmd & )` detaches the app: `wait` does not block on it and it outlives the gate. The
+  # redirect truncates the log only once that subshell runs, so empty it here: for the first
+  # second the wait loop would otherwise read the PREVIOUS boot's errors and report this boot
+  # as failed after 1s, with the old failure as its reason.
+  mkdir -p .mxcli && : > .mxcli/gate-boot.log
   ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
   BASE_URL="http://localhost:$APP_PORT"
   wait_for_boot .mxcli/gate-boot.log
@@ -235,6 +239,8 @@ boot_with_mxcli_run() {
     # A fresh project has no database; --ensure-db creates it only when missing.
     boot_args+=(--ensure-db)
   fi
+  # Empty the log first; see boot_with_command for why.
+  mkdir -p .mxcli && : > .mxcli/gate-boot.log
   ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
   BASE_URL="http://localhost:$APP_PORT"
   wait_for_boot .mxcli/gate-boot.log

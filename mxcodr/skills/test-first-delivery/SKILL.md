@@ -56,6 +56,20 @@ source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
 #         tests/lib.sh (shell) -- the header only, the bodies add nothing a test needs
 ```
 
+Three things about the gate that a test has to match, so there is no need to read
+`tests/gate.sh` to find them (three sessions did):
+
+- **The module a test queries** comes from its own `# covers:` line -- the module of
+  the first element named there. `oql_count Invoice` then means that module's Invoice.
+  `MODULE=...` before sourcing `lib.sh` overrides it.
+- **Coverage counts every page and every `ACT_` microflow** of the app's own modules,
+  and each one has to appear on some `# covers:` line. A `SUB_` microflow, an entity or
+  an enumeration is not counted -- naming one there instead is what makes the checker
+  report "not in the model".
+- **Inside a scenario, write regular expressions with character classes**: the body
+  travels through the shell and JSON before it reaches the browser, so `\d` arrives as
+  a literal `d`. Use `/INV-[0-9]+/`, not `/INV-\d+/`.
+
 Non-negotiable, in order of how often they get skipped:
 
 1. **The test fails before the implementation exists.** A test that has never been red
