@@ -14,7 +14,7 @@ import time
 
 # Files are listed from the bundle, not globbed in the app, so mxcli's own skills and rules are not tracked.
 SKILL_DIRS = (".claude/skills", ".agents/skills", ".ai-context/skills")
-HARNESS_SCRIPTS = ("gate.sh", "orient.sh", "diagnose.sh", "lib.sh", "portable.sh")
+HARNESS_SCRIPTS = ("gate.sh", "orient.sh", "diagnose.sh", "lib.sh", "portable.sh", "scenario-helpers.js")
 
 
 def listdir(path, suffix):
@@ -29,6 +29,9 @@ def destinations(src):
     """Yield (bundle file, app-relative destination) for everything tracked."""
     for name in HARNESS_SCRIPTS:
         yield os.path.join(src, "tests", name), "tests/" + name
+
+    for name in listdir(os.path.join(src, "tests", "gate"), ".sh"):
+        yield os.path.join(src, "tests", "gate", name), "tests/gate/" + name
 
     for name in listdir(os.path.join(src, "checks"), ".py"):
         yield os.path.join(src, "checks", name), "tools/mdl-checks/" + name

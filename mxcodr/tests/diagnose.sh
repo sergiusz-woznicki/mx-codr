@@ -17,14 +17,6 @@ RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
 WORK="$(mdl_tmpdir mdl-diagnose)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The app's own modules: not System, MyFirstModule or Marketplace (those have a Source).
-module_list() {
-  "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null \
-    | "$PY" -c 'import json,sys
-for row in json.load(sys.stdin):
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
-        print(row["Module"])' 2>/dev/null
-}
 
 # --- Sections: each prints its own "== heading" and runs in the background. ---
 
@@ -70,7 +62,7 @@ rows_section() {
        echo "   (start it: $MXCLI run --local -p $MPR --app-port ${APP_PORT:-8081} --watch)"
        return 0 ;;
   esac
-  for module in $(module_list); do
+  for module in $(mdl_user_modules "$MPR"); do
     persistent_entities "$module" | while read -r entity; do
       count="$(row_count "$entity")"
       printf "   %-40s %s\n" "$entity" "${count:-?}"
@@ -114,11 +106,11 @@ errors_section() {
 access_section() {
   local module
   echo "== access on $ENTITY (row-level XPath is what hides rows from a role)"
-  for module in $(module_list); do
+  for module in $(mdl_user_modules "$MPR"); do
     "$MXCLI" -p "$MPR" -c "SHOW ACCESS ON ENTITY $module.$ENTITY" 2>/dev/null | head -25
   done
   echo "== associations of $ENTITY (a missing link looks exactly like a missing row)"
-  for module in $(module_list); do
+  for module in $(mdl_user_modules "$MPR"); do
     "$MXCLI" -p "$MPR" -c "SHOW ASSOCIATIONS IN $module" 2>/dev/null | grep -i "$ENTITY" | head -10
   done
 }

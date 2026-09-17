@@ -3,7 +3,7 @@
 # Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh and run-app.sh; not run on its own.
 # Provides: $MXCLI, $PY, mdl_find_python, mdl_load_harness_env, mdl_json_object,
 #   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_check_local_database,
-#   mdl_check_install_freshness, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr.
+#   mdl_check_install_freshness, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr, mdl_user_modules.
 # Sourcing it also loads tests/harness.env as data (never sourced) and repairs JAVA_HOME.
 # Inputs: MXCLI, PY, PORTABLE_APP_DIR, APP_DIR, LOCALAPPDATA. Nothing else is exported.
 
@@ -283,4 +283,22 @@ mdl_find_mpr() {
     echo "   !! more than one .mpr here; using $MPR. Remove the others, or name one with MPR=." >&2
   fi
   return 0
+}
+
+# --- 10. The app's own modules ---
+# mdl_user_modules <mpr> -- one module per line: not System, MyFirstModule or a Marketplace module
+# (those have a Source). Returns 2 when SHOW MODULES fails or does not return a JSON list.
+mdl_user_modules() {
+  local listing
+  listing="$("$MXCLI" -p "$1" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
+  printf '%s' "$listing" | "$PY" -c 'import json,sys
+try:
+    rows = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+if not isinstance(rows, list):
+    sys.exit(1)
+for row in rows:
+    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
+        print(row["Module"])' 2>/dev/null || return 2
 }

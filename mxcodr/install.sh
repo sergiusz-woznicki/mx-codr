@@ -1677,9 +1677,15 @@ for source_file in "$SRC"/tests/*; do
   name="$(basename "$source_file")"
   target="$APP/tests/$name"
   case "$name" in
-    gate.sh|orient.sh|diagnose.sh|lib.sh|portable.sh) ;;
+    gate.sh|orient.sh|diagnose.sh|lib.sh|portable.sh|scenario-helpers.js|gate) ;;
     *) if [ -e "$target" ]; then continue; fi ;;
   esac
+  if [ -d "$source_file" ]; then
+    # tests/gate/: the gate's steps, upgraded in place like gate.sh.
+    mkdir -p "$target" && cp -R "$source_file"/. "$target"/
+    suite_written=$((suite_written + 1))
+    continue
+  fi
   cp "$source_file" "$target"
   chmod +x "$target" 2>/dev/null || true
   suite_written=$((suite_written + 1))

@@ -14,20 +14,12 @@ APP_PORT="${APP_PORT:-8081}"
 WORK="$(mdl_tmpdir mdl-orient)"
 trap 'rm -rf "$WORK"' EXIT
 
-# The app's own modules: not System, MyFirstModule or Marketplace (those have a Source).
-user_modules() {
-  "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null \
-    | "$PY" -c 'import json,sys
-for row in json.load(sys.stdin):
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
-        print(row["Module"])' 2>/dev/null
-}
 
 # --- Sections: each prints its own "== heading" and runs in the background. ---
 
 structure_section() {
   echo "== structure (this app's own modules; System and Atlas are not listed)"
-  for module in $(user_modules); do
+  for module in $(mdl_user_modules "$MPR"); do
     "$MXCLI" -p "$MPR" -c "SHOW STRUCTURE DEPTH 2 IN $module" 2>&1 | head -60
   done
 }
@@ -54,7 +46,7 @@ tests_section() {
   done
   echo "== coverage"
   if [ -f tools/mdl-checks/check_test_coverage.py ]; then
-    for module in $(user_modules); do
+    for module in $(mdl_user_modules "$MPR"); do
       printf '   %-20s %s\n' "$module" "$("$PY" tools/mdl-checks/check_test_coverage.py . "$module" 2>&1 | tail -1)"
     done
   fi

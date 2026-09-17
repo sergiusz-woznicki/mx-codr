@@ -15,18 +15,8 @@
 #   fail "<message>"                     "FAIL: <message>" on stderr, exit 1
 #   release_session                      sign the browser out (gate.sh, end of run)
 #
-# JS helpers (inside a scenario; 'widget' = Mendix name, i.e. .mx-name-<widget>; `page` = Playwright):
-#   open_app()                         open the app, sign in as TEST_USER if asked
-#   reopen_app()                       start over (page.goto is refused once the app is open)
-#   menu('Label'[, 'widget'])          click a menu item; the widget proves arrival
-#   landed('widget', 'what')           throw unless the widget appears
-#   fill('widget', value)              type into a text box/area, then tab out
-#   pick_combo('widget', 'option')     choose a combo box option
-#   row_action('grid', 'text', 'btn')  click a button in the first grid row containing text
-#   await_message(/regex/[, ms])       wait for an app message; returns the page text
-#   dismiss_dialog()                   click OK on an open dialog
-#   page_text()                        all visible page text
-#   BASE, USER, PASSWORD, ACTION_TIMEOUT  constants from the settings
+# JS helpers a scenario body can call (open_app, menu, fill, row_action, ...): listed at the
+# top of tests/scenario-helpers.js.
 #
 # Env (all optional):
 #   BASE_URL                               app address (default http://localhost:8081)
@@ -49,6 +39,7 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8081}"
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+_MDL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MPR="${MPR:-$(cd "$APP_DIR" && ls -1 *.mpr | head -1)}"
 # MXCLI and PY come from portable.sh unless already set.
 PORTABLE_APP_DIR="$APP_DIR"
@@ -84,15 +75,9 @@ if [ -z "${MODULE:-}" ] && [ -f "${BASH_SOURCE[1]:-}" ]; then
 fi
 MODULE="${MODULE:-${MDL_DEFAULT_MODULE:-}}"
 if [ -z "${MODULE:-}" ]; then
-  MODULE="$("$MXCLI" -p "$APP_DIR/$MPR" --json -c "SHOW MODULES" 2>/dev/null \
-    | "$PY" -c 'import json,sys
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    rows = []
-for row in rows:
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System", "MyFirstModule"):
-        print(row["Module"]); break' 2>/dev/null)"
+  # `|| true`: under set -e an unreadable module list must not end the test here; oql_count
+  # then fails with "needs a module", which says what is missing.
+  MODULE="$(mdl_user_modules "$APP_DIR/$MPR" | sed -n 1p)" || true
 fi
 
 # --- 4. fail and the runtime log ---
@@ -276,218 +261,11 @@ _mdl_js_settings() {
   printf '  const REUSE = %s;\n' "$_MDL_REUSE"
 }
 
-# The JS helpers a body calls: open_app, menu, fill, ... (listed at the top of this file).
+# The JS helpers a body calls, from tests/scenario-helpers.js.
 _mdl_js_helpers() {
-  cat <<'PRELUDE'
-  // Playwright waits 30s by default for a missing element. During development the
-  // failing case is the normal case, so fail in 8s instead -- red runs are what
-  // cost time, not green ones. Override per call where a step is genuinely slow.
-  page.setDefaultTimeout(ACTION_TIMEOUT);
-
-  const LOGIN_FIELD = '#usernameInput, input[name=username]';
-  // '/' redirects to login.html, and the redirect finishes after goto returns --
-  // so wait for whichever of the two arrives rather than deciding immediately,
-  // or the form is never seen and .mx-page never comes.
-  const sign_in_if_asked = async () => {
-    await page.waitForSelector(LOGIN_FIELD + ', .mx-page', {timeout: 20000});
-    if (!(await page.locator(LOGIN_FIELD).count())) return;
-    if (!PASSWORD) throw new Error('app shows a login page but TEST_PASSWORD is empty');
-    // Login-page selectors only. `.alert` and `.mx-validation-message` also occur on
-    // ordinary pages, and a race that matched those would report a refused sign-in
-    // for an app that had loaded perfectly well.
-    const LOGIN_ERROR = '#loginMessage, .login-message, .alert-danger, .mx-login .alert';
-    let landed = 'gone';
-    // Two attempts. A sign-in sent the instant the login page appears after a
-    // sign-out is refused now and then with a bare "Sign in failed" (seen once in
-    // ~10 suite runs, always right after switching users), and the same form
-    // submitted again a moment later is accepted. Wrong credentials fail both
-    // times and are reported as before.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      await page.fill(LOGIN_FIELD, USER);
-      await page.fill('#passwordInput, input[name=password]', PASSWORD);
-      await page.click('#loginButton, button[type=submit], form button');
-      // Race the app against the login page's own error: a refused sign-in is on
-      // screen in about a second, and waiting out the 20s timeout for .mx-page turns
-      // "wrong password" into an unexplained hang.
-      landed = await Promise.race([
-        page.waitForSelector('.mx-page', {timeout: 20000}).then(() => 'page').catch(() => 'gone'),
-        page.waitForSelector(LOGIN_ERROR, {timeout: 20000}).then(() => 'error').catch(() => 'gone'),
-      ]);
-      if (!(landed === 'error' && /login/.test(page.url()) && attempt === 1)) break;
-      await page.waitForTimeout(700);
-    }
-    // Still on the login page is part of the claim: an error element that appears as
-    // the app renders must not be read as a refusal.
-    if (landed === 'error' && /login/.test(page.url())) {
-      const said = await page.locator(LOGIN_ERROR).first().innerText()
-        .then(t => t.replace(/\s+/g, ' ').trim()).catch(() => '');
-      throw new Error('sign-in as ' + USER + ' was refused: ' + (said || 'the login page reported an error')
-        + ' (credentials come from tests/credentials.env)');
-    }
-    await page.waitForSelector('.mx-page', {timeout: 20000});
-  };
-  // Ending a session, not just forgetting it. Clearing cookies leaves the old
-  // session alive on the server, and the runtime's session limit then refuses the
-  // next sign-in with "Maximum number of sessions exceeded" -- which reaches the
-  // browser as a plain "Sign in failed".
-  const current_user = async () => page.evaluate(() => {
-    try { const a = mx.session.sessionData.user.attributes.Name; return (a && a.value) || ''; }
-    catch (e) { return ''; }
-  }).catch(() => '');
-  const sign_out = async () => {
-    if (await page.locator('.mx-page').count()) {
-      await page.evaluate(() => { if (window.mx && window.mx.logout) window.mx.logout(); });
-    }
-    await page.waitForSelector(LOGIN_FIELD, {timeout: 20000});
-  };
-  // Always start from a fresh sign-in. The runtime's licence caps concurrent
-  // sessions, and a session left behind by an earlier run counts against it --
-  // the next sign-in then fails with a bare "Sign in failed" on the login page.
-  // A mid-scenario page.goto wipes client state, hides carry-over between steps, and
-  // above Security Level: Off it is a silent sign-out -- the suite then continues as
-  // though navigation worked. Navigate with menu()/row_action(); to deliberately start
-  // over, call reopen_app().
-  let __journey_started = false;
-  // The page object lives in the playwright-cli daemon and outlives one scenario, so a
-  // guard installed last time is still on it. Restore the real goto first, or each
-  // scenario wraps the previous scenario's already-tripped guard.
-  if (page.__mdl_raw_goto) page.goto = page.__mdl_raw_goto;
-  const __goto = page.goto.bind(page);
-  page.__mdl_raw_goto = page.goto;
-  page.goto = async (url, options) => {
-    if (__journey_started) {
-      throw new Error('page.goto(' + url + ') after the app was opened is a mid-journey reload:'
-        + ' it wipes client state and, with security on, signs the session out. Navigate with'
-        + ' menu() or row_action(), or call reopen_app() to deliberately start a fresh journey.');
-    }
-    return __goto(url, options);
-  };
-  const reopen_app = async () => { __journey_started = false; await open_app(); };
-
-  const open_app = async () => {
-    await page.goto(BASE + '/');
-    await page.waitForSelector(LOGIN_FIELD + ', .mx-page', {timeout: 20000});
-    // Signing out only makes sense where there is something to sign in to. With
-    // Security Level: Off there is no login page, so mx.logout() would leave the
-    // scenario waiting 20s for a form that never appears -- and the failure then
-    // reads as a broken feature. Say so instead, before spending the 20s.
-    if (PASSWORD && await page.locator('.mx-page').count()) {
-      const who = await current_user();
-      if (/^Anonymous/.test(who)) {
-        throw new Error('the app is signed in as ' + who + ' and shows no login page, so TEST_USER='
-          + USER + ' cannot be applied: this app runs with Security Level: Off. Unset TEST_USER and'
-          + ' TEST_PASSWORD (and remove tests/credentials.env) for this app, or turn security on');
-      }
-      // A session the previous script left signed in as this same user is this
-      // script's session too (MDL_SESSION_REUSE / KEEP_SESSION). Anyone else's is
-      // ended first: the tests for another role must not run as this one.
-      if (!(REUSE && who === USER)) await sign_out();
-    }
-    await sign_in_if_asked();
-    await page.waitForSelector('.mx-page', {timeout: 20000});
-    __journey_started = true;
-  };
-  // await_message(/reminder sent/i) -- wait for the text the app shows in reply to
-  // an action, wherever it puts it: a dialog, an alert bar, or a rendered message
-  // on the page. Returns the visible text so the test can assert on it. This
-  // replaces `waitForTimeout(1500)` followed by page_text(): it returns as soon as
-  // the message is there (~200ms) instead of after a fixed pause, and it fails
-  // saying what WAS on screen when the message never came, rather than handing the
-  // test an unrelated page to assert against.
-  // The pattern must match the MESSAGE and nothing the page showed before the
-  // action: a button captioned "Unpaid" satisfies /unpaid/ instantly, and the
-  // test then reads a page on which the message has not appeared yet. Include a
-  // word or a number that only the message carries: /has \d+ unpaid invoice/i.
-  const await_message = async (pattern, timeout) => {
-    const deadline = Date.now() + (timeout || ACTION_TIMEOUT);
-    let text = '';
-    for (;;) {
-      text = await page.locator('body').innerText().catch(() => '');
-      if (pattern.test(text)) return text.replace(/\s+/g, ' ').trim();
-      if (Date.now() > deadline) {
-        throw new Error('no message matching ' + pattern + ' appeared within '
-          + (timeout || ACTION_TIMEOUT) + 'ms; the page says: '
-          + text.replace(/\s+/g, ' ').trim().slice(0, 300));
-      }
-      await page.waitForTimeout(100);
-    }
-  };
-  // Mendix commits an input on blur, so a fill followed straight away by a click
-  // on Save can be saved before the last value is committed. Tab out to blur.
-  const fill = async (widget, value) => {
-    const input = page.locator('.mx-name-' + widget + ' input, .mx-name-' + widget + ' textarea').first();
-    await input.fill(String(value));
-    await input.press('Tab');
-  };
-  const pick_combo = async (widget, option) => {
-    await page.click('.mx-name-' + widget + ' .widget-combobox-input-container');
-    const item = page.locator('.widget-combobox-item', {hasText: option}).first();
-    await item.waitFor({timeout: 10000});
-    await item.click();
-  };
-  const row_action = async (grid, row_text, widget) => {
-    const row = page.locator('.mx-name-' + grid + ' [role=row]', {hasText: row_text}).first();
-    await row.waitFor({timeout: 15000});
-    await row.locator('.mx-name-' + widget).click();
-  };
-  // Prove the page arrived before anything asserts against it. Without this, a nav
-  // click that silently did nothing leaves the next assertions measuring the PREVIOUS
-  // page, and the failures that follow describe a defect that does not exist.
-  const landed = async (widget, what) => {
-    const ok = await page.locator('.mx-name-' + widget).first()
-      .waitFor({timeout: 10000}).then(() => true).catch(() => false);
-    if (!ok) {
-      throw new Error('did NOT land after ' + what + ': .mx-name-' + widget
-        + ' never appeared (on ' + page.url() + '). Everything after this would have been'
-        + ' asserted against the previous page.');
-    }
-  };
-  // menu('Invoices', 'invoiceGrid') -- the second argument is the widget that proves
-  // arrival, and is the right way to click a menu item. With one argument the guard
-  // falls back to "something must have happened": a menu item that is a microflow
-  // action opens a dialog rather than a page, and both count.
-  const menu = async (label, ready) => {
-    const candidates = page.locator('.mx-navigationtree a, nav a, a').filter({hasText: label});
-    await candidates.first().waitFor({timeout: 10000});
-    // An Atlas layout renders its menu twice -- the top bar and the off-canvas
-    // sidebar. Both report themselves visible, but the collapsed one sits under a
-    // .mx-placeholder overlay, so clicking it times out as "element is not stable"
-    // and the failure reads as a missing menu item. Click the copy a real pointer
-    // would reach. (Found by a session that lost several minutes to it.)
-    let link = candidates.first();
-    const total = await candidates.count();
-    for (let i = 0; i < total; i++) {
-      const reachable = await candidates.nth(i).evaluate(el => {
-        const r = el.getBoundingClientRect();
-        if (!r.width || !r.height) return false;
-        const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-        return !!hit && (hit === el || el.contains(hit) || hit.contains(el));
-      }).catch(() => false);
-      if (reachable) { link = candidates.nth(i); break; }
-    }
-    const before = (await page.locator('.mx-page').first().innerText().catch(() => '')).slice(0, 300);
-    const url_before = page.url();
-    await link.click();
-    if (ready) { await landed(ready, "menu '" + label + "'"); return; }
-    const deadline = Date.now() + 3000;
-    for (;;) {
-      const after = (await page.locator('.mx-page').first().innerText().catch(() => '')).slice(0, 300);
-      const dialog = await page.locator('.modal-footer button, .mx-dialog').count();
-      if (after !== before || dialog > 0 || page.url() !== url_before) return;
-      if (Date.now() > deadline) {
-        throw new Error("clicked menu '" + label + "' but nothing happened within 3s: no page"
-          + ' change, no dialog (on ' + page.url() + '). If this item leads to a page you are'
-          + " already on, pass the widget that proves it: menu('" + label + "', 'someGrid').");
-      }
-      await page.waitForTimeout(150);
-    }
-  };
-  const dismiss_dialog = async () => {
-    const ok = page.locator('.modal-footer button, .mx-dialog button').filter({hasText: 'OK'});
-    if (await ok.count()) await ok.first().click();
-  };
-  const page_text = async () => (await page.locator('body').innerText());
-PRELUDE
+  [ -f "$_MDL_LIB_DIR/scenario-helpers.js" ] \
+    || fail "tests/scenario-helpers.js is missing -- re-run the installer"
+  sed '1,/^\/\/ ---- helpers (lib.sh copies from the next line on) ----$/d' "$_MDL_LIB_DIR/scenario-helpers.js"
 }
 
 # The end of the try: the catch adds url, user and login message; the finally signs out.
