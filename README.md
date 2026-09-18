@@ -8,6 +8,11 @@ for every screen, a model that passes Mendix's own checks, microflows a colleagu
 read, screens that aren't glued together. mx-codr adds exactly that — one installer,
 and one command that answers **DONE** or **NOT DONE**.
 
+It sits on top of [mxcli](https://github.com/mendixlabs/mxcli):
+- **mxcli** opens command-line access to a Mendix model
+- **mx-codr** adds a **harness** — skills, rules and hooks — to turn it into a
+  delivery workflow.
+
 ## What you get
 
 - **Test-first, automatically.** The agent writes a failing browser test before each
