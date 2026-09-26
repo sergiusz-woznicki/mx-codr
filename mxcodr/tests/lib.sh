@@ -86,10 +86,15 @@ RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
 
 # Inside $(...) fail ends only that subshell; callers add `|| exit 1`.
 # Also noted in a file: a fail inside $(...) (or behind 2>/dev/null) reaches the EXIT trap that way.
+# One line: the runner shows only a test's last stderr line, and `fail "...: $body"` with a grid's
+# text in it ended on the grid's last row -- no FAIL: left, and the gate showed a bare FAIL.
 fail() {
+  local message="$*"
+  message="${message//$'\r'/}"; message="${message//$'\n'/ | }"
+  [ "${#message}" -le 400 ] || message="${message:0:400} ..."
   _MDL_FAIL_SAID=1
-  echo "FAIL: $*" >&2
-  [ -z "${_MDL_FAIL_NOTE:-}" ] || printf 'FAIL: %s\n' "$*" > "$_MDL_FAIL_NOTE" 2>/dev/null || true
+  echo "FAIL: $message" >&2
+  [ -z "${_MDL_FAIL_NOTE:-}" ] || printf 'FAIL: %s\n' "$message" > "$_MDL_FAIL_NOTE" 2>/dev/null || true
   exit 1
 }
 

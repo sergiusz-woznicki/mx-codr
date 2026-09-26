@@ -4,16 +4,17 @@
 # Each check runs in a background subshell, so it reports through files: check_<name> writes
 # $WORK/<name>.summary and .detail and returns 0 pass / 1 problems / 2 could not run;
 # run_cached adds .status and .secs; collect reads them after `wait`.
-check_mx() {
-  local out errors item
-  # mx check runs on a copy: it rewrites the .mpr and would trigger --watch rebuilds.
-  # The copy needs widgets/ and theme*/ as well; `cp -Rc` clones on APFS, else plain cp -R.
-  local scratch="$WORK/mxcheck"
-  mkdir -p "$scratch"
+
+# mx_check_copy -- mx check on a fresh copy of the project; sets out. False when the copy failed.
+# mx check runs on a copy: it rewrites the .mpr and would trigger --watch rebuilds.
+# The copy needs widgets/ and theme*/ as well; `cp -Rc` clones on APFS, else plain cp -R.
+mx_check_copy() {
+  local item scratch="$WORK/mxcheck"
+  rm -rf "$scratch"; mkdir -p "$scratch"
   for item in "$MPR" mprcontents widgets theme themesource javasource; do
     [ -e "$item" ] || continue
     cp -Rc "$item" "$scratch/" 2>/dev/null || cp -R "$item" "$scratch/" 2>/dev/null || {
-      echo "mx check: could not run -- could not copy $item to a scratch directory" > "$WORK/mx.summary"; return 2; }
+      echo "mx check: could not run -- could not copy $item to a scratch directory" > "$WORK/mx.summary"; return 1; }
   done
   # Without `mx update-widgets` (2.9s of a 5.2s check, measured); the one error that
   # step prevents, CE0463, buys the slow run. Same rule as tests/precheck.sh.
@@ -23,8 +24,20 @@ check_mx() {
   if printf '%s\n' "$out" | grep -q 'CE0463'; then
     out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
   fi
-  # mx check exits 0 even with model errors, so read the count it prints.
-  errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"
+  return 0
+}
+
+check_mx() {
+  local out errors attempt
+  # Twice: the copy is taken beside a boot, and a copy made while mxbuild touched the project
+  # failed mx check with no error count (Windows, --restart); a fresh copy a moment later passed.
+  for attempt in 1 2; do
+    mx_check_copy || return 2
+    errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"
+    [ -n "$errors" ] && break
+    [ "$attempt" = 1 ] && sleep 3
+  done
+  # mx check exits 0 even with model errors, so it is the count it prints that says.
   if [ -z "$errors" ]; then
     printf '%s\n' "$out" | tail -3 > "$WORK/mx.detail"
     if [ -n "${MDL_MXBUILD_PATH:-}" ]; then
@@ -53,6 +66,15 @@ checker_verdict() {
   return 2
 }
 
+# describe_one <kind> <document> -- its MDL, or false. Tried twice: these run beside a boot, and a
+# describe that meets mxbuild touching the project fails once, then works (Windows, --restart).
+describe_one() {
+  local text
+  text="$("$MXCLI" describe "$1" "$2" -p "$MPR" 2>/dev/null)" \
+    || { sleep 2; text="$("$MXCLI" describe "$1" "$2" -p "$MPR" 2>/dev/null)"; } || return 1
+  printf '%s\n' "$text"
+}
+
 # Describes every document of <kinds> into <dir>/<module>.mdl; failures go to
 # $WORK/<label>.broken. False when anything failed.
 describe_all() {
@@ -70,7 +92,7 @@ describe_all() {
       fi
       while IFS= read -r document; do
         [ -n "$document" ] || continue
-        "$MXCLI" describe "${kind%S}" "$document" -p "$MPR" >> "$dir/$module.mdl" 2>/dev/null \
+        describe_one "${kind%S}" "$document" >> "$dir/$module.mdl" \
           || echo "describe ${kind%S} $document failed" >> "$broken"
       done <<< "$names"
     done
@@ -94,6 +116,12 @@ modules_or_status() {
 check_lint() {
   local out code line errors
   out="$("$MXCLI" lint -p "$MPR" 2>&1)"; code=$?
+  # Lint runs beside a boot: when mxbuild touches the project mid-run, lint stops on "Cache
+  # invalid: project file modified" with no summary. Once more, after the change, is enough.
+  if ! printf '%s\n' "$out" | grep -qE '^[0-9]+ issues:|No issues found\.'; then
+    sleep 3
+    out="$("$MXCLI" lint -p "$MPR" 2>&1)"; code=$?
+  fi
   # A .star file that fails to parse is skipped while lint still exits 0: not a pass.
   if printf '%s\n' "$out" | grep -qE 'rule file\(s\) skipped|rule file skipped'; then
     echo "lint: could not run -- $(printf '%s\n' "$out" | grep -cE '^Warning: rule file skipped') lint rule file(s) failed to load" > "$WORK/lint.summary"
