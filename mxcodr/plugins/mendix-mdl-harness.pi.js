@@ -76,6 +76,18 @@ function run(command, cwd, timeout, input) {
   }
 }
 
+// tests/harness.env is the person's: guard-harness-env.sh blocks a session flipping a gate switch
+// (editing the file, or MDL_REQUIRE_PRODUCTION=0 bash tests/gate.sh). The reason, or null.
+function harnessEnvBlocked(root, tool, args) {
+  const text = JSON.stringify(args ?? {})
+  if (!/harness\.env|tests[\/\\]+(gate|precheck)\.sh/.test(text)) return null
+  const guard = join(root, "tools", "mdl-checks", "hooks", "guard-harness-env.sh")
+  if (!existsSync(guard)) return null
+  const payload = JSON.stringify({ tool_name: tool, tool_input: args ?? {} })
+  const { status, out } = run([guard.replace(/\\/g, "/")], root, 30000, payload)
+  return status === 2 ? out : null
+}
+
 // `...; sleep 12; bash tests/gate.sh` or `sleep 30; tail .mxcli/gate-boot.log`: the gate waits for
 // the runtime and for --watch itself. Two Pi sessions did
 // this anyway, against the rule file; a block says it at the moment it happens.
@@ -168,9 +180,11 @@ export default function mendixMdlHarness(pi) {
   // Errors block the call, and `reason` is what the model reads instead of the tool output.
   // Inline MDL, or a project without precheck.sh, passes through.
   pi.on("tool_call", (event, ctx) => {
-    if (event.toolName !== "bash") return
     const root = harnessRoot(ctx)
     if (!root) return
+    const blocked = harnessEnvBlocked(root, event.toolName, event.input)
+    if (blocked) return { block: true, reason: blocked }
+    if (event.toolName !== "bash") return
     const command = event.input && event.input.command
     if (isSleepBeforeGate(command)) return { block: true, reason: SLEEP_BEFORE_GATE }
     if (!isMxcliExec(command)) return

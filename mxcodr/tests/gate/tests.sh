@@ -55,8 +55,8 @@ note_never_red_tests() {
   [ -n "$unproven" ] || return 0
   summary+=("red-first: no red run recorded for$unproven -- a test that has never failed may assert")
   summary+=("   nothing. Break what it checks once (an mxcli exec that changes the message, then undo")
-  summary+=("   it) and watch that one test go red, or list it in MDL_ALLOW_GREEN_FIRST if it is green")
-  summary+=("   by nature. This is a warning; it does not fail the gate.")
+  summary+=("   it) and watch that one test go red. If it is green by nature, say so in your report; the")
+  summary+=("   person may list it in MDL_ALLOW_GREEN_FIRST. This is a warning; it does not fail the gate.")
 }
 
 # A MODULE set by the caller goes to every test. Otherwise each test takes the module on its own

@@ -7,7 +7,7 @@
 
 input="$(cat)"
 allow() { printf '{"permission":"allow"}\n'; exit 0; }
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) allow ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*gate.sh*|*precheck.sh*) ;; *) allow ;; esac
 
 mdl_find_python() {
   local candidate
@@ -40,8 +40,17 @@ command="$(printf '%s' "$input" | "$PY" -c 'import json,sys
 d = json.load(sys.stdin)
 print(d.get("command") or d.get("tool_input", {}).get("command", ""))' 2>/dev/null)"
 cwd="$(printf '%s' "$input" | "$PY" -c 'import json,sys; print(json.load(sys.stdin).get("cwd") or "")' 2>/dev/null)"
-case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) allow ;; esac
 [ -z "$cwd" ] || cd "$cwd" 2>/dev/null || allow
+# tests/harness.env is the person's: the same guard as the other hosts (guard-harness-env.sh).
+guard="$(dirname "$0")/guard-harness-env.sh"
+if [ -f "$guard" ]; then
+  why="$(printf '%s' "$command" | "$PY" -c 'import json,sys; print(json.dumps({"tool_name": "Bash", "tool_input": {"command": sys.stdin.read()}}))' \
+    | bash "$guard" 2>&1 >/dev/null)" || {
+    printf '%s' "$why" | "$PY" -c 'import json,sys; m=sys.stdin.read(); print(json.dumps({"permission": "deny", "userMessage": "Blocked a change to the gate switches in tests/harness.env.", "agentMessage": m}))'
+    exit 0
+  }
+fi
+case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) allow ;; esac
 [ -f tests/precheck.sh ] || allow
 
 scripts="$(printf '%s' "$command" | "$PY" -c 'import glob, shlex, sys
