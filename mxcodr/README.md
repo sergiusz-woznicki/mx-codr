@@ -193,7 +193,11 @@ seeding reset.
 
 A test that `set -e` ends on a command that printed nothing (say `x=$(oql_count ... 2>/dev/null
 || echo "")`, where the exit inside `$(...)` skips the fallback) no longer shows a bare `FAIL`: its
-last line names the test's line and command.
+last line names the test's line and command. `fail` also joins a multi-line message onto one
+line: the runner shows only a test's last line, and `fail "...: $body"` ended on a grid row.
+
+`mx check`, lint and the page and flow dumps run beside a boot. When `--restart` rebuilds while
+they read the project, each is tried once more before the gate calls it "could not run".
 
 Each boot empties `.mxcli/gate-boot.log` and keeps the one before it as
 `.mxcli/gate-boot.prev.log`, so a failure that a later boot overwrote can still be read.
