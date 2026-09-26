@@ -284,6 +284,7 @@ A failing test always says why, on one line: one that stops on a silent command 
 ## Configuration
 
 `tests/harness.env` is written by the installer and read by every harness script.
+It is yours: the agent may read it, but a hook blocks it from editing the file or setting a gate switch inline.
 The environment still wins, so any of it can be overridden for one run.
 
 | Key | What it is |

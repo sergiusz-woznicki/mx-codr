@@ -154,6 +154,18 @@ function run(command, cwd, timeout, input) {
   }
 }
 
+// tests/harness.env is the person's: guard-harness-env.sh blocks a session flipping a gate switch
+// (editing the file, or MDL_REQUIRE_PRODUCTION=0 bash tests/gate.sh). The reason, or null.
+function harnessEnvBlocked(root, tool, args) {
+  const text = JSON.stringify(args ?? {})
+  if (!/harness\.env|tests[\/\\]+(gate|precheck)\.sh/.test(text)) return null
+  const guard = join(root, "tools", "mdl-checks", "hooks", "guard-harness-env.sh")
+  if (!existsSync(guard)) return null
+  const payload = JSON.stringify({ tool_name: tool, tool_input: args ?? {} })
+  const { status, out } = run([guard.replace(/\\/g, "/")], root, 30000, payload)
+  return status === 2 ? out : null
+}
+
 export const MendixMdlHarness = async ({ client, directory, worktree }) => {
   const root = worktree || directory
 
@@ -173,6 +185,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
     // model reads instead of the tool output. Inline MDL, or no precheck.sh, passes through.
     "tool.execute.before": async (input, output) => {
       if (!installed) return
+      const blocked = harnessEnvBlocked(root, input.tool, output.args)
+      if (blocked) throw new Error(blocked)
       if (input.tool !== "bash") return
       const command = output.args?.command
       if (isSleepBeforeGate(command)) throw new Error(SLEEP_BEFORE_GATE)

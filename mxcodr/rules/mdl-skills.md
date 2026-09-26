@@ -244,6 +244,12 @@ bash tests/gate.sh
 does not touch this file, `.claude/skills/` or `.claude/settings.local.json`, which
 is why the project's own rules live here.
 
+**`tests/harness.env` is the person's.** It holds the gate's switches
+(`MDL_REQUIRE_PRODUCTION`, `MDL_ALLOW_GREEN_FIRST`, `MDL_VISUAL`, ...). Do not edit it, and do not
+set those switches on the command line: a hook blocks both. A session building an app with no
+users wrote `MDL_REQUIRE_PRODUCTION=0` there; the next session, asked for per-customer logins,
+got DONE with security Off. When a check stands in your way, meet it or report it.
+
 **Ask before any git command that writes.** `init`, `add`, `commit`, `checkout`,
 `branch`, `merge`, `reset`, `stash`, `clean`, `push` -- every one of them waits for the
 person to say yes, in this project and in any other folder. A session ran

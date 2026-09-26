@@ -20,19 +20,21 @@ except json.JSONDecodeError as exc:
     # mergers below refuse for the same reason.
     raise SystemExit("   !! %s is not valid JSON (%s); leaving it alone. Fix it and re-run." % (path, exc))
 hooks = settings.setdefault("hooks", {})
-wanted = {
-    "UserPromptSubmit": {"hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/remind-skills.sh"}]},
+wanted = [
+    ("UserPromptSubmit", {"hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/remind-skills.sh"}]}),
     # 180s: the precheck copies the model and runs mx check on it (~6s on a small app).
-    "PreToolUse": {"matcher": "Bash", "hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/before-mxcli-exec.sh", "timeout": 180}]},
-    "PostToolUse": {"matcher": "Bash", "hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/after-mxcli-exec.sh"}]},
-}
-for event, entry in wanted.items():
+    ("PreToolUse", {"matcher": "Bash", "hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/before-mxcli-exec.sh", "timeout": 180}]}),
+    # tests/harness.env is the person's: the session may not flip a gate switch.
+    ("PreToolUse", {"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/guard-harness-env.sh", "timeout": 30}]}),
+    ("PostToolUse", {"matcher": "Bash", "hooks": [{"type": "command", "command": "bash tools/mdl-checks/hooks/after-mxcli-exec.sh"}]}),
+]
+for event, entry in wanted:
     existing = hooks.setdefault(event, [])
     if not any(json.dumps(e, sort_keys=True) == json.dumps(entry, sort_keys=True) for e in existing):
         existing.append(entry)
 json.dump(settings, open(path, "w"), indent=2)
 PY_MERGE
-ui_done "Claude hooks" "3 $I_ARROW .claude/settings.local.json"
+ui_done "Claude hooks" "4 $I_ARROW .claude/settings.local.json"
 ignore_credential_files
 
 # Codex: PostToolUse ignores plain stdout, so it gets an adapter.
@@ -95,6 +97,15 @@ wanted = {
             "timeout": 60,
         }],
     },
+    # Codex hooks only its shell tool; apply_patch edits are not seen (the gate's drift check is).
+    "PreToolUse": {
+        "matcher": "^Bash$",
+        "hooks": [{
+            "type": "command",
+            "command": 'bash %s/guard-harness-env.sh' % root,
+            "timeout": 30,
+        }],
+    },
     "PostToolUse": {
         "matcher": "^Bash$",
         "hooks": [{
@@ -130,7 +141,7 @@ with open(path, "w") as handle:
     json.dump(settings, handle, indent=2)
     handle.write("\n")
 PY_CODEX_MERGE
-ui_done "Codex hooks" "3 $I_ARROW .codex/hooks.json"
+ui_done "Codex hooks" "4 $I_ARROW .codex/hooks.json"
 
 # Cursor reads neither .claude/rules nor .ai-context: an alwaysApply .mdc rule plus three adapter hooks.
 ui_begin "registering Cursor hooks"

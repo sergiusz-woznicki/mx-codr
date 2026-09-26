@@ -503,7 +503,8 @@ layout: PASS  0 failure(s) over 6 page(s)
 `LOOK02` | warning | with review on: a screenshot you rejected; the line repeats your own fix |
 
 The warnings list under `== warnings` in the gate's output and do not block DONE yet;
-`MDL_VISUAL=error` in `tests/harness.env` makes them block, `MDL_VISUAL=0` turns them off.
+`MDL_VISUAL=error` in `tests/harness.env` makes them block, `MDL_VISUAL=0` turns them off -- the
+person's switches: a session does not edit that file.
 
 ## What this cannot see
 
