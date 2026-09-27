@@ -157,7 +157,7 @@ no checker to remember the arguments of, no order to run things in. After
 |---|---|
 | The six rules, in prose | `SKILL.md` files in the three directories each host looks in |
 | The always-loaded reminder | `.claude/rules/` and `.cursor/rules/`, and Pi's system prompt through its extension, on every turn |
-| The syntax sessions look up most | a digest from the project's own mxcli, loaded into the session: `.claude/rules/`, `.cursor/rules/`, `opencode.json`, Pi's system prompt |
+| The syntax sessions look up most | a digest from the project's own mxcli, with the pitfalls that cost sessions the most time on top, loaded into the session: `.claude/rules/`, `.cursor/rules/`, `opencode.json`, Pi's system prompt |
 | `MOD001`, `REU001`, `UI001` | `mxcli lint` discovers `.claude/lint-rules/*.star` by itself |
 | `check_mdl.py`, `check_test_coverage.py`, `check_layout.py` | the skills that need them name the exact command; the gate runs them too |
 | The gate | host hooks fire it, and the `test-first-delivery` skill tells the agent to |
