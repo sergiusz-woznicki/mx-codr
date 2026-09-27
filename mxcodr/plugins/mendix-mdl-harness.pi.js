@@ -103,6 +103,22 @@ function isSleepBeforeGate(command) {
 const EXEC_THROUGH_VARIABLE =
   "Blocked: that exec names its script through a variable (`$f.mdl` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"
 
+// MDL given to mxcli with -c that changes the model: CREATE, ALTER, DROP, GRANT, REVOKE, MOVE,
+// RENAME. It went round the precheck, and one broken access rule written that way blocked every
+// later exec with an error that was not in its script.
+const WRITE_MDL = /^\s*(create|alter|drop|grant|revoke|move|rename)\b/i
+function inlineMdl(command) {
+  if (typeof command !== "string" || !/mxcli(\.exe)?\b/.test(command)) return []
+  const found = []
+  const pattern = /\s-c\s+("((?:[^"\\]|\\.)*)"|'([^']*)')/g
+  let match
+  while ((match = pattern.exec(command)) !== null) {
+    const text = match[2] !== undefined ? match[2].replace(/\\(["\\$`])/g, "$1") : match[3]
+    if (WRITE_MDL.test(text)) found.push(text)
+  }
+  return found
+}
+
 function isMxcliExec(command) {
   return typeof command === "string" && /mxcli(\.exe)? exec/.test(command)
 }
@@ -187,13 +203,15 @@ export default function mendixMdlHarness(pi) {
     if (event.toolName !== "bash") return
     const command = event.input && event.input.command
     if (isSleepBeforeGate(command)) return { block: true, reason: SLEEP_BEFORE_GATE }
-    if (!isMxcliExec(command)) return
+    const inline = inlineMdl(command)
+    if (!isMxcliExec(command) && inline.length === 0) return
     const precheck = join(root, "tests", "precheck.sh")
     if (!existsSync(precheck)) return
-    const scripts = mdlScripts(command)
-    if (scripts.length === 0) return
+    const scripts = isMxcliExec(command) ? mdlScripts(command) : []
+    if (scripts.length === 0 && inline.length === 0) return
     if (scripts.some((script) => script.includes("$"))) return { block: true, reason: EXEC_THROUGH_VARIABLE }
-    const { status, out } = run([precheck.replace(/\\/g, "/"), ...scripts], root, PRECHECK_TIMEOUT_MS)
+    const inlineArgs = inline.flatMap((text) => ["--inline", text])
+    const { status, out } = run([precheck.replace(/\\/g, "/"), ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
     if (status === 0 || out.includes("precheck: could not run")) return
     return {
       block: true,

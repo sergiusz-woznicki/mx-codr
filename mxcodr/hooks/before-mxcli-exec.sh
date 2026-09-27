@@ -6,7 +6,7 @@
 
 # Cheap substring test first: almost no Bash call is an `mxcli exec`.
 input="$(cat)"
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot.log"*|*"runtime.log"*) ;; *) exit 0 ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot.log"*|*"runtime.log"*|*mxcli*-c*) ;; *) exit 0 ;; esac
 
 # Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
 mdl_find_python() {
@@ -42,7 +42,31 @@ if printf '%s' "$command" | grep -qE '(^|[^[:alnum:]_])sleep[[:space:]]+[0-9]' \
   echo "Blocked: drop the \`sleep\` -- tests/gate.sh waits for the runtime and for --watch to apply the latest change itself, and says so; a hand-rolled wait only adds seconds. Run the same command without it." >&2
   exit 2
 fi
-case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
+# MDL given to mxcli with -c that changes the model (CREATE, ALTER, DROP, GRANT, REVOKE, MOVE,
+# RENAME), NUL-separated. It went round the precheck: one broken access rule written that way
+# blocked every later exec with an error that was not in its script.
+inline_mdl() {
+  printf '%s' "$1" | "$PY" -c 'import re, shlex, sys
+text = sys.stdin.read()
+try:
+    words = shlex.split(text)
+except ValueError:
+    sys.exit(0)
+seen_mxcli = False
+for i, word in enumerate(words):
+    if re.search(r"(^|/)mxcli(\.exe)?$", word):
+        seen_mxcli = True
+    elif word in ("|", ";", "&&", "||"):
+        seen_mxcli = False
+    elif seen_mxcli and word == "-c" and i + 1 < len(words):
+        if re.match(r"\s*(create|alter|drop|grant|revoke|move|rename)\b", words[i + 1], re.I):
+            sys.stdout.write(words[i + 1] + "\0")' 2>/dev/null
+}
+inline=()
+case "$command" in *mxcli*-c*)
+  while IFS= read -r -d '' statement; do inline+=(--inline "$statement"); done < <(inline_mdl "$command") ;;
+esac
+case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) [ "${#inline[@]}" -gt 0 ] || exit 0 ;; esac
 [ -f tests/precheck.sh ] || exit 0
 
 # The .mdl words of the command, split like a shell (shlex, no execution; globs expanded,
@@ -67,7 +91,7 @@ for word in words:
                 break
             matches.append(match)
     print("\n".join(matches) if matches else word)' 2>/dev/null)"
-[ -n "$scripts" ] || exit 0
+[ -n "$scripts" ] || [ "${#inline[@]}" -gt 0 ] || exit 0
 # `for f in a b; do mxcli exec mdlsource/$f.mdl` hands the hook a literal `$f`: nothing to check.
 if printf '%s\n' "$scripts" | grep -q '[$]'; then
   echo "Blocked: that exec names its script through a variable (\`$f.mdl\` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr" >&2
@@ -81,7 +105,7 @@ done <<HOOK_SCRIPTS
 $scripts
 HOOK_SCRIPTS
 
-out="$(bash tests/precheck.sh "${args[@]}" 2>&1)"
+out="$(bash tests/precheck.sh ${args[@]+"${args[@]}"} ${inline[@]+"${inline[@]}"} 2>&1)"
 status=$?
 if [ "$status" -ne 0 ]; then
   {
