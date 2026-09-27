@@ -38,6 +38,24 @@ if [ "$#" -eq 0 ]; then
 fi
 mdl_find_mpr 2>/dev/null || { echo "precheck: could not run -- no .mpr in $(pwd)"; exit 0; }
 
+# `--inline "<mdl>"`: MDL a command gives mxcli with -c, not in a file. It changes the model as much
+# as a script does, and a session that wrote its access rules that way put a broken XPath into the
+# model unchecked; every later exec was then blocked by an error that was not in its script.
+inline_args=()
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--inline" ] && [ "$#" -ge 2 ]; then
+    inline_file="$(mdl_tmpfile mdl-inline).mdl"
+    printf '%s\n' "$2" > "$inline_file"
+    inline_args+=("$inline_file")
+    shift 2
+  else
+    inline_args+=("$1")
+    shift
+  fi
+done
+set -- ${inline_args[@]+"${inline_args[@]}"}
+[ "$#" -gt 0 ] || { echo "precheck: nothing to check -- name the .mdl script(s) the exec will run"; exit 0; }
+
 # One copy of each script, in order: `cat > x.mdl <<EOF ... && mxcli exec x.mdl` names it twice,
 # and a second apply of a non-re-runnable script would fail on the copy for no reason.
 scripts=()
@@ -112,13 +130,22 @@ for script in "$@"; do
     # thirty seconds, then guessed at the causes. Errors are the `✗` lines and their `at` line;
     # a parse or apply failure prints `Parse error:` / `Error:` instead. At most 15 are shown.
     printf '%s\n' "$out" | sed $'s/\x1b\\[[0-9;]*m//g' | grep -v '^Using project' | awk '
-      /^[[:space:]]*✗|Parse error:|^Error:|^[[:space:]]*Error:/ {
+      /^[[:space:]]*✗|Parse error:|^Error:|^[[:space:]]*Error:|^Reference error:/ {
         if (++shown > 15) { more++; next }
-        print; want_at = 1; next }
+        print; want_at = 1; want_item = 1; next }
+      want_item && /^[[:space:]]+- / { print; next }
+      { want_item = 0 }
       want_at && /^[[:space:]]+at [^[:space:]]/ { print; want_at = 0; next }
       { want_at = 0 }
       /issues: [0-9]+ errors|^Refusing to execute/ { print }
       END { if (more) printf "  ... and %d more\n", more }'
+    # A page that calls a new microflow which opens that page: each script fails alone, in either
+    # order, and a session reached for --no-check (mxcli's own advice) -- which the precheck refuses.
+    if printf '%s\n' "$out" | grep -q 'unresolved reference'; then
+      echo "  Not found = not created yet. If another script creates it, exec that one first; if the two"
+      echo "  need EACH OTHER (a page calls a new microflow that opens that page), move them into ONE"
+      echo "  .mdl -- a script resolves what it creates itself. --no-check does not get past this check."
+    fi
     exit 1
   }
 done
@@ -150,15 +177,51 @@ if [ "$errors" = "0" ]; then
   echo "precheck: 0 errors -- mx check passed on a copy of the model with $* applied (${seconds}s)"
   exit 0
 fi
-echo "precheck: $errors error(s) -- the build would fail. Fix the script, then exec (${seconds}s):"
-printf '%s\n' "$out" | grep -E '^\[error\]' | head -12
+# Errors the model already had before these scripts are not theirs: an exec that adds none of its
+# own passes, and says what is already broken, instead of blocking every script on the same error.
+new_errors="$(printf '%s\n' "$out" | grep -E '^\[error\]')"
+base="$(mdl_tmpdir mdl-precheck-base)" && {
+  for item in "$MPR" mprcontents widgets theme themesource javasource; do
+    [ -e "$item" ] && { cp -Rc "$item" "$base/" 2>/dev/null || cp -R "$item" "$base/" 2>/dev/null; }
+  done
+  base_out="$("$MXCLI" docker check -p "$base/$MPR" ${MDL_MXBUILD_PATH:+--mxbuild-path "$MDL_MXBUILD_PATH"} --no-update-widgets 2>&1)"
+  rm -rf "$base"
+  old_errors="$(printf '%s\n' "$base_out" | grep -E '^\[error\]')"
+  if [ -n "$old_errors" ]; then
+    # An old error stays the script's when the script touches what it names: CE0161 reads the same
+    # for every broken rule of an entity, so a script that swaps one broken rule for another would
+    # otherwise pass as "adds no error".
+    new_errors="$(printf '%s\n' "$new_errors" | "$PY" -c '
+import re, sys
+old = set(open(sys.argv[1]).read().splitlines())
+scripts = " ".join(open(path, errors="replace").read() for path in sys.argv[2:])
+for line in sys.stdin.read().splitlines():
+    if not line:
+        continue
+    names = re.findall(r"\x27([A-Za-z_]\w*\.[A-Za-z_]\w*)\x27", line)
+    if line not in old or any(name in scripts for name in names):
+        print(line)' <(printf '%s\n' "$old_errors") "$@")"
+  fi
+}
+seconds=$(( $(date +%s) - started ))
+if [ -n "${old_errors:-}" ]; then
+  echo "precheck: the model ALREADY has $(printf '%s\n' "$old_errors" | grep -c .) error(s) before these scripts -- a change made"
+  echo "  without a precheck (an inline mxcli -c, or Studio Pro). They are not in your script; fix them first:"
+  printf '%s\n' "$old_errors" | head -8 | sed 's/^/  /'
+fi
+if [ -z "$new_errors" ]; then
+  echo "precheck: 0 new errors -- $* adds no error of its own (${seconds}s)"
+  exit 0
+fi
+echo "precheck: $(printf '%s\n' "$new_errors" | grep -c .) error(s) -- the build would fail. Fix the script, then exec (${seconds}s):"
+printf '%s\n' "$new_errors" | head -12
 # The same one-line hints the gate prints for a failed boot: a block of 26 identical CE2729
 # errors is one missing pair of grants, and reads as 26 problems without them.
 if [ -f tests/gate/hints.sh ]; then
   # shellcheck source=gate/hints.sh
   . tests/gate/hints.sh
   hint_log="$scratch/precheck-errors.txt"
-  printf '%s\n' "$out" | grep -E '^\[error\]' > "$hint_log" 2>/dev/null
+  printf '%s\n' "$new_errors" > "$hint_log" 2>/dev/null
   mdl_ce_hints "$hint_log"
 fi
 exit 1

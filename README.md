@@ -280,6 +280,7 @@ bash tests/diagnose.sh                # why is the app not answering
 ```
 
 A failing test always says why, on one line: one that stops on a silent command names its line and command.
+The precheck also covers MDL given with `mxcli -c`, and tells errors already in the model from the script's own.
 
 ## Configuration
 

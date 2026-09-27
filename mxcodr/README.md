@@ -332,6 +332,17 @@ turns the whole thing off.
 When a script fails to apply at all, precheck prints the errors themselves -- the `✗` lines, a
 `Parse error:` or an `Error:` line, at most fifteen -- and then the verdict; a `tail` of mxcli
 0.24's output kept only its six-line summary and showed "33 error(s) above" with nothing above it.
+The unresolved references are listed too (`microflow not found: ...`). Two scripts that need
+each other (a page calls a new microflow that opens that page) fail alone in either order: they
+belong in one `.mdl`, and `--no-check` does not get past the precheck.
+
+MDL given with `-c` (`mxcli -p App.mpr -c "GRANT ..."`) is checked like a script: `CREATE`,
+`ALTER`, `DROP`, `GRANT`, `REVOKE`, `MOVE` and `RENAME` go through the precheck in every host. A
+local model wrote its access rules that way, unchecked, and put a broken XPath into the model.
+Errors the model already had are told apart from the script's own: "the model ALREADY has N
+error(s) ... fix them first", and a script that adds none passes. An old error still counts
+against a script that touches what it names, so swapping one broken rule for another does not
+pass.
 
 It also refuses a script that creates a document another script in the same folder creates too
 (`SCRIPT01`): whichever of the two runs last decides what the page is, so re-running the earlier
@@ -345,6 +356,10 @@ a single passing script once printed the same DONE line as the full gate while t
 Under the errors it prints a one-line hint per error code, from `tests/gate/hints.sh` -- the same
 hints the gate prints for a failed boot. They earn their place by having cost a session time:
 twenty-six `CE2729` lines in one precheck were a single missing pair of grants, and now say so.
+Local models added more: `[%CurrentDateTime%]`, not `now()` or `currentDateTime()` (CE0117); a
+token keeps its `]` inside the doubled quotes, `''[%CurrentUser%]''` (CE0161); an access-rule
+path alternates association and entity (CE1613); `Administration.Account.Name` is System.User's,
+so show `FullName` (CE1613).
 Precheck is for the script about to be exec'd; a syntax question is answered by
 `./mxcli syntax <topic>` or `./mxcli check <file> -p <app>.mpr --references`, not by running
 precheck on variants.

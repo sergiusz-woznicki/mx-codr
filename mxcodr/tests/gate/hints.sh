@@ -12,9 +12,17 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
   [ -f "$1" ] || return 0
   for code in $(grep -oE '\[CE[0-9]+\]' "$1" 2>/dev/null | tr -d '[]' | awk '!seen[$0]++'); do
     case "$code" in
-      CE0161) echo "   hint CE0161 (XPath): tokens are quoted -- '[%CurrentUser%]', '[%CurrentDateTime%]' -- never CurrentUser() or \$currentUser; paths use full names (Module.Assoc/Module.Entity); a token compares only to a value of its type. Skill: xpath-constraints" ;;
-      CE0117) echo "   hint CE0117 (expression): check each operand's type (a reference compares with = empty, a decimal does not fit an integer), function names, and enumeration values written Module.Enum.Value. Skill: write-microflows" ;;
-      CE1613) echo "   hint CE1613: a page or microflow names an attribute, association or document that does not exist (not created yet, or renamed) -- DESCRIBE the entity it points at" ;;
+      CE0161) echo "   hint CE0161 (XPath): tokens are quoted -- '[%CurrentUser%]', '[%CurrentDateTime%]' -- never CurrentUser() or \$currentUser; paths use full names (Module.Assoc/Module.Entity); a token compares only to a value of its type. Inside MDL's where '...' the quotes double and the ] stays inside them: ''[%CurrentUser%]'' (not ''[%CurrentUser%'']). Skill: xpath-constraints" ;;
+      CE0117) echo "   hint CE0117 (expression): check each operand's type (a reference compares with = empty, a decimal does not fit an integer), function names, and enumeration values written Module.Enum.Value. The current time is the token [%CurrentDateTime%] (addDays([%CurrentDateTime%], -30)); now() and currentDateTime() do not exist. Skill: write-microflows" ;;
+      CE1613) echo "   hint CE1613: a page or microflow names an attribute, association or document that does not exist (not created yet, or renamed) -- DESCRIBE the entity it points at"
+              # Two sessions in a row: Name is System.User's, and Account only inherits it.
+              if grep -q "CE1613.*'Administration\.Account\.Name'" "$1" 2>/dev/null; then
+                echo "   hint CE1613 Administration.Account.Name: Name belongs to System.User and Account only inherits it -- show FullName (Account's own attribute), e.g. CaptionAttribute: FullName"
+              fi
+              # A local model went round this three times: an access rule path missing its entity step.
+              if grep -q 'CE1613.*Access rule' "$1" 2>/dev/null; then
+                echo "   hint CE1613 in an access rule: an XPath path alternates association and entity, ending on the association to the user, and the token is quoted whole: where '[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Account = ''[%CurrentUser%]'']' -- 'selected entity Mod.X_Y no longer exists' means an association stands where an entity step belongs. Skill: xpath-constraints"
+              fi ;;
       CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
       CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;
       CE2729) echo "   hint CE2729: a page reaches something its viewers may not use. The message names both halves -- grant the microflow to that role and the entity it returns: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant Mod.Role on Mod.Entity (read *);'. A non-persistent entity behind a data view needs the grant as much as a stored one, and every role that can open the page needs it. Skill: manage-security" ;;
