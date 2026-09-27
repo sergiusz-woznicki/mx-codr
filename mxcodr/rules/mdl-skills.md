@@ -65,9 +65,12 @@ after changing logic, `bash tests/gate.sh --stop`, then `./mxcli test tests/ -p 
 **The syntax digest is already in your context** under Claude Code, Cursor, OpenCode and Pi --
 anywhere else, `cat tools/mdl-checks/syntax-digest.md` whole, once, right after orient.sh. The
 installer writes it and `tests/orient.sh` refreshes it from this project's own mxcli: the
-`Syntax:` blocks of the fifteen topics every session otherwise looks up one call at a time (entities, associations, enumerations, module and
-user roles, demo users, entity access, settings, modules, pages, page actions, data sources, snippets,
-navigation, object operations) -- 22, 25 and 19 lookups in three measured sessions.
+`Syntax:` blocks of the nineteen topics every session otherwise looks up one call at a time (entities, associations, enumerations, module and
+user roles, demo users, entity access, project security, settings, modules, pages, page actions, data
+sources, snippets, navigation, microflows, variables, retrieves, object operations) -- 22, 25 and 19
+lookups in three measured sessions -- and, on top, **the pitfalls** that cost sessions the most time
+(the current-time token, XPath quoting and paths, reference combo boxes, Account.Name). It is current
+for this project's mxcli: use it as it stands, and look up only what is not in it.
 
 For anything else, `./mxcli syntax` with no argument lists every topic. After that, **ask for the leaf
 topic directly and ask for everything you need in one command** -- each lookup costs

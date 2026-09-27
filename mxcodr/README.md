@@ -319,6 +319,17 @@ Claude Code reads `.claude/rules/` only when a session starts -- and `tests/orie
 current (`mdl_syntax_digest` in `portable.sh`). The rules file keeps only what no `syntax` topic
 says: the spacing, grid-filter and message rules that are this harness's own.
 
+On top of the digest sits `checks/mdl-pitfalls.md` (installed as `tools/mdl-checks/mdl-pitfalls.md`):
+a dozen "write this, not that" lines for what cost measured sessions the most time -- the
+`[%CurrentDateTime%]` token, a token's quoting inside `where '...'`, the association/entity path
+of an access rule, reference combo boxes, `Account.Name`. Two Pi sessions (Qwen 3.8, DeepSeek 4)
+asked `mxcli syntax` 56 times between them, yet lost their time to these, not to syntax. Every
+example in the file passed `mx check` on mxcli v0.24.0. The digest is a fixed prefix -- it changes
+only with the mxcli version, the topic list or the pitfalls -- so a host with a KV cache (Pi on
+DeepSeek) computes it once. Before each PR, check the current mxcli and bring both up to date.
+The digest now holds nineteen topics (microflow create, variables and retrieve, and project
+security joined), about 25 kB.
+
 ### What `tests/precheck.sh` does and does not catch
 
 Before every `mxcli exec` a hook applies the scripts to a scratch copy of the model and runs

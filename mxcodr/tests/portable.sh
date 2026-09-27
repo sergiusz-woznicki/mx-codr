@@ -332,9 +332,14 @@ PY_FRESH
 # The first line of the canonical file records the mxcli version it came from; a topic this
 # mxcli does not know is skipped. Needs MXCLI; returns 1 when there is nothing to write.
 MDL_SYNTAX_DIGEST="tools/mdl-checks/syntax-digest.md"
+# Measured again on two Pi sessions (56 lookups): microflow.create, .variables, .retrieve and
+# security.project-security joined. The pitfalls file (tools/mdl-checks/mdl-pitfalls.md) goes on
+# top: those, not syntax, were where the time went.
 MDL_SYNTAX_TOPICS="domain-model.entity.create domain-model.association.create domain-model.enumeration.create
-  security.module-role security.user-role security.demo-user security.entity-access settings.alter
-  module page.create page.action page.datasource snippet.create navigation.create microflow.object-operations"
+  security.module-role security.user-role security.demo-user security.entity-access security.project-security
+  settings.alter module page.create page.action page.datasource snippet.create navigation.create
+  microflow.create microflow.variables microflow.retrieve microflow.object-operations"
+MDL_PITFALLS="tools/mdl-checks/mdl-pitfalls.md"
 
 mdl_syntax_digest() {
   local version topic block tmp topics
@@ -344,14 +349,17 @@ mdl_syntax_digest() {
   [ -d "$(dirname "$MDL_SYNTAX_DIGEST")" ] || return 1
   # Written again when mxcli or the topic list changes (page.datasource was added to a digest
   # an installed project had already cached for its mxcli version).
-  topics="<!-- topics: $(echo $MDL_SYNTAX_TOPICS) -->"
+  # The pitfalls' checksum is part of the key: an updated list rewrites the digest.
+  topics="<!-- topics: $(echo $MDL_SYNTAX_TOPICS) pitfalls:$(cksum < "$MDL_PITFALLS" 2>/dev/null | cut -d' ' -f1) -->"
   if ! { [ -f "$MDL_SYNTAX_DIGEST" ] && [ "$(head -1 "$MDL_SYNTAX_DIGEST")" = "<!-- $version -->" ] \
          && [ "$(sed -n 2p "$MDL_SYNTAX_DIGEST")" = "$topics" ]; }; then
     tmp="$MDL_SYNTAX_DIGEST.tmp"
     {
       printf '<!-- %s -->\n%s\n' "$version" "$topics"
       printf '# MDL syntax this project looks up most\n\n'
-      printf 'Generated from `./mxcli syntax <topic>` of this project. The rest: `./mxcli syntax`.\n'
+      printf 'Generated from `./mxcli syntax <topic>` of this project, and current for its mxcli: use it\n'
+      printf 'as it stands and look up only topics that are not here. The rest: `./mxcli syntax`.\n\n'
+      [ -f "$MDL_PITFALLS" ] && cat "$MDL_PITFALLS"
       for topic in $MDL_SYNTAX_TOPICS; do
         block="$("$MXCLI" syntax "$topic" 2>/dev/null \
           | awk '/^Syntax:$/ { on = 1; next } /^[A-Z][A-Za-z ]+:$/ { on = 0 } on')"
