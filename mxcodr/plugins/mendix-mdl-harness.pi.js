@@ -80,7 +80,7 @@ function run(command, cwd, timeout, input) {
 // harness's own checkers and scripts, the hook configs. The reason, or null.
 function harnessEnvBlocked(root, tool, args) {
   const text = JSON.stringify(args ?? {})
-  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin/.test(text)) return null
+  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin|\b(find|grep|egrep|fgrep|rg|ag|fd|mdfind|locate) |\/(System|Applications|Library|usr|opt|private|tmp|Users|home)\/|~\/|\$HOME/.test(text)) return null
   const guard = join(root, "tools", "mdl-checks", "hooks", "guard-harness-env.sh")
   if (!existsSync(guard)) return null
   const payload = JSON.stringify({ tool_name: tool, tool_input: args ?? {} })

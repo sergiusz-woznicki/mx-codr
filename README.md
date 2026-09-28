@@ -293,6 +293,7 @@ A blocked exec says when the command's earlier steps (an edit) did not run eithe
 
 `tests/harness.env` is written by the installer and read by every harness script.
 It is yours: the agent may read it, but a hook blocks it from editing the file or setting a gate switch inline -- and from editing the harness's own checkers and scripts (`MDL_HARNESS_EDITS=allow` in this file lifts that part).
+The same hook blocks a search or read outside the project (`find /`, the mxcli source, Studio Pro's files): nothing there answers a Mendix question, and a whole-disk scan runs for minutes.
 The environment still wins, so any of it can be overridden for one run.
 
 | Key | What it is |
