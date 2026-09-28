@@ -366,7 +366,7 @@ microflow the test drives instead"). Shell values reach a scenario as `vars.<NAM
 body cost DeepSeek, Qwen and GLM minutes each.
 
 On top of the digest sits `checks/mdl-pitfalls.md` (installed as `tools/mdl-checks/mdl-pitfalls.md`):
-a dozen "write this, not that" lines for what cost measured sessions the most time -- the
+eighteen "write this, not that" lines for what cost measured sessions the most time (six of them confirmed by a second model on the same prompt) -- the
 `[%CurrentDateTime%]` token, a token's quoting inside `where '...'`, the association/entity path
 of an access rule, reference combo boxes, `Account.Name`, and in tests the scenario runner (no
 `fetch` or `Buffer`: `page.request` or `curl`; `result=$(scenario '...')` with no quotes around it). Two Pi sessions (Qwen 3.8, DeepSeek 4)

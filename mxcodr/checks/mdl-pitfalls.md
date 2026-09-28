@@ -34,3 +34,17 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   the scenario runner has no Node globals -- no `fetch`, no `Buffer` ("... is not defined").
   Build a Basic-auth header in bash (`SV_AUTH=$(printf '%s' "$user:$pw" | base64)`), use vars.AUTH.
   A test that only calls an API needs no browser at all: `curl -u "$user:$pw" "$BASE_URL/odata/..."`.
+- **An enumeration in a microflow signature is `Enumeration(Mod.Enum)`**, parameter and return alike:
+  `($Status: Enumeration(Mod.OrderStatus)) returns Enumeration(Mod.OrderStatus)`. Written as
+  `Mod.OrderStatus` it fails with "entity 'Mod.OrderStatus' not found" (two sessions, four execs each).
+- **An activity's result is never declared**: `$Next = call microflow ...;`, `$Rows = retrieve ...`,
+  `$Obj = create ...` make the variable; a `declare $Next` before it is CE0111 "Duplicate variable name".
+- **String functions**: `replaceAll(s, 'x', 'y')`, `urlEncode(s)`, `toLowerCase`, `trim` -- there is no
+  `replace()` (CE0117). A path parameter that holds `/` (an order number) goes through `urlEncode`.
+- **A specialisation of `System.FileDocument` or `System.Image`** takes no `write *` (CE6592, the system
+  attribute HasContents): grant `read *` and `write` on your own attributes only.
+- **A non-persistent object a page shows or a flow hands to a page** needs `grant Role on Mod.Entity
+  (create, read *, write *)`, or the client fails with "cannot create Mendix object" (CE2729 at check).
+- **Every statement in an owner script is re-runnable**: `create or modify` for entities, view entities
+  and java actions, `drop module if exists`, `add event handler ... if not exists` -- a plain `create`
+  stops the second exec at "already exists".
