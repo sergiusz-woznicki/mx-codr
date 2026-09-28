@@ -102,6 +102,17 @@ function isSleepBeforeGate(command) {
 }
 
 // `for f in a b; do mxcli exec mdlsource/$f.mdl`: the scripts are a variable, so precheck sees none.
+// A blocked command runs none of its steps: GLM sent `python3 <edit> ... ; ./mxcli exec` seven
+// times, was blocked before the edit ran, and debugged an edit that was never applied.
+const STEPS_BEFORE_EXEC =
+  "Nothing in this command ran, the steps before the exec included (an edit there never happened): the script was checked as it is on disk. Run those steps on their own, then the exec as its own command.\n"
+function stepsBeforeExec(command) {
+  const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
+  if (!m) return false
+  const trivial = /^((export\s+)?[A-Za-z_]\w*=("[^"]*"|'[^']*'|\S*)\s*)*$|^cd\s+\S+$/
+  return command.slice(0, m.index).split(/&&|\|\||[;|\n]/).some((step) => !trivial.test(step.trim()))
+}
+
 const EXEC_THROUGH_VARIABLE =
   "Blocked: that exec names its script through a variable (`$f.mdl` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"
 
@@ -218,7 +229,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (status === 0 || out.includes("precheck: could not run")) return
       throw new Error(
         "Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). " +
-        "Fix the script and exec again:\n" + out.slice(-GATE_OUTPUT_LIMIT),
+        "Fix the script and exec again:\n" +
+        (stepsBeforeExec(command) ? STEPS_BEFORE_EXEC : "") + out.slice(-GATE_OUTPUT_LIMIT),
       )
     },
 

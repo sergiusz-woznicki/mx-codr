@@ -111,6 +111,15 @@ select_test_targets() {
   [ ${#targets[@]} -gt 0 ] || { echo "no test matches '$ONLY'" >&2; exit 2; }
 }
 
+# close_browser_if_asked -- MDL_CLOSE_BROWSER=1 closes this project's playwright-cli browser once the
+# suite is done. Every session left its own open: 39 daemons and 155 headless Chrome processes
+# (6.5 GB), the oldest 18 days old. Off by default: --only reuses the open browser and its sign-in.
+close_browser_if_asked() {
+  [ "${MDL_CLOSE_BROWSER:-0}" = "1" ] || return 0
+  command -v playwright-cli >/dev/null 2>&1 || return 0
+  playwright-cli close >/dev/null 2>&1 || true
+}
+
 # run_suite <target>... -- the runner's output; its exit code is the suite's.
 run_suite() {
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT

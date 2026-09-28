@@ -281,6 +281,7 @@ bash tests/diagnose.sh                # why is the app not answering
 
 A failing test always says why, on one line: one that stops on a silent command names its line and command.
 The precheck also covers MDL given with `mxcli -c`, and tells errors already in the model from the script's own.
+A blocked exec says when the command's earlier steps (an edit) did not run either; a scenario opens the browser when none is open; `# covers:` names may be separated by commas or spaces.
 
 ## Configuration
 
@@ -296,6 +297,8 @@ The environment still wins, so any of it can be overridden for one run.
 | `MDL_BOOT_COMMAND` | how the gate boots the app when nothing answers |
 | `MDL_VISUAL` / `MDL_RUNTIME_ERRORS` | the rendered-page and server-error checks: warnings by default, `error` blocks DONE, `0` turns them off |
 | `MDL_VISUAL_REVIEW` | `agent`: a model that reads images also judges a screenshot of each page |
+| `MDL_CAPTIONS` | the caption rules of the naming check: warnings by default, `error` blocks DONE |
+| `MDL_CLOSE_BROWSER` | `1`: close the test browser after each suite and on `--stop` (off: `--only` reuses it) |
 | `MDL_ALLOW_GREEN_FIRST` | tests that are green by nature, so the gate does not warn that they never failed |
 | `MDL_REQUIRE_PRODUCTION` | `0` for an app that deliberately has no users at all |
 | `APP_PORT` | the app's port, 8081 by default; a second project running beside the first needs its own, e.g. `8082` (the admin API follows at +9). The gate refuses to test another project's app on its port |

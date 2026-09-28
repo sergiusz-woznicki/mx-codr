@@ -19,8 +19,9 @@ from pathlib import Path
 
 # `# covers: A, B, C`, and the `#` lines right under it that hold only more names: a long list
 # wrapped over three lines counted its first line only, and the rest showed as untested.
-# Group 1 is the comma list, continuation lines included.
-QUALIFIED_LIST = r"[\w.]+\.\w+(?:\s*,\s*[\w.]+\.\w+)*\s*,?"
+# Names are separated by commas or spaces: a session wrote `# covers: A B C` and read 0/24
+# covered with every test green. Group 1 is the list, continuation lines included.
+QUALIFIED_LIST = r"[\w.]+\.\w+(?:(?:\s*,\s*|\s+)[\w.]+\.\w+)*\s*,?"
 COVERS_RE = re.compile(r"^\s*#\s*covers\s*:\s*(.+(?:\n\s*#\s*" + QUALIFIED_LIST + r"\s*$)*)",
                        re.IGNORECASE | re.MULTILINE)
 
@@ -119,7 +120,7 @@ def covered(tests_dir: Path) -> dict[str, list[str]]:
     for script in sorted(tests_dir.glob("verify-*.test.sh")):
         text = script.read_text(encoding="utf-8", errors="replace")
         for match in COVERS_RE.finditer(text):
-            for element in re.sub(r"\n\s*#", ",", match.group(1)).split(","):
+            for element in re.split(r"[,\s]+", re.sub(r"\n\s*#", ",", match.group(1))):
                 element = element.strip()
                 if element:
                     claims.setdefault(element, []).append(script.name)
@@ -151,7 +152,8 @@ def stale_reason(name: str, entities: set[str]) -> str:
     if name in entities:
         return (f"  - covers: names {name}, an entity -- a covers: line lists {COVERABLE}; name the page or "
                 f"microflow the test drives instead")
-    return f"  - covers: names {name}, which is not in the model (not built yet, or renamed) -- it lists {COVERABLE}"
+    return (f"  - covers: names {name}, which is not in the model (not built yet, or renamed) -- it lists {COVERABLE}, "
+            f"separated by commas or spaces")
 
 
 def print_text(reports: list[dict], orphans: list[str], entities: set[str] = frozenset()) -> None:

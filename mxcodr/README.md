@@ -183,6 +183,16 @@ line:
 Every naming finding carries its fix after ` -- `, as the layout ones already did: a session that
 could not tell what `loop-annotation` wanted opened `check_mdl.py` to find out.
 
+The caption rules (`action-caption`, `decision-caption`, `caption-not-a-question` and the other
+wording rules) are warnings in the gate: 286 of them once landed at once on a session with no
+test green yet. `MDL_CAPTIONS=error` in `tests/harness.env` makes them block again; variable-name
+rules always block. A capped list says so ("10 of 286 shown"): the next session read ten lines as
+ten findings. `MxTest`, the module `mxcli test` injects, is not one of the app's own: a
+gate that listed it could not run naming.
+
+A `# covers:` line may separate its names with commas or spaces. A session wrote spaces and read
+0/24 covered with every test green.
+
 ### What the gate says about tests that never failed
 
 A full `bash tests/gate.sh` lists every `verify-*.test.sh` with no recorded red run in
@@ -221,6 +231,12 @@ A scenario that ends without a `return` now says so ("returned nothing -- end th
 with a return"), instead of "produced no result ... needs: playwright-cli open", which sent a
 session to the browser. The `sleep` block covers a hand-rolled wait on `.mxcli/gate-boot.log` or
 `runtime.log` too, not only one in front of `tests/gate.sh`.
+
+A scenario run outside the gate's runner (peek.sh, or a test run by hand after the gate) opens the
+browser itself when playwright-cli says none is open, and runs once more; two sessions retried the
+same command on "Browser 'default' is not open". `MDL_CLOSE_BROWSER=1` in `tests/harness.env`
+closes the browser after each suite and on `--stop`: sessions left theirs open, 39 of them at once
+(6.5 GB). Off by default, since `--only` reuses the open browser and its sign-in.
 
 With `mxcli run --watch`, the gate now waits until the boot log has been quiet for a few seconds
 after its last "applied" line, and until the app actually serves the web client that
@@ -347,6 +363,10 @@ that would stop half-way and leave the model half-applied. It does **not** see w
 deployment build sees: a Marketplace module whose version does not match the project's Mendix
 version passes the precheck and fails the build (CE4271). `MDL_PRECHECK=0` in `tests/harness.env`
 turns the whole thing off.
+
+A blocked command runs none of its steps. When something comes before the `mxcli exec` (an edit,
+`python3 - <<EOF ... EOF; ./mxcli exec ...`), the block says that nothing ran, the edit included:
+GLM sent that shape seven times and debugged an edit that was never applied.
 
 When a script fails to apply at all, precheck prints the errors themselves -- the `✗` lines, a
 `Parse error:` or an `Error:` line, at most fifteen -- and then the verdict; a `tail` of mxcli

@@ -174,7 +174,8 @@ check_coverage() {
   return 2
 }
 
-# Runs check_mdl.py --skill naming over the described microflows and nanoflows.
+# Runs check_mdl.py --skill naming over the described microflows and nanoflows. Caption rules are
+# warnings unless MDL_CAPTIONS=error: 286 of them once landed on a session with no test green.
 check_naming() {
   [ -f tools/mdl-checks/check_mdl.py ] || {
     echo "naming: could not run -- tools/mdl-checks/check_mdl.py is missing" > "$WORK/naming.summary"
@@ -194,7 +195,9 @@ check_naming() {
   if ! ls "$WORK"/mdl/*.mdl >/dev/null 2>&1; then
     echo "naming: no microflow or nanoflow to check" > "$WORK/naming.summary"; return 0
   fi
-  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming 2>&1)"; code=$?
+  local captions=warn total
+  [ "${MDL_CAPTIONS:-warn}" = "error" ] && captions=error
+  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
     echo "naming: could not run -- check_mdl.py exited $code" > "$WORK/naming.summary"
@@ -202,7 +205,16 @@ check_naming() {
     return 2
   fi
   echo "naming: $(printf '%s\n' "$out" | head -1)" > "$WORK/naming.summary"
+  # A session read ten detail lines as ten findings when there were 286: say how many are left out.
+  total="$(printf '%s\n' "$out" | grep -cE '^\s+- ')"
   printf '%s\n' "$out" | grep -E '^\s+- ' | head -10 > "$WORK/naming.detail"
+  [ "$total" -gt 10 ] && echo "  ... 10 of $total shown -- the rest are the same kinds; fix them script by script" >> "$WORK/naming.detail"
+  total="$(printf '%s\n' "$out" | grep -cE '^\s+! ')"
+  if [ "$total" -gt 0 ]; then
+    { printf '%s\n' "$out" | grep -E '^\s+! ' | head -8 | sed -E 's/^[[:space:]]+! /   - /'
+      [ "$total" -gt 8 ] && echo "   ... 8 of $total naming warnings shown (MDL_CAPTIONS=error makes caption rules block)"
+    } > "$WORK/naming.warnings"
+  fi
   return "$gate"
 }
 
@@ -358,7 +370,7 @@ start_model_checks() {
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   echo "== mx check, lint, coverage, naming, layout and security started (they need no app; running while the suite does)"

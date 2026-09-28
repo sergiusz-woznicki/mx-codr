@@ -71,7 +71,7 @@ mdl_load_harness_env() {
       MDL_NO_DOCKER|MDL_MXBUILD_PATH|MDL_DB_HOST|MDL_DB_NAME|MDL_DB_USER|MDL_DB_PASSWORD| \
       MDL_PSQL|MDL_BOOT_COMMAND|MDL_PRECHECK|MDL_ALLOW_GREEN_FIRST|JAVA_HOME|MX_VERSION| \
       MDL_REQUIRE_PRODUCTION|MDL_GATE_CACHE|MDL_VISUAL|MDL_VISUAL_REVIEW|MDL_RUNTIME_ERRORS| \
-      MDL_RUN_MODE|APP_PORT|ADMIN_PORT) ;;
+      MDL_RUN_MODE|APP_PORT|ADMIN_PORT|MDL_CAPTIONS|MDL_CLOSE_BROWSER) ;;
       *) continue ;;
     esac
     case "$value" in
@@ -407,8 +407,9 @@ mdl_find_mpr() {
 }
 
 # --- 10. The app's own modules ---
-# mdl_user_modules <mpr> -- one module per line: not System, MyFirstModule or a Marketplace module
-# (those have a Source). Returns 2 when SHOW MODULES fails or does not return a JSON list.
+# mdl_user_modules <mpr> -- one module per line: not System, MyFirstModule, MxTest (the module `mxcli
+# test` injects; a gate that listed it could not run naming) or a Marketplace module (those have a
+# Source). Returns 2 when SHOW MODULES fails or does not return a JSON list.
 mdl_user_modules() {
   local listing
   listing="$("$MXCLI" -p "$1" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
@@ -420,6 +421,6 @@ except Exception:
 if not isinstance(rows, list):
     sys.exit(1)
 for row in rows:
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
+    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule","MxTest"):
         print(row["Module"])' 2>/dev/null || return 2
 }
