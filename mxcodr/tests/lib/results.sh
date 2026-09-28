@@ -8,7 +8,7 @@ field() {
   local json="$1" key="$2"
   # An empty result read as "" and failed the check below it with a wrong reason ("customer did
   # not see their invoice") while the page was right: the scenario's output had gone to /dev/null.
-  [ -n "$json" ] || fail "field $key: no scenario result to read -- capture it: result=\"\$(scenario '...')\" (a scenario sent to /dev/null, or never run, leaves \$result empty)"
+  [ -n "$json" ] || fail "field $key: no scenario result to read -- capture it: result=\$(scenario '...') (a scenario sent to /dev/null, or never run, leaves \$result empty)"
   printf '%s' "$json" | "$PY" -c "
 import json, sys
 raw = sys.stdin.read().strip()
