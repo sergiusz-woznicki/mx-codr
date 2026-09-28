@@ -226,7 +226,18 @@
     const ok = page.locator('.modal-footer button, .mx-dialog button').filter({hasText: 'OK'});
     if (await ok.count()) await ok.first().click();
   };
-  const page_text = async () => (await page.locator('body').innerText());
+  // The page as a user reads it once it has loaded. Four sessions read an empty page ("it says:
+  // | | |") because the text was taken while Mendix was still rendering the page or fetching a
+  // grid's rows. Waits (at most ACTION_TIMEOUT) until no progress indicator or loading grid is
+  // showing and the page has text, then returns the body's text -- the same text as before.
+  const page_text = async () => {
+    await page.waitForFunction(() => {
+      const busy = document.querySelector('.mx-progress, .mx-progress-indicator, [aria-busy="true"], .widget-datagrid .spinner, .mx-datagrid-loading');
+      const root = document.querySelector('.mx-page') || document.body;
+      return !busy && (root.innerText || '').trim().length > 0;
+    }, null, {timeout: ACTION_TIMEOUT}).catch(() => {});
+    return await page.locator('body').innerText();
+  };
 
   // ---- visual_findings (pure; the audit tests run it on made-up boxes) ----
   // boxes: [{id, name, layer, leaf, text, x, y, w, h, clipped, rects?}]; only leaves (widgets with

@@ -240,6 +240,12 @@ Mendix's "the page includes a broken widget". CE0106 and CE0557 -- a microflow o
 page, button or menu with no role, in all three sessions of 2026-09-28 -- get a hint that names each
 element and the `grant` line to paste.
 
+CE0582 (the classic drop-down, which the React client does not run) gets a hint too: `combobox` or
+`radiobuttons` on the same attribute, both checked on Mendix 11.12. And `page_text()` waits, at most
+`ACTION_TIMEOUT`, until no progress indicator or loading grid shows and the page has text, then
+returns the same body text as before: four sessions read an empty page ("it says: | | |") taken
+while Mendix was still rendering.
+
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity
 through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never

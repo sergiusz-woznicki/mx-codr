@@ -46,6 +46,9 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
                 echo "     grant execute on microflow $name to <each module role whose page, button or menu calls it>;"
               fi
             done ;;
+      # DeepSeek wrote `dropdown` for an enumeration; mx check refuses it for the React client. Checked
+      # on Mendix 11.12: combobox and radiobuttons on the same attribute pass.
+      CE0582) echo "   hint CE0582: the classic drop-down widget does not run in the React client -- for an enumeration or a Boolean write \`combobox cbStatus (Label: 'Status', Attribute: Status)\` (or radiobuttons) in its place. Skill: create-page" ;;
       CE7247) echo "   hint CE7247: that name is reserved by the Mendix platform and quoting does not rescue it -- Owner, Type and Default have to be renamed (Staff, ResourceType, Standard); other keywords only need quotes. Full list: ./mxcli syntax keywords" ;;
     esac
   done
