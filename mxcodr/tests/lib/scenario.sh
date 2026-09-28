@@ -40,7 +40,7 @@ _mdl_scenario_js() {
   printf '}\n'
 }
 
-# The JS constants: BASE, USER, PASSWORD, ACTION_TIMEOUT, RELEASE, REUSE.
+# The JS constants: BASE, USER, PASSWORD, ACTION_TIMEOUT, RELEASE, REUSE, and vars (SV_* values).
 _mdl_js_settings() {
   # JSON-encoded: these values are data, and an apostrophe must not end the JS string.
   printf '  const MDL_CFG = JSON.parse(%s);\n' "$(mdl_json_string \
@@ -55,6 +55,13 @@ _mdl_js_settings() {
   printf '  const VISUAL = %s;\n' "$([ "${MDL_VISUAL:-warn}" = "0" ] && echo false || echo true)"
   printf '  const VISUAL_DIR = %s;\n' "$(mdl_json_string "$(_mdl_visual_dir)")"
   printf '  const TEST_NAME = %s;\n' "$(mdl_json_string "$(_mdl_test_name)")"
+  # vars.<NAME>: every SV_<NAME> shell variable, JSON-encoded -- `SV_PW="$pw" scenario '...'`, then
+  # vars.PW in the body. Splicing '"$var"' into the body cost three models minutes each.
+  local name pairs=()
+  for name in $(compgen -v SV_ 2>/dev/null); do
+    pairs+=("${name#SV_}" "${!name}")
+  done
+  printf '  const vars = JSON.parse(%s);\n' "$(mdl_json_string "$(mdl_json_object ${pairs[@]+"${pairs[@]}"})")"
 }
 
 # Where look() saves screenshots; empty unless MDL_VISUAL_REVIEW=agent.

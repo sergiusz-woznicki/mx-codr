@@ -248,7 +248,9 @@ cost more than it saves.
 (`MDL_REQUIRE_PRODUCTION`, `MDL_ALLOW_GREEN_FIRST`, `MDL_VISUAL`, ...). Do not edit it, and do not
 set those switches on the command line: a hook blocks both. A session building an app with no
 users wrote `MDL_REQUIRE_PRODUCTION=0` there; the next session, asked for per-customer logins,
-got DONE with security Off. When a check stands in your way, meet it or report it.
+got DONE with security Off. The same goes for the harness's own files -- `tools/mdl-checks/`,
+`tests/gate*`, `tests/lib*`, `tests/precheck.sh`, the hook configs: a session rewrote the coverage
+checker to get DONE. When a check stands in your way, meet it or report it.
 
 **Ask before any git command that writes.** `init`, `add`, `commit`, `checkout`,
 `branch`, `merge`, `reset`, `stash`, `clean`, `push` -- every one of them waits for the

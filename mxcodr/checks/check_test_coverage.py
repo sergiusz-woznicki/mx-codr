@@ -87,14 +87,29 @@ def qualified_names(rows: list[dict]) -> list[str]:
     return names
 
 
-def inventory(app_dir: Path, mpr: str, module: str) -> tuple[list[str], set[str]]:
-    """(required: pages and ACT_ microflows, known: any page, microflow or snippet a test may name)."""
+def optional_names(app_dir: Path, mpr: str, command: str, key: str = "") -> list[str]:
+    """Names from a listing an older mxcli may not have: nothing, rather than a failed check."""
+    try:
+        rows = mxcli_json(app_dir, mpr, command)
+    except ModelReadError:
+        return []
+    return [row[key] for row in rows if row.get(key)] if key else qualified_names(rows)
+
+
+def inventory(app_dir: Path, mpr: str, module: str) -> tuple[list[str], set[str], set[str]]:
+    """(required: pages and ACT_ microflows, known: any page, microflow, snippet or published
+    service a test may name, entities: named on a covers: line, they get their own message)."""
     pages = qualified_names(mxcli_json(app_dir, mpr, f"SHOW PAGES IN {module}"))
     flows = qualified_names(mxcli_json(app_dir, mpr, f"SHOW MICROFLOWS IN {module}"))
     snippets = qualified_names(mxcli_json(app_dir, mpr, f"SHOW SNIPPETS IN {module}"))
+    # A test of an API covers the service: an OData test named Invoicing.InvoiceAPI and failed
+    # coverage with "8/8 covered" on top, and the session rewrote this checker to get past it.
+    services = (optional_names(app_dir, mpr, f"SHOW ODATA SERVICES IN {module}")
+                + optional_names(app_dir, mpr, f"SHOW PUBLISHED REST SERVICES IN {module}"))
+    entities = set(optional_names(app_dir, mpr, f"SHOW ENTITIES IN {module}", "Entity"))
     required = sorted(set(pages + [f for f in flows if f.split(".")[-1].startswith("ACT_")]))
-    known = set(pages) | set(flows) | set(snippets)
-    return required, known
+    known = set(pages) | set(flows) | set(snippets) | set(services)
+    return required, known, entities
 
 
 def covered(tests_dir: Path) -> dict[str, list[str]]:
@@ -128,22 +143,36 @@ def module_report(module: str, required: list[str], claims: dict[str, list[str]]
     }
 
 
-def print_text(reports: list[dict], orphans: list[str]) -> None:
+COVERABLE = "pages, snippets, microflows and published OData/REST services"
+
+
+def stale_reason(name: str, entities: set[str]) -> str:
+    """Why a covers: name counts for nothing -- the line the session reads to fix it."""
+    if name in entities:
+        return (f"  - covers: names {name}, an entity -- a covers: line lists {COVERABLE}; name the page or "
+                f"microflow the test drives instead")
+    return f"  - covers: names {name}, which is not in the model (not built yet, or renamed) -- it lists {COVERABLE}"
+
+
+def print_text(reports: list[dict], orphans: list[str], entities: set[str] = frozenset()) -> None:
     for report in reports:
         total, missing = report["elements"], len(report["untested"])
         if total == 0 and not report["stale_covers"]:
             print(f"PASS  {report['module']}: nothing a user can reach (no page, no ACT_ microflow)")
             continue
+        # "FAIL ... 8/8 covered" alone read as a contradiction: say what the failure is.
+        stale = len(report["stale_covers"])
+        why = f", but {stale} covers: name(s) count for nothing" if stale and not missing else ""
         print(f"{report['verdict']}  {report['module']}: {total - missing}/{total} "
-              f"elements covered by {len(report['tests'])} test script(s)")
+              f"elements covered by {len(report['tests'])} test script(s){why}")
         for element in report["untested"]:
             print(f"  - no test covers {element}")
         for name in report["stale_covers"]:
-            print(f"  - covers: names {name}, which is not in the model (not built yet, or renamed)")
+            print(stale_reason(name, entities))
     if orphans:
         print("FAIL  covers: lines name elements in no module of this project")
         for name in orphans:
-            print(f"  - covers: names {name}, which is not in the model (not built yet, or renamed)")
+            print(stale_reason(name, entities))
 
 
 def main() -> int:
@@ -174,8 +203,10 @@ def main() -> int:
         return 2
 
     known: set[str] = set()
-    for _required, names in inventories.values():
+    entities: set[str] = set()
+    for _required, names, module_entities in inventories.values():
         known |= names
+        entities |= module_entities
 
     claims = covered(app_dir / args.tests_dir)
     stale = sorted(name for name in claims if name not in known)
@@ -191,7 +222,7 @@ def main() -> int:
         payload = reports[0] if single else {"modules": reports, "stale_covers": orphans}
         print(json.dumps(payload, indent=2))
     else:
-        print_text(reports, orphans)
+        print_text(reports, orphans, entities)
 
     failed = orphans or any(report["verdict"] == "FAIL" for report in reports)
     return 1 if failed else 0
