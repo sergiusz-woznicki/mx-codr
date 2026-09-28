@@ -45,7 +45,8 @@ export TEST_USER=demo_customer       # optional, BEFORE lib.sh: sign in as this 
                                      # tests/credentials.env: TEST_PASSWORD_demo_customer=...
                                      # (DESCRIBE DEMO USER masks it -- write down what you set)
 source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
-# shell:  scenario '<js body>'   field "$result" key   fields "$result" a b   fail "msg"
+# shell:  result=$(scenario '<js body>')   field "$result" key   fields "$result" a b   fail "msg"
+#         values into the body: SV_PW="$pw" scenario '... vars.PW ...'  (never splice '"$pw"')
 #         oql "SELECT ..."   oql_count Entity ["where"]   oql_value Entity Attr "where"
 #         await_row Entity "where" [seconds]            (entity names without module)
 # inside a scenario body: await open_app()  menu('Invoices', 'invoiceGrid')

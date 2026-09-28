@@ -150,7 +150,7 @@ The hooks are the part that does not depend on the model choosing to comply:
 | `remind-skills.sh` | every Claude user prompt | adds one line of context naming the skills and what "done" means |
 | `remind-skills-codex.sh` | every Codex user prompt | gives the same rule using Codex's `$skill-name` invocation syntax |
 | `before-mxcli-exec.sh` | before a Claude Bash call containing `mxcli exec <script>.mdl` | runs `tests/precheck.sh` (the scripts applied to a scratch copy of the model, then `mx check` there, ~3-5s, and nothing at all when the same scripts already passed) and blocks the exec with the `[error]` lines when it would break the build -- the CE errors `mxcli check` cannot see |
-| `guard-harness-env.sh` | before a Claude Bash, Edit or Write call, a Codex shell call, Cursor's `beforeShellExecution`, and in the OpenCode and Pi plugins | blocks a session editing `tests/harness.env` or running `tests/gate.sh` with a gate switch set inline (`MDL_REQUIRE_PRODUCTION=0 bash tests/gate.sh`): the file is the person's. Reading it passes. Codex and Cursor edit files outside these hooks, so there only the shell route is covered |
+| `guard-harness-env.sh` | before a Claude Bash, Edit or Write call, a Codex shell call, Cursor's `beforeShellExecution`, and in the OpenCode and Pi plugins | blocks a session writing what judges it: `tests/harness.env`, the harness's own files (`tools/mdl-checks/`, the harness scripts in `tests/` that `INSTALL.json` records, `.claude/lint-rules/`, the hook and plugin configs), and `tests/gate.sh` run with a gate switch set inline. Only writes: reading, copying from, and the session's own `verify-*` tests, `mdlsource/` and `credentials.env` pass. `MDL_HARNESS_EDITS=allow` in `tests/harness.env` (the person's) lifts the harness-file part. Codex and Cursor edit files outside these hooks, so there only the shell route is covered; the gate's drift check still names a changed file |
 | `after-mxcli-exec.sh` | after a Claude Bash call containing `mxcli exec` | runs coverage and reports only a failure on stdout |
 | `after-mxcli-exec-codex.sh` | after a Codex Bash call containing `mxcli exec` | adapts coverage failures to Codex's exit-2 feedback contract and marks the session as requiring the full gate |
 | `stop-gate-codex.sh` | when that Codex session tries to finish | runs `bash tests/gate.sh`; exit 2 continues the turn until the positive `DONE — every check passed` line appears |
@@ -318,6 +318,13 @@ extension extends (Pi); under Codex the rules say to `cat` it once. The installe
 Claude Code reads `.claude/rules/` only when a session starts -- and `tests/orient.sh` keeps it
 current (`mdl_syntax_digest` in `portable.sh`). The rules file keeps only what no `syntax` topic
 says: the spacing, grid-filter and message rules that are this harness's own.
+
+A test's `# covers:` line may name a published OData or REST service as well as a page, snippet or
+microflow: an OData test named its service, failed coverage with "8/8 covered", and the session
+rewrote the checker. A name that counts for nothing now says why ("an entity -- name the page or
+microflow the test drives instead"). Shell values reach a scenario as `vars.<NAME>` from
+`SV_<NAME>` (`SV_PW="$pw" scenario '... vars.PW ...'`), JSON-encoded: splicing `'"$pw"'` into the
+body cost DeepSeek, Qwen and GLM minutes each.
 
 On top of the digest sits `checks/mdl-pitfalls.md` (installed as `tools/mdl-checks/mdl-pitfalls.md`):
 a dozen "write this, not that" lines for what cost measured sessions the most time -- the

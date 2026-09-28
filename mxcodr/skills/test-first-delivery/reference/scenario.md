@@ -18,11 +18,12 @@ source "$(dirname "$0")/lib.sh"
 
 number="TEST-$$"
 
-scenario '
+# Shell values reach the body as vars.<NAME> from SV_<NAME>: no quotes spliced into the JS.
+SV_NUMBER="$number" scenario '
   await open_app();
   await page.click(".mx-name-btnNewInvoice");
   await page.waitForSelector(".mx-name-txtNumber");
-  await fill("txtNumber", "'"$number"'");
+  await fill("txtNumber", vars.NUMBER);
   await pick_combo("cmbCustomer", "Northwind Traders");
   await page.click(".mx-name-btnSave");
   await page.waitForSelector(".mx-name-txtNumber", {state: "detached"});

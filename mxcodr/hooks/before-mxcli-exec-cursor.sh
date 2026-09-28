@@ -7,7 +7,7 @@
 
 input="$(cat)"
 allow() { printf '{"permission":"allow"}\n'; exit 0; }
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*gate.sh*|*precheck.sh*|*mxcli*-c*) ;; *) allow ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*) ;; *) allow ;; esac
 
 mdl_find_python() {
   local candidate

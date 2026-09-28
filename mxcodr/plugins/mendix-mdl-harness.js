@@ -170,11 +170,11 @@ function run(command, cwd, timeout, input) {
   }
 }
 
-// tests/harness.env is the person's: guard-harness-env.sh blocks a session flipping a gate switch
-// (editing the file, or MDL_REQUIRE_PRODUCTION=0 bash tests/gate.sh). The reason, or null.
+// guard-harness-env.sh: the session may not change what judges it -- tests/harness.env, the
+// harness's own checkers and scripts, the hook configs. The reason, or null.
 function harnessEnvBlocked(root, tool, args) {
   const text = JSON.stringify(args ?? {})
-  if (!/harness\.env|tests[\/\\]+(gate|precheck)\.sh/.test(text)) return null
+  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin/.test(text)) return null
   const guard = join(root, "tools", "mdl-checks", "hooks", "guard-harness-env.sh")
   if (!existsSync(guard)) return null
   const payload = JSON.stringify({ tool_name: tool, tool_input: args ?? {} })

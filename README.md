@@ -285,7 +285,7 @@ The precheck also covers MDL given with `mxcli -c`, and tells errors already in 
 ## Configuration
 
 `tests/harness.env` is written by the installer and read by every harness script.
-It is yours: the agent may read it, but a hook blocks it from editing the file or setting a gate switch inline.
+It is yours: the agent may read it, but a hook blocks it from editing the file or setting a gate switch inline -- and from editing the harness's own checkers and scripts (`MDL_HARNESS_EDITS=allow` in this file lifts that part).
 The environment still wins, so any of it can be overridden for one run.
 
 | Key | What it is |
