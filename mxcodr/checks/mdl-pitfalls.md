@@ -26,5 +26,11 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   in one `.mdl`: a script resolves what it creates itself. `--no-check` does not pass the precheck.
 - **Model changes go through a `.mdl` file** and `./mxcli exec`: `mxcli -c "grant ..."` is checked
   like a script, and one broken inline rule used to block every later exec.
-- **A scenario's result must be captured**: `result="$(scenario '...')"`, then `field "$result" x`.
-  `scenario '...' > /dev/null` leaves nothing to read.
+- **A scenario's result must be captured**: `result=$(scenario '...')`, then `field "$result" x`.
+  `scenario '...' > /dev/null` leaves nothing to read. Keep the body single-quoted and pass
+  shell values in with `'"$var"'`; no quotes around `$(...)` -- an assignment needs none, and a
+  double-quoted body then needs a third closing character that sessions miss.
+- **HTTP from a scenario** (an OData or REST test) goes through `page.request.get(url, {headers})`:
+  the scenario runner has no Node globals -- no `fetch`, no `Buffer` ("... is not defined").
+  Build a Basic-auth header in bash (`auth=$(printf '%s' "$user:$pw" | base64)`) and pass it in.
+  A test that only calls an API needs no browser at all: `curl -u "$user:$pw" "$BASE_URL/odata/..."`.

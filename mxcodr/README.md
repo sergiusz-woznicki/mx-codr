@@ -322,7 +322,8 @@ says: the spacing, grid-filter and message rules that are this harness's own.
 On top of the digest sits `checks/mdl-pitfalls.md` (installed as `tools/mdl-checks/mdl-pitfalls.md`):
 a dozen "write this, not that" lines for what cost measured sessions the most time -- the
 `[%CurrentDateTime%]` token, a token's quoting inside `where '...'`, the association/entity path
-of an access rule, reference combo boxes, `Account.Name`. Two Pi sessions (Qwen 3.8, DeepSeek 4)
+of an access rule, reference combo boxes, `Account.Name`, and in tests the scenario runner (no
+`fetch` or `Buffer`: `page.request` or `curl`; `result=$(scenario '...')` with no quotes around it). Two Pi sessions (Qwen 3.8, DeepSeek 4)
 asked `mxcli syntax` 56 times between them, yet lost their time to these, not to syntax. Every
 example in the file passed `mx check` on mxcli v0.24.0. The digest is a fixed prefix -- it changes
 only with the mxcli version, the topic list or the pitfalls -- so a host with a KV cache (Pi on
