@@ -141,7 +141,8 @@ for script in "$@"; do
       END { if (more) printf "  ... and %d more\n", more }'
     # A page that calls a new microflow which opens that page: each script fails alone, in either
     # order, and a session reached for --no-check (mxcli's own advice) -- which the precheck refuses.
-    if printf '%s\n' "$out" | grep -q 'unresolved reference'; then
+    # "not found" too: a calculated attribute's microflow, or a page's microflow, in a later script.
+    if printf '%s\n' "$out" | grep -qiE 'unresolved reference|(microflow|nanoflow|page|entity|snippet|enumeration|association)[^\n]{0,40}not found'; then
       echo "  Not found = not created yet. If another script creates it, exec that one first; if the two"
       echo "  need EACH OTHER (a page calls a new microflow that opens that page), move them into ONE"
       echo "  .mdl -- a script resolves what it creates itself. --no-check does not get past this check."

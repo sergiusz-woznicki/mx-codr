@@ -44,6 +44,12 @@ def destinations(src):
     for name in listdir(os.path.join(src, "checks", "layout_rules"), ".py"):
         yield os.path.join(src, "checks", "layout_rules", name), "tools/mdl-checks/layout_rules/" + name
 
+    # The plugins' shared core and the reminder template: read by every host, changed by none.
+    for name in listdir(os.path.join(src, "checks", "plugins"), ".cjs"):
+        yield os.path.join(src, "checks", "plugins", name), "tools/mdl-checks/plugins/" + name
+    if os.path.isfile(os.path.join(src, "checks", "reminder.txt")):
+        yield os.path.join(src, "checks", "reminder.txt"), "tools/mdl-checks/reminder.txt"
+
     for name in listdir(os.path.join(src, "hooks"), ".sh"):
         yield os.path.join(src, "hooks", name), "tools/mdl-checks/hooks/" + name
 
