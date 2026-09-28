@@ -122,7 +122,7 @@ if you use one — is listed at the end with the command to run.
 ```
  you ask ─▶ agent writes a test ─▶ test fails (red) ─▶ agent builds it in MDL
                                                               │
-      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout ◀── test passes
+      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout · scope ◀── test passes
 ```
 
 You never run the checks yourself. The agent runs the gate, and the hooks make sure
@@ -305,6 +305,7 @@ The environment still wins, so any of it can be overridden for one run.
 | `MDL_VISUAL` / `MDL_RUNTIME_ERRORS` | the rendered-page and server-error checks: warnings by default, `error` blocks DONE, `0` turns them off |
 | `MDL_VISUAL_REVIEW` | `agent`: a model that reads images also judges a screenshot of each page |
 | `MDL_CAPTIONS` | the caption rules of the naming check: warnings by default, `error` blocks DONE |
+| `MDL_SCOPE` | `SCOPE01`, a page's data source microflow that ignores its role's row scope: a warning by default, `error` blocks DONE |
 | `MDL_CLOSE_BROWSER` | `1`: close the test browser after each suite and on `--stop` (off: `--only` reuses it) |
 | `MDL_ALLOW_GREEN_FIRST` | tests that are green by nature, so the gate does not warn that they never failed |
 | `MDL_REQUIRE_PRODUCTION` | `0` for an app that deliberately has no users at all |

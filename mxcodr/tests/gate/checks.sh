@@ -373,7 +373,8 @@ start_model_checks() {
   ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
-  echo "== mx check, lint, coverage, naming, layout and security started (they need no app; running while the suite does)"
+  ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.py "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
+  echo "== mx check, lint, coverage, naming, layout, security and scope started (they need no app; running while the suite does)"
 }
 
 # An app with sign-in is only as safe as its security level: at PROTOTYPE Mendix checks page and
@@ -435,6 +436,37 @@ check_security() {
   return 1
 }
 
+# SCOPE01: a page's data source microflow returns rows its role may not read -- a microflow does
+# not apply entity access, so an XPath-scoped access rule does not reach them. A warning unless
+# MDL_SCOPE=error: a DeepSeek portal leaked another customer's invoice this way, and only its
+# verify test caught it.
+check_scope() {
+  local gate out code total
+  [ -f tools/mdl-checks/check_scope.py ] || {
+    echo "scope: could not run -- tools/mdl-checks/check_scope.py is missing" > "$WORK/scope.summary"; return 2; }
+  modules_or_status scope; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  # shellcheck disable=SC2086
+  out="$("$PY" tools/mdl-checks/check_scope.py . $USER_MODULES 2>&1)"; code=$?
+  if [ "$code" = "2" ]; then
+    echo "scope: could not run -- $(printf '%s\n' "$out" | tail -1)" > "$WORK/scope.summary"; return 2
+  fi
+  echo "scope: $(printf '%s\n' "$out" | head -1)" > "$WORK/scope.summary"
+  [ "$code" = "0" ] && return 0
+  if [ "${MDL_SCOPE:-warn}" = "error" ]; then
+    printf '%s\n' "$out" | grep -E '^\s+- ' > "$WORK/scope.detail"
+    return 1
+  fi
+  total="$(printf '%s\n' "$out" | grep -cE '^\s+- ')"
+  printf '%s\n' "$out" | grep -E '^\s+- ' | head -6 | sed -E 's/^[[:space:]]+- /   - /' > "$WORK/scope.warnings"
+  [ "$total" -gt 6 ] && echo "   ... 6 of $total shown" >> "$WORK/scope.warnings"
+  return 0
+}
+
 # Reads one background check's files into summary, failures or cannot_run, and details.
 collect() {
   local name="$1" label="$2" status line
@@ -474,4 +506,5 @@ collect_model_checks() {
   collect naming "naming"
   collect layout "layout"
   collect security "security"
+  collect scope "scope"
 }

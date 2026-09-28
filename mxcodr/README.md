@@ -233,6 +233,19 @@ with a return"), instead of "produced no result ... needs: playwright-cli open",
 session to the browser. The `sleep` block covers a hand-rolled wait on `.mxcli/gate-boot.log` or
 `runtime.log` too, not only one in front of `tests/gate.sh`.
 
+A test that fails with the runtime's help shows the cause, not the request handler's preamble
+("[User '...' with session id '...' and roles '...']" filled the line in three sessions). A 404 on
+`dist/*.js` after a `--watch` rebuild says "the client bundle is stale: `--restart`" instead of
+Mendix's "the page includes a broken widget". CE0106 and CE0557 -- a microflow or page reached from a
+page, button or menu with no role, in all three sessions of 2026-09-28 -- get a hint that names each
+element and the `grant` line to paste.
+
+`SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
+retrieves an entity with nothing tying it to the user, while the page's role reads that entity
+through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never
+reaches those rows: a customer portal showed another customer's invoice this way and only its
+verify test caught it.
+
 A scenario run outside the gate's runner (peek.sh, or a test run by hand after the gate) opens the
 browser itself when playwright-cli says none is open, and runs once more; two sessions retried the
 same command on "Browser 'default' is not open". `MDL_CLOSE_BROWSER=1` in `tests/harness.env`
@@ -366,7 +379,7 @@ microflow the test drives instead"). Shell values reach a scenario as `vars.<NAM
 body cost DeepSeek, Qwen and GLM minutes each.
 
 On top of the digest sits `checks/mdl-pitfalls.md` (installed as `tools/mdl-checks/mdl-pitfalls.md`):
-eighteen "write this, not that" lines for what cost measured sessions the most time (six of them confirmed by a second model on the same prompt) -- the
+twenty "write this, not that" lines for what cost measured sessions the most time (six of them confirmed by a second model on the same prompt) -- the
 `[%CurrentDateTime%]` token, a token's quoting inside `where '...'`, the association/entity path
 of an access rule, reference combo boxes, `Account.Name`, and in tests the scenario runner (no
 `fetch` or `Buffer`: `page.request` or `curl`; `result=$(scenario '...')` with no quotes around it). Two Pi sessions (Qwen 3.8, DeepSeek 4)
