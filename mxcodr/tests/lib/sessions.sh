@@ -78,13 +78,25 @@ print('the runtime refused a session: Maximum number of sessions exceeded (devel
 
 # _runtime_errors_since <YYYY-MM-DD HH:MM:SS> -- the runtime's ERROR lines logged since then, each
 # with the exception message on the line after it, on one line (at most 2, 300 characters).
+# The request handler's boilerplate ("An error has occurred while handling the request. [User 'x'
+# with session id '...' and roles '...']: ") is dropped: it filled the 300 characters and cut off the
+# cause ("Attribute ... has a maximum length of 20", "Error calling REST service") in three sessions.
+# A 404 on the client bundle (dist/*.js) after a --watch rebuild is not the page's fault: three
+# sessions read Mendix's "the page includes a broken widget" and went looking at widgets.
 _runtime_errors_since() {
   [ -n "${1:-}" ] && [ -f "$RUNTIME_LOG" ] || return 0
-  tail -3000 "$RUNTIME_LOG" 2>/dev/null | awk -v since="$1" '
+  local found
+  found="$(tail -3000 "$RUNTIME_LOG" 2>/dev/null | awk -v since="$1" '
     /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / { stamped = 1; if (substr($0, 1, 19) < since) { keep = 0; next } }
     / ERROR - / { if (keep) print line; line = substr($0, 25); keep = 1; next }
     stamped && keep == 1 && /^[^\t ]/ && !/^[0-9][0-9][0-9][0-9]-/ { line = line ": " $0; keep = 2; next }
     /^[0-9][0-9][0-9][0-9]-/ { if (keep) print line; keep = 0 }
-    END { if (keep) print line }' \
+    END { if (keep) print line }')"
+  if printf '%s\n' "$found" | grep -qE '404 - file not found for file: dist(/|%2F)'; then
+    echo "the client bundle is stale (404 on dist/*.js after a --watch rebuild), not the page: bash tests/gate.sh --restart --only <feature>"
+    return 0
+  fi
+  printf '%s\n' "$found" \
+    | sed -E "s/An error has occurred while handling the request\. \[User '[^']*' with session id '[^']*' and roles '[^']*'\]: //" \
     | awk '!seen[$0]++' | tail -2 | tr '\n' ' ' | cut -c1-300 | sed 's/ *$//'
 }

@@ -21,7 +21,7 @@
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
-#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
+#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
 #      set in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
@@ -107,7 +107,7 @@ print_warnings() {
   local file shown=0
   for file in "$WORK"/*.warnings; do
     [ -s "$file" ] || continue
-    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them anyway -- MDL_VISUAL, MDL_RUNTIME_ERRORS or MDL_CAPTIONS=error makes them block)"; }
+    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them anyway -- MDL_VISUAL, MDL_RUNTIME_ERRORS, MDL_CAPTIONS or MDL_SCOPE=error makes them block)"; }
     shown=1
     head -12 "$file"
   done
@@ -120,7 +120,7 @@ print_verdict_and_exit() {
   echo
   echo "== gate"
   for line in "${summary[@]}"; do echo "   $line"; done
-  for name in tests mx lint coverage naming layout security visual; do
+  for name in tests mx lint coverage naming layout security scope visual; do
     [ -f "$WORK/$name.secs" ] && timing="$timing $name $(cat "$WORK/$name.secs")s,"
   done
   echo "   timing:${timing} wall $((SECONDS - GATE_START))s"

@@ -26,6 +26,26 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
       CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
       CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;
       CE2729) echo "   hint CE2729: a page reaches something its viewers may not use. The message names both halves -- grant the microflow to that role and the entity it returns: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant Mod.Role on Mod.Entity (read *);'. A non-persistent entity behind a data view needs the grant as much as a stored one, and every role that can open the page needs it. Skill: manage-security" ;;
+      # Three sessions in a row: a page or microflow reached from a button, a menu or a page, with
+      # no role. The pitfall "grant in the same script" was in the prompt each time; the name and
+      # the line to paste, at the moment of the error, is what lands.
+      CE0106|CE0557)
+        if [ "$code" = "CE0106" ]; then
+          echo "   hint CE0106: a microflow a page, a button or the menu uses needs a role -- in the script that creates it:"
+        else
+          echo "   hint CE0557: a page the menu, a button or a microflow opens needs a role -- in the script that creates it:"
+        fi
+        grep -E "\[$code\]" "$1" 2>/dev/null \
+          | sed -nE -e "s/.* at ([A-Za-z0-9_]+) \/ (Microflow|Page) '([^'.]+)'.*/\2 \1.\3/p" \
+                    -e "/ \/ (Microflow|Page) '/!s/.*(Microflow|Page) '([^']+)'.*/\1 \2/p" \
+          | awk '!seen[$0]++' | head -6 | while read -r kind name; do
+              case "$name" in *.*) ;; *) continue ;; esac
+              if [ "$kind" = "Page" ]; then
+                echo "     grant view on page $name to <each module role that opens it>;"
+              else
+                echo "     grant execute on microflow $name to <each module role whose page, button or menu calls it>;"
+              fi
+            done ;;
       CE7247) echo "   hint CE7247: that name is reserved by the Mendix platform and quoting does not rescue it -- Owner, Type and Default have to be renamed (Staff, ResourceType, Standard); other keywords only need quotes. Full list: ./mxcli syntax keywords" ;;
     esac
   done

@@ -48,3 +48,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **Every statement in an owner script is re-runnable**: `create or modify` for entities, view entities
   and java actions, `drop module if exists`, `add event handler ... if not exists` -- a plain `create`
   stops the second exec at "already exists".
+- **Demo user passwords are 12+ characters** with a digit (the template's policy); a shorter one stops
+  the exec at "password policy violation".
+- **A data source microflow does not apply entity access**: an XPath rule that scopes a customer to
+  their own rows does not reach what the microflow retrieves. Constrain the retrieve itself --
+  `where [Mod.Invoice_Customer = $SignedInCustomer]` or the `'[%CurrentUser%]'` path (gate `SCOPE01`).
