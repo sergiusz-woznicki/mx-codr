@@ -59,5 +59,6 @@ here blocks DONE unless the line says "warning".
 | `VIS01` `VIS02` `VIS03` | no overlapping widgets, sideways scroll or cut-off text on the page a test ends on (warning) | usually a box class on inline text or a negative margin; `MDL_VISUAL=error` makes them block |
 | `LOOK01` `LOOK02` | screenshots reviewed when `MDL_VISUAL_REVIEW=agent` (warning) | read each PNG named in `.mxcli/visual/review.md`, write `verdicts.json` |
 | "went green without ever being red" | a test that was seen to fail once (warning) | break the feature, `bash tests/gate.sh --only <feature>`, fix it; or list the test in `MDL_ALLOW_GREEN_FIRST` when green by nature |
+| `CE0582` | no classic drop-down (not React-client compatible) | `combobox` or `radiobuttons` on the same enumeration or Boolean attribute |
 | `CE0106` `CE0557` | a microflow or page reached from a page, button or menu has a role | the hint gives `grant execute on microflow <name> to <role>;` / `grant view on page <name> to <role>;` -- put it in the script that creates the document |
 | `CE0007` `CE0117` `CE0161` `CE0642` `CE1613` `CE2729` `CE7247` | build errors the gate and precheck print a hint for | read the hint under the error; the pitfalls in the syntax digest cover the same ground |

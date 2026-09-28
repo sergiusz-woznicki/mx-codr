@@ -46,7 +46,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **A non-persistent object a page shows or a flow hands to a page** needs `grant Role on Mod.Entity
   (create, read *, write *)`, or the client fails with "cannot create Mendix object" (CE2729 at check).
 - **Every statement in an owner script is re-runnable** (each form checked on mxcli 0.24): `create or
-  modify` for module, entity, view entity, page, microflow, java action, user role and module role;
+  modify` for module, entity, view entity, enumeration, page, microflow, java action, user role and
+  module role;
   `drop user role if exists`, `drop demo user if exists`, `create persistent entity if not exists`,
   `alter entity X add attribute if not exists ...`, `alter entity X add event handler if not exists on
   before commit call Mod.MF raise error`. There is no `drop module if exists` and no `drop entity|page|
