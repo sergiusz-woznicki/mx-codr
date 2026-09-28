@@ -365,6 +365,13 @@ setting.
 mxcli does warn that the project was left modified. It does not say what the value
 was, so note it before running tests against a project you care about.
 
+## One source per host-repeated piece
+
+The per-prompt reminder (`checks/reminder.txt`), the before-exec hook's decisions
+(`hooks/before-mxcli-exec-core.sh`) and the plugins' logic (`checks/plugins/harness-core.cjs`) each
+exist once; the Claude, Codex, Cursor, OpenCode and Pi entry points only adapt them to their
+host. A change to what the harness says or checks is one edit.
+
 ## Rebuilding the bundle
 
 `mxcodr/` is a copy of files that live in the harness repo — `mxcodr/README.md` has the

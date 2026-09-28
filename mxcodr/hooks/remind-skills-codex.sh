@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Codex UserPromptSubmit hook: prints the project rules, injected as context before every prompt. Exit 0.
-# Differs from remind-skills.sh only in skill naming (`$name` for Codex).
-cat <<'MSG'
-Project rules (full text: `.claude/rules/mdl-skills.md`). 1. Start with `bash tests/orient.sh`, not by exploring by hand. 2. Before building or changing any feature load `$test-first-delivery`: write tests/verify-<feature>.test.sh, run `bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on that ONE script. 3. Read no other skill up front: a gate finding names the skill it needs (`spacing-and-layout` for a page, `module-structure` for a new module or for changing a Marketplace module (`<Module>Ext`), `naming-and-captions` for a microflow) and carries its fix; what each code wants is one page, `tests/CHECKS.md`, never the gate's source. 4. Syntax: the digest in your context has the topic indexes and the pitfalls; `./mxcli syntax <topic>` for a leaf, several per command; `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec then `bash tests/precheck.sh <script>.mdl` (mx check on a copy: what a build or a half-applied script would hit); do not sweep SKILL.md files. 5. Done = `bash tests/gate.sh` (suite + mx check + lint + coverage + naming + layout + security) ends in `DONE`.
-MSG
+# Same template as remind-skills.sh; Codex names a skill `$name` and has no precheck hook, so it runs
+# tests/precheck.sh itself.
+# shellcheck source=remind-skills-lib.sh
+. "$(dirname "$0")/remind-skills-lib.sh"
+mdl_reminder '.claude/rules/mdl-skills.md' \
+  'load `$test-first-delivery`' \
+  'then `bash tests/precheck.sh <script>.mdl` (mx check on a copy: what a build or a half-applied script would hit)'

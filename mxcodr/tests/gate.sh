@@ -113,6 +113,25 @@ print_warnings() {
   done
 }
 
+# After a green --only: is the full gate worth running yet? DeepSeek ran 15 full gates in an hour
+# on the footer's advice, several while coverage was still 0/24 and the verdict known. The
+# coverage checker answers in 0.3s; a line here says which it is. Advice only: the verdict is unchanged.
+only_coverage_note() {
+  local modules out code lines
+  [ -f tools/mdl-checks/check_test_coverage.py ] || return 0
+  modules="$(mdl_user_modules "$MPR" 2>/dev/null)" || return 0
+  [ -n "$modules" ] || return 0
+  # shellcheck disable=SC2086
+  out="$("$PY" tools/mdl-checks/check_test_coverage.py . $modules 2>/dev/null)"; code=$?
+  lines="$(printf '%s\n' "$out" | grep -E '^(PASS|FAIL) ' | sed -E 's/^(PASS|FAIL) +//' | tr '\n' ';' | sed 's/;$//')"
+  [ -n "$lines" ] || return 0
+  if [ "$code" = "0" ]; then
+    echo "   coverage now: $lines -- every element is covered: the full gate can pass now"
+  else
+    echo "   coverage now: $lines -- the full gate cannot pass yet; the next feature and its test first"
+  fi
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -143,6 +162,7 @@ print_verdict_and_exit() {
     local scope="tests only"
     [ -n "${ONLY:-}" ] && scope="--only $ONLY"
     echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
+    only_coverage_note
     exit 0
   fi
   echo "   DONE — every check passed"

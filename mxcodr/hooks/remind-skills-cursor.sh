@@ -30,6 +30,9 @@ mdl_find_python() {
 PY="$(mdl_find_python || true)"
 PY="${PY:-python3}"
 
-cat <<'MSG' | "$PY" -c 'import json,sys; print(json.dumps({"additional_context": sys.stdin.read().strip()}))'
-Project rules (full text: `.cursor/rules/mdl-skills.mdc`). 1. Start with `bash tests/orient.sh`, not by exploring by hand. 2. Before building or changing any feature read `test-first-delivery` (`.ai-context/skills/<name>/SKILL.md`): write tests/verify-<feature>.test.sh, run `bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on that ONE script. 3. Read no other skill up front: a gate finding names the skill it needs (`spacing-and-layout` for a page, `module-structure` for a new module or for changing a Marketplace module (`<Module>Ext`), `naming-and-captions` for a microflow) and carries its fix; what each code wants is one page, `tests/CHECKS.md`, never the gate's source. 4. Syntax: the digest in your context has the topic indexes and the pitfalls; `./mxcli syntax <topic>` for a leaf, several per command; `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec (a hook runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand); do not sweep SKILL.md files. 5. Done = `bash tests/gate.sh` (suite + mx check + lint + coverage + naming + layout + security) ends in `DONE`.
-MSG
+# shellcheck source=remind-skills-lib.sh
+. "$(dirname "$0")/remind-skills-lib.sh"
+mdl_reminder '.cursor/rules/mdl-skills.mdc' \
+  'read `test-first-delivery` (`.ai-context/skills/<name>/SKILL.md`)' \
+  '(a hook runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand)' \
+  | "$PY" -c 'import json,sys; print(json.dumps({"additional_context": sys.stdin.read().strip()}))'

@@ -23,8 +23,10 @@
 # (a whole-disk scan, killed after minutes) and read the mxcli source checkout under /private/tmp
 # for a widget's syntax. Nothing outside the project answers a Mendix question. Blocked: find,
 # recursive grep, rg/ag/fd, mdfind and locate rooted outside the project; cat/sed/head/tail/less/
-# strings/awk of a file under /System, /Applications, /Library, /usr, /opt, ~/.mxcli, or a tree
-# two or more levels under /tmp (a `/tmp/gate.log` the session wrote itself passes).
+# strings/awk of a file under /System, /Applications, /Library, /usr, /opt, ~/.mxcli/mxbuild|runtime,
+# or inside a source checkout under /tmp (a directory with .git, go.mod or package.json above the
+# file). The session's own scratch files under /tmp pass, and so does a redirect INTO /tmp: a
+# DeepSeek run's `cat > /tmp/mdlprobe/x.mdl <<EOF` was blocked as a read on the first day.
 
 input="$(cat)"
 case "$input" in *harness.env*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;;
@@ -153,10 +155,19 @@ def outside(path):
         return not (p.lower() == root.lower() or p.lower().startswith(root.lower() + "/"))
     return p == ".." or p.startswith("../")
 
-def deep_tmp(path):
+def tmp_checkout(path):
+    """A file inside a source checkout that sits under /tmp (a directory with .git, go.mod or
+    package.json between /tmp and the file): the mxcli sources a session read for a widget."""
     p = expand(path)
     m = re.match(r"^(/private/tmp|/tmp|/System/Volumes/Data/private/tmp)/(.+)$", p)
-    return bool(m) and "/" in m.group(2)
+    if not m:
+        return False
+    base, rest = m.group(1), m.group(2).split("/")
+    for depth in range(1, len(rest)):
+        folder = base + "/" + "/".join(rest[:depth])
+        if any(os.path.exists(folder + "/" + marker) for marker in (".git", "go.mod", "package.json")):
+            return True
+    return False
 
 def outside_target(command):
     """The first path a command searches or reads outside the project, or None."""
@@ -165,7 +176,6 @@ def outside_target(command):
             words = shlex.split(segment)
         except ValueError:
             words = segment.split()
-        words = [w for w in words if w not in (">", ">>", "<")]
         if not words:
             continue
         verb = os.path.basename(words[0])
@@ -193,11 +203,17 @@ def outside_target(command):
                 if outside(r):
                     return r
         elif verb in READ_VERBS:
+            skip = False
             for w in rest:
-                if w.startswith("-"):
+                # `cat > /tmp/x` writes /tmp/x: a redirect target is not read.
+                if w in (">", ">>", "<"):
+                    skip = w != "<"
+                    continue
+                if skip or w.startswith(">") or w.startswith("-"):
+                    skip = False
                     continue
                 p = expand(w)
-                if any(p == r or p.startswith(r + "/") for r in READ_ROOTS) or deep_tmp(w):
+                if any(p == r or p.startswith(r + "/") for r in READ_ROOTS) or tmp_checkout(w):
                     return w
     return None
 

@@ -45,9 +45,13 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   attribute HasContents): grant `read *` and `write` on your own attributes only.
 - **A non-persistent object a page shows or a flow hands to a page** needs `grant Role on Mod.Entity
   (create, read *, write *)`, or the client fails with "cannot create Mendix object" (CE2729 at check).
-- **Every statement in an owner script is re-runnable**: `create or modify` for entities, view entities
-  and java actions, `drop module if exists`, `add event handler ... if not exists` -- a plain `create`
-  stops the second exec at "already exists".
+- **Every statement in an owner script is re-runnable** (each form checked on mxcli 0.24): `create or
+  modify` for module, entity, view entity, page, microflow, java action, user role and module role;
+  `drop user role if exists`, `drop demo user if exists`, `create persistent entity if not exists`,
+  `alter entity X add attribute if not exists ...`, `alter entity X add event handler if not exists on
+  before commit call Mod.MF raise error`. There is no `drop module if exists` and no `drop entity|page|
+  microflow if exists`: a plain `create` or an unguarded `drop` stops the second exec at "already
+  exists" / "not found" -- put a one-off `drop module` in its own script.
 - **Demo user passwords are 12+ characters** with a digit (the template's policy); a shorter one stops
   the exec at "password policy violation".
 - **A data source microflow does not apply entity access**: an XPath rule that scopes a customer to

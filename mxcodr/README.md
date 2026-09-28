@@ -352,6 +352,30 @@ Claude Code reads `.claude/rules/` only when a session starts -- and `tests/orie
 current (`mdl_syntax_digest` in `portable.sh`). The rules file keeps only what no `syntax` topic
 says: the spacing, grid-filter and message rules that are this harness's own.
 
+### One source for what every host repeats
+
+The per-prompt reminder is one template, `checks/reminder.txt` (installed as
+`tools/mdl-checks/reminder.txt`), with three placeholders a host fills in -- its rules file, how it
+loads `test-first-delivery`, and whether a hook runs the precheck for it. The Claude, Codex and
+Cursor hooks source `hooks/remind-skills-lib.sh` for it; the OpenCode plugin reads the same file.
+Five copies had drifted apart before. The two before-exec hooks (Claude/Codex, Cursor) share
+`hooks/before-mxcli-exec-core.sh` -- the inline-MDL scan, the script list, the precheck call and
+the block messages -- and keep only how they read the call and answer it. The OpenCode plugin and
+the Pi extension share `checks/plugins/harness-core.cjs` (installed as
+`tools/mdl-checks/plugins/harness-core.cjs`): the bash runner, the guard call, the decision before
+and after an `mxcli exec`, the gate's follow-up message. Both load it with `createRequire` from
+either place, so the hosts' loaders see one ordinary module each. Behaviour is unchanged; the
+audit's 238 tests say so, and three changes in one day that each touched four or five files would
+now touch one.
+
+A green `--only <feature>` run ends with what coverage says now ("Audit: 11/20 -- the full gate
+cannot pass yet; the next feature and its test first", or "every element is covered: the full gate
+can pass now"): DeepSeek ran 15 full gates in an hour on the footer's bare "run bash tests/gate.sh",
+several with coverage still 0/24. Advice only; no verdict changed. The precheck's "move them into
+ONE .mdl" advice now also follows a "microflow not found" / "page not found" (a calculated
+attribute's microflow, or a page's action microflow, in a later script), not only an unresolved
+reference.
+
 ### What a session reads before it starts, measured
 
 Seven Pi sessions (GLM, DeepSeek, Qwen, mtplx) were measured for where their context went. The
