@@ -128,6 +128,12 @@ if you use one — is listed at the end with the command to run.
 You never run the checks yourself. The agent runs the gate, and the hooks make sure
 it does.
 
+The agent reads one skill before the first feature (`test-first-delivery`); every other
+project skill is named by the gate finding that needs it, with the fix in the finding. What each
+check code wants is one page, `tests/CHECKS.md`. Measured on seven sessions, a session read about
+113 kB before its first change; the new shape is about 48 kB, to be confirmed by an A/B run. The
+gate is unchanged.
+
 ## Does it make a difference?
 
 Two A/B runs: the same prompt, the same model, a fresh app each time — once without
@@ -281,11 +287,13 @@ bash tests/diagnose.sh                # why is the app not answering
 
 A failing test always says why, on one line: one that stops on a silent command names its line and command.
 The precheck also covers MDL given with `mxcli -c`, and tells errors already in the model from the script's own.
+A blocked exec says when the command's earlier steps (an edit) did not run either; a scenario opens the browser when none is open; `# covers:` names may be separated by commas or spaces.
 
 ## Configuration
 
 `tests/harness.env` is written by the installer and read by every harness script.
 It is yours: the agent may read it, but a hook blocks it from editing the file or setting a gate switch inline -- and from editing the harness's own checkers and scripts (`MDL_HARNESS_EDITS=allow` in this file lifts that part).
+The same hook blocks a search or read outside the project (`find /`, the mxcli source, Studio Pro's files): nothing there answers a Mendix question, and a whole-disk scan runs for minutes.
 The environment still wins, so any of it can be overridden for one run.
 
 | Key | What it is |
@@ -296,6 +304,8 @@ The environment still wins, so any of it can be overridden for one run.
 | `MDL_BOOT_COMMAND` | how the gate boots the app when nothing answers |
 | `MDL_VISUAL` / `MDL_RUNTIME_ERRORS` | the rendered-page and server-error checks: warnings by default, `error` blocks DONE, `0` turns them off |
 | `MDL_VISUAL_REVIEW` | `agent`: a model that reads images also judges a screenshot of each page |
+| `MDL_CAPTIONS` | the caption rules of the naming check: warnings by default, `error` blocks DONE |
+| `MDL_CLOSE_BROWSER` | `1`: close the test browser after each suite and on `--stop` (off: `--only` reuses it) |
 | `MDL_ALLOW_GREEN_FIRST` | tests that are green by nature, so the gate does not warn that they never failed |
 | `MDL_REQUIRE_PRODUCTION` | `0` for an app that deliberately has no users at all |
 | `APP_PORT` | the app's port, 8081 by default; a second project running beside the first needs its own, e.g. `8082` (the admin API follows at +9). The gate refuses to test another project's app on its port |

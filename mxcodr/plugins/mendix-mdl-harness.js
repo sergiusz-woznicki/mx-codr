@@ -36,19 +36,12 @@ const NO_BASH =
   "Install Git for Windows and make sure bash.exe is on the PATH."
 
 const RULES = [
-  "Project rules (full text: `.claude/rules/mdl-skills.md`). 1. Start with `bash tests/orient.sh`,",
-  "not by exploring by hand. 2. Before building or changing any feature read",
-  "`.ai-context/skills/test-first-delivery/SKILL.md`: write tests/verify-<feature>.test.sh, run",
-  "`bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on",
-  "that ONE script. 3. Before creating a module or changing a Marketplace module (`<Module>Ext`):",
-  "`module-structure`; before a page: `spacing-and-layout` (side-by-side widgets need",
-  "`DesignProperties` Spacing, never CSS); before a microflow: `naming-and-captions` (a business",
-  "`@caption` on every decision AND action). Read exactly those four skill files up front and",
-  "nothing else, one file per command (never one combined `cat`). 4. Syntax: `./mxcli syntax",
-  "<topic>`, then `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec (a hook",
-  "runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand); do not sweep",
-  "SKILL.md files. 5. Done = `bash tests/gate.sh` (suite + mx check + lint +",
-  "coverage + naming + layout + security) ends in `DONE`.",
+  "Project rules (full text: `.claude/rules/mdl-skills.md`).",
+  "1. Start with `bash tests/orient.sh`, not by exploring by hand.",
+  "2. Before building or changing any feature read `.ai-context/skills/test-first-delivery/SKILL.md`: write tests/verify-<feature>.test.sh, run `bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on that ONE script.",
+  "3. Read no other skill up front: a gate finding names the skill it needs (`spacing-and-layout` for a page, `module-structure` for a new module or for changing a Marketplace module (`<Module>Ext`), `naming-and-captions` for a microflow) and carries its fix; what each code wants is one page, `tests/CHECKS.md`, never the gate's source.",
+  "4. Syntax: the digest in your context has the topic indexes and the pitfalls; `./mxcli syntax <topic>` for a leaf, several per command; `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec (a hook runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand); do not sweep SKILL.md files.",
+  "5. Done = `bash tests/gate.sh` (suite + mx check + lint + coverage + naming + layout + security) ends in `DONE`.",
 ].join(" ")
 
 // Per-session state on disk, so it survives reloads.
@@ -102,6 +95,17 @@ function isSleepBeforeGate(command) {
 }
 
 // `for f in a b; do mxcli exec mdlsource/$f.mdl`: the scripts are a variable, so precheck sees none.
+// A blocked command runs none of its steps: GLM sent `python3 <edit> ... ; ./mxcli exec` seven
+// times, was blocked before the edit ran, and debugged an edit that was never applied.
+const STEPS_BEFORE_EXEC =
+  "Nothing in this command ran, the steps before the exec included (an edit there never happened): the script was checked as it is on disk. Run those steps on their own, then the exec as its own command.\n"
+function stepsBeforeExec(command) {
+  const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
+  if (!m) return false
+  const trivial = /^((export\s+)?[A-Za-z_]\w*=("[^"]*"|'[^']*'|\S*)\s*)*$|^cd\s+\S+$/
+  return command.slice(0, m.index).split(/&&|\|\||[;|\n]/).some((step) => !trivial.test(step.trim()))
+}
+
 const EXEC_THROUGH_VARIABLE =
   "Blocked: that exec names its script through a variable (`$f.mdl` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"
 
@@ -174,7 +178,7 @@ function run(command, cwd, timeout, input) {
 // harness's own checkers and scripts, the hook configs. The reason, or null.
 function harnessEnvBlocked(root, tool, args) {
   const text = JSON.stringify(args ?? {})
-  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin/.test(text)) return null
+  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin|\b(find|grep|egrep|fgrep|rg|ag|fd|mdfind|locate) |\/(System|Applications|Library|usr|opt|private|tmp|Users|home)\/|~\/|\$HOME/.test(text)) return null
   const guard = join(root, "tools", "mdl-checks", "hooks", "guard-harness-env.sh")
   if (!existsSync(guard)) return null
   const payload = JSON.stringify({ tool_name: tool, tool_input: args ?? {} })
@@ -218,7 +222,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (status === 0 || out.includes("precheck: could not run")) return
       throw new Error(
         "Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). " +
-        "Fix the script and exec again:\n" + out.slice(-GATE_OUTPUT_LIMIT),
+        "Fix the script and exec again:\n" +
+        (stepsBeforeExec(command) ? STEPS_BEFORE_EXEC : "") + out.slice(-GATE_OUTPUT_LIMIT),
       )
     },
 

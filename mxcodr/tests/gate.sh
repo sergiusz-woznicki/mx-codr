@@ -21,7 +21,8 @@
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
-#      MDL_VISUAL_REVIEW=agent -- MDL_* may also be set in tests/harness.env.
+#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
+#      set in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # How to read this file: main() at the bottom is the whole gate, step by step. The steps
@@ -106,7 +107,7 @@ print_warnings() {
   local file shown=0
   for file in "$WORK"/*.warnings; do
     [ -s "$file" ] || continue
-    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them anyway -- MDL_VISUAL or MDL_RUNTIME_ERRORS=error makes them block)"; }
+    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them anyway -- MDL_VISUAL, MDL_RUNTIME_ERRORS or MDL_CAPTIONS=error makes them block)"; }
     shown=1
     head -12 "$file"
   done
@@ -159,6 +160,8 @@ BLOCKERS_SHOWN=5
 print_blockers() {
   local entry name label detail count shown pattern
   pattern='^[[:space:]]*- \[|\[error\]|^[[:space:]]*FAIL[[:space:]:]|^[[:space:]]+- '
+  # Three sessions grepped tests/gate/*.sh for what a code required; the page says it in one line.
+  echo "   what each code wants and its fix: tests/CHECKS.md -- not the gate's source"
   echo "== still blocking DONE"
   # details holds name|label for every failed or unrunnable check, in the order they printed.
   # Every finding up to BLOCKERS_SHOWN, each with its fix: a session that saw only the first one
@@ -221,6 +224,7 @@ main() {
   if [ "$STOP" = "1" ]; then
     echo "== stopping this project's app"
     stop_project_app
+    close_browser_if_asked
     exit 0
   fi
 
@@ -242,6 +246,7 @@ main() {
   step_tests
   step_visual
   step_runtime_errors
+  close_browser_if_asked
   note_microflow_tests
   add_red_first_notes
   note_never_red_tests

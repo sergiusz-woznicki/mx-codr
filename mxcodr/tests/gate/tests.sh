@@ -111,6 +111,15 @@ select_test_targets() {
   [ ${#targets[@]} -gt 0 ] || { echo "no test matches '$ONLY'" >&2; exit 2; }
 }
 
+# close_browser_if_asked -- MDL_CLOSE_BROWSER=1 closes this project's playwright-cli browser once the
+# suite is done. Every session left its own open: 39 daemons and 155 headless Chrome processes
+# (6.5 GB), the oldest 18 days old. Off by default: --only reuses the open browser and its sign-in.
+close_browser_if_asked() {
+  [ "${MDL_CLOSE_BROWSER:-0}" = "1" ] || return 0
+  command -v playwright-cli >/dev/null 2>&1 || return 0
+  playwright-cli close >/dev/null 2>&1 || true
+}
+
 # run_suite <target>... -- the runner's output; its exit code is the suite's.
 run_suite() {
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT
@@ -198,6 +207,9 @@ step_visual() {
 note_microflow_tests() {
   local count how
   [ -n "$(find tests -name '*.test.mdl' -o -name '*.test.md' 2>/dev/null | head -1)" ] || return 0
+  # Only once the suite is green: with it red, two sessions took this line as the next job and
+  # spent 20-40 minutes on microflow tests that do not count for DONE.
+  [ -z "${failures[*]:-}" ] || return 0
   count="$("$MXCLI" test tests/ -p "$MPR" --list 2>/dev/null | sed -nE 's/^Found ([0-9]+) test.*/\1/p' | head -1)"
   if [ -n "${MDL_BOOT_COMMAND:-}" ]; then
     # This project boots without `mxcli run --local` (Windows), and `mxcli test --local` boots the same way.

@@ -16,11 +16,25 @@ scenario() {
   _MDL_SCENARIO_FILE="$code_file"
   _MDL_SCENARIO_START="$(date '+%Y-%m-%d %H:%M:%S')"
   output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
+  # Outside the runner (peek.sh, a test run by hand after the gate) nothing opened the browser, and
+  # two sessions retried the same command on "Browser 'default' is not open". Open it and run once more.
+  if _mdl_browser_not_open "$output"; then
+    _mdl_bounded 30 playwright-cli open
+    output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
+  fi
   rm -f "$code_file"; _MDL_SCENARIO_FILE=""
 
   # Called directly, not in $(...): fail() must end the script, not a subshell.
   _mdl_fail_on_scenario_error "$output"
   _mdl_scenario_result "$output"
+}
+
+# _mdl_browser_not_open <output> -- true when playwright-cli refused because no browser is open.
+_mdl_browser_not_open() {
+  case "$1" in
+    *"is not open, please run open first"*|*"Browser 'default' is not open"*) return 0 ;;
+  esac
+  return 1
 }
 
 # _mdl_scenario_js <body> -- the whole async function: settings, helpers, then the body in try/catch.

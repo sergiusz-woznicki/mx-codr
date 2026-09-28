@@ -1,267 +1,121 @@
 ---
-description: The six project rules for building in this Mendix app, and the three commands that check them
+description: The project rules for building in this Mendix app, and the commands that check them
 alwaysApply: true
 ---
 
 # Project rules that are always in force
 
-This app is built under six rules. They are **not** in the skill table mxcli writes
-into `AGENTS.md` — that table lists only mxcli's own skills. Read the skill before
-the work, not after; each lives at `.ai-context/skills/<name>/SKILL.md`. Read them one
-per command: a combined `cat` of several crosses the tool-output limit and the whole
-text is then read a second time from a saved file.
+This project's own skills live in `.claude/skills/`, beside the mxcli skills `AGENTS.md` lists.
+Read **one** up front: `test-first-delivery`, before the first feature. The others are named
+by the check that needs them -- a `layout` finding says `spacing-and-layout`, a lint finding
+`module-structure` or `reuse-and-snippets`, a `naming` finding `naming-and-captions` -- and
+each finding already carries its fix, so read a skill when a finding names it, one file per
+command, not all of them at the start (measured: four skills read up front cost more context
+than these rules and the syntax digest together, and the same findings came anyway).
 
-| When | Rule |
-|---|---|
-| Adding, changing or fixing **any** feature — a page, a button, a microflow, an action | `test-first-delivery` — the failing test comes first, and nothing is done until the whole suite is green |
-| Creating a module, adding the first documents to one, or deciding which folder a document goes in | `module-structure` |
-| Writing or changing any microflow, nanoflow or rule | `naming-and-captions` — a business `@caption` on every decision **and** every action (retrieve, create, change, commit, delete, call, show page, set), never the Mendix default |
-| A second page, snippet or microflow that resembles an existing one | `reuse-and-snippets` |
-| Moving documents between folders or modules | `organize-project` |
-| Writing or altering any **page** or snippet | `spacing-and-layout` — two inline widgets side by side need `DesignProperties: ['Spacing': ['margin-right': 'S']]`; the gate's `layout` verdict fails without it |
-
-## Facts come from one call, not from exploring
+Facts about this app come from one call, not from exploring by hand:
 
 ```bash
-bash tests/orient.sh                    # structure, security, navigation, tests + covers, coverage, lint, app state
-bash tests/diagnose.sh <Entity> <user>  # row counts, sessions, access rules, associations, runtime errors
-bash tests/peek.sh '<menu item>' [widget]  # a page's visible text and console errors -- writes no test
+bash tests/orient.sh                            # structure, security, navigation, tests + covers, coverage, lint, app state
+bash tests/diagnose.sh <Entity> <user>          # row counts, sessions, access rules, associations, runtime errors
+bash tests/peek.sh '<menu item>' [widget]       # a page's visible text and console errors -- writes no test
 ```
 
-To look at a page, use `tests/peek.sh` -- never a throwaway script or `verify-zz-*` test of your
-own: it signs in, opens the menu item and prints what is on screen, and leaves nothing behind.
-
-## The loop
-
-Keep the app up in another terminal and run one script at a time — the suite is for
-the end, not the loop:
+To look at a page, use `tests/peek.sh` -- never a throwaway script or `verify-zz-*` test of
+your own. While you iterate, run one script at a time; the suite is for the end:
 
 ```bash
-bash tests/gate.sh --boot-if-needed        # starts the app the way this project starts it
-bash tests/gate.sh --only <feature>        # one script against the running app
+bash tests/gate.sh --boot-if-needed          # starts the app the way this project starts it
+bash tests/gate.sh --only <feature>          # one script against the running app
+bash tests/gate.sh --restart                 # the one way to restart; --stop the one way to stop
+bash tests/gate.sh                           # "done" is this ending in DONE; --only ends in PASSED, never DONE
 ```
 
-`--boot-if-needed` is the portable way in: `./mxcli run --local --watch` gives a ~1s
-hot reload where it works, but it deadlocks on some machines, and a runtime serving a
-built deployment has no hot reload at all. `tests/harness.env` records how this
-project boots. Never wrap a harness command in `timeout`: macOS has none
-(`timeout: command not found`), and the gate, `--only` runs and the boot carry their own limits. Never hand-roll a wait for the app
-or for a reload either (`for i in $(seq 1 30); do sleep 5; grep … gate-boot.log`): `gate.sh`
-and `gate.sh --only` wait for the runtime and for `--watch` to apply the latest change, and say so.
+The gate boots, restarts and waits by itself: never boot the app or run `mxcli test` by hand.
+Never wrap a harness command in `timeout` (macOS has none). Never hand-roll a wait for the app
+or a reload (`sleep` before the gate is blocked). Microflow tests (`*.test.mdl`) are not run by
+the gate and do not count for DONE; only `tests/verify-*.test.sh` do.
 
-The gate also measures the page each test ends on and lists, under `== warnings`, widgets that
-overlap (`VIS01`), a page that scrolls sideways (`VIS02`) and cut-off text (`VIS03`), with the
-page and widget names: fix them like any finding. With `MDL_VISUAL_REVIEW=agent` it also saves a
-screenshot per page and asks you to judge them in `.mxcli/visual/review.md` -- Read each PNG,
-answer every question, write `verdicts.json`; a page you change is asked again.
+**What each check code wants, and its fix, is one page: `tests/CHECKS.md`** (layout codes such
+as `USER01`, `NAV01`, `EDGE01`, lint `UI001`, precheck `SCRIPT01`, `RUNTIME01`, `VIS01`). Read
+that, never `tests/gate/*.sh` or the checkers: three sessions grepped the gate's source for
+what a code required, and the page says it in one line.
 
-The gate also lists errors the server logged while the suite ran (`RUNTIME01`): a test can
-pass while the page behind it threw. Microflow tests (`*.test.mdl`) are NOT run by the gate:
-after changing logic, `bash tests/gate.sh --stop`, then `./mxcli test tests/ -p <app>.mpr
---local`, then `bash tests/gate.sh --boot-if-needed` -- boot again even when a test fails.
-
-**The syntax digest is already in your context** under Claude Code, Cursor, OpenCode and Pi --
-anywhere else, `cat tools/mdl-checks/syntax-digest.md` whole, once, right after orient.sh. The
-installer writes it and `tests/orient.sh` refreshes it from this project's own mxcli: the
-`Syntax:` blocks of the nineteen topics every session otherwise looks up one call at a time (entities, associations, enumerations, module and
-user roles, demo users, entity access, project security, settings, modules, pages, page actions, data
-sources, snippets, navigation, microflows, variables, retrieves, object operations) -- 22, 25 and 19
-lookups in three measured sessions -- and, on top, **the pitfalls** that cost sessions the most time
-(the current-time token, XPath quoting and paths, reference combo boxes, Account.Name). It is current
-for this project's mxcli: use it as it stands, and look up only what is not in it.
-
-For anything else, `./mxcli syntax` with no argument lists every topic. After that, **ask for the leaf
-topic directly and ask for everything you need in one command** -- each lookup costs
-a whole round trip, and `syntax microflow` followed by `syntax microflow.create` is
-two where one would do:
-
-```bash
-./mxcli syntax microflow.object-operations; ./mxcli syntax page.action; ./mxcli syntax navigation.create
-```
-
-**Do not probe syntax by writing variant files and running precheck on each.** One session
-generated a dozen versions of the same statement into a temporary file and ran
-`tests/precheck.sh` on every one. That answers the wrong question: precheck runs a full
-`mx check` on a copy of the model and says whether the BUILD would break.
-`./mxcli check <file> -p <app>.mpr --references` is the cheaper answer and a stricter one --
-it also refuses names that do not exist (0.4s against a rebuilt precheck's seconds, measured).
-Keep `tests/precheck.sh` for the script you are about to exec, which a hook runs for you.
-Never `exec` a probe into the model to try a syntax out: a session left `ZZ_Probe1`..`3` in
-its module that way, documents with no test and no caption for the gate to count. `./mxcli
-check <file>` answers the same question and writes nothing.
+**The syntax digest is already in your context** under Claude Code, Cursor, OpenCode and Pi
+(anywhere else: `cat tools/mdl-checks/syntax-digest.md` once, after orient.sh). It holds the
+topic indexes -- what `./mxcli syntax`, `syntax microflow`, `syntax page` list -- and the
+pitfalls that cost sessions the most time, so go straight to the leaf: `./mxcli syntax
+microflow.show-page`, several per command, never the index again.
+**Do not probe syntax by writing variant files** and running precheck on each:
+`./mxcli check <file> -p <app>.mpr --references` answers in 0.4s and writes nothing. Never `exec` a probe into the model (a session
+left `ZZ_Probe1`..`3` behind). Keep `tests/precheck.sh` for the script you are about to exec:
+under Claude, Cursor, OpenCode and Pi a hook runs it before every `mxcli exec` and blocks a
+failing one -- do not call it by hand there; under Codex call it yourself. It applies the
+script to a scratch copy and runs `mx check`, so build-only errors (reserved names, a broken
+XPath, a missing member) and a script that would stop half-way surface first. Only a Marketplace
+module built for another Mendix version gets past it (CE4271); the boot catches that one.
+Never run `mx check` yourself while the app is up: it re-saves the `.mpr` under the suite.
 
 What neither the digest nor `./mxcli syntax` says -- this harness's own rules:
 
 ```
 DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']]
-  -- sides margin-|padding- top|right|bottom|left · values None S M L and NOTHING else
-  -- two inline widgets side by side (label+button, button+button) collide without it;
-  --   the gate's `layout` verdict fails on it. Never a Class: or custom CSS for spacing
+  -- two inline widgets side by side collide without it (layout SPACE01); never Class: or CSS for spacing
 layoutgrid pageGrid { row rowTop { column colTop (DesktopWidth: 12) { ... } } }
-  -- everything on a page goes inside one layoutgrid, the Back / signed-in row and the heading
-  --   too: Atlas layouts add no side margin, so a widget outside it touches the window (EDGE01)
+  -- everything on a page goes inside one layoutgrid, the Back / signed-in row too (EDGE01)
 datagrid dg (...) { column colStatus (attribute: "Status") { dropdownfilter fltStatus } }
-  -- a data grid filters itself, one filter inside the column it belongs to: textfilter on a
-  --   String, numberfilter on a number, datefilter on a date (FilterType: between for a
-  --   range), dropdownfilter on an enumeration, and over an association
-  --   dropdownfilter fltCustomer (Association: Mod.Order_Customer,
-  --   datasource: database Mod.Customer, CaptionAttribute: Name). Boolean takes none.
-  --   Never a filter bar of your own over a helper entity: lint rule UI001 fails on it
-  --   The column needs its Attribute even when it shows Content: the filter filters on it,
-  --   and without one it renders "Unable to get filter store" (gate GRID01)
-show message '{1}' type info|warning|error objects [$Obj/Name + ' saved'];   -- '{1}' is the slot, the
-show message 'Plain text' type info;                                          -- list fills it
-validation feedback $Obj/Attr message 'Name is required';   -- more: ./mxcli -c "HELP" | grep -A6 'show message'
+  -- a grid filters itself, one filter inside its column: textfilter, numberfilter, datefilter,
+  --   dropdownfilter on an enumeration or over an association (dropdownfilter fltCustomer
+  --   (Association: Mod.Order_Customer, datasource: database Mod.Customer, CaptionAttribute: Name)).
+  --   Never a filter bar of your own over a helper entity (lint UI001); the column keeps its Attribute (GRID01)
+show message '{1}' type info objects [$Obj/Name + ' saved'];   validation feedback $Obj/Attr message 'Name is required';
 ```
 
-## Users and logins
+Users who sign in need no login screen of your own (two sessions lost 15-25 minutes building one):
 
-Users who sign in (you, your customers, staff) need no login screen of your own. Two
-sessions each lost 15-25 minutes building one -- a login microflow calling a
-`System.Login` Java action that does not exist, grants on `Administration.Account`
-that break the build, jar files unpacked in search of an API:
-
-- **Security on is the whole login.** At `PROTOTYPE` or `PRODUCTION` level the
-  runtime serves its own sign-in page (`login.html`); anonymous visitors land there.
-- **Build at `PRODUCTION` from the first script** -- `alter project security level PRODUCTION;`.
-  At `PROTOTYPE` Mendix checks page and microflow access and the read/write rights but
-  **ignores the XPath constraint** on an access rule: row-level isolation is stored, passes
-  `mx check` and lint, and lets every row through, so a test can go green on an app that
-  leaks. The gate's `security` check fails below Production. Production costs one thing:
-  every entity a page reads needs a rule for that role, or the page comes up empty.
-- **A user is an `Administration.Account`** (it extends `System.User`) with a user
-  role. Give each kind of user its own user role, and include `Administration.User`
-  in it so the person can change their own password:
-  `create user role Customer (Invoicing.Customer, Administration.User);`
-- **Demo users are the seeded logins**, with their passwords set:
+- **Security on is the whole login**: at `PROTOTYPE` or `PRODUCTION` the runtime serves its own
+  sign-in page (`login.html`). **Build at `PRODUCTION` from the first script** -- `PROTOTYPE`
+  ignores the XPath on access rules, so a test goes green on an app that leaks; the gate's
+  `security` check fails below Production. Every entity a page reads then needs a rule for
+  that role, or the page comes up empty.
+- **A user is an `Administration.Account`** with a user role that includes `Administration.User`:
+  `create user role Customer (Invoicing.Customer, Administration.User);`. Accounts are managed
+  with the Administration module's own pages; a change to them goes in `AdministrationExt`.
+- **Demo users are the seeded logins**, with a password the policy accepts:
   `create demo user 'demo_customer' password 'Customer1234!' entity Administration.Account (Customer);`
-  A password shorter than the project's policy fails the exec; an account committed
-  without one fails at runtime with "The password cannot be empty".
-- **Never grant your own module roles on `Administration.*` entities** -- an access
-  rule takes only its own module's roles (build error CE0007). To show whose data
-  is whose, link your entity to `Administration.Account` and constrain *your*
-  entity's access rule with XPath on that association -- full association names,
-  and the user token quoted `'[%CurrentUser%]'` (doubled quotes inside the MDL
-  string). `CurrentUser()` and `$currentUser` pass `mxcli check` and fail the build
-  with CE0161:
+- **Never grant your own module roles on `Administration.*` entities** (CE0007). Link your
+  entity to `Administration.Account` and constrain *your* rule with XPath on that link, full
+  names, the token quoted -- `CurrentUser()` and `$currentUser` pass `mxcli check` and fail the
+  build (CE0161):
   `grant Invoicing.Customer on Invoicing.Invoice (read *) where '[Invoicing.Invoice_Customer/Invoicing.Customer/Invoicing.Customer_Account = ''[%CurrentUser%]'']';`
-  The link itself goes to another module, so give it `ON DELETE SET NULL`: a PREVENT or
-  RESTRICT rule on it builds and then stops the runtime at startup with `None.get`:
-  `create or modify association Invoicing.Customer_Account from Invoicing.Customer to Administration.Account type Reference on delete set null;`
-- **Creating accounts in the app:** reuse the Administration module's account pages
-  (`SHOW PAGES IN Administration`); a change to them goes in `AdministrationExt`
-  (skill: `module-structure`). Once users sign in, the menu ends with Log out
-  (skill: `spacing-and-layout`).
-- **One navigation menu for every role, on `Atlas_Core.Atlas_Default`** -- Mendix
-  hides a menu item from a user who cannot open its page, so list every page in the
-  profile's menu, `grant view on page` per role, and `home page X for Role`. Never
-  build a menu of your own from link buttons in a layout: no hamburger, no phone view
-  (skill: `spacing-and-layout`; gate `NAV03`, `NAV04`). Every menu entry has an icon
-  that shows what it opens, e.g. `icon Atlas_Core.Atlas_Filled."shopping-cart"` for
-  orders (gate `NAV05`).
-- **Every page another page or a microflow opens starts with Back, top left** --
-  `actionbutton btnBack (Caption: 'Back', Action: CLOSE_PAGE, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')`
-  as its first widget, above the heading; pop-ups excepted (gate `BACK01`).
-- **Once users sign in, every page shows who is signed in, top right** -- the page opens with one
-  row -- a container with `'Flex container': 'Horizontal (row)'` and `'Align items X': 'Space
-  between (only for horizontal containers)'` (Back, then the snippet) or `'Right'` (the snippet alone) -- holding `snippetcall
-  scCurrentUser (Snippet: <Module>.SNIPPET_CurrentUser)`; the skill `spacing-and-layout` has the
-  snippet and both rows (gate `USER01`).
-- **One layout for every page that is not a pop-up** -- chosen once for the app
-  (`Atlas_Core.Atlas_Default` unless it is a top-bar app); pages on different layouts
-  make the menu change or open and close between pages (gate `LAYOUT01`).
-- **Every button has an icon that shows what it does** -- `Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'`
-  for Save, `trash-can` Delete, `pencil` Edit, `add` New, `view` Open, `chevron-left` Back
-  (skill: `spacing-and-layout` has the table; gate `ICON01`).
-- **Once users sign in, the menu has Users and My account** -- `menu item 'Users' page
-  Administration.Account_Overview` (administrators only) and `menu item 'My account' microflow
-  Administration.ManageMyAccount` (own account and password), and every signed-in role includes
-  `Administration.User` (gate `ACCOUNT01`-`ACCOUNT03`).
-- **`MyFirstModule` goes once the app has its own module** -- re-point the home pages, take
-  `MyFirstModule.User` out of every user role, `drop module MyFirstModule;`, and give the
-  administrators a home page in your module (`home page Shop.Admin_Home for Administrator`)
-  (skill: `module-structure`; gate `MODULE01`, `HOME01`).
-- **Tests sign in as that user:** `export TEST_USER=demo_customer` before sourcing
-  `tests/lib.sh`, and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`.
+  The link crosses modules, so `on delete set null;` -- a PREVENT rule on it stops the runtime at
+  startup with `None.get`.
+- The shape of a signed-in app -- Log out, a menu and home page per role, Users and My account,
+  the signed-in user top right, Back top left, icons, one layout, `MyFirstModule` gone -- is
+  what the `layout` check enforces: `tests/CHECKS.md` names each code and its fix, the skill
+  `spacing-and-layout` has the snippets.
+- **Tests sign in as that user:** `export TEST_USER=demo_customer` before sourcing `tests/lib.sh`,
+  and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`.
 
-Reserved words bite at build time, not at `check`. Quoting an identifier (`"Status"`,
-`"Order"`) escapes the ~38 MDL parser keywords, but three names are reserved by the
-Mendix platform itself and quoting does not help: **`Owner`, `Type`, `Default`** --
-rename them (`Staff`, `ResourceType`, `Standard`). Three sessions in a row lost a boot
-to a module role named `Owner` (CE7247); an attribute named `Type` fails MDL021, and
-`CreatedDate`/`ChangedDate`/`ChangedBy` are the audit pseudo-types
-(`owner: autoowner`), not ordinary attributes. Full list: `./mxcli syntax keywords`,
-the detail in the `check-syntax` skill.
+Three names are reserved by the platform and quoting does not help:
+**`Owner`, `Type`, `Default`** -- rename them (CE7247 at boot; `./mxcli syntax keywords`, skill `check-syntax`).
 
-Keep every `mdlsource/*.mdl` re-runnable -- `create or modify`, `create entity if not
-exists` -- because `mxcli exec` stops at the first failing statement: a script that
-fails on "already exists" never runs the statements after it, and the model is left
-half-applied. After a failed exec, fix the script and exec it again rather than
-patching the model by other means.
+Keep every `mdlsource/*.mdl` re-runnable (`create or modify`, `create entity if not
+exists`): `mxcli exec` stops at the first failing statement and leaves the model half-applied;
+after a failed exec, fix the script and exec it again. Each document is **created in one script
+only** (precheck `SCRIPT01`), one `exec` per script by its own path. Never read or edit `mprcontents/`
+or the `.mpr` by hand: `DESCRIBE` and `SHOW` read the model, MDL changes it. A test that passes
+alone and fails in the suite is a test-isolation bug, fixed in `tests/lib.sh`, never by rerunning
+the suite.
 
-Each page, snippet, microflow or entity is **created in one script only** -- change it
-there, or with `alter`, never by a second `create or modify` in a later script: whichever
-of the two runs last wins, and re-running the earlier one silently undoes the later one
-(precheck refuses it: `SCRIPT01`). Exec each script by its own path, one command per
-script -- `for f in …; do mxcli exec mdlsource/$f.mdl` hides the scripts from precheck and
-is blocked. `gate.sh --only <feature>` ends in `PASSED … not DONE`; only the full
-`bash tests/gate.sh` can say DONE.
+**`tests/harness.env` is the person's.** So are the harness's own files: a hook blocks
+editing them and setting a gate switch inline. When a check stands in your way, meet it or
+report it.
 
-Never read or edit `mprcontents/` or the `.mpr` by hand (`strings`, `unzip`, a copied
-`.mpr` as backup): the `.mpr` is only an index, and a hand-repaired unit breaks the
-model in ways no check reports. `DESCRIBE` and `SHOW` read the model; MDL changes it.
-When the build names an element but not the cause, the gate prints a hint for the
-error code -- read that and the skill it names first.
+**Ask before any git command that writes** (`init`, `add`, `commit`, `checkout`, `branch`,
+`merge`, `reset`, `stash`, `clean`, `push`), here and in any other folder; reading (`git status`,
+`git log`, `git diff`) is free.
 
-Never debug by rerunning the whole suite. A test that passes alone and fails in the
-suite is a test-isolation bug, and it is fixed in `tests/lib.sh`.
-
-## Done
-
-"Done" is one command, and it is the gate this project is built around — the suite,
-`mx check`, lint and the coverage checker, ending in `DONE` or `NOT DONE`:
-
-```bash
-bash tests/gate.sh
-```
-
-Every model change goes through MDL: write it, validate it with
-`./mxcli check <file>.mdl -p <app>.mpr --references`, then apply it with
-`./mxcli exec <file>.mdl -p <app>.mpr`. Everything here runs on `./mxcli` in the
-project root — not a system-wide install.
-
-The one check to run *before* an exec is `bash tests/precheck.sh <file>.mdl`: it
-applies the script to a scratch copy and runs `mx check` there (~6s), so the CE
-errors `mxcli check` cannot see -- a reserved name, an enumeration in a text box, a
-broken XPath or expression, a missing member -- come out before the runtime stops for
-a rebuild that fails. It also catches a script that would stop half-way (a demo user
-whose password the policy rejects, say), which on the real model leaves it
-half-applied. Under Claude, Cursor and OpenCode a hook runs it before every
-`mxcli exec` and blocks a failing one -- do not call it by hand there; under Codex
-call it yourself. `MDL_PRECHECK=0` in tests/harness.env turns it off.
-It sees what `mx check` sees. A Marketplace module whose version does not match the
-project's Mendix version passes the precheck and fails the deployment build (CE4271);
-the boot is the backstop for that one class, and a full build before every exec would
-cost more than it saves.
-
-**`tests/harness.env` is the person's.** It holds the gate's switches
-(`MDL_REQUIRE_PRODUCTION`, `MDL_ALLOW_GREEN_FIRST`, `MDL_VISUAL`, ...). Do not edit it, and do not
-set those switches on the command line: a hook blocks both. A session building an app with no
-users wrote `MDL_REQUIRE_PRODUCTION=0` there; the next session, asked for per-customer logins,
-got DONE with security Off. The same goes for the harness's own files -- `tools/mdl-checks/`,
-`tests/gate*`, `tests/lib*`, `tests/precheck.sh`, the hook configs: a session rewrote the coverage
-checker to get DONE. When a check stands in your way, meet it or report it.
-
-**Ask before any git command that writes.** `init`, `add`, `commit`, `checkout`,
-`branch`, `merge`, `reset`, `stash`, `clean`, `push` -- every one of them waits for the
-person to say yes, in this project and in any other folder. A session ran
-`git init && git add -A` here on its own initiative and the folder was never meant to be
-a repository. Reading is free: `git status`, `git log`, `git diff` whenever you need them.
-
-When you record a decision in the project brain, carry what proved it -- the error
-message, the command, the measurement. A captured "why" is read as settled fact by
-every later session, and a wrong one stops the next person from looking; if the cause
-is a guess, write it as one.
-
-On Windows the harness runs under Git Bash or WSL2 and the binary is
-`./mxcli.exe`; everything else here is unchanged.
+When you record a decision in the project brain, carry what proved it -- the error message, the
+command, the measurement; a guess is written as one. On Windows the binary is `./mxcli.exe`;
+everything else here is unchanged.

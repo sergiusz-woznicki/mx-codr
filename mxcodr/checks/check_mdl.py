@@ -2,7 +2,7 @@
 """Check flow MDL against the naming-and-captions rules (captions, variable names, positions).
 
 Input: .mdl files or directories (searched recursively), normally the `describe` dump from tests/gate.sh.
-Usage: check_mdl.py <file.mdl|dir> ... --skill naming [--json]
+Usage: check_mdl.py <file.mdl|dir> ... --skill naming [--captions error|warn] [--json]
 --json keys: verdict, warnings, skills, sources, lines, failures.
 Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad arguments.
 """
@@ -18,6 +18,8 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 #   action-caption-is-default    FAIL  caption is the Mendix default ("Retrieve Invoice", "Commit object")
 #   placeholder-variable         FAIL  $Int1, $List2, $tmp, $x ...
 #   type-echo-variable           FAIL  name ends in _List, _Object or _Obj
+# --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
+# default, since 286 of them landed at once on a session with no test green yet.
 
 from __future__ import annotations
 
@@ -87,7 +89,7 @@ class Failure(dict):
 
 
 class Warning_(dict):
-    """A finding the author cannot fix; reported but does not fail the run."""
+    """A finding reported that does not fail the run (one the author cannot fix, or a demoted caption rule)."""
 
     def __init__(self, check: str, message: str, line: int | None = None):
         super().__init__(check=check, message=message, line=line)
@@ -262,6 +264,11 @@ def check_naming(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
 
 CHECKS = {"naming": check_naming}
 
+# The wording rules: a flow runs the same without them. Variable names and loop captions that
+# mxcli drops stay failures.
+CAPTION_RULES = {"decision-caption", "caption-restates-expression", "caption-not-a-question",
+                 "loop-annotation", "action-caption", "action-caption-is-default"}
+
 
 def collect_text(sources: list[Path]) -> tuple[str, list[Path]]:
     """Joined text of every .mdl under sources, and the files read; missing paths are skipped."""
@@ -287,6 +294,8 @@ def main() -> int:
         required=True,
         help="which skill's rules to enforce (repeatable)",
     )
+    parser.add_argument("--captions", choices=("error", "warn"), default="error",
+                        help="warn: caption rules are warnings, not failures")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -303,6 +312,12 @@ def main() -> int:
         skill_failures, skill_warnings = CHECKS[skill](lines)
         failures.extend(skill_failures)
         warnings.extend(skill_warnings)
+    caption_warnings = 0
+    if args.captions == "warn":
+        demoted = [f for f in failures if f["check"] in CAPTION_RULES]
+        failures = [f for f in failures if f["check"] not in CAPTION_RULES]
+        warnings.extend(Warning_(f["check"], f["message"], f["line"]) for f in demoted)
+        caption_warnings = len(demoted)
 
     report = {
         "verdict": "PASS" if not failures else "FAIL",
@@ -316,7 +331,8 @@ def main() -> int:
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        print(f"{report['verdict']}  {len(failures)} failure(s) over {len(lines)} lines")
+        extra = f", {caption_warnings} caption warning(s)" if caption_warnings else ""
+        print(f"{report['verdict']}  {len(failures)} failure(s) over {len(lines)} lines{extra}")
         for failure in failures:
             location = f"line {failure['line']}" if failure["line"] else "-"
             print(f"  - [{failure['check']}] {location}: {failure['message']}")

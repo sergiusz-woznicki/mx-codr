@@ -93,9 +93,10 @@ measured, not assumed: markers written into all three were gone after one
 So the project's own instructions live where mxcli does not reach:
 
 - **`.claude/rules/mdl-skills.md`** — loaded into every session at launch, same
-  priority as `.claude/CLAUDE.md`. It names the six skills and when each applies,
-  because mxcli's generated `CLAUDE.md` skill table lists only mxcli's own skills
-  and an agent that follows that table never sees these.
+  priority as `.claude/CLAUDE.md`. It names `test-first-delivery` as the one skill to
+  read before the first feature; the other project skills are named by the gate finding
+  that needs them, because mxcli's generated `CLAUDE.md` skill table lists only mxcli's
+  own skills and an agent that follows that table never sees these.
 - **`.claude/settings.local.json`** — registers Claude's two hooks.
 - **`.codex/hooks.json`** — registers the Codex equivalents plus a `Stop` gate.
   Codex discovers the six `.agents/skills/` copies automatically. Project hooks
@@ -150,7 +151,7 @@ The hooks are the part that does not depend on the model choosing to comply:
 | `remind-skills.sh` | every Claude user prompt | adds one line of context naming the skills and what "done" means |
 | `remind-skills-codex.sh` | every Codex user prompt | gives the same rule using Codex's `$skill-name` invocation syntax |
 | `before-mxcli-exec.sh` | before a Claude Bash call containing `mxcli exec <script>.mdl` | runs `tests/precheck.sh` (the scripts applied to a scratch copy of the model, then `mx check` there, ~3-5s, and nothing at all when the same scripts already passed) and blocks the exec with the `[error]` lines when it would break the build -- the CE errors `mxcli check` cannot see |
-| `guard-harness-env.sh` | before a Claude Bash, Edit or Write call, a Codex shell call, Cursor's `beforeShellExecution`, and in the OpenCode and Pi plugins | blocks a session writing what judges it: `tests/harness.env`, the harness's own files (`tools/mdl-checks/`, the harness scripts in `tests/` that `INSTALL.json` records, `.claude/lint-rules/`, the hook and plugin configs), and `tests/gate.sh` run with a gate switch set inline. Only writes: reading, copying from, and the session's own `verify-*` tests, `mdlsource/` and `credentials.env` pass. `MDL_HARNESS_EDITS=allow` in `tests/harness.env` (the person's) lifts the harness-file part. Codex and Cursor edit files outside these hooks, so there only the shell route is covered; the gate's drift check still names a changed file |
+| `guard-harness-env.sh` | before a Claude Bash, Edit or Write call, a Codex shell call, Cursor's `beforeShellExecution`, and in the OpenCode and Pi plugins | blocks a search or read outside the project (`find /`, a recursive grep of `/System/...`, `sed` on the mxcli source under `/private/tmp`, `~/.mxcli/mxbuild`): a session scanned the whole disk for a login and read the mxcli source for a widget's syntax, and nothing outside the project answers a Mendix question; a `/tmp/x.log` the session wrote passes. Also blocks a session writing what judges it: `tests/harness.env`, the harness's own files (`tools/mdl-checks/`, the harness scripts in `tests/` that `INSTALL.json` records, `.claude/lint-rules/`, the hook and plugin configs), and `tests/gate.sh` run with a gate switch set inline. Only writes: reading, copying from, and the session's own `verify-*` tests, `mdlsource/` and `credentials.env` pass. `MDL_HARNESS_EDITS=allow` in `tests/harness.env` (the person's) lifts the harness-file part. Codex and Cursor edit files outside these hooks, so there only the shell route is covered; the gate's drift check still names a changed file |
 | `after-mxcli-exec.sh` | after a Claude Bash call containing `mxcli exec` | runs coverage and reports only a failure on stdout |
 | `after-mxcli-exec-codex.sh` | after a Codex Bash call containing `mxcli exec` | adapts coverage failures to Codex's exit-2 feedback contract and marks the session as requiring the full gate |
 | `stop-gate-codex.sh` | when that Codex session tries to finish | runs `bash tests/gate.sh`; exit 2 continues the turn until the positive `DONE — every check passed` line appears |
@@ -182,6 +183,16 @@ line:
 
 Every naming finding carries its fix after ` -- `, as the layout ones already did: a session that
 could not tell what `loop-annotation` wanted opened `check_mdl.py` to find out.
+
+The caption rules (`action-caption`, `decision-caption`, `caption-not-a-question` and the other
+wording rules) are warnings in the gate: 286 of them once landed at once on a session with no
+test green yet. `MDL_CAPTIONS=error` in `tests/harness.env` makes them block again; variable-name
+rules always block. A capped list says so ("10 of 286 shown"): the next session read ten lines as
+ten findings. `MxTest`, the module `mxcli test` injects, is not one of the app's own: a
+gate that listed it could not run naming.
+
+A `# covers:` line may separate its names with commas or spaces. A session wrote spaces and read
+0/24 covered with every test green.
 
 ### What the gate says about tests that never failed
 
@@ -221,6 +232,12 @@ A scenario that ends without a `return` now says so ("returned nothing -- end th
 with a return"), instead of "produced no result ... needs: playwright-cli open", which sent a
 session to the browser. The `sleep` block covers a hand-rolled wait on `.mxcli/gate-boot.log` or
 `runtime.log` too, not only one in front of `tests/gate.sh`.
+
+A scenario run outside the gate's runner (peek.sh, or a test run by hand after the gate) opens the
+browser itself when playwright-cli says none is open, and runs once more; two sessions retried the
+same command on "Browser 'default' is not open". `MDL_CLOSE_BROWSER=1` in `tests/harness.env`
+closes the browser after each suite and on `--stop`: sessions left theirs open, 39 of them at once
+(6.5 GB). Off by default, since `--only` reuses the open browser and its sign-in.
 
 With `mxcli run --watch`, the gate now waits until the boot log has been quiet for a few seconds
 after its last "applied" line, and until the app actually serves the web client that
@@ -304,11 +321,14 @@ project booted with `MDL_BOOT_COMMAND`, a pointer to the test-microflows skill i
 ### The syntax every session looks up
 
 Three measured sessions asked `./mxcli syntax <topic>` 22, 25 and 19 times each, one topic per
-round trip, and mostly the same fourteen topics: entities, associations, enumerations, module
-and user roles, demo users, entity access, settings, modules, pages, page actions, snippets,
-navigation and object operations. Their `Syntax:` blocks go into one digest (about 17 kB) made
-from the project's own `./mxcli`, so it matches the version; its first line records which one,
-and it is written again when the version changes.
+round trip. The first digest carried the `Syntax:` blocks of nineteen leaf topics (25 kB); seven
+later sessions (445 lookups) showed what sessions actually ask for is the **index** pages -- the
+bare `./mxcli syntax` 27 times, `syntax microflow` 51, `page` 36, `security` 16, `layout` 15 --
+while the nineteen leaves were looked up 10 times in 89 with the digest in the prompt. The digest
+now holds the index rows (a topic per line, so a session names the leaf it needs in one call),
+the small leaves every app writes (roles, page access, variables, retrieve, show page) and the
+pitfalls: 14 kB, made from the project's own `./mxcli`, so it matches the version; its first line
+records which one, and it is written again when the version or the topic list changes.
 
 A file the agent is told to read was not enough -- a fourth session listed the digest's table of
 contents and still asked 165 times -- so the digest now goes where each host loads instructions
@@ -319,6 +339,25 @@ Claude Code reads `.claude/rules/` only when a session starts -- and `tests/orie
 current (`mdl_syntax_digest` in `portable.sh`). The rules file keeps only what no `syntax` topic
 says: the spacing, grid-filter and message rules that are this harness's own.
 
+### What a session reads before it starts, measured
+
+Seven Pi sessions (GLM, DeepSeek, Qwen, mtplx) were measured for where their context went. The
+fixed prompt (rules 19 kB, digest 25 kB, `AGENTS.md` 6 kB) was the smaller part: the rules told
+every session to read four skills before writing anything -- `test-first-delivery`,
+`module-structure`, `naming-and-captions`, `spacing-and-layout` -- 62 kB per session, re-read
+after every compaction (`spacing-and-layout` five times in one session), and the layout findings
+those skills describe came anyway, each with its fix, which is what the session then applied.
+Text in the prompt did not land (the "grant in the same script" pitfall was in it; CE0557 came);
+a hint at the moment of the error did (CE1613 fixed in one try).
+
+So the rules are 8 kB and name one skill to read first; the others are named by the finding
+that needs them, and the per-prompt reminder says the same. What each check code wants and its
+fix is one page, `tests/CHECKS.md` -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it
+per session) for what `HOME01` or `--only` required -- and a red verdict points at it. The
+summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
+is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
+on tests that do not count for DONE. The gate's requirements themselves are unchanged.
+
 A test's `# covers:` line may name a published OData or REST service as well as a page, snippet or
 microflow: an OData test named its service, failed coverage with "8/8 covered", and the session
 rewrote the checker. A name that counts for nothing now says why ("an entity -- name the page or
@@ -327,7 +366,7 @@ microflow the test drives instead"). Shell values reach a scenario as `vars.<NAM
 body cost DeepSeek, Qwen and GLM minutes each.
 
 On top of the digest sits `checks/mdl-pitfalls.md` (installed as `tools/mdl-checks/mdl-pitfalls.md`):
-a dozen "write this, not that" lines for what cost measured sessions the most time -- the
+eighteen "write this, not that" lines for what cost measured sessions the most time (six of them confirmed by a second model on the same prompt) -- the
 `[%CurrentDateTime%]` token, a token's quoting inside `where '...'`, the association/entity path
 of an access rule, reference combo boxes, `Account.Name`, and in tests the scenario runner (no
 `fetch` or `Buffer`: `page.request` or `curl`; `result=$(scenario '...')` with no quotes around it). Two Pi sessions (Qwen 3.8, DeepSeek 4)
@@ -347,6 +386,10 @@ that would stop half-way and leave the model half-applied. It does **not** see w
 deployment build sees: a Marketplace module whose version does not match the project's Mendix
 version passes the precheck and fails the build (CE4271). `MDL_PRECHECK=0` in `tests/harness.env`
 turns the whole thing off.
+
+A blocked command runs none of its steps. When something comes before the `mxcli exec` (an edit,
+`python3 - <<EOF ... EOF; ./mxcli exec ...`), the block says that nothing ran, the edit included:
+GLM sent that shape seven times and debugged an edit that was never applied.
 
 When a script fails to apply at all, precheck prints the errors themselves -- the `✗` lines, a
 `Parse error:` or an `Error:` line, at most fifteen -- and then the verdict; a `tail` of mxcli

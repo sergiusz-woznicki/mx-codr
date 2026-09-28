@@ -80,7 +80,7 @@ function run(command, cwd, timeout, input) {
 // harness's own checkers and scripts, the hook configs. The reason, or null.
 function harnessEnvBlocked(root, tool, args) {
   const text = JSON.stringify(args ?? {})
-  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin/.test(text)) return null
+  if (!/harness\.env|tests[\/\\]|mdl-checks|lint-rules|settings\.local\.json|hooks\.json|extensions|plugin|\b(find|grep|egrep|fgrep|rg|ag|fd|mdfind|locate) |\/(System|Applications|Library|usr|opt|private|tmp|Users|home)\/|~\/|\$HOME/.test(text)) return null
   const guard = join(root, "tools", "mdl-checks", "hooks", "guard-harness-env.sh")
   if (!existsSync(guard)) return null
   const payload = JSON.stringify({ tool_name: tool, tool_input: args ?? {} })
@@ -100,6 +100,17 @@ function isSleepBeforeGate(command) {
 }
 
 // `for f in a b; do mxcli exec mdlsource/$f.mdl`: the scripts are a variable, so precheck sees none.
+// A blocked command runs none of its steps: GLM sent `python3 <edit> ... ; ./mxcli exec` seven
+// times, was blocked before the edit ran, and debugged an edit that was never applied.
+const STEPS_BEFORE_EXEC =
+  "Nothing in this command ran, the steps before the exec included (an edit there never happened): the script was checked as it is on disk. Run those steps on their own, then the exec as its own command.\n"
+function stepsBeforeExec(command) {
+  const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
+  if (!m) return false
+  const trivial = /^((export\s+)?[A-Za-z_]\w*=("[^"]*"|'[^']*'|\S*)\s*)*$|^cd\s+\S+$/
+  return command.slice(0, m.index).split(/&&|\|\||[;|\n]/).some((step) => !trivial.test(step.trim()))
+}
+
 const EXEC_THROUGH_VARIABLE =
   "Blocked: that exec names its script through a variable (`$f.mdl` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"
 
@@ -217,7 +228,8 @@ export default function mendixMdlHarness(pi) {
       block: true,
       reason:
         "Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). " +
-        "Fix the script and exec again:\n" + out.slice(-OUTPUT_LIMIT),
+        "Fix the script and exec again:\n" +
+        (stepsBeforeExec(command) ? STEPS_BEFORE_EXEC : "") + out.slice(-OUTPUT_LIMIT),
     }
   })
 

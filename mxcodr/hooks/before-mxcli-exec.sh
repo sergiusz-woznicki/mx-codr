@@ -62,6 +62,22 @@ for i, word in enumerate(words):
         if re.match(r"\s*(create|alter|drop|grant|revoke|move|rename)\b", words[i + 1], re.I):
             sys.stdout.write(words[i + 1] + "\0")' 2>/dev/null
 }
+# steps_before_exec <command> -- prints a note when the command does more than set variables or cd
+# before its `mxcli exec`: a blocked command runs none of it. GLM sent `python3 <edit> ... ; ./mxcli
+# exec` seven times, was blocked before the edit ran, and debugged an edit that was never applied.
+steps_before_exec() {
+  printf '%s' "$1" | "$PY" -c 'import re, sys
+text = sys.stdin.read()
+m = re.search(r"(?:^|[\s;&|(])(?:\./)?mxcli(?:\.exe)?\s+exec\b", text)
+if not m:
+    sys.exit(0)
+trivial = re.compile(r"""^((export\s+)?[A-Za-z_]\w*=("[^"]*"|\x27[^\x27]*\x27|\S*)\s*)*$|^cd\s+\S+$""")
+for step in re.split(r"&&|\|\||[;|\n]", text[:m.start()]):
+    if not trivial.match(step.strip()):
+        print("Nothing in this command ran, the steps before the exec included (an edit there never happened): the script was checked as it is on disk. Run those steps on their own, then the exec as its own command.")
+        break' 2>/dev/null
+}
+
 inline=()
 case "$command" in *mxcli*-c*)
   while IFS= read -r -d '' statement; do inline+=(--inline "$statement"); done < <(inline_mdl "$command") ;;
@@ -110,6 +126,7 @@ status=$?
 if [ "$status" -ne 0 ]; then
   {
     echo "Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). Fix the script and exec again:"
+    steps_before_exec "$command"
     printf '%s\n' "$out"
   } >&2
   exit 2

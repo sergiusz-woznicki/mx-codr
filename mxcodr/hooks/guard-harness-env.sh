@@ -18,9 +18,18 @@
 # MDL_HARNESS_EDITS=allow in tests/harness.env (the person's file) lets harness files be edited;
 # harness.env itself stays the person's either way. Anything the guard cannot read passes, and the
 # gate's drift check (INSTALL.json checksums) still names a changed harness file.
+#
+# Searching or reading outside the project is blocked too: a session ran `find / -name login.js`
+# (a whole-disk scan, killed after minutes) and read the mxcli source checkout under /private/tmp
+# for a widget's syntax. Nothing outside the project answers a Mendix question. Blocked: find,
+# recursive grep, rg/ag/fd, mdfind and locate rooted outside the project; cat/sed/head/tail/less/
+# strings/awk of a file under /System, /Applications, /Library, /usr, /opt, ~/.mxcli, or a tree
+# two or more levels under /tmp (a `/tmp/gate.log` the session wrote itself passes).
 
 input="$(cat)"
-case "$input" in *harness.env*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;; *) exit 0 ;; esac
+case "$input" in *harness.env*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;;
+  *find\ *|*grep\ *|*egrep\ *|*fgrep\ *|*rg\ *|*ag\ *|*fd\ *|*mdfind*|*locate\ *|*/System/*|*/Applications/*|*/Library/*|*/usr/*|*/opt/*|*/private/*|*/tmp/*|*~/*|*\$HOME*|*/Users/*|*/home/*) ;;
+  *) exit 0 ;; esac
 
 # Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
 mdl_find_python() {
@@ -123,8 +132,77 @@ def shell_targets(command):
             targets += [w[3:] for w in words if w.startswith("of=")]
     return targets
 
+HOME = os.path.expanduser("~").replace("\\", "/").rstrip("/")
+READ_ROOTS = ("/System", "/Applications", "/Library", "/usr", "/opt", HOME + "/.mxcli/mxbuild", HOME + "/.mxcli/runtime")
+SEARCH_VERBS = ("find", "rg", "ag", "fd", "fdfind", "mdfind", "locate")
+READ_VERBS = ("cat", "sed", "head", "tail", "less", "more", "strings", "awk", "bat")
+
+def expand(path):
+    path = path.strip().strip("\x22\x27").replace("\\", "/")
+    if path == "~" or path.startswith("~/"):
+        path = HOME + path[1:]
+    path = path.replace("$HOME", HOME).replace("${HOME}", HOME)
+    return path
+
+def outside(path):
+    """An absolute path not under the project, or a relative one that climbs out of it."""
+    p = expand(path)
+    if p.startswith("/dev/"):
+        return False
+    if p.startswith("/") or re.match(r"^[A-Za-z]:/", p):
+        return not (p.lower() == root.lower() or p.lower().startswith(root.lower() + "/"))
+    return p == ".." or p.startswith("../")
+
+def deep_tmp(path):
+    p = expand(path)
+    m = re.match(r"^(/private/tmp|/tmp|/System/Volumes/Data/private/tmp)/(.+)$", p)
+    return bool(m) and "/" in m.group(2)
+
+def outside_target(command):
+    """The first path a command searches or reads outside the project, or None."""
+    for segment in re.split(r"&&|\|\||[;|\n]", command):
+        try:
+            words = shlex.split(segment)
+        except ValueError:
+            words = segment.split()
+        words = [w for w in words if w not in (">", ">>", "<")]
+        if not words:
+            continue
+        verb = os.path.basename(words[0])
+        rest = words[1:]
+        if verb in ("mdfind", "locate"):
+            return verb
+        if verb in SEARCH_VERBS:
+            roots = []
+            for w in rest:
+                if w.startswith("-"):
+                    if verb == "find":
+                        break
+                    continue
+                roots.append(w)
+            if verb != "find":
+                roots = roots[1:]  # the first operand is the pattern
+            for r in roots:
+                if outside(r):
+                    return r
+        elif verb in ("grep", "egrep", "fgrep") and any(
+                w in ("--recursive", "--dereference-recursive")
+                or (w.startswith("-") and not w.startswith("--") and ("r" in w[1:] or "R" in w[1:])) for w in rest):
+            operands = [w for w in rest if not w.startswith("-")]
+            for r in operands[1:]:
+                if outside(r):
+                    return r
+        elif verb in READ_VERBS:
+            for w in rest:
+                if w.startswith("-"):
+                    continue
+                p = expand(w)
+                if any(p == r or p.startswith(r + "/") for r in READ_ROOTS) or deep_tmp(w):
+                    return w
+    return None
+
 SWITCHES = ("MDL_REQUIRE_PRODUCTION", "MDL_ALLOW_GREEN_FIRST", "MDL_VISUAL", "MDL_VISUAL_REVIEW",
-            "MDL_RUNTIME_ERRORS", "MDL_PRECHECK", "MDL_GATE_CACHE", "MDL_HARNESS_EDITS")
+            "MDL_RUNTIME_ERRORS", "MDL_PRECHECK", "MDL_GATE_CACHE", "MDL_HARNESS_EDITS", "MDL_CAPTIONS")
 hit = None
 if tool == "bash":
     command = str(args.get("command") or "")
@@ -136,6 +214,10 @@ if tool == "bash":
     if not hit and re.search(r"tests[/\\\\](gate|precheck)\.sh", command) and re.search(
             r"(^|[\s;&|(])(export\s+)?(%s)=" % "|".join(SWITCHES), command):
         hit = ("switch", "")
+    if not hit:
+        away = outside_target(command)
+        if away:
+            hit = ("outside", away)
 elif tool in ("edit", "write", "multiedit", "notebookedit", "patch", "apply_patch"):
     path = str(args.get("file_path") or args.get("filePath") or args.get("notebook_path")
                or args.get("path") or "")
@@ -155,6 +237,17 @@ the gate checks it against INSTALL.json). Do not change a check to get past it. 
 wrong -- it flags something that is right -- leave it, finish what you can, and say in your report
 which check, what it said and why it is wrong: the person fixes it in mx-codr, for every project.
 Your own tests (tests/verify-*.test.sh), scripts (mdlsource/) and tests/credentials.env are yours.
+MSG
+  exit 2
+fi
+if [ "$what" = "outside" ]; then
+  cat >&2 <<MSG
+Blocked: that searches or reads outside this project ($path). Nothing outside the project answers
+a Mendix question, and a whole-disk scan runs for minutes: the model is read with ./mxcli (SHOW,
+DESCRIBE), syntax with ./mxcli syntax <topic> (the digest in your context lists the topics), widgets
+in .ai-context/skills/widgets/, and what a check wants in tests/CHECKS.md. Users sign in on the
+runtime's own page: security PRODUCTION and demo users, no login code of your own. Studio Pro,
+mxbuild and the mxcli source hold nothing you need.
 MSG
   exit 2
 fi
