@@ -36,19 +36,12 @@ const NO_BASH =
   "Install Git for Windows and make sure bash.exe is on the PATH."
 
 const RULES = [
-  "Project rules (full text: `.claude/rules/mdl-skills.md`). 1. Start with `bash tests/orient.sh`,",
-  "not by exploring by hand. 2. Before building or changing any feature read",
-  "`.ai-context/skills/test-first-delivery/SKILL.md`: write tests/verify-<feature>.test.sh, run",
-  "`bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on",
-  "that ONE script. 3. Before creating a module or changing a Marketplace module (`<Module>Ext`):",
-  "`module-structure`; before a page: `spacing-and-layout` (side-by-side widgets need",
-  "`DesignProperties` Spacing, never CSS); before a microflow: `naming-and-captions` (a business",
-  "`@caption` on every decision AND action). Read exactly those four skill files up front and",
-  "nothing else, one file per command (never one combined `cat`). 4. Syntax: `./mxcli syntax",
-  "<topic>`, then `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec (a hook",
-  "runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand); do not sweep",
-  "SKILL.md files. 5. Done = `bash tests/gate.sh` (suite + mx check + lint +",
-  "coverage + naming + layout + security) ends in `DONE`.",
+  "Project rules (full text: `.claude/rules/mdl-skills.md`).",
+  "1. Start with `bash tests/orient.sh`, not by exploring by hand.",
+  "2. Before building or changing any feature read `.ai-context/skills/test-first-delivery/SKILL.md`: write tests/verify-<feature>.test.sh, run `bash tests/gate.sh --only <feature> --boot-if-needed`, watch it FAIL first, then iterate on that ONE script.",
+  "3. Read no other skill up front: a gate finding names the skill it needs (`spacing-and-layout` for a page, `module-structure` for a new module or for changing a Marketplace module (`<Module>Ext`), `naming-and-captions` for a microflow) and carries its fix; what each code wants is one page, `tests/CHECKS.md`, never the gate's source.",
+  "4. Syntax: the digest in your context has the topic indexes and the pitfalls; `./mxcli syntax <topic>` for a leaf, several per command; `./mxcli check <script>.mdl -p <app>.mpr --references` before every exec (a hook runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand); do not sweep SKILL.md files.",
+  "5. Done = `bash tests/gate.sh` (suite + mx check + lint + coverage + naming + layout + security) ends in `DONE`.",
 ].join(" ")
 
 // Per-session state on disk, so it survives reloads.

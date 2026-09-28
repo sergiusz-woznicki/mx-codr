@@ -160,6 +160,8 @@ BLOCKERS_SHOWN=5
 print_blockers() {
   local entry name label detail count shown pattern
   pattern='^[[:space:]]*- \[|\[error\]|^[[:space:]]*FAIL[[:space:]:]|^[[:space:]]+- '
+  # Three sessions grepped tests/gate/*.sh for what a code required; the page says it in one line.
+  echo "   what each code wants and its fix: tests/CHECKS.md -- not the gate's source"
   echo "== still blocking DONE"
   # details holds name|label for every failed or unrunnable check, in the order they printed.
   # Every finding up to BLOCKERS_SHOWN, each with its fix: a session that saw only the first one

@@ -128,6 +128,12 @@ if you use one — is listed at the end with the command to run.
 You never run the checks yourself. The agent runs the gate, and the hooks make sure
 it does.
 
+The agent reads one skill before the first feature (`test-first-delivery`); every other
+project skill is named by the gate finding that needs it, with the fix in the finding. What each
+check code wants is one page, `tests/CHECKS.md`. Measured on seven sessions, a session read about
+113 kB before its first change; the new shape is about 48 kB, to be confirmed by an A/B run. The
+gate is unchanged.
+
 ## Does it make a difference?
 
 Two A/B runs: the same prompt, the same model, a fresh app each time — once without

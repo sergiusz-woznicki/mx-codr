@@ -207,6 +207,9 @@ step_visual() {
 note_microflow_tests() {
   local count how
   [ -n "$(find tests -name '*.test.mdl' -o -name '*.test.md' 2>/dev/null | head -1)" ] || return 0
+  # Only once the suite is green: with it red, two sessions took this line as the next job and
+  # spent 20-40 minutes on microflow tests that do not count for DONE.
+  [ -z "${failures[*]:-}" ] || return 0
   count="$("$MXCLI" test tests/ -p "$MPR" --list 2>/dev/null | sed -nE 's/^Found ([0-9]+) test.*/\1/p' | head -1)"
   if [ -n "${MDL_BOOT_COMMAND:-}" ]; then
     # This project boots without `mxcli run --local` (Windows), and `mxcli test --local` boots the same way.

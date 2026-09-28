@@ -93,9 +93,10 @@ measured, not assumed: markers written into all three were gone after one
 So the project's own instructions live where mxcli does not reach:
 
 - **`.claude/rules/mdl-skills.md`** — loaded into every session at launch, same
-  priority as `.claude/CLAUDE.md`. It names the six skills and when each applies,
-  because mxcli's generated `CLAUDE.md` skill table lists only mxcli's own skills
-  and an agent that follows that table never sees these.
+  priority as `.claude/CLAUDE.md`. It names `test-first-delivery` as the one skill to
+  read before the first feature; the other project skills are named by the gate finding
+  that needs them, because mxcli's generated `CLAUDE.md` skill table lists only mxcli's
+  own skills and an agent that follows that table never sees these.
 - **`.claude/settings.local.json`** — registers Claude's two hooks.
 - **`.codex/hooks.json`** — registers the Codex equivalents plus a `Stop` gate.
   Codex discovers the six `.agents/skills/` copies automatically. Project hooks
@@ -320,11 +321,14 @@ project booted with `MDL_BOOT_COMMAND`, a pointer to the test-microflows skill i
 ### The syntax every session looks up
 
 Three measured sessions asked `./mxcli syntax <topic>` 22, 25 and 19 times each, one topic per
-round trip, and mostly the same fourteen topics: entities, associations, enumerations, module
-and user roles, demo users, entity access, settings, modules, pages, page actions, snippets,
-navigation and object operations. Their `Syntax:` blocks go into one digest (about 17 kB) made
-from the project's own `./mxcli`, so it matches the version; its first line records which one,
-and it is written again when the version changes.
+round trip. The first digest carried the `Syntax:` blocks of nineteen leaf topics (25 kB); seven
+later sessions (445 lookups) showed what sessions actually ask for is the **index** pages -- the
+bare `./mxcli syntax` 27 times, `syntax microflow` 51, `page` 36, `security` 16, `layout` 15 --
+while the nineteen leaves were looked up 10 times in 89 with the digest in the prompt. The digest
+now holds the index rows (a topic per line, so a session names the leaf it needs in one call),
+the small leaves every app writes (roles, page access, variables, retrieve, show page) and the
+pitfalls: 14 kB, made from the project's own `./mxcli`, so it matches the version; its first line
+records which one, and it is written again when the version or the topic list changes.
 
 A file the agent is told to read was not enough -- a fourth session listed the digest's table of
 contents and still asked 165 times -- so the digest now goes where each host loads instructions
@@ -334,6 +338,25 @@ extension extends (Pi); under Codex the rules say to `cat` it once. The installe
 Claude Code reads `.claude/rules/` only when a session starts -- and `tests/orient.sh` keeps it
 current (`mdl_syntax_digest` in `portable.sh`). The rules file keeps only what no `syntax` topic
 says: the spacing, grid-filter and message rules that are this harness's own.
+
+### What a session reads before it starts, measured
+
+Seven Pi sessions (GLM, DeepSeek, Qwen, mtplx) were measured for where their context went. The
+fixed prompt (rules 19 kB, digest 25 kB, `AGENTS.md` 6 kB) was the smaller part: the rules told
+every session to read four skills before writing anything -- `test-first-delivery`,
+`module-structure`, `naming-and-captions`, `spacing-and-layout` -- 62 kB per session, re-read
+after every compaction (`spacing-and-layout` five times in one session), and the layout findings
+those skills describe came anyway, each with its fix, which is what the session then applied.
+Text in the prompt did not land (the "grant in the same script" pitfall was in it; CE0557 came);
+a hint at the moment of the error did (CE1613 fixed in one try).
+
+So the rules are 8 kB and name one skill to read first; the others are named by the finding
+that needs them, and the per-prompt reminder says the same. What each check code wants and its
+fix is one page, `tests/CHECKS.md` -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it
+per session) for what `HOME01` or `--only` required -- and a red verdict points at it. The
+summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
+is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
+on tests that do not count for DONE. The gate's requirements themselves are unchanged.
 
 A test's `# covers:` line may name a published OData or REST service as well as a page, snippet or
 microflow: an OData test named its service, failed coverage with "8/8 covered", and the session

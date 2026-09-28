@@ -332,13 +332,16 @@ PY_FRESH
 # The first line of the canonical file records the mxcli version it came from; a topic this
 # mxcli does not know is skipped. Needs MXCLI; returns 1 when there is nothing to write.
 MDL_SYNTAX_DIGEST="tools/mdl-checks/syntax-digest.md"
-# Measured again on two Pi sessions (56 lookups): microflow.create, .variables, .retrieve and
-# security.project-security joined. The pitfalls file (tools/mdl-checks/mdl-pitfalls.md) goes on
-# top: those, not syntax, were where the time went.
-MDL_SYNTAX_TOPICS="domain-model.entity.create domain-model.association.create domain-model.enumeration.create
-  security.module-role security.user-role security.demo-user security.entity-access security.project-security
-  settings.alter module page.create page.action page.datasource snippet.create navigation.create
-  microflow.create microflow.variables microflow.retrieve microflow.object-operations"
+# Measured on seven sessions (445 lookups): what sessions ask for is the INDEX pages -- the bare
+# `mxcli syntax` 27 times, `syntax microflow` 51, `page` 36, `security` 16, `layout` 15 -- while the
+# nineteen leaf topics the digest used to carry were looked up 10 times in 89 with the digest in the
+# prompt. So the digest holds the index rows (a topic per line, which is what lets a session name
+# the leaf it needs in one call), the small leaves every app writes, and the pitfalls file
+# (tools/mdl-checks/mdl-pitfalls.md) on top: those, not syntax, were where the time went.
+# `index` is the bare `mxcli syntax`.
+MDL_SYNTAX_TOPICS="index domain-model microflow page layout security navigation integration
+  security.module-role security.user-role security.demo-user security.page-access
+  module page.create microflow.variables microflow.retrieve microflow.show-page microflow.control-flow"
 MDL_PITFALLS="tools/mdl-checks/mdl-pitfalls.md"
 
 mdl_syntax_digest() {
@@ -361,8 +364,11 @@ mdl_syntax_digest() {
       printf 'as it stands and look up only topics that are not here. The rest: `./mxcli syntax`.\n\n'
       [ -f "$MDL_PITFALLS" ] && cat "$MDL_PITFALLS"
       for topic in $MDL_SYNTAX_TOPICS; do
-        block="$("$MXCLI" syntax "$topic" 2>/dev/null \
-          | awk '/^Syntax:$/ { on = 1; next } /^[A-Z][A-Za-z ]+:$/ { on = 0 } on')"
+        if [ "$topic" = "index" ]; then out="$("$MXCLI" syntax 2>/dev/null)"; else out="$("$MXCLI" syntax "$topic" 2>/dev/null)"; fi
+        # A leaf has a Syntax: block; an index page has none, and its rows (two spaces, a topic, a
+        # description) are what to keep.
+        block="$(printf '%s\n' "$out" | awk '/^Syntax:$/ { on = 1; next } /^[A-Z][A-Za-z ]+:$/ { on = 0 } on')"
+        [ -n "$block" ] || block="$(printf '%s\n' "$out" | grep -E '^  [a-z][a-z0-9.-]+ {2,}' | sed -E 's/^  //; s/ {2,}/  /')"
         [ -n "$block" ] || continue
         printf '\n## %s\n\n```\n%s\n```\n' "$topic" "$block"
       done
