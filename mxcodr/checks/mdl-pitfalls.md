@@ -23,13 +23,16 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   (CE0557, CE0106): put the `grant view on page` / `grant execute on microflow` in the same
   script that creates them.
 - **Two scripts that need each other** (a page calls a new microflow that opens that page) belong
-  in one `.mdl`: a script resolves what it creates itself. `--no-check` does not pass the precheck.
+  in one `.mdl`: a `show page` or a button may name what the script creates further down. A `call
+  microflow` may not: create the called microflow first. `--no-check` does not pass the precheck.
 - **Model changes go through a `.mdl` file** and `./mxcli exec`: `mxcli -c "grant ..."` is checked
   like a script, and one broken inline rule used to block every later exec.
 - **A scenario's result must be captured**: `result=$(scenario '...')`, then `field "$result" x`.
   `scenario '...' > /dev/null` leaves nothing to read. Keep the body single-quoted and pass shell
   values in as `SV_<NAME>`: `result=$(SV_PW="$pw" SV_INVOICE=INV-0002 scenario '... vars.PW ...')`
   -- never splice `'"$var"'` into the body, and no quotes around `$(...)` (an assignment needs none).
+  No apostrophe anywhere in that body, comments included: `// the module's page` ends the quoted JS
+  and bash refuses the whole script.
 - **HTTP from a scenario** (an OData or REST test) goes through `page.request.get(url, {headers})`:
   the scenario runner has no Node globals -- no `fetch`, no `Buffer` ("... is not defined").
   Build a Basic-auth header in bash (`SV_AUTH=$(printf '%s' "$user:$pw" | base64)`), use vars.AUTH.

@@ -246,6 +246,12 @@ CE0582 (the classic drop-down, which the React client does not run) gets a hint 
 returns the same body text as before: four sessions read an empty page ("it says: | | |") taken
 while Mendix was still rendering.
 
+A test script bash cannot parse now gets its reason under the gate verdict ("bash cannot parse it:
+line 17: syntax error ..."), plus the usual cause, an apostrophe inside `scenario '...'`. Before,
+the gate showed a bare "FAIL verify-admin (55ms)". The precheck also passes mxcli's own `hint:` lines
+through, for example "defined later in this script -- move its create statement before this one":
+mxcli 0.24 refuses a `call microflow` to a microflow the same script creates further down.
+
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity
 through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never
