@@ -288,6 +288,7 @@ bash tests/diagnose.sh                # why is the app not answering
 A failing test always says why, on one line: one that stops on a silent command names its line and command.
 The precheck also covers MDL given with `mxcli -c`, and tells errors already in the model from the script's own.
 An exec whose script a step in the same command writes (an edit, a `mv`, a redirect) is refused: the precheck runs before the command and would check the old file.
+When a trial-licence runtime runs out of sessions ("Maximum number of sessions exceeded"), the gate names that as the cause of the failed sign-ins instead of the features, and says `--restart` clears them.
 A blocked exec says when the command's earlier steps (an edit) did not run either; a scenario opens the browser when none is open; `# covers:` names may be separated by commas or spaces.
 
 ## Configuration

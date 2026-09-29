@@ -165,7 +165,27 @@ environment_cause() {
       echo "the browser was closed while the suite was running (playwright-cli has one shared browser -- another session or command closed it)" ;;
     *"opening browser: exit status"*)
       echo "the browser could not be started (check .playwright/cli.config.json executablePath, then: playwright-cli close && playwright-cli open)" ;;
+    *"Maximum number of sessions exceeded"*)
+      echo "$SESSION_LIMIT_CAUSE" ;;
+    *)
+      session_limit_in_log && echo "$SESSION_LIMIT_CAUSE" ;;
   esac
+}
+
+# A trial-licence runtime allows a few sessions. Past that it refuses every sign-in, and REST or
+# OData calls with Basic auth fail too: a DeepSeek session saw "sign-in was refused" and "the
+# OData service answered at neither path" in three suites, each test green alone, while
+# runtime.log held 72 lines of "Maximum number of sessions exceeded! (You are currently using a
+# trial license)". The runner often shows only the sign-in failure, so the log is read as well.
+SESSION_LIMIT_CAUSE="the runtime ran out of sessions (trial licence: \"Maximum number of sessions exceeded\" in .mxcli/runtime.log) -- sign-ins were refused and Basic-auth REST/OData calls failed, most likely not the features. bash tests/gate.sh --restart starts with none; each user a scenario signs in as, and each Basic-auth call, can hold one"
+
+# session_limit_in_log -- true when runtime.log has the session-limit line since the suite started.
+session_limit_in_log() {
+  local log="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}" started
+  [ -f "$log" ] && [ -s "$WORK/tests.started" ] || return 1
+  started="$(cat "$WORK/tests.started")"
+  awk -v since="$started" '($1 " " substr($2, 1, 8)) >= since && /Maximum number of sessions exceeded/ { found = 1; exit }
+    END { exit !found }' "$log"
 }
 
 # record_suite_result <runner output> <exit code> <environment cause> -- the tests line of the
