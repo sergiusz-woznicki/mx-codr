@@ -3,7 +3,7 @@
 # before-mxcli-exec.sh (Claude Code, Codex) and before-mxcli-exec-cursor.sh (Cursor); never run on
 # its own. The two hooks differed only in how they read the call and answer it, and three changes
 # in one day were made twice each. Provides: PY, hook_sleep_message, inline_mdl,
-# steps_before_exec, hook_scripts, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.
+# steps_before_exec, hook_scripts, script_written_before_exec, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.
 
 # Prints the first Python that actually runs (Windows may have only a Store stub).
 mdl_find_python() {
@@ -80,7 +80,7 @@ for step in re.split(r"&&|\|\||[;|\n]", text[:m.start()]):
 # hook_scripts <command> -- the .mdl words of the command, one per line, split like a shell (shlex,
 # no execution; globs expanded, bounded like after-mxcli-exec.sh).
 hook_scripts() {
-  printf '%s' "$1" | "$PY" -c 'import glob, shlex, sys
+  printf '%s' "$1" | "$PY" -c 'import glob, os, shlex, sys
 text = sys.stdin.read()
 try:
     words = shlex.split(text)
@@ -91,6 +91,10 @@ seen = set()
 for word in words:
     if not word.endswith(".mdl") or word in seen:
         continue
+    # `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
+    for var in ("${PWD}/", "$PWD/", "$(pwd)/"):
+        if word.startswith(var):
+            word = os.getcwd() + "/" + word[len(var):]
     seen.add(word)
     matches = []
     if any(c in word for c in "*?[") and word.count("*") <= 4:
@@ -100,6 +104,29 @@ for word in words:
                 break
             matches.append(match)
     print("\n".join(matches) if matches else word)' 2>/dev/null
+}
+
+# script_written_before_exec <command> <script>... -- prints the block message when a step before
+# the exec writes one of its scripts (an edit, a move, a new file). The precheck runs before the
+# command, so it checked the old file -- or found none and let the exec through: a DeepSeek session
+# ran `mv 05b.mdl 04c.mdl && mxcli exec 04c.mdl`, and a python edit followed by the exec put four
+# build errors into the model. A step that only reads the script (grep, cat) is fine. Same rule as
+# scriptWrittenBeforeExec in checks/plugins/harness-core.cjs.
+script_written_before_exec() {
+  local command="$1"; shift
+  printf '%s' "$command" | "$PY" -c 'import re, sys
+text = sys.stdin.read()
+m = re.search(r"(?:^|[\s;&|(])(?:\./)?mxcli(?:\.exe)?\s+exec\b", text)
+if not m:
+    sys.exit(0)
+before = text[:m.start()]
+writes = re.search(r"<<|(^|[\s;&|(])(mv|cp|tee|rm|ln|rsync|install|patch|ed|perl|python3?|node|ruby|git)\s|(^|[\s;&|(])sed\s+(-[a-zA-Z]*\s+)*-i", before)
+for script in sys.argv[1:]:
+    name = script.rsplit("/", 1)[-1]
+    redirected = re.search(r">>?\s*\S*" + re.escape(name), before)
+    if redirected or (writes and (script in before or name in before)):
+        print("Blocked: a step before the exec writes %s (an edit, a move or a new file), and the precheck runs before the command -- it would check the old file, or none. Nothing in this command ran. Run that step on its own, then `./mxcli exec %s` as its own command." % (script, script))
+        break' "$@" 2>/dev/null
 }
 
 HOOK_VARIABLE_MESSAGE="Blocked: that exec names its script through a variable (\`\$f.mdl\` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"

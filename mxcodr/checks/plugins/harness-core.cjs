@@ -97,6 +97,34 @@ function stepsBeforeExec(command) {
   return command.slice(0, m.index).split(/&&|\|\||[;|\n]/).some((step) => !trivial.test(step.trim()))
 }
 
+// A step before the exec that writes one of its scripts (an edit, a move, a new file): the precheck
+// runs before the command, so it checked the old file -- or, for a file the step creates, found none
+// and let the exec through unchecked. A DeepSeek session ran `mv 05b.mdl 04c.mdl && mxcli exec
+// 04c.mdl` and a python heredoc edit followed by the exec; the second put four build errors into
+// the model. A step that only reads the script (grep, cat) is fine.
+const WRITES_BEFORE_EXEC = /<<|(^|[\s;&|(])(mv|cp|tee|rm|ln|rsync|install|patch|ed|perl|python3?|node|ruby|git)\s|(^|[\s;&|(])sed\s+(-[a-zA-Z]*\s+)*-i/
+function scriptWrittenBeforeExec(command, scripts) {
+  const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
+  if (!m) return null
+  const before = command.slice(0, m.index)
+  const name = (script) => script.split("/").pop()
+  const mentions = (script) => before.includes(script) || before.includes(name(script))
+  // `> x.mdl` writes it; `2>/dev/null` next to a `grep x.mdl` does not.
+  const redirected = (script) => new RegExp(">>?\\s*\\S*" + name(script).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(before)
+  const hit = scripts.find((script) => redirected(script) || (WRITES_BEFORE_EXEC.test(before) && mentions(script)))
+  if (!hit) return null
+  return (
+    "Blocked: a step before the exec writes " + hit + " (an edit, a move or a new file), and the " +
+    "precheck runs before the command -- it would check the old file, or none. Nothing in this " +
+    "command ran. Run that step on its own, then `./mxcli exec " + hit + "` as its own command."
+  )
+}
+
+// `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
+function resolvePwd(root, script) {
+  return script.replace(/^(\$\{PWD\}|\$PWD|\$\(pwd\))(?=\/)/, root.replace(/\\/g, "/"))
+}
+
 const EXEC_THROUGH_VARIABLE =
   "Blocked: that exec names its script through a variable (`$f.mdl` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"
 
@@ -155,9 +183,11 @@ function blockReason(root, tool, args) {
   if (!isMxcliExec(command) && inline.length === 0) return null
   const precheck = join(root, "tests", "precheck.sh")
   if (!existsSync(precheck)) return null
-  const scripts = isMxcliExec(command) ? mdlScripts(command) : []
+  const scripts = (isMxcliExec(command) ? mdlScripts(command) : []).map((script) => resolvePwd(root, script))
   if (scripts.length === 0 && inline.length === 0) return null
   if (scripts.some((script) => script.includes("$"))) return EXEC_THROUGH_VARIABLE
+  const written = scriptWrittenBeforeExec(command, scripts)
+  if (written) return written
   const inlineArgs = inline.flatMap((text) => ["--inline", text])
   const { status, out } = run([precheck.replace(/\\/g, "/"), ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
   if (status === 0 || out.includes("precheck: could not run")) return null
@@ -203,6 +233,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder,
 }

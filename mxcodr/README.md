@@ -252,6 +252,14 @@ the gate showed a bare "FAIL verify-admin (55ms)". The precheck also passes mxcl
 through, for example "defined later in this script -- move its create statement before this one":
 mxcli 0.24 refuses a `call microflow` to a microflow the same script creates further down.
 
+The before-exec hooks now refuse an exec whose script a step in the same command writes: an edit,
+a `mv`, a `sed -i` or a redirect, as in `mv 05b.mdl 04c.mdl && mxcli exec 04c.mdl`. The precheck
+runs before the command, so it checked the old file, or found none and let the exec through. A
+python edit followed by the exec put four build errors into a DeepSeek session's model that way. A
+step that only reads the script (`grep`, `cat`) is still fine. `"$PWD/mdlsource/x.mdl"` is no longer
+taken for a loop variable. The outside-project guard no longer reads a `|` inside a quoted grep
+pattern as a pipe: `grep -E 'add \$|remove \$' skills/` was blocked as a read of "/$".
+
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity
 through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never

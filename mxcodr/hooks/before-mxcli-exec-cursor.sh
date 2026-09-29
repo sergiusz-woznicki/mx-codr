@@ -53,6 +53,8 @@ while IFS= read -r script; do
 done <<HOOK_SCRIPTS
 $scripts
 HOOK_SCRIPTS
+written="$(script_written_before_exec "$command" ${args[@]+"${args[@]}"})"
+[ -z "$written" ] || deny "$written"
 
 hook_precheck ${args[@]+"${args[@]}"} ${inline[@]+"${inline[@]}"}
 if [ "$HOOK_STATUS" -ne 0 ]; then
