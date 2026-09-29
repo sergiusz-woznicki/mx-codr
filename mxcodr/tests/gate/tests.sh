@@ -87,6 +87,8 @@ step_tests() {
   echo $((SECONDS - started)) > "$WORK/tests.secs"
   # Script verdicts only; each failure's cause line is printed once, under the gate verdict.
   printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s|^Total:'
+  syntax_notes "${targets[@]}" > "$WORK/tests.syntax"
+  cat "$WORK/tests.syntax"
   # One sign-out for a full run; lib.sh is sourced in a subshell to keep it out of the gate.
   if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
     ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
@@ -97,6 +99,25 @@ step_tests() {
   fi
   record_red_first "$out" "$environment"
   record_suite_result "$out" "$status" "$environment"
+}
+
+# syntax_notes <target>... -- one line per test script bash cannot parse. Such a script dies before
+# lib.sh's traps exist, and the runner showed only "FAIL verify-admin (55ms)" with no reason: an
+# apostrophe in a JS comment ("the module's overview") had closed the single-quoted scenario '...'.
+syntax_notes() {
+  local target script err hint
+  for target in "$@"; do
+    for script in "$target" "$target"verify-*.test.sh; do
+      case "$script" in *.test.sh) ;; *) continue ;; esac
+      [ -f "$script" ] || continue
+      err="$(bash -n "$script" 2>&1)" && continue
+      err="$(printf '%s\n' "$err" | head -1 | sed 's/^[^:]*: //')"
+      hint=""
+      grep -q "scenario '" "$script" \
+        && hint=" -- an apostrophe inside scenario '...' ends the quoted JS: write ’ or a double-quoted JS string"
+      echo "   FAIL $(basename "$script" .test.sh): bash cannot parse it: ${err}${hint}"
+    done
+  done
 }
 
 # Sets targets: tests/ for the whole suite, or the scripts --only names (exit 2 when none match).
@@ -167,7 +188,8 @@ record_suite_result() {
   failures+=("tests")
   # The failing scripts' lines again under the verdict, with the other failures' details.
   # The runner prints a script's cause line before and after its verdict: keep one of each.
-  printf '%s\n' "$out" | grep -E '^\s+FAIL' | awk '!seen[$0]++' | head -12 > "$WORK/tests.detail"
+  { printf '%s\n' "$out" | grep -E '^\s+FAIL' | awk '!seen[$0]++' | head -12
+    cat "$WORK/tests.syntax" 2>/dev/null; } > "$WORK/tests.detail"
   details+=("tests|tests")
   if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then
     echo "== facts (tests/diagnose.sh)"

@@ -129,6 +129,8 @@ for script in "$@"; do
     # the summary, and a session read "33 error(s) above" with nothing above it three times in
     # thirty seconds, then guessed at the causes. Errors are the `✗` lines and their `at` line;
     # a parse or apply failure prints `Parse error:` / `Error:` instead. At most 15 are shown.
+    # mxcli's own `hint:` lines too ("X is defined later in this script -- move its create
+    # statement before this one"): a session never saw that one and guessed.
     printf '%s\n' "$out" | sed $'s/\x1b\\[[0-9;]*m//g' | grep -v '^Using project' | awk '
       /^[[:space:]]*✗|Parse error:|^Error:|^[[:space:]]*Error:|^Reference error:/ {
         if (++shown > 15) { more++; next }
@@ -138,14 +140,16 @@ for script in "$@"; do
       want_at && /^[[:space:]]+at [^[:space:]]/ { print; want_at = 0; next }
       { want_at = 0 }
       /issues: [0-9]+ errors|^Refusing to execute/ { print }
+      /^[[:space:]]*hint:/ { print }
       END { if (more) printf "  ... and %d more\n", more }'
     # A page that calls a new microflow which opens that page: each script fails alone, in either
     # order, and a session reached for --no-check (mxcli's own advice) -- which the precheck refuses.
     # "not found" too: a calculated attribute's microflow, or a page's microflow, in a later script.
     if printf '%s\n' "$out" | grep -qiE 'unresolved reference|(microflow|nanoflow|page|entity|snippet|enumeration|association)[^\n]{0,40}not found'; then
-      echo "  Not found = not created yet. If another script creates it, exec that one first; if the two"
-      echo "  need EACH OTHER (a page calls a new microflow that opens that page), move them into ONE"
-      echo "  .mdl -- a script resolves what it creates itself. --no-check does not get past this check."
+      echo "  Not found = not created yet. Order matters, inside a script too: create what is called before"
+      echo "  its caller (mxcli 0.24 refuses a call to a microflow that the same script creates further down)."
+      echo "  If another script creates it, exec that one first; if the two need EACH OTHER (a page calls a"
+      echo "  new microflow that opens that page), move them into ONE .mdl. --no-check does not get past this check."
     fi
     exit 1
   }
