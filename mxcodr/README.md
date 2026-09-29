@@ -260,6 +260,12 @@ step that only reads the script (`grep`, `cat`) is still fine. `"$PWD/mdlsource/
 taken for a loop variable. The outside-project guard no longer reads a `|` inside a quoted grep
 pattern as a pipe: `grep -E 'add \$|remove \$' skills/` was blocked as a read of "/$".
 
+A runtime out of sessions is now named as the environment, not the features. A trial licence
+allows a few; past that every sign-in is refused and Basic-auth REST/OData calls fail. The gate
+reads "Maximum number of sessions exceeded" from the runner output or from runtime.log since the
+suite started, and says `--restart` starts with none. The tests still fail the gate; only the
+cause line changes. Three suites in one session had blamed the features for it.
+
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity
 through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never
