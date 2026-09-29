@@ -169,13 +169,31 @@ def tmp_checkout(path):
             return True
     return False
 
+def command_words(command):
+    """The simple commands as word lists, split on ; && || | and newlines outside quotes. Splitting
+    the raw text first cut a grep pattern such as \x27add \\$|remove \\$\x27 inside its quotes, and the
+    half-quoted \\$ read as the absolute path /$ -- a false block."""
+    try:
+        lex = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
+        lex.whitespace = " \t\r"
+        lex.whitespace_split = True
+        out, cur = [], []
+        for tok in lex:
+            if tok and set(tok) <= set(";|&\n()"):
+                if cur:
+                    out.append(cur)
+                cur = []
+            else:
+                cur.append(tok)
+        if cur:
+            out.append(cur)
+        return out
+    except ValueError:
+        return [segment.split() for segment in re.split(r"&&|\|\||[;|\n]", command)]
+
 def outside_target(command):
     """The first path a command searches or reads outside the project, or None."""
-    for segment in re.split(r"&&|\|\||[;|\n]", command):
-        try:
-            words = shlex.split(segment)
-        except ValueError:
-            words = segment.split()
+    for words in command_words(command):
         if not words:
             continue
         verb = os.path.basename(words[0])
