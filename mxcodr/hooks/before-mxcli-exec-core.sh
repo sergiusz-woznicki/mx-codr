@@ -3,7 +3,7 @@
 # before-mxcli-exec.sh (Claude Code, Codex) and before-mxcli-exec-cursor.sh (Cursor); never run on
 # its own. The two hooks differed only in how they read the call and answer it, and three changes
 # in one day were made twice each. Provides: PY, hook_sleep_message, inline_mdl,
-# steps_before_exec, hook_scripts, script_written_before_exec, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.
+# steps_before_exec, hook_scripts, script_written_before_exec, hook_marketplace_wait, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.
 
 # Prints the first Python that actually runs (Windows may have only a Store stub).
 mdl_find_python() {
@@ -127,6 +127,13 @@ for script in sys.argv[1:]:
     if redirected or (writes and (script in before or name in before)):
         print("Blocked: a step before the exec writes %s (an edit, a move or a new file), and the precheck runs before the command -- it would check the old file, or none. Nothing in this command ran. Run that step on its own, then `./mxcli exec %s` as its own command." % (script, script))
         break' "$@" 2>/dev/null
+}
+
+# hook_marketplace_wait <command> -- prints the login message, and returns 3, while the app needs a
+# Marketplace module and mxcli is not logged in (tests/marketplace-login.sh decides); 0 otherwise.
+hook_marketplace_wait() {
+  [ -f tests/marketplace-login.sh ] || return 0
+  HOOK_MARKETPLACE_OUT="$(bash tests/marketplace-login.sh before "$1" 2>/dev/null)"
 }
 
 HOOK_VARIABLE_MESSAGE="Blocked: that exec names its script through a variable (\`\$f.mdl\` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"

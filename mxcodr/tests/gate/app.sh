@@ -37,6 +37,8 @@ report_boot_failure() {   # report_boot_failure <log> <waited>
 # seen, naming the usual cause and the skill that has the syntax.
 build_error_hints() {
   mdl_ce_hints "$1"
+  # A missing Marketplace module: how to install it, or the login the person has to do first.
+  if [ -f "$APP_DIR/tests/marketplace-login.sh" ]; then bash "$APP_DIR/tests/marketplace-login.sh" needs "$1" || true; fi
   # The boot failed because something already holds one of this project's ports. Where it is
   # this project's own leftover -- a runtime that answers nothing but still holds the admin
   # API, an mxbuild left behind by a killed `mxcli run` -- one command clears it, and a

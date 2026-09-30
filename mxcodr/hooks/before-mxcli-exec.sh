@@ -7,7 +7,7 @@
 
 # Cheap substring test first: almost no Bash call is an `mxcli exec`.
 input="$(cat)"
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot.log"*|*"runtime.log"*|*mxcli*-c*) ;; *) exit 0 ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot.log"*|*"runtime.log"*|*mxcli*-c*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) exit 0 ;; esac
 
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"
@@ -16,6 +16,12 @@ command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.std
 message="$(hook_sleep_message "$command")"
 if [ -n "$message" ]; then
   echo "$message" >&2
+  exit 2
+fi
+# The app needs a Marketplace module and mxcli is not logged in: no build, gate or Marketplace call
+# until the person has run ./mxcli auth login.
+if ! hook_marketplace_wait "$command"; then
+  echo "$HOOK_MARKETPLACE_OUT" >&2
   exit 2
 fi
 

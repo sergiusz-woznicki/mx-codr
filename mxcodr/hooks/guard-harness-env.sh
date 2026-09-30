@@ -31,6 +31,8 @@
 input="$(cat)"
 case "$input" in *harness.env*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;;
   *find\ *|*grep\ *|*egrep\ *|*fgrep\ *|*rg\ *|*ag\ *|*fd\ *|*mdfind*|*locate\ *|*/System/*|*/Applications/*|*/Library/*|*/usr/*|*/opt/*|*/private/*|*/tmp/*|*~/*|*\$HOME*|*/Users/*|*/home/*) ;;
+  # The Mendix token: auth.json, $MENDIX_PAT, or a dump of the environment that holds it.
+  *auth.json*|*MENDIX_PAT*|*env*|*set*|*export*|*declare*|*marketplace-login-needed*) ;;
   *) exit 0 ;; esac
 
 # Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
@@ -75,7 +77,7 @@ DIRS = ["tools/mdl-checks/", "tests/gate/", "tests/lib/", ".claude/lint-rules/",
 FILES = {".claude/settings.local.json", ".codex/hooks.json", ".cursor/hooks.json", "tests/gate.sh",
          "tests/lib.sh", "tests/precheck.sh", "tests/portable.sh", "tests/orient.sh",
          "tests/diagnose.sh", "tests/peek.sh", "tests/run-app.sh", "tests/run-docker.sh",
-         "tests/scenario-helpers.js"}
+         "tests/scenario-helpers.js", "tests/marketplace-login.sh", ".mxcli/marketplace-login-needed"}
 try:
     recorded = json.load(open("tools/mdl-checks/INSTALL.json")).get("files") or {}
     FILES |= {f for f in recorded if f.startswith("tests/") and not f.startswith("tests/verify-")}
@@ -235,9 +237,30 @@ def outside_target(command):
                     return w
     return None
 
+def token_read(command):
+    """The Mendix token a command would show: ~/.mxcli/auth.json, $MENDIX_PAT, or the whole
+    environment while MENDIX_PAT is set in it. mxcli reads the token itself; the session never
+    needs its value, and anything it prints lands in the session log and at the model provider."""
+    if re.search(r"\.mxcli[/\\\\]auth\.json", command):
+        return "~/.mxcli/auth.json"
+    if re.search(r"\$\{?MENDIX_PAT|printenv\s+MENDIX_PAT", command):
+        return "MENDIX_PAT"
+    if os.environ.get("MENDIX_PAT"):
+        for words in command_words(command):
+            if not words:
+                continue
+            verb, rest = os.path.basename(words[0]), words[1:]
+            if verb in ("env", "printenv") and all(w.startswith("-") for w in rest):
+                return "the environment (MENDIX_PAT is set)"
+            if verb == "set" and not rest:
+                return "the environment (MENDIX_PAT is set)"
+            if verb in ("export", "declare") and rest and all(w in ("-p", "-x", "-px", "-xp") for w in rest):
+                return "the environment (MENDIX_PAT is set)"
+    return None
+
 SWITCHES = ("MDL_REQUIRE_PRODUCTION", "MDL_ALLOW_GREEN_FIRST", "MDL_VISUAL", "MDL_VISUAL_REVIEW",
             "MDL_RUNTIME_ERRORS", "MDL_PRECHECK", "MDL_GATE_CACHE", "MDL_HARNESS_EDITS", "MDL_CAPTIONS",
-            "MDL_SCOPE")
+            "MDL_SCOPE", "MDL_MARKETPLACE_LOGIN")
 hit = None
 if tool == "bash":
     command = str(args.get("command") or "")
@@ -249,6 +272,10 @@ if tool == "bash":
     if not hit and re.search(r"tests[/\\\\](gate|precheck)\.sh", command) and re.search(
             r"(^|[\s;&|(])(export\s+)?(%s)=" % "|".join(SWITCHES), command):
         hit = ("switch", "")
+    if not hit:
+        secret = token_read(command)
+        if secret:
+            hit = ("token", secret)
     if not hit:
         away = outside_target(command)
         if away:
@@ -272,6 +299,14 @@ the gate checks it against INSTALL.json). Do not change a check to get past it. 
 wrong -- it flags something that is right -- leave it, finish what you can, and say in your report
 which check, what it said and why it is wrong: the person fixes it in mx-codr, for every project.
 Your own tests (tests/verify-*.test.sh), scripts (mdlsource/) and tests/credentials.env are yours.
+MSG
+  exit 2
+fi
+if [ "$what" = "token" ]; then
+  cat >&2 <<MSG
+Blocked: that would show the Mendix token ($path). mxcli reads it by itself for every
+./mxcli marketplace call -- you never need its value, and whatever a command prints ends up in this
+session's log. To see whether mxcli is logged in: ./mxcli auth status --offline (it shows no token).
 MSG
   exit 2
 fi

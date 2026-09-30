@@ -28,6 +28,8 @@ security_section() {
   echo "== security"
   "$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>&1 | grep -iE 'security level|demo users|guest|user roles'
   "$MXCLI" -p "$MPR" -c "SHOW USER ROLES" 2>&1 | grep -E '^\|' | head -10
+  # Whether a Marketplace module can be installed: known before a feature needs one.
+  [ -f tests/marketplace-login.sh ] && bash tests/marketplace-login.sh status | sed 's/^/   /'
 }
 
 navigation_section() {
