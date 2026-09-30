@@ -229,4 +229,9 @@ if [ -f tests/gate/hints.sh ]; then
   printf '%s\n' "$new_errors" > "$hint_log" 2>/dev/null
   mdl_ce_hints "$hint_log"
 fi
+# A missing Marketplace module: install it, or -- not logged in -- stop and ask the person to log in.
+if [ -f tests/marketplace-login.sh ]; then
+  printf '%s\n' "$new_errors" > "$scratch/precheck-errors.txt" 2>/dev/null
+  bash tests/marketplace-login.sh needs "$scratch/precheck-errors.txt"
+fi
 exit 1

@@ -8,7 +8,7 @@
 
 input="$(cat)"
 allow() { printf '{"permission":"allow"}\n'; exit 0; }
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*) ;; *) allow ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) allow ;; esac
 
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"
@@ -37,6 +37,8 @@ if [ -f "$guard" ]; then
     exit 0
   }
 fi
+# The app needs a Marketplace module and mxcli is not logged in: wait for the person's login.
+hook_marketplace_wait "$command" || deny "$HOOK_MARKETPLACE_OUT"
 inline=()
 case "$command" in *mxcli*-c*)
   while IFS= read -r -d '' statement; do inline+=(--inline "$statement"); done < <(inline_mdl "$command") ;;

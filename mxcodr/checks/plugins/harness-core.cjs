@@ -120,6 +120,17 @@ function scriptWrittenBeforeExec(command, scripts) {
   )
 }
 
+// The app needs a Marketplace module and mxcli is not logged in: tests/marketplace-login.sh holds
+// every build, gate and Marketplace call back until the person has run ./mxcli auth login.
+const MARKETPLACE_CALL = /mxcli(\.exe)? (exec|marketplace|catalog)\b|tests\/gate\.sh/
+function marketplaceWait(root, command) {
+  if (typeof command !== "string" || !MARKETPLACE_CALL.test(command)) return null
+  const script = join(root, "tests", "marketplace-login.sh")
+  if (!existsSync(script)) return null
+  const { status, out } = run([script.replace(/\\/g, "/"), "before", command], root, 30000)
+  return status === 3 && out ? out.trim() : null
+}
+
 // `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
 function resolvePwd(root, script) {
   return script.replace(/^(\$\{PWD\}|\$PWD|\$\(pwd\))(?=\/)/, root.replace(/\\/g, "/"))
@@ -179,6 +190,8 @@ function blockReason(root, tool, args) {
   if (tool !== "bash") return null
   const command = args && args.command
   if (isSleepBeforeGate(command)) return SLEEP_BEFORE_GATE
+  const waiting = marketplaceWait(root, command)
+  if (waiting) return waiting
   const inline = inlineMdl(command)
   if (!isMxcliExec(command) && inline.length === 0) return null
   const precheck = join(root, "tests", "precheck.sh")
@@ -233,6 +246,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder,
 }

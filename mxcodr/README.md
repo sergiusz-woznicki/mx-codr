@@ -271,6 +271,19 @@ URL: a REST client BaseUrl set to a constant is stored as `'{@Mod.Const}'` and r
 told a session to rename Owner/Type/Default. It now names the BaseUrl fix, and it says nothing for
 a CE7247 text it does not know.
 
+A Marketplace module the app needs now waits for the person's login (`tests/marketplace-login.sh`).
+When mx check reports "couldn't find the X module in your app" and mxcli is not logged in, the
+precheck or the gate stops with a short instruction. It says to create a token, run
+`./mxcli auth login` in your own terminal, and never paste the token into the chat. From then on,
+every `mxcli exec`, gate run and `mxcli marketplace` call is refused with the same message. Once
+mxcli is logged in, it lets go by itself. Logged in, the hint says how to install the module:
+`marketplace search`, then `install <id>`. orient.sh shows the login state at the start.
+`MDL_MARKETPLACE_LOGIN=report` in tests/harness.env is for unattended runs: nothing waits, and the
+feature is reported as not built, not imitated. A DeepSeek session had built Java imitations of
+three module-based features, and the gate passed them. The guard also keeps the token out of the
+session: it refuses reads of `~/.mxcli/auth.json`, `$MENDIX_PAT`, and a dump of an environment
+that holds it.
+
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity
 through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never
