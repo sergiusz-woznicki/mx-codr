@@ -283,6 +283,7 @@ feature is reported as not built, not imitated. A DeepSeek session had built Jav
 three module-based features, and the gate passed them. The guard also keeps the token out of the
 session: it refuses reads of `~/.mxcli/auth.json`, `$MENDIX_PAT`, and a dump of an environment
 that holds it. While a login is pending, the end-of-turn gate (Pi, OpenCode, Codex, Cursor) stays quiet so the session can stop and wait, and the session cannot delete the wait flag. The first live test showed the Pi gate follow-up sending a session that had asked for the login back to work.
+Only running the gate waits: reading tests/gate.sh (grep, cat) and `mxcli marketplace --help` pass.
 
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity

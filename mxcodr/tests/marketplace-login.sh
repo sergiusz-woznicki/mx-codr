@@ -73,12 +73,16 @@ case "${1:-}" in
   before)
     command="${2:-}"
     [ "$MODE" = "report" ] && exit 0
-    # Only a call that builds, runs the gate or reaches the Marketplace waits for the login.
-    case "$command" in
-      *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;;
-      *) exit 0 ;;
-    esac
+    # Only a call that builds, RUNS the gate or reaches the Marketplace waits for the login. Reading
+    # tests/gate.sh (grep, cat, sed) is not running it: a session was refused a grep of it.
+    if ! printf '%s' "$command" | grep -qE 'mxcli(\.exe)? (exec|marketplace|catalog)([[:space:]]|$)|(^|[;&|(]|[[:space:]])(bash|sh)[[:space:]]+(\./)?tests/gate\.sh|(^|[;&|(]|[[:space:]])\./tests/gate\.sh'; then
+      exit 0
+    fi
     case "$command" in *"mxcli auth"*|*"mxcli.exe auth"*) exit 0 ;; esac
+    # Reading the help needs no login: `mxcli marketplace --help` was refused.
+    if printf '%s' "$command" | grep -qE 'mxcli(\.exe)? (marketplace|catalog)[^;&|]*(--help|-h)([[:space:]]|$)|mxcli(\.exe)? help (marketplace|catalog)'; then
+      exit 0
+    fi
     pending=""
     [ -f "$FLAG" ] && pending="$(head -1 "$FLAG")"
     case "$command" in *"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) pending="${pending:-a module}" ;; esac

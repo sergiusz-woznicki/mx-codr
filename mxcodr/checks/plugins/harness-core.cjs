@@ -122,7 +122,7 @@ function scriptWrittenBeforeExec(command, scripts) {
 
 // The app needs a Marketplace module and mxcli is not logged in: tests/marketplace-login.sh holds
 // every build, gate and Marketplace call back until the person has run ./mxcli auth login.
-const MARKETPLACE_CALL = /mxcli(\.exe)? (exec|marketplace|catalog)\b|tests\/gate\.sh/
+const MARKETPLACE_CALL = /mxcli(\.exe)? (exec|marketplace|catalog)\b|(^|[\s;&|(])(bash|sh)\s+(\.\/)?tests\/gate\.sh|(^|[\s;&|(])\.\/tests\/gate\.sh/
 function marketplaceWait(root, command) {
   if (typeof command !== "string" || !MARKETPLACE_CALL.test(command)) return null
   const script = join(root, "tests", "marketplace-login.sh")
