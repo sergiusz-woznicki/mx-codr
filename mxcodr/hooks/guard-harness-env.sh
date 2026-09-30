@@ -32,7 +32,7 @@ input="$(cat)"
 case "$input" in *harness.env*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;;
   *find\ *|*grep\ *|*egrep\ *|*fgrep\ *|*rg\ *|*ag\ *|*fd\ *|*mdfind*|*locate\ *|*/System/*|*/Applications/*|*/Library/*|*/usr/*|*/opt/*|*/private/*|*/tmp/*|*~/*|*\$HOME*|*/Users/*|*/home/*) ;;
   # The Mendix token: auth.json, $MENDIX_PAT, or a dump of the environment that holds it.
-  *auth.json*|*MENDIX_PAT*|*env*|*set*|*export*|*declare*) ;;
+  *auth.json*|*MENDIX_PAT*|*env*|*set*|*export*|*declare*|*marketplace-login-needed*) ;;
   *) exit 0 ;; esac
 
 # Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
@@ -77,7 +77,7 @@ DIRS = ["tools/mdl-checks/", "tests/gate/", "tests/lib/", ".claude/lint-rules/",
 FILES = {".claude/settings.local.json", ".codex/hooks.json", ".cursor/hooks.json", "tests/gate.sh",
          "tests/lib.sh", "tests/precheck.sh", "tests/portable.sh", "tests/orient.sh",
          "tests/diagnose.sh", "tests/peek.sh", "tests/run-app.sh", "tests/run-docker.sh",
-         "tests/scenario-helpers.js", "tests/marketplace-login.sh"}
+         "tests/scenario-helpers.js", "tests/marketplace-login.sh", ".mxcli/marketplace-login-needed"}
 try:
     recorded = json.load(open("tools/mdl-checks/INSTALL.json")).get("files") or {}
     FILES |= {f for f in recorded if f.startswith("tests/") and not f.startswith("tests/verify-")}

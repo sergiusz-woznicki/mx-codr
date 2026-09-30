@@ -81,6 +81,11 @@ if [ ! -f tests/gate.sh ]; then
   say "The model changed through mxcli exec, but tests/gate.sh is missing. Restore the project gate before reporting completion."
 fi
 
+# Waiting for the person's Marketplace login: let the turn end so they can answer.
+if [ -f tests/marketplace-login.sh ]; then
+  bash tests/marketplace-login.sh before "bash tests/gate.sh" >/dev/null 2>&1
+  [ $? -eq 3 ] && nothing
+fi
 output="$(bash tests/gate.sh 2>&1)"
 status_code=$?
 if [ "$status_code" -eq 0 ] && printf '%s\n' "$output" | grep -Fq 'DONE — every check passed'; then

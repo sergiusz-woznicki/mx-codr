@@ -129,6 +129,8 @@ export default function mendixMdlHarness(pi) {
     if (event.outcome !== "completed") return
     const root = harnessRoot(ctx)
     if (!root) return
+    // Waiting for the person's Marketplace login: let the turn end so they can answer.
+    if (core.marketplacePending(root)) return
     if (rounds >= core.MAX_GATE_ROUNDS) {
       gateRequired = false
       return

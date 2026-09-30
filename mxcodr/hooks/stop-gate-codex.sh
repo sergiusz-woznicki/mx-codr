@@ -51,6 +51,11 @@ if [ ! -f "$repo_root/tests/gate.sh" ]; then
   exit 2
 fi
 
+# Waiting for the person's Marketplace login: let the turn end so they can answer.
+if [ -f "$repo_root/tests/marketplace-login.sh" ]; then
+  (cd "$repo_root" && bash tests/marketplace-login.sh before "bash tests/gate.sh" >/dev/null 2>&1)
+  [ $? -eq 3 ] && exit 0
+fi
 output="$(cd "$repo_root" && bash tests/gate.sh 2>&1)"
 status=$?
 if [ "$status" -eq 0 ] && printf '%s\n' "$output" | grep -Fq 'DONE — every check passed'; then

@@ -119,6 +119,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (!readState(sessionID, "gate-required")) return
       // session.idle fires again while the gate runs.
       if (readState(sessionID, "running")) return
+      // Waiting for the person's Marketplace login: stay idle so they can answer.
+      if (core.marketplacePending(root)) return
 
       const rounds = Number(readState(sessionID, "rounds") || 0)
       if (rounds >= core.MAX_GATE_ROUNDS) {

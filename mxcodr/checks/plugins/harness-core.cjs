@@ -131,6 +131,13 @@ function marketplaceWait(root, command) {
   return status === 3 && out ? out.trim() : null
 }
 
+// True while a Marketplace login is pending: the end-of-turn gate then stays quiet, so the session
+// stops and waits for the person. A DeepSeek session asked for the login and stopped; the gate
+// failed at the end of its turn, sent it back to work, and it went looking for a way round.
+function marketplacePending(root) {
+  return marketplaceWait(root, "bash tests/gate.sh") !== null
+}
+
 // `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
 function resolvePwd(root, script) {
   return script.replace(/^(\$\{PWD\}|\$PWD|\$\(pwd\))(?=\/)/, root.replace(/\\/g, "/"))
@@ -246,6 +253,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder,
 }
