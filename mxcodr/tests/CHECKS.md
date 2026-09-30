@@ -62,3 +62,4 @@ here blocks DONE unless the line says "warning".
 | `CE0582` | no classic drop-down (not React-client compatible) | `combobox` or `radiobuttons` on the same enumeration or Boolean attribute |
 | `CE0106` `CE0557` | a microflow or page reached from a page, button or menu has a role | the hint gives `grant execute on microflow <name> to <role>;` / `grant view on page <name> to <role>;` -- put it in the script that creates the document |
 | `CE0007` `CE0117` `CE0161` `CE0642` `CE1613` `CE2729` `CE7247` | build errors the gate and precheck print a hint for | read the hint under the error; the pitfalls in the syntax digest cover the same ground |
+| `CE7247` | a reserved name, or an invalid URL (a REST client BaseUrl set to a constant) -- the hint follows the message | rename Owner/Type/Default; a BaseUrl is a literal http(s):// address, a mock URL is built in the microflow |

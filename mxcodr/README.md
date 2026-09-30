@@ -266,6 +266,11 @@ reads "Maximum number of sessions exceeded" from the runner output or from runti
 suite started, and says `--restart` starts with none. The tests still fail the gate; only the
 cause line changes. Three suites in one session had blamed the features for it.
 
+The CE7247 hint follows the message. Mendix uses that code for a reserved name and for an invalid
+URL: a REST client BaseUrl set to a constant is stored as `'{@Mod.Const}'` and refused. The hint had
+told a session to rename Owner/Type/Default. It now names the BaseUrl fix, and it says nothing for
+a CE7247 text it does not know.
+
 `SCOPE01` (check `scope`, a warning; `MDL_SCOPE=error` blocks): a page's data source microflow
 retrieves an entity with nothing tying it to the user, while the page's role reads that entity
 through an XPath-scoped access rule. A microflow does not apply entity access, so the rule never
