@@ -365,6 +365,10 @@ page is asked again (`LOOK01`); a rejection repeats its fix (`LOOK02`).
 All of these are warnings for now: they do not block DONE. `MDL_VISUAL=error` makes them
 block, `MDL_VISUAL=0` turns them off.
 
+The gate asks for every warning to be fixed together with the next real fix, never in a gate run
+of its own. After DONE it says to leave them for the report, which names each one as what to fix
+next. Its old "fix them anyway" sent sessions back for more full gates after DONE, just for warnings.
+
 ### What the server logged while the suite ran
 
 The gate records when the suite starts and lists every distinct `ERROR`/`CRITICAL` line the

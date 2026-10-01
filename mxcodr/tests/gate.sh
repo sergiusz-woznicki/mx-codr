@@ -103,14 +103,17 @@ add_red_first_notes() {
 }
 
 # What a check found that does not block DONE (yet): <check>.warnings, as `   - [CODE] ...` lines.
+# "fix them anyway" sent sessions round extra full gates after DONE for warnings alone. Now a
+# warning rides along with the next real fix, and one left at DONE goes into the report.
 print_warnings() {
   local file shown=0
   for file in "$WORK"/*.warnings; do
     [ -s "$file" ] || continue
-    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them anyway -- MDL_VISUAL, MDL_RUNTIME_ERRORS, MDL_CAPTIONS or MDL_SCOPE=error makes them block)"; }
+    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them together with your next fix, not in a gate run of their own -- MDL_VISUAL, MDL_RUNTIME_ERRORS, MDL_CAPTIONS or MDL_SCOPE=error makes them block)"; }
     shown=1
     head -12 "$file"
   done
+  WARNINGS_SHOWN=$shown
 }
 
 # After a green --only: is the full gate worth running yet? DeepSeek ran 15 full gates in an hour
@@ -166,6 +169,9 @@ print_verdict_and_exit() {
     exit 0
   fi
   echo "   DONE — every check passed"
+  if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
+    echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
+  fi
   exit 0
 }
 
