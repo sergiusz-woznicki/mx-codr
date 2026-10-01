@@ -951,7 +951,7 @@ before it can run, so getting that shell is PowerShell's job. It winget-installs
 Git for Windows, Python 3 and Node.js (skipping whatever is already there), finds
 a **real** Git Bash, and hands over to `bash install.sh <target> --with-deps`,
 which installs `playwright-cli`, its Chromium headless shell and `mxcli.exe`, then
-lands the harness.
+lands the harness. With several Studio Pro versions installed it reports the newest.
 
 Three things it deliberately does not do:
 
