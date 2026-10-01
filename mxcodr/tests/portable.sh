@@ -2,7 +2,7 @@
 # tests/portable.sh -- platform shims and shared helpers (macOS, Linux, Git Bash on Windows).
 # Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh and run-app.sh; not run on its own.
 # Provides: $MXCLI, $PY, mdl_find_python, mdl_load_harness_env, mdl_json_object,
-#   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_check_local_database,
+#   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_runtime_running, mdl_check_local_database,
 #   mdl_check_install_freshness, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr, mdl_user_modules.
 # Sourcing it also loads tests/harness.env as data (never sourced) and repairs JAVA_HOME.
 # Inputs: MXCLI, PY, PORTABLE_APP_DIR, APP_DIR, LOCALAPPDATA. Nothing else is exported.
@@ -155,6 +155,21 @@ if [ -n "${JAVA_HOME:-}" ]; then
 fi
 
 # --- 6. Local database check ---
+# True while a Mendix runtime runs, and when that cannot be told: a lock is called stale only
+# when nothing runs. Git Bash has no pgrep, and the warning said "stale, rm it" beside a running app.
+mdl_runtime_running() {
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -f 'runtimelauncher' >/dev/null 2>&1
+    return
+  fi
+  command -v powershell.exe >/dev/null 2>&1 || return 0
+  powershell.exe -NoProfile -Command '
+    try { $p = Get-CimInstance Win32_Process -ErrorAction Stop } catch { exit 0 }
+    if ($p | Where-Object { $_.Name -eq "java.exe" -and $_.CommandLine -like "*runtimelauncher*" }) { exit 0 }
+    exit 1' >/dev/null 2>&1
+  [ $? != 1 ]
+}
+
 # Warns (prints only) about a stale HSQLDB lock or a half-written database; both break a boot.
 mdl_check_local_database() {
   local base="${1:-${APP_DIR:-.}/deployment/data/database}"
@@ -165,7 +180,7 @@ mdl_check_local_database() {
   lock="$(find "$base" -name '*.lck' -type f 2>/dev/null | head -1)"
   if [ -n "$lock" ]; then
     # A lock is stale only when no runtime is running.
-    if ! { command -v pgrep >/dev/null 2>&1 && pgrep -f 'runtimelauncher' >/dev/null 2>&1; }; then
+    if ! mdl_runtime_running; then
       echo "   !! a stale database lock is left over from a killed runtime:"
       echo "      ${lock#${APP_DIR:-.}/}"
       echo "      nothing is running now, so it only blocks the next boot:  rm '$lock'"
@@ -419,7 +434,10 @@ mdl_find_mpr() {
 mdl_user_modules() {
   local listing
   listing="$("$MXCLI" -p "$1" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
+  # newline="\n": on Windows print() writes \r\n, and every module but the last one kept its \r
+  # ("Integration\r" in a two-module app), so the coverage check found no module of that name.
   printf '%s' "$listing" | "$PY" -c 'import json,sys
+sys.stdout.reconfigure(newline="\n")
 try:
     rows = json.load(sys.stdin)
 except Exception:
