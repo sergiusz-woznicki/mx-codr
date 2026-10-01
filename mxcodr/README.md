@@ -278,6 +278,10 @@ precheck or the gate stops with a short instruction. It says to create a token, 
 every `mxcli exec`, gate run and `mxcli marketplace` call is refused with the same message. Once
 mxcli is logged in, it lets go by itself. Logged in, the hint says how to install the module:
 `marketplace search`, then `install <id>`. orient.sh shows the login state at the start.
+Only the exec hook's precheck (`--for-exec`) sets the wait: a precheck run by hand on a probe script
+only says what an exec would need. A session that probed a throwaway Business Events script that
+way set the wait for real and could not clear it. The login message also names the way out:
+`MDL_MARKETPLACE_LOGIN=report`.
 `MDL_MARKETPLACE_LOGIN=report` in tests/harness.env is for unattended runs: nothing waits, and the
 feature is reported as not built, not imitated. A DeepSeek session had built Java imitations of
 three module-based features, and the gate passed them. The guard also keeps the token out of the

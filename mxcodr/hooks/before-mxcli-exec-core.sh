@@ -142,6 +142,6 @@ HOOK_BLOCKED_HEAD="Blocked: that exec would break the build (mx check on a copy 
 # hook_precheck <script>... [--inline <mdl>]... -- runs tests/precheck.sh; HOOK_OUT holds its output,
 # HOOK_STATUS its exit code.
 hook_precheck() {
-  HOOK_OUT="$(bash tests/precheck.sh "$@" 2>&1)"
+  HOOK_OUT="$(bash tests/precheck.sh --for-exec "$@" 2>&1)"
   HOOK_STATUS=$?
 }

@@ -41,9 +41,17 @@ mdl_find_mpr 2>/dev/null || { echo "precheck: could not run -- no .mpr in $(pwd)
 # `--inline "<mdl>"`: MDL a command gives mxcli with -c, not in a file. It changes the model as much
 # as a script does, and a session that wrote its access rules that way put a broken XPath into the
 # model unchecked; every later exec was then blocked by an error that was not in its script.
+# `--for-exec`: the exec hook is about to run these scripts. Only then does a missing Marketplace module
+# hold every later build back; a probe run by hand only says so. A session that ran the precheck on a
+# throwaway Business Events script to see whether it could exist set the wait flag for real, and every
+# exec after it was refused with no way out but the person editing tests/harness.env.
+for_exec=0
 inline_args=()
 while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--inline" ] && [ "$#" -ge 2 ]; then
+  if [ "$1" = "--for-exec" ]; then
+    for_exec=1
+    shift
+  elif [ "$1" = "--inline" ] && [ "$#" -ge 2 ]; then
     inline_file="$(mdl_tmpfile mdl-inline).mdl"
     printf '%s\n' "$2" > "$inline_file"
     inline_args+=("$inline_file")
@@ -232,6 +240,10 @@ fi
 # A missing Marketplace module: install it, or -- not logged in -- stop and ask the person to log in.
 if [ -f tests/marketplace-login.sh ]; then
   printf '%s\n' "$new_errors" > "$scratch/precheck-errors.txt" 2>/dev/null
-  bash tests/marketplace-login.sh needs "$scratch/precheck-errors.txt"
+  if [ "$for_exec" = "1" ]; then
+    bash tests/marketplace-login.sh needs "$scratch/precheck-errors.txt"
+  else
+    bash tests/marketplace-login.sh probe "$scratch/precheck-errors.txt"
+  fi
 fi
 exit 1

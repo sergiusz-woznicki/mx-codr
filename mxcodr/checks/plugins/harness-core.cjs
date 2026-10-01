@@ -209,7 +209,7 @@ function blockReason(root, tool, args) {
   const written = scriptWrittenBeforeExec(command, scripts)
   if (written) return written
   const inlineArgs = inline.flatMap((text) => ["--inline", text])
-  const { status, out } = run([precheck.replace(/\\/g, "/"), ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
+  const { status, out } = run([precheck.replace(/\\/g, "/"), "--for-exec", ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
   if (status === 0 || out.includes("precheck: could not run")) return null
   return (
     "Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). " +
