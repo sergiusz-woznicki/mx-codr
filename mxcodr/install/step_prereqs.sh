@@ -12,7 +12,7 @@ ui_begin "checking prerequisites"
 dep_need "Python 3" "mdl_find_python >/dev/null" "Python.Python.3.12" "python" "python3" || true
 [ -n "$PY" ] || PY="$(mdl_find_python || true)"
 [ -n "$PY" ] || ui_fail "This installer needs Python 3 -- it merges the host hook files." \
-                        "Re-run with --with-deps, or install it and try again." \
+                        "Re-run without --no-deps, or install it and try again." \
                         "On Windows note that the python.org installer leaves \"Add python.exe" \
                         "to PATH\" unticked -- an installed but invisible Python looks the same."
 

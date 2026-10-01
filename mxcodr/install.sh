@@ -2,11 +2,12 @@
 # install.sh -- install the mx-codr harness (skills, lint rules, checkers, hooks, tests/gate.sh)
 # into a Mendix project, creating the app when there is none. Safe to re-run.
 #
-# Usage: bash install.sh [project-dir] [--no-app] [--with-deps] [-h|--help]
+# Usage: bash install.sh [project-dir] [--no-app] [--no-deps] [-h|--help]
 #   Run it from the project folder, one level above the bundle:  cd <app> && bash mxcodr/install.sh
 #   (not from inside mxcodr/ -- that still works, but the target is then guessed, not named).
 #   --no-app     never create a Mendix app; stop when there is no .mpr
-#   --with-deps  install missing prerequisites (winget/brew/apt/dnf); otherwise only reported
+#   --no-deps    only report missing prerequisites; by default they are installed
+#                (winget/brew/apt/dnf). --with-deps is still accepted and changes nothing.
 #   No dir: the current directory, or the project the bundle sits in when run from inside it.
 # Env: MX_VERSION, APP_NAME (new app); MDL_ASSUME_YES=1; MDL_DEPS_DRY_RUN=1 (print installs only);
 #   MDL_NO_UPDATE_CHECK=1; MXCLI_TAG, MXCLI_SHA256; MDL_DB_HOST, MDL_DB_USER, MDL_DB_PASSWORD,
@@ -90,7 +91,7 @@ mdl_find_python() {
 }
 
 PY="$(mdl_find_python || true)"
-# Not fatal: with --with-deps the prerequisites step installs Python and re-probes.
+# Not fatal: unless --no-deps, the prerequisites step installs Python and re-probes.
 
 # The bundle this script belongs to: every part and file below is read from here.
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
