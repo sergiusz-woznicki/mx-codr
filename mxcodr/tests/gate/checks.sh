@@ -488,7 +488,9 @@ collect() {
     0) ;;
     2) # A check that stopped without writing why left a bare "could not run", and a session
        # took it for its own fault and spent many steps taking the gate apart.
-       if ! grep -q 'could not run' "$WORK/$name.summary" 2>/dev/null; then
+       # A checker's own "ERROR <why>" line says why: adding "without saying why" under it
+       # contradicted it (coverage, "no module named Integration").
+       if ! grep -qE 'could not run|^[a-z]+ ERROR ' "$WORK/$name.summary" 2>/dev/null; then
          summary+=("$label: could not run -- the check stopped without saying why. That is a fault in the harness, not in your project: run bash tests/gate.sh once more; if it repeats, say so and carry on with the other checks")
        fi
        details+=("$name|$label (could not run)")

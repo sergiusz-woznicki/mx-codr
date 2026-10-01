@@ -1025,6 +1025,8 @@ What the bundle does about each difference:
 | LF line endings | `.gitattributes` pins `*.sh` and `*.py`. Without it one editor save turns every line of `gate.sh` into `$'\r': command not found` |
 | Python installed but invisible | winget accepts python.org's default of *not* adding python to the PATH, so a working Python 3.12 can exist that no shell can see — observed on a clean Windows 11 VM. `portable.sh`, the hooks and `install.sh` all search `%LOCALAPPDATA%\Programs\Python\Python3*` and `C:\Program Files\Python3*` before giving up |
 | `bash` on the PATH is the wrong bash | `C:\Windows\System32\bash.exe` is the **WSL launcher**. `bootstrap.ps1` and the OpenCode plugin put Git's own directories first and reject anything under `System32` |
+| Python writes `\r\n` | `print()` on Windows ends every line with `\r\n`, and bash kept the `\r` on every line but the last: in a two-module app the gate asked the coverage check for module `Integration\r` and stopped on `no module named Integration`. The module list and `gate_helpers.py` write plain `\n` |
+| No `pgrep` | the database check asks PowerShell whether a Mendix runtime is running before it calls an HSQLDB lock stale; it once said "rm it" beside a running app. When nothing can tell, it stays quiet |
 | No CDN mxbuild | `mxcli setup mxbuild` refuses on Windows; `mx` comes from an installed Studio Pro. The installer enumerates `C:\Program Files\Mendix\*\modeler\mx.exe` and builds at the newest version present |
 
 Three Unix-only niceties degrade instead of failing: the stale-model warning needs

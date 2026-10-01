@@ -461,4 +461,6 @@ def main(argv):
 
 
 if __name__ == "__main__":
+    # Bash reads these lines into lists; on Windows print() would end each one with \r\n.
+    sys.stdout.reconfigure(newline="\n")
     sys.exit(main(sys.argv))
