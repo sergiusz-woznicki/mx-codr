@@ -4,6 +4,8 @@
 #   bash tests/marketplace-login.sh status            one line for orient.sh: logged in or not
 #   bash tests/marketplace-login.sh needs <file>      build output (mx check) naming a missing module:
 #                                                     the login message (exit 3), or how to install it
+#   bash tests/marketplace-login.sh probe <file>      the same output from a precheck run by hand: says
+#                                                     what an exec would need, never sets the wait flag
 #   bash tests/marketplace-login.sh before <command>  a tool call about to run: exit 3 and the login
 #                                                     message while a login is pending
 #
@@ -39,6 +41,8 @@ STOP HERE and ask the person to log in once, in their own terminal -- never past
   2. cd "$(pwd)" && ./mxcli auth login      (paste the token when it asks)
 Do not continue, and do not build a replacement for the feature, until they say it is done. Once mxcli
 is logged in, the harness lets every command through again by itself.
+If the person does not want that module, they can set MDL_MARKETPLACE_LOGIN=report in tests/harness.env
+(and delete .mxcli/marketplace-login-needed): nothing waits, and the feature is reported as not built.
 EOF
 }
 
@@ -70,6 +74,18 @@ case "${1:-}" in
     login_message "the $module module"
     exit 3 ;;
 
+  probe)
+    module="$(missing_module "${2:-}")"
+    [ -n "$module" ] || exit 0
+    if logged_in; then
+      echo "   hint: $module is a Marketplace module -- an exec would install it: ./mxcli marketplace search \"$module\", ./mxcli marketplace install <id> -p <app>.mpr. Skill: download-marketplace-content"
+    elif [ "$MODE" = "report" ]; then
+      report_message "$module"
+    else
+      echo "   note: $module comes from the Mendix Marketplace and mxcli is not logged in. This precheck run by hand does not stop the work, but an exec of a script that needs it would: it then waits for the person's ./mxcli auth login. If the feature cannot be built without the module, ask the person before you exec."
+    fi
+    exit 0 ;;
+
   before)
     command="${2:-}"
     [ "$MODE" = "report" ] && exit 0
@@ -97,6 +113,6 @@ case "${1:-}" in
     exit 3 ;;
 
   *)
-    echo "usage: bash tests/marketplace-login.sh status | needs <file> | before <command>" >&2
+    echo "usage: bash tests/marketplace-login.sh status | needs <file> | probe <file> | before <command>" >&2
     exit 2 ;;
 esac
