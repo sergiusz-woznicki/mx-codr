@@ -114,10 +114,21 @@ $Target = (Resolve-Path -LiteralPath $Target).Path
 
 # Without Studio Pro nothing works on Windows: creating the app, mx check and the build all use
 # the mx.exe / mxbuild.exe it installs. Say so now, before minutes of winget installs.
-$studioPro = @("$env:ProgramFiles\Mendix", "${env:ProgramFiles(x86)}\Mendix", "$env:LOCALAPPDATA\Programs\Mendix") |
-             Where-Object { $_ -and (Test-Path $_) } |
-             ForEach-Object { Get-ChildItem -Path $_ -Filter 'mx.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue } |
-             Select-Object -First 1
+# Several versions can sit side by side (an old 8.x next to 11.x): report the newest, which is
+# the one a new app needs, not the first the search happens to meet. Each mx.exe lives in
+# <version>\modeler\, so the folder two levels up names the version.
+$studioPros = @("$env:ProgramFiles\Mendix", "${env:ProgramFiles(x86)}\Mendix", "$env:LOCALAPPDATA\Programs\Mendix") |
+              Where-Object { $_ -and (Test-Path $_) } |
+              ForEach-Object { Get-ChildItem -Path $_ -Filter 'mx.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue } |
+              ForEach-Object {
+                $dir = Split-Path -Parent (Split-Path -Parent $_.FullName)
+                $name = Split-Path -Leaf $dir
+                $version = if ($name -match '^\d+(\.\d+){1,3}$') { [version]$name } else { [version]'0.0' }
+                [pscustomobject]@{ Exe = $_; Dir = $dir; Version = $version }
+              } |
+              Sort-Object -Property Version -Descending
+$studioPro = $studioPros | Select-Object -First 1
+$studioProCount = @($studioPros | ForEach-Object { $_.Version } | Select-Object -Unique).Count
 if (-not $studioPro -and -not $env:MDL_SKIP_STUDIO_PRO_CHECK) {
   Write-Host ''
   Write-Host '  Mendix Studio Pro is not installed. Install it first, then run this again.' -ForegroundColor Red
@@ -133,7 +144,10 @@ if (-not $studioPro -and -not $env:MDL_SKIP_STUDIO_PRO_CHECK) {
   Write-Host ''
   exit 1
 }
-Write-Ok "Studio Pro: $(Split-Path -Parent (Split-Path -Parent $studioPro.FullName))"
+if ($studioPro) {
+  $newest = if ($studioProCount -gt 1) { "  (newest of $studioProCount installed)" } else { '' }
+  Write-Ok "Studio Pro: $($studioPro.Dir)$newest"
+}
 
 # --- 1. winget stage ---------------------------------------------------------
 if (-not $SkipWinget) {

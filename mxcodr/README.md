@@ -601,7 +601,7 @@ Run it from the mx-codr clone. It asks for the Mendix project folder, with the f
 are in as the default, copies `mxcodr/` into the project and installs there:
 
 ```bash
-bash mx-codr/mxcodr/install.sh --with-deps          # asks
+bash mx-codr/mxcodr/install.sh                      # asks; installs what is missing
 bash mx-codr/mxcodr/install.sh ~/Apps/MyApp          # named
 cd ~/Apps/MyApp && bash mxcodr/install.sh            # again, from the copy in the project
 ```
@@ -949,9 +949,13 @@ powershell -ExecutionPolicy Bypass -File mxcodr\bootstrap.ps1 C:\Mendix\YourApp
 `bootstrap.ps1` is the only piece that cannot be bash: `install.sh` needs a shell
 before it can run, so getting that shell is PowerShell's job. It winget-installs
 Git for Windows, Python 3 and Node.js (skipping whatever is already there), finds
-a **real** Git Bash, and hands over to `bash install.sh <target> --with-deps`,
+a **real** Git Bash, and hands over to `bash install.sh <target> --with-deps`
+(the default since 2026.10.01.3; `--no-deps` only reports what is missing),
 which installs `playwright-cli`, its Chromium headless shell and `mxcli.exe`, then
-lands the harness.
+lands the harness. With several Studio Pro versions installed it reports the newest.
+It creates the app with `mxcli new --skip-build`: on Windows mxcli's first build never
+returns (mxbuild leaves a Gradle daemon holding mxcli's output pipe); the gate's first boot
+builds the app instead.
 
 Three things it deliberately does not do:
 

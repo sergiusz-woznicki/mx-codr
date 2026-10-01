@@ -44,7 +44,7 @@ restarted, about 40 seconds (measured), and Docker Desktop must be running.
 
 ```bash
 git clone https://github.com/tgolembiewski/mx-codr.git
-bash mx-codr/mxcodr/install.sh --with-deps
+./mx-codr/mxcodr/install.sh
 ```
 
 **Windows**: PowerShell **as administrator**, with Mendix Studio Pro installed:
@@ -108,9 +108,9 @@ fetches what is missing, and tells you plainly about anything it could not do.
 | **Your Mendix app** | Creates one with `mxcli new` if the folder has none (Mendix 11.12.1 unless you set `MX_VERSION`) |
 | **mxcli** | Uses the newest mxcli on the machine, offers the latest release when it is newer, and verifies the download's checksum |
 | **Docker** | Only in Docker mode: installs Docker Desktop when missing and waits for it; with WSL off it says so at once |
-| **Python, Node, Playwright and its browser** | Installs them with `--with-deps` — the checkers and browser tests run on them |
-| **MxBuild** | Downloads the one for your Mendix version with `--with-deps`, so `mx check` runs |
-| **PostgreSQL** | Local mode (the default): sets it up with `--with-deps` |
+| **Python, Node, Playwright and its browser** | Installs the missing ones — the checkers and browser tests run on them |
+| **MxBuild** | Downloads the one for your Mendix version, so `mx check` runs |
+| **PostgreSQL** | Local mode (the default): sets it up |
 | **Skills, lint rules, checkers, hooks** | Puts them where each of the five agents looks for them |
 | **Windows** | Applies the junctions and ARM64 fixes that Studio Pro's mxbuild needs |
 
@@ -182,7 +182,7 @@ want to see where a project stands — that is a convenience, not a step.
 So the whole of your involvement is, from your project folder:
 
 ```bash
-bash mxcodr/install.sh --with-deps
+bash mxcodr/install.sh
 ```
 
 and then working with your agent as usual.
@@ -200,19 +200,20 @@ and then working with your agent as usual.
 | **A JDK** | matching the Mendix version; Studio Pro installs one |
 | **Docker** | only if you choose Docker mode |
 
-`--with-deps` installs the ones that can be installed unattended. It never installs
-a JDK — that wants a licence click.
+The installer installs the missing ones that can be installed unattended and leaves
+what is already there; `--no-deps` only lists them. It never installs a JDK — that
+wants a licence click.
 
 ## Install
 
 ```
-bash mx-codr/mxcodr/install.sh [project-folder] [--no-app] [--with-deps]
+bash mx-codr/mxcodr/install.sh [project-folder] [--no-app] [--no-deps]
 
   project-folder   the Mendix project; asked for when not given (the current folder is the
                    default). Never the mx-codr clone itself
   --no-app         never create a Mendix app; require one to be there already
-  --with-deps      install missing prerequisites with this machine's package manager.
-                   Without it they are only reported.
+  --no-deps        only report missing prerequisites. By default they are installed
+                   with this machine's package manager; what is there is left alone.
 ```
 
 The installer copies `mxcodr/` into the project, so it can be run again from there:
@@ -221,14 +222,15 @@ The installer copies `mxcodr/` into the project, so it can be run again from the
 ### Windows
 
 `bootstrap.ps1` asks for the project folder first, installs Git for Windows, Python and
-Node with winget, then runs `install.sh --with-deps`. Run it as administrator: winget
+Node with winget, then runs `install.sh`. Run it as administrator: winget
 needs it.
 
 **Studio Pro is required on Windows.** `mx check` and the app build use the `mx.exe` and
 `mxbuild.exe` that come with it; Mendix publishes them separately for Linux only. That
 holds in Docker mode too: the app is built on the computer.
 Without it the installer stops at once, before installing anything, and says where to
-get it.
+get it. With several versions installed it reports the newest. The app is created without
+mxcli's first build, which hangs on Windows; the first gate run builds it.
 
 ### What lands in the project, and who reads it
 

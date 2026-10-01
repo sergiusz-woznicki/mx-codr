@@ -4,23 +4,25 @@
 # --- 10. Command-line arguments and the target project ---
 APP_ARG=""
 CREATE_APP=1
-WITH_DEPS=0
+WITH_DEPS=1
 for arg in "$@"; do
   case "$arg" in
     --no-app) CREATE_APP=0 ;;
-    --with-deps) WITH_DEPS=1 ;;
+    --with-deps) WITH_DEPS=1 ;;   # the default since 2026.10.01.3; kept for old instructions
+    --no-deps) WITH_DEPS=0 ;;
     -h|--help)
-      printf 'bash mxcodr/install.sh [path-to-project] [--no-app] [--with-deps]\n\n'
+      printf 'bash mxcodr/install.sh [path-to-project] [--no-app] [--no-deps]\n\n'
       printf '  Run it from the mx-codr folder you cloned; it asks for the Mendix project folder,\n'
       printf '  copies mxcodr/ there and installs:\n'
-      printf '    bash mx-codr/mxcodr/install.sh --with-deps\n\n'
+      printf '    ./mx-codr/mxcodr/install.sh\n\n'
       printf '  path-to-project  the Mendix project (default: asked for, or the current folder\n'
       printf '                   when it holds a *.mpr). Never the mx-codr folder itself\n'
       printf '  --no-app         never create a Mendix app; require one to be there already\n'
-      printf '  --with-deps      install missing prerequisites (Python, Node, playwright-cli,\n'
-      printf '                   its browser, mxcli, MxBuild) with this machine'"'"'s package manager.\n'
-      printf '                   Without it they are only reported. Docker is installed when\n'
-      printf '                   missing either way; the JDK is only reported.\n\n'
+      printf '  --no-deps        only report missing prerequisites. By default the missing ones\n'
+      printf '                   (Python, Node, playwright-cli, its browser, mxcli, MxBuild) are\n'
+      printf '                   installed with this machine'"'"'s package manager, and what is\n'
+      printf '                   already there is left alone. Docker is installed when missing\n'
+      printf '                   either way; the JDK is only reported.\n\n'
       printf '  MX_VERSION=%s  APP_NAME=<name>   env overrides when an app is created\n' "$DEFAULT_MX_VERSION"
       printf '  MDL_DEPS_DRY_RUN=1                    print the install commands, run none\n'
       printf '  MDL_ASSUME_YES=1                      answer the prerequisite prompts with yes\n'
@@ -96,7 +98,7 @@ elif [ -n "$(find "$PWD" -maxdepth 1 -name '*.mpr' -print -quit 2>/dev/null)" ] 
 else
   ui_fail "Nothing installed: name the Mendix project folder." \
           "" \
-          "  bash $SRC/install.sh /path/to/project --with-deps"
+          "  bash $SRC/install.sh /path/to/project"
 fi
 case "$APP" in /*) ;; *) APP="$PWD/$APP" ;; esac
 mkdir -p "$APP" 2>/dev/null || ui_fail "Cannot create the project folder: $APP"
@@ -113,7 +115,7 @@ if is_bundle_or_repo "$APP"; then
           "" \
           "Give the folder of your Mendix app, or a new folder for a new app, outside it:" \
           "" \
-          "  bash $SRC/install.sh /path/to/project --with-deps"
+          "  bash $SRC/install.sh /path/to/project"
 fi
 
 # Windows: without Studio Pro nothing here works -- creating the app, mx check and the build all
@@ -135,7 +137,7 @@ if [ "$IS_WINDOWS" = "1" ] && [ -z "$(studio_pro_versions)" ] && [ -z "${MDL_SKI
           "  1. Install Mendix Studio Pro $wanted_mx:" \
           "     https://marketplace.mendix.com/link/studiopro/" \
           "  2. Run this again:" \
-          "     bash $SRC/install.sh \"$APP\" --with-deps"
+          "     bash $SRC/install.sh \"$APP\""
 fi
 
 # No .mpr: create an app (MX_VERSION, APP_NAME) unless --no-app.

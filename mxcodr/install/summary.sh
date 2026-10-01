@@ -57,7 +57,7 @@ if [ "${#DEPS_MISSING[@]}" -gt 0 ]; then
     printf '     %s%s%s\n' "$C_YELLOW" "$line" "$C_RESET"
   done
   if [ "$WITH_DEPS" = "0" ]; then
-    printf '     %s%s%s\n' "$C_GREY" "re-run with --with-deps to have these installed for you" "$C_RESET"
+    printf '     %s%s%s\n' "$C_GREY" "re-run without --no-deps to have these installed for you" "$C_RESET"
   fi
 fi
 
