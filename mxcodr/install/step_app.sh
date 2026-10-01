@@ -50,6 +50,14 @@ create_app() {
   stash_mxcli="$tmp_app/mxcli-host$EXE"
   cp "$creator_mxcli" "$stash_mxcli" 2>/dev/null || stash_mxcli="$creator_mxcli"
   # mxcli's "Executing step '<phase>'" lines drive the sub-progress.
+  # On Windows, skip mxcli new's first build: mxbuild leaves a Gradle daemon that holds
+  # mxcli's output pipe, so mxcli waits for it forever (mxcli v0.24, docker/settle.go).
+  # The gate's first boot builds the app anyway.
+  skip_build=''
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if "$creator_mxcli" new --help 2>&1 | grep -q -- '--skip-build'; then skip_build='--skip-build'; fi ;;
+  esac
   if [ -n "$direct_mx" ]; then
     ui_sub "Studio Pro $mx_version (mxcli cannot see this install)"
     if ! "$direct_mx" create-project --app-name "$app_name" --output-dir "$tmp_app/app" \
@@ -66,7 +74,7 @@ create_app() {
     "$creator_mxcli" init "$tmp_app/app" >> "$tmp_app/new.log" 2>&1 || true
     ui_tick
   elif ! "$creator_mxcli" new "$app_name" --version "$mx_version" --output-dir "$tmp_app/app" \
-       --theme none --layout none 2>&1 | while IFS= read -r line; do
+       --theme none --layout none $skip_build 2>&1 | while IFS= read -r line; do
          printf '%s\n' "$line" >> "$tmp_app/new.log"
          case "$line" in
            "Executing step "*) phase="${line#Executing step \'}"; ui_sub "${phase%\'}" ;;

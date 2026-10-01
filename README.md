@@ -228,7 +228,8 @@ needs it.
 `mxbuild.exe` that come with it; Mendix publishes them separately for Linux only. That
 holds in Docker mode too: the app is built on the computer.
 Without it the installer stops at once, before installing anything, and says where to
-get it. With several versions installed it reports the newest.
+get it. With several versions installed it reports the newest. The app is created without
+mxcli's first build, which hangs on Windows; the first gate run builds it.
 
 ### What lands in the project, and who reads it
 

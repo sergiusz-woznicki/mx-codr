@@ -952,6 +952,9 @@ Git for Windows, Python 3 and Node.js (skipping whatever is already there), find
 a **real** Git Bash, and hands over to `bash install.sh <target> --with-deps`,
 which installs `playwright-cli`, its Chromium headless shell and `mxcli.exe`, then
 lands the harness. With several Studio Pro versions installed it reports the newest.
+It creates the app with `mxcli new --skip-build`: on Windows mxcli's first build never
+returns (mxbuild leaves a Gradle daemon holding mxcli's output pipe); the gate's first boot
+builds the app instead.
 
 Three things it deliberately does not do:
 
