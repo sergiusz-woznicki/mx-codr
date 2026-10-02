@@ -81,6 +81,7 @@ what to fix. Codes in brackets are what the gate prints.
 - "Users" for admins and "My account" for everyone once people sign in
   (`ACCOUNT01`-`03`); admins start on a page of the app (`HOME01`).
 - One layout for all pages except pop-ups (`LAYOUT01`).
+- A pop-up's Save commits with `refresh`, so the grid under it shows the new row at once (`REFRESH01`).
 - A Back button top left on every page opened from another page (`BACK01`), and on the right
   of the same top row, under the language selector, who is signed in: a user icon and e-mail
   that opens My account (`USER01`).
