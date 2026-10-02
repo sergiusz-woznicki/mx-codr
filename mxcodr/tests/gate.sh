@@ -103,14 +103,17 @@ add_red_first_notes() {
 }
 
 # What a check found that does not block DONE (yet): <check>.warnings, as `   - [CODE] ...` lines.
+# "fix them anyway" sent sessions round extra full gates after DONE for warnings alone. Now a
+# warning rides along with the next real fix, and one left at DONE goes into the report.
 print_warnings() {
   local file shown=0
   for file in "$WORK"/*.warnings; do
     [ -s "$file" ] || continue
-    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them anyway -- MDL_VISUAL, MDL_RUNTIME_ERRORS, MDL_CAPTIONS or MDL_SCOPE=error makes them block)"; }
+    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them together with your next fix, not in a gate run of their own -- MDL_VISUAL, MDL_RUNTIME_ERRORS, MDL_CAPTIONS or MDL_SCOPE=error makes them block)"; }
     shown=1
     head -12 "$file"
   done
+  WARNINGS_SHOWN=$shown
 }
 
 # After a green --only: is the full gate worth running yet? DeepSeek ran 15 full gates in an hour
@@ -130,6 +133,19 @@ only_coverage_note() {
   else
     echo "   coverage now: $lines -- the full gate cannot pass yet; the next feature and its test first"
   fi
+}
+
+# After a full DONE: did the last DONE see exactly this model and these tests? Pi re-ran a green
+# gate on an unchanged app three times in two minutes "to confirm stability". Advice only.
+done_repeat_note() {
+  local key file="$CACHE_DIR/last-done.key"
+  key="$(fingerprint tests 2>/dev/null)" || return 0
+  [ -n "$key" ] || return 0
+  if [ -f "$file" ] && [ "$(cat "$file" 2>/dev/null)" = "$key" ]; then
+    echo "   Same model and tests as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- change something before the next run."
+  fi
+  mkdir -p "$CACHE_DIR" 2>/dev/null && echo "$key" > "$file" 2>/dev/null
+  return 0
 }
 
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
@@ -166,6 +182,10 @@ print_verdict_and_exit() {
     exit 0
   fi
   echo "   DONE — every check passed"
+  done_repeat_note
+  if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
+    echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
+  fi
   exit 0
 }
 

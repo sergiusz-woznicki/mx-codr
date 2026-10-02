@@ -36,7 +36,7 @@ tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), preche
 .gitattributes    forces LF on *.sh and *.py — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
-skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of three)
+skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
 lint-rules/       3 × *.star — MOD001, REU001, UI001 — run by `mxcli lint`, no Python needed
 checks/           *.py + fixtures/ — the checks Starlark cannot express, gate_helpers.py
                   for the gate's JSON and digests; check_layout.py is the entry of the layout
@@ -365,6 +365,19 @@ page is asked again (`LOOK01`); a rejection repeats its fix (`LOOK02`).
 All of these are warnings for now: they do not block DONE. `MDL_VISUAL=error` makes them
 block, `MDL_VISUAL=0` turns them off.
 
+The gate asks for every warning to be fixed together with the next real fix, never in a gate run
+of its own. After DONE it says to leave them for the report, which names each one as what to fix
+next. Its old "fix them anyway" sent sessions back for more full gates after DONE, just for warnings.
+
+Lint warnings were only counted, so a commit inside a loop (`CONV011`, one database call per row)
+surfaced at the end of the work, or not at all: Pi fixed seven of them a turn later. The gate now
+lists each one under its warnings, with the fix, while the code is fresh, and the pitfalls in the
+syntax digest show the right form up front. They still do not block DONE.
+
+After a full DONE the gate remembers what it saw. A DONE on the same model and tests says
+"a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
+unchanged app, "to confirm stability".
+
 ### What the server logged while the suite ran
 
 The gate records when the suite starts and lists every distinct `ERROR`/`CRITICAL` line the
@@ -435,6 +448,12 @@ after every compaction (`spacing-and-layout` five times in one session), and the
 those skills describe came anyway, each with its fix, which is what the session then applied.
 Text in the prompt did not land (the "grant in the same script" pitfall was in it; CE0557 came);
 a hint at the moment of the error did (CE1613 fixed in one try).
+
+The one skill every session reads, `test-first-delivery`, is a 9 kB core: the loop in one
+screen, with each step's facts as a line, and what a test can call. The step-by-step prose and
+its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` and
+`gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
+it the loop told twice).
 
 So the rules are 8 kB and name one skill to read first; the others are named by the finding
 that needs them, and the per-prompt reminder says the same. What each check code wants and its

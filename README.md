@@ -264,6 +264,10 @@ runs even when another fails, so one call reports the whole picture, and a red r
 blocks DONE. Exit 0 only when all seven pass. Below them come warnings that do not block
 DONE yet: how the pages rendered (`VIS`, `LOOK`), errors the server logged (`RUNTIME01`) and
 tests that were never seen to fail.
+The agent fixes them along with its next fix, never in a gate run of their own. Whatever is
+left at DONE goes into its report as the next thing to fix.
+A commit inside a loop (lint `CONV011`) is listed among them with its fix.
+A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 
 ```
 == gate
