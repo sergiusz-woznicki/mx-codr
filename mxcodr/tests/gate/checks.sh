@@ -112,6 +112,13 @@ modules_or_status() {
   return 0
 }
 
+# The lint warnings to fix now, from `mxcli lint` text on stdin, as `   - [CODE] ...` lines.
+lint_worth_fixing() {
+  grep -E '\[CONV011\][[:space:]]*$' | head -10 \
+    | sed -E 's/^[[:space:]]*[^[:alnum:]]*[[:space:]]*//; s/ This causes N\+1 database operations\.//; s/[[:space:]]*\[CONV011\][[:space:]]*$//' \
+    | sed 's/^/   - [CONV011] /; s/$/ -- change the objects in the loop, commit the list once after `end loop` (new objects: `add` them to a list first)/'
+}
+
 # Only lint errors fail; warnings and info do not.
 check_lint() {
   local out code line errors
@@ -122,6 +129,10 @@ check_lint() {
     sleep 3
     out="$("$MXCLI" lint -p "$MPR" 2>&1)"; code=$?
   fi
+  # Lint warnings never block, and the gate only counted them, so a session met a commit inside a
+  # loop (CONV011, one database call per row) at the end of its work or not at all. The ones worth
+  # fixing while the code is fresh are listed under the gate's warnings, each with its fix.
+  printf '%s\n' "$out" | lint_worth_fixing > "$WORK/lint.warnings"
   # A .star file that fails to parse is skipped while lint still exits 0: not a pass.
   if printf '%s\n' "$out" | grep -qE 'rule file\(s\) skipped|rule file skipped'; then
     echo "lint: could not run -- $(printf '%s\n' "$out" | grep -cE '^Warning: rule file skipped') lint rule file(s) failed to load" > "$WORK/lint.summary"

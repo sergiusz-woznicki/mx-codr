@@ -16,6 +16,10 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **A data grid column across an association** binds the attribute at the end of the path:
   `column colCustomer (Attribute: Invoice_Customer/Name)`, not the association itself.
 - **`Administration.Account.Name` does not exist**: Name is System.User's. Show `FullName`.
+- **No `commit` inside a `loop`** (lint CONV011: one database call per row). Change the objects in
+  the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
+  `commit $Lines;` after `end loop;`. A new object goes into a list first (`$New = create list of
+  Mod.Line;` before the loop, `add $Copy to $New;` in it, `commit $New;` after it).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
   `grant Mod.Role on Mod.Entity (create, delete, read *, write *)`.

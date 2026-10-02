@@ -369,6 +369,11 @@ The gate asks for every warning to be fixed together with the next real fix, nev
 of its own. After DONE it says to leave them for the report, which names each one as what to fix
 next. Its old "fix them anyway" sent sessions back for more full gates after DONE, just for warnings.
 
+Lint warnings were only counted, so a commit inside a loop (`CONV011`, one database call per row)
+surfaced at the end of the work, or not at all: Pi fixed seven of them a turn later. The gate now
+lists each one under its warnings, with the fix, while the code is fresh, and the pitfalls in the
+syntax digest show the right form up front. They still do not block DONE.
+
 ### What the server logged while the suite ran
 
 The gate records when the suite starts and lists every distinct `ERROR`/`CRITICAL` line the
