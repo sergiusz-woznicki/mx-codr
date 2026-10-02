@@ -122,7 +122,9 @@ an empty grid and on a page rendering an error. Assert text and the data behind 
 
 **Count rows in the data, not in the grid.** A grid shows one page (`PageSize: 20`), so
 "one order was added" read from its visible rows compared 20 with 20. Count with
-`oql_count`; assert the grid by content, the row carrying the new order number.
+`oql_count`; assert the grid by content, the row carrying the new order number. A test
+that has to reload the page (`reopen_app()`, a menu round trip) to see what it just saved has
+found a bug: fix the app (`commit ... refresh`), not the test.
 
 **Touching an untested feature means writing its test first.** That is how coverage
 grows without a big-bang backfill.

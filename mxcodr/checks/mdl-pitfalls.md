@@ -20,6 +20,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
   `commit $Lines;` after `end loop;`. A new object goes into a list first (`$New = create list of
   Mod.Line;` before the loop, `add $Copy to $New;` in it, `commit $New;` after it).
+- **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
+  Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
   `grant Mod.Role on Mod.Entity (create, delete, read *, write *)`.

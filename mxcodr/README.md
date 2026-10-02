@@ -191,6 +191,11 @@ rules always block. A capped list says so ("10 of 286 shown"): the next session 
 ten findings. `MxTest`, the module `mxcli test` injects, is not one of the app's own: a
 gate that listed it could not run naming.
 
+`REFRESH01`, run with the naming rules and always blocking: a microflow that ends in `close page`
+(a popup's Save) commits with `refresh`. Every app the harness built kept the old rows under the
+popup after Save -- `commit $Invoice;` then `close page;` -- and the tests missed it, because one
+reloaded the page to see the new row. The test skill now calls such a reload a bug found.
+
 A `# covers:` line may separate its names with commas or spaces. A session wrote spaces and read
 0/24 covered with every test green.
 

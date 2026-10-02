@@ -18,6 +18,7 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 #   action-caption-is-default    FAIL  caption is the Mendix default ("Retrieve Invoice", "Commit object")
 #   placeholder-variable         FAIL  $Int1, $List2, $tmp, $x ...
 #   type-echo-variable           FAIL  name ends in _List, _Object or _Obj
+#   REFRESH01                    FAIL  a microflow that closes its page commits without `refresh`
 # --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
 # default, since 286 of them landed at once on a session with no test green yet.
 
@@ -262,7 +263,68 @@ def check_naming(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
     return failures, warnings
 
 
-CHECKS = {"naming": check_naming}
+# A microflow behind a popup's Save: it commits, then `close page`. Without `refresh` the
+# client is never told the object changed, so the grid under the popup still shows the old
+# rows until a reload -- in every app the harness built (new invoice, new customer). The tests
+# missed it: a session reloaded the page in its test (`reopen_app()`) to see the new row.
+MICROFLOW_START_RE = re.compile(r"^create\s+(?:or\s+(?:modify|replace)\s+)?microflow\s+([\w.]+)", re.IGNORECASE)
+COMMIT_STATEMENT_RE = re.compile(r"^\s*(?:commit\s+\$\w+|change\s+\$\w+\b.*\bcommit\b)", re.IGNORECASE | re.DOTALL)
+
+
+def refresh_findings(lines: list[str]) -> list[Failure]:
+    """REFRESH01: in a microflow that ends in `close page`, every commit carries `refresh`."""
+    failures: list[Failure] = []
+    name, statements, closes = None, [], False
+
+    def flush() -> None:
+        if not name or not closes:
+            return
+        for line_number, statement in statements:
+            if COMMIT_STATEMENT_RE.match(statement) and not re.search(r"\brefresh\b", statement, re.IGNORECASE):
+                target = re.search(r"\$\w+", statement).group(0)
+                failures.append(Failure(
+                    "REFRESH01",
+                    f"{name} closes its page but commits {target} without refresh -- the grid under the "
+                    f"popup keeps showing the old rows until a reload: write `commit {target} refresh;` "
+                    f"(or `change {target} (...) commit refresh;`)",
+                    line_number))
+
+    current, start, in_body = "", None, False
+    for index, line in enumerate(lines):
+        match = MICROFLOW_START_RE.match(line)
+        if match:
+            flush()
+            name, statements, closes, current, start, in_body = match.group(1), [], False, "", None, False
+            continue
+        if name is None or ANNOTATION_RE.match(line):
+            continue
+        if not in_body:
+            # the signature and its parameters end at `begin`
+            in_body = bool(re.match(r"^\s*begin\s*$", line, re.IGNORECASE))
+            continue
+        if re.match(r"^end;\s*$", line):
+            flush()
+            name = None
+            continue
+        if not current.strip():
+            start = index + 1
+        current += " " + line.strip()
+        if line.rstrip().endswith(";"):
+            statement = current.strip()
+            if re.match(r"close\s+page\b", statement, re.IGNORECASE):
+                closes = True
+            statements.append((start, statement))
+            current = ""
+    flush()
+    return failures
+
+
+def check_naming_and_refresh(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
+    failures, warnings = check_naming(lines)
+    return failures + refresh_findings(lines), warnings
+
+
+CHECKS = {"naming": check_naming_and_refresh}
 
 # The wording rules: a flow runs the same without them. Variable names and loop captions that
 # mxcli drops stay failures.
