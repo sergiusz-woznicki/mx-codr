@@ -374,6 +374,10 @@ surfaced at the end of the work, or not at all: Pi fixed seven of them a turn la
 lists each one under its warnings, with the fix, while the code is fresh, and the pitfalls in the
 syntax digest show the right form up front. They still do not block DONE.
 
+After a full DONE the gate remembers what it saw. A DONE on the same model and tests says
+"a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
+unchanged app, "to confirm stability".
+
 ### What the server logged while the suite ran
 
 The gate records when the suite starts and lists every distinct `ERROR`/`CRITICAL` line the

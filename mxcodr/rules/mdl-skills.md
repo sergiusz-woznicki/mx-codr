@@ -89,6 +89,10 @@ Users who sign in need no login screen of your own (two sessions lost 15-25 minu
   the signed-in user top right, Back top left, icons, one layout, `MyFirstModule` gone -- is
   what the `layout` check enforces: `tests/CHECKS.md` names each code and its fix, the skill
   `spacing-and-layout` has the snippets.
+- **Brand colours or a logo:** skill `theme-styling` and `./mxcli theme` (`create`, `apply`). A
+  colour set only in `custom-variables.scss` is overwritten by Atlas; the top bar logo is
+  Atlas_Core's image, replaced from the theme (Atlas's `$brand-logo`), never inside that
+  Marketplace module.
 - **Tests sign in as that user:** `export TEST_USER=demo_customer` before sourcing `tests/lib.sh`,
   and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`.
 

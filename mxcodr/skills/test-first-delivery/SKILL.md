@@ -23,8 +23,6 @@ behind single lines; read one when its line is the thing you are doing (table at
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call
 # 2. RUN IT AND WATCH IT FAIL -- the step that proves the test can fail at all
 bash tests/gate.sh --only <feature> --boot-if-needed
-#    (the gate records that red run in .mxcli/red-first/; that record is the proof,
-#     so there is no need to break the feature later to see the test notice)
 # 3. implement the smallest MDL that satisfies the criterion
 ./mxcli check <script>.mdl -p <app>.mpr --references && ./mxcli exec ...
 # 4. iterate on that ONE script until green (~2s a run) -- always through the gate,
@@ -77,18 +75,14 @@ Non-negotiable, in order of how often they get skipped:
 1. **The test fails before the implementation exists.** A test that has never been red
    may assert nothing at all; you cannot tell by reading it.
 2. **Never edit a test to make it pass.** Wrong test means the criterion was wrong —
-   change it as its own visible step, and say so.
+   agree the new one with the user, change the test as its own visible step. Silently
+   relaxing an assertion turns a failing feature into a passing suite.
 3. **Iterate on one script, never the whole suite.** A red loop is ~2s per run; a suite
    is ~25s, and one session spent 8 of its 10 minutes of test time on suite reruns.
 4. **Done is the full gate printing `DONE`**, quoted as output — not "should work".
 
-## When to use this skill
-
-Whenever you are about to change what the app *does*: adding a page, a button, a
-microflow, an action; changing existing behaviour; fixing a bug; being asked to "just
-quickly" add something — that is when the step gets skipped. Not for pure refactors
-that change no behaviour, and not for model-only chores (renames, folder moves,
-documentation).
+Use it whenever what the app *does* changes -- "just quickly" is when the step gets
+skipped -- not for renames, folder moves or refactors that change no behaviour.
 
 ## The loop, step by step
 
@@ -160,17 +154,7 @@ does the one goto, `reopen_app()` starts over, any other goto throws). Dismiss a
 message* dialog (`dismiss_dialog()`) before the next click; wait for a message with
 `await_message(/reminder sent/i)`, never `page.waitForTimeout`.
 
-**6. Only now is it done.** One command reports everything:
-
-```
-== gate
-   tests: Total: 9  Passed: 9  Failed: 0  Time: 19.5s
-   mx check: 0 errors
-   lint: 53 issues: 0 errors, 31 warnings, 22 info
-   coverage InvoiceDesk: PASS  11/11 elements covered by 9 test script(s)
-   DONE — every check passed
-```
-
+**6. Only now is it done**, when `bash tests/gate.sh` prints `DONE — every check passed`.
 Never report a feature as working on the strength of having written it. Paste what the
 gate printed. When it prints `NOT DONE`, the cause of each failure is under the verdict.
 
@@ -184,19 +168,18 @@ writing one that only pretends to.
 
 ## The rules that make it bite
 
-**Never edit a test to make it pass.** If the test is wrong, the acceptance criterion
-was wrong — say so, agree the new criterion with the user, change the test as its own
-visible step. Silently relaxing an assertion converts a failing feature into a passing
-suite, which is worse than no tests.
-
 **Never delete, skip or comment out a red test to finish.** A red test is the work not
 being done. Report it red.
 
 **A bug fix gets a test too**, in the same order: red on the bug, fix, green.
 
 **Assert on content, not existence.** `querySelector('.mx-name-x') !== null` passes on
-an empty grid and on a page rendering an error. Assert row counts, text, and the data
-behind it — `await_row`, `oql_count`, `oql_value`.
+an empty grid and on a page rendering an error. Assert text and the data behind it —
+`await_row`, `oql_count`, `oql_value`.
+
+**Count rows in the data, not in the grid.** A grid shows one page (`PageSize: 20`), so
+"one order was added" read from its visible rows compared 20 with 20. Count with
+`oql_count`; assert the grid by content, the row carrying the new order number.
 
 **Touching an untested feature means writing its test first.** That is how coverage
 grows without a big-bang backfill.
@@ -217,8 +200,5 @@ grows without a big-bang backfill.
 - [ ] A test that changes seeded data uses a row no other test reads
 - [ ] The test is one `scenario` call, not a chain of browser calls
 - [ ] The test declares a `# covers:` header naming real model elements
-- [ ] No test was edited, skipped or deleted to reach green
-- [ ] The whole suite was run, not just the new test
 - [ ] `bash tests/gate.sh` ends in `DONE — every check passed`
-- [ ] The red loop iterated on **one** script, not on the whole suite
 - [ ] The result was reported as command output, not as a claim

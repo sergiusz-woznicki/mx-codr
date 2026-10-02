@@ -23,6 +23,10 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
   `grant Mod.Role on Mod.Entity (create, delete, read *, write *)`.
+- **A user filling in an object a microflow created needs `write`, not `create`**: the
+  microflow creates it, the page edits it. Grant only the fields the page leaves editable,
+  `grant Mod.Customer on Mod.OrderLine (read *, write (Quantity, OrderLine_Product));`
+  -- a `create` right adds lint CONV006 and nothing the page needs.
 - **Pages and microflows need a role** the moment a menu, a button or another page reaches them
   (CE0557, CE0106): put the `grant view on page` / `grant execute on microflow` in the same
   script that creates them.

@@ -267,6 +267,7 @@ tests that were never seen to fail.
 The agent fixes them along with its next fix, never in a gate run of their own. Whatever is
 left at DONE goes into its report as the next thing to fix.
 A commit inside a loop (lint `CONV011`) is listed among them with its fix.
+A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 
 ```
 == gate
