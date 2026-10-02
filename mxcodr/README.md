@@ -36,7 +36,7 @@ tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), preche
 .gitattributes    forces LF on *.sh and *.py — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
-skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of three)
+skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
 lint-rules/       3 × *.star — MOD001, REU001, UI001 — run by `mxcli lint`, no Python needed
 checks/           *.py + fixtures/ — the checks Starlark cannot express, gate_helpers.py
                   for the gate's JSON and digests; check_layout.py is the entry of the layout
@@ -448,6 +448,12 @@ after every compaction (`spacing-and-layout` five times in one session), and the
 those skills describe came anyway, each with its fix, which is what the session then applied.
 Text in the prompt did not land (the "grant in the same script" pitfall was in it; CE0557 came);
 a hint at the moment of the error did (CE1613 fixed in one try).
+
+The one skill every session reads, `test-first-delivery`, is a 9 kB core: the loop in one
+screen, with each step's facts as a line, and what a test can call. The step-by-step prose and
+its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` and
+`gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
+it the loop told twice).
 
 So the rules are 8 kB and name one skill to read first; the others are named by the finding
 that needs them, and the per-prompt reminder says the same. What each check code wants and its
