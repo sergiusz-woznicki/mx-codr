@@ -73,7 +73,8 @@ what to fix. Codes in brackets are what the gate prints.
 - PascalCase names, `ENUM_`/`SNIPPET_` prefixes, `_NewEdit`/`_View`/`_Overview` pages.
 - A business caption on every activity; decisions as questions; a note on every loop.
 - Reuse: snippets and sub-microflows instead of copies; data grids use column filters
-  (`UI001`, `GRID01`).
+  (`UI001`, `GRID01`), and a button that changes a grid's rows sits in the grid's header
+  (`GRID02`).
 
 **Screens**
 - One menu for all roles on a standard Atlas layout (`NAV03`, `NAV04`), an icon on every

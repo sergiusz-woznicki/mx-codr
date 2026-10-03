@@ -23,6 +23,9 @@ Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 #                  profile's menu
 #   GRID01   FAIL  a grid filter in a column with no Attribute (and none of its own): it renders
 #                  "Unable to get filter store" and filters nothing
+#   GRID02   FAIL  a button outside a data grid changes the rows it shows (creates its entity, acts
+#                  on its selection, or calls a flow that writes its entity): it goes in the grid's
+#                  header, `controlbar` inside the datagrid
 #   LAYOUT01 FAIL  the app's pages (pop-ups, login and phone/tablet pages aside) use more than one
 #                  layout: the menu and its open/closed state change from page to page
 #   ICON01   FAIL  a button (actionbutton, linkbutton) without an icon; the message suggests one
@@ -53,7 +56,7 @@ Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 #
 # Where each rule lives, in layout_rules/ next to this file (this file only reads the arguments
 # and runs them): pages.py parses the dumps; spacing.py SPACE01-03, HEAD01, ALERT01; controls.py
-# GRID01, ICON01; page_top.py BACK01, USER01; layouts.py LAYOUT01, NAV04; navigation.py NAV01-03,
+# GRID01, ICON01; grids.py GRID02; page_top.py BACK01, USER01; layouts.py LAYOUT01, NAV04; navigation.py NAV01-03,
 # NAV05-06; accounts.py ACCOUNT01-03, MODULE01, HOME01; edges.py EDGE01.
 
 from __future__ import annotations
@@ -69,6 +72,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from layout_rules.accounts import USER_ROLE_RE, account_findings, admin_home_findings, template_module_findings  # noqa: E402
 from layout_rules.controls import button_icon_findings  # noqa: E402
 from layout_rules.edges import edge_findings  # noqa: E402
+from layout_rules.grids import header_button_findings  # noqa: E402
 from layout_rules.layouts import layout_menu_findings, one_layout_findings  # noqa: E402
 from layout_rules.navigation import (duplicate_icon_findings, menu_icon_findings, read_menu_access,  # noqa: E402
                                      role_home_findings, sign_out_findings)
@@ -157,6 +161,7 @@ def main() -> int:
     failures += one_layout_findings(lines, navigation, layouts)
     failures += button_icon_findings(lines + snippets.splitlines())
     failures += back_button_findings(lines, flows, navigation)
+    failures += header_button_findings(lines, flows)
     failures += edge_findings(lines, snippets, navigation)
     if args.layouts:
         failures += layout_menu_findings(layouts)

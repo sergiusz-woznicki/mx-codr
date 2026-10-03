@@ -850,6 +850,7 @@ project's own layouts:
 `SPACE03` | error | widgets on one line disagreeing on vertical margins, or none carrying `margin-bottom` |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
 `GRID01` | error | a grid filter in a column with no `Attribute:` (and none of its own) — it renders "Unable to get filter store" |
+`GRID02` | error | a button outside a data grid changes the rows it shows (creates its entity, uses its selection, or calls a flow that writes it, three calls deep); it goes in the grid's header, `controlbar` inside the datagrid |
 `NAV01` | error | project security is on and no menu, page or snippet offers Log out |
 `NAV02` | warning | the Log out item is not the last item of its menu |
 `NAV03` | error | project security is on and a role's home page (`home page X for Role`) is not in the menu |

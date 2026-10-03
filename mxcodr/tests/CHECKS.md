@@ -28,6 +28,7 @@ here blocks DONE unless the line says "warning".
 | `SPACE02` | only Atlas spacing values | sides `margin-`/`padding-` `top|right|bottom|left`, values `None S M L`; never a `Class:` or CSS for spacing |
 | `SPACE03` | the same vertical spacing on widgets that share a line | give them the same `margin-top`/`margin-bottom` |
 | `GRID01` | a column with a filter keeps its `Attribute` | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`; without it: "Unable to get filter store" |
+| `GRID02` | a button changing a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter |
 | `ALERT01` | an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
 
 ## lint -- the project's own rules (`mxcli lint`, `.claude/lint-rules/`)

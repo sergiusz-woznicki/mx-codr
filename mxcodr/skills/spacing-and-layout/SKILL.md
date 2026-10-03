@@ -424,6 +424,27 @@ create or modify page Sales.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atl
 
 The gate fails `BACK01` for every opened page without it and says which page opens it.
 
+## Buttons that change a grid go in its header
+
+A button that changes the rows a data grid shows -- New, Delete selected, Mark paid, Run the
+overdue check -- goes in the grid's own header, above its rows, where the grid-wide filters sit.
+In MDL that is a `controlbar` inside the `datagrid`, after the columns:
+
+```sql
+datagrid dgOrders (DataSource: database from Sales.Order, Selection: single) {
+  column colNumber (Attribute: Number, Caption: 'Number')
+  controlbar ctbOrders {
+    actionbutton btnNew (Caption: 'New order', Action: microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add')
+    actionbutton btnPaid (Caption: 'Mark paid', Action: microflow Sales.ACT_Order_MarkPaid(Order: $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark')
+  }
+}
+```
+
+The header is not row-scoped: pass the grid's selection (`$dgOrders`) or a page parameter.
+`$currentObject` and an enclosing data view's name do not resolve there (mx check: CE0117).
+A button on one row stays in a column of that row. The gate fails `GRID02` for a button outside
+the grid that creates the grid's entity, uses its selection, or calls a flow that writes it.
+
 ## Alerts and notices: the box class goes on a container
 
 `alert`, `alert-danger`, `card`, `well` draw a box with padding and a border. On a
@@ -496,6 +517,7 @@ layout: PASS  0 failure(s) over 6 page(s)
 `NAV01` | error | project security is on, a navigation menu has no `sign_out` item, and no page or snippet has a sign-out button |
 `NAV02` | warning | the `sign_out` item is not the last item of its menu |
 `GRID01` | error | a grid filter sits in a column with no `Attribute:` and has none of its own: it renders "Unable to get filter store" and filters nothing |
+`GRID02` | error | a button outside a data grid changes the rows it shows; it goes in the grid's `controlbar` |
 `NAV03` | error | project security is on, and a role's home page (`home page X for Role`) is not in the menu |
 `NAV04` | error | one of the project's own layouts opens two or more pages from buttons: a menu built by hand |
 `NAV05` | error | a menu item or sub-menu has no icon (the message suggests one for its caption) |
