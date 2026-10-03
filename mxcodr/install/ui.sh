@@ -79,9 +79,16 @@ ui_bar() {
     if [ "$i" -lt "$filled" ]; then bar="$bar$BAR_FULL"; else bar="$bar$BAR_EMPTY"; fi
     i=$(( i + 1 ))
   done
-  local label="$UI_LABEL" max=$(( UI_COLS - width - 11 ))
+  local label="$UI_LABEL" max=$(( UI_COLS - width - 11 )) took=""
+  # A step that runs long shows how long, so a silent tool does not look frozen.
+  local elapsed=$(( SECONDS - ${UI_BEGAN:-$SECONDS} ))
+  if [ "$elapsed" -ge 5 ]; then
+    took=" $I_DOT $(( elapsed / 60 ))m$(printf '%02d' $(( elapsed % 60 )))s"
+    max=$(( max - ${#took} ))
+  fi
   [ "$max" -lt 8 ] && max=8
   if [ "${#label}" -gt "$max" ]; then label="${label:0:$(( max - 1 ))}~"; fi
+  label="$label$took"
   printf '\r\033[K  %s%s%s  %s%3s%%%s  %s%s%s' \
     "$C_BLUE" "$bar" "$C_RESET" "$C_BOLD" "$pct" "$C_RESET" "$C_GREY" "$label" "$C_RESET"
 }
@@ -91,6 +98,7 @@ ui_clear() { [ "$UI_TTY" = 1 ] && printf '\r\033[K'; return 0; }
 
 ui_begin() {           # ui_begin "label"
   UI_LABEL="$1"
+  UI_BEGAN=$SECONDS
   UI_SUB_SEEN=0
   [ "$UI_TTY" = 1 ] || printf '  %s %s\n' "$I_DOT" "$1"
   ui_bar

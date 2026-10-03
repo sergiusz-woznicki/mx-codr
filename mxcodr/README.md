@@ -963,6 +963,12 @@ otherwise have done, each of which is easy to miss:
   servlet gated on that system property; without it the runtime logs *"Skipping
   development servlet registration"* and every data assertion fails.
 
+A step of the installer that runs long shows its elapsed time on the bar (`· 1m05s`), and
+the app-creation step redraws every two seconds while `mxcli new` prints nothing: its first
+build is silent for minutes, and a bar stuck at "13%  creating InvoiceChasQwen3827BSplash
+(Mendix ~" -- the label cut, nothing moving -- read as a freeze. The app's name now goes on
+the done line, so the label fits an 80-column terminal.
+
 ## Windows
 
 The harness is bash and Python on every host, so on Windows it runs under **Git

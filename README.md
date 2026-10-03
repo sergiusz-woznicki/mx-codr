@@ -232,6 +232,8 @@ holds in Docker mode too: the app is built on the computer.
 Without it the installer stops at once, before installing anything, and says where to
 get it. With several versions installed it reports the newest. The app is created without
 mxcli's first build, which hangs on Windows; the first gate run builds it.
+While the app is created the bar keeps moving and shows the elapsed time, so a silent
+build does not look like a freeze.
 The gate reads Python's `\r\n` output as plain lines, so an app with two modules gets
 its coverage checked, and it never calls a database lock stale while the app runs.
 
