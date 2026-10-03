@@ -85,6 +85,7 @@ printf '     %s\n' "Codex will not fire its hooks until you open ${C_BOLD}/hooks
 printf '     %s\n' "Cursor needs hooks enabled for this workspace before ${C_BOLD}.cursor/hooks.json${C_RESET} runs."
 printf '     %s\n' "OpenCode loads ${C_BOLD}.opencode/plugin/${C_RESET} at startup; restart an open session to pick it up."
 printf '     %s\n' "Pi loads ${C_BOLD}.pi/extensions/${C_RESET} once the project is trusted; restart an open session to pick it up."
+printf '     %s\n' "Change the app's look any time, in seconds: ${C_BOLD}bash tests/theme.sh${C_RESET} lists the themes."
 printf '     %s\n' "Write your own tests/verify-<feature>.test.sh -- the ${C_BOLD}test-first-delivery${C_RESET} skill has a"
 printf '     %s\n' "complete example, and mxcodr/examples/ holds eight from the demo app."
 printf '\n'

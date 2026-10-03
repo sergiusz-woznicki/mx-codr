@@ -156,6 +156,8 @@ if [ "$SRC_REAL" != "$(cd "$APP" && pwd -P)/mxcodr" ]; then
 fi
 
 choose_run_mode
+# A new app also gets its look chosen now, with the other questions.
+[ "$mpr_count" = "0" ] && choose_theme
 
 # NOTE: there are 12 ui_done steps (13 with a new app), so these totals are one short.
 if [ "$mpr_count" = "0" ]; then ui_plan 14; else ui_plan 13; fi

@@ -1,0 +1,47 @@
+/* Amber -- Graphite with an amber accent -- warm, for operations and logistics.
+ * A palette for `mxcli theme create amber --from amber.css --base signal`: everything
+ * not set here (status colours, radius, density, fonts) comes from signal. */
+:root {
+  --mxt-brand: #a35f00;
+  --mxt-brand-hover: #8a5000;
+  --mxt-brand-ink: #ffffff;
+  --mxt-ground: #f5f4f0;
+  --mxt-surface: #ffffff;
+  --mxt-surface-alt: #faf9f6;
+  --mxt-surface-hover: #efece4;
+  --mxt-surface-selected: #f6e3b8;
+  --mxt-ink: #20242c;
+  --mxt-ink-muted: #5e636e;
+  --mxt-ink-faint: #9a9ea8;
+  --mxt-line: #e0ddd4;
+  --mxt-rail: #2e3440;
+  --mxt-rail-line: #3b4252;
+  --mxt-rail-ink: #d8dee9;
+  --mxt-rail-ink-active: #ffffff;
+  --mxt-tint-info: rgba(163, 95, 0, 0.12);
+  --mxt-tone-info: #a35f00;
+  --mxt-focus-halo: 0 0 0 3px rgba(163, 95, 0, 0.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mxt-brand: #e0a33a;
+    --mxt-brand-hover: #ecb75a;
+    --mxt-brand-ink: #241600;
+    --mxt-ground: #14161b;
+    --mxt-surface: #1b1e25;
+    --mxt-surface-alt: #20242c;
+    --mxt-surface-hover: #262a33;
+    --mxt-surface-selected: #3a2e14;
+    --mxt-ink: #eceff4;
+    --mxt-ink-muted: #a3a9b5;
+    --mxt-ink-faint: #737985;
+    --mxt-line: #2c313b;
+    --mxt-rail: #0f1115;
+    --mxt-rail-line: #22262e;
+    --mxt-rail-ink: #c5cbd6;
+    --mxt-rail-ink-active: #ffffff;
+    --mxt-tint-info: rgba(224, 163, 58, 0.12);
+    --mxt-tone-info: #e0a33a;
+    --mxt-focus-halo: 0 0 0 3px rgba(224, 163, 58, 0.16);
+  }
+}

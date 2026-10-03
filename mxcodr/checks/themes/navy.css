@@ -1,0 +1,47 @@
+/* Navy -- Ink navy and cool greys -- calm, for finance and back office.
+ * A palette for `mxcli theme create navy --from navy.css --base signal`: everything
+ * not set here (status colours, radius, density, fonts) comes from signal. */
+:root {
+  --mxt-brand: #1f3a5f;
+  --mxt-brand-hover: #172c49;
+  --mxt-brand-ink: #ffffff;
+  --mxt-ground: #f3f5f9;
+  --mxt-surface: #ffffff;
+  --mxt-surface-alt: #f8f9fc;
+  --mxt-surface-hover: #e9eef5;
+  --mxt-surface-selected: #dce5f2;
+  --mxt-ink: #14202e;
+  --mxt-ink-muted: #5a6679;
+  --mxt-ink-faint: #98a2b3;
+  --mxt-line: #dce2ea;
+  --mxt-rail: #14263f;
+  --mxt-rail-line: #1e3352;
+  --mxt-rail-ink: #c9d3e0;
+  --mxt-rail-ink-active: #ffffff;
+  --mxt-tint-info: rgba(31, 58, 95, 0.12);
+  --mxt-tone-info: #1f3a5f;
+  --mxt-focus-halo: 0 0 0 3px rgba(31, 58, 95, 0.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mxt-brand: #7fa6d9;
+    --mxt-brand-hover: #9bbbe5;
+    --mxt-brand-ink: #0b1626;
+    --mxt-ground: #0e1420;
+    --mxt-surface: #151d2b;
+    --mxt-surface-alt: #1a2333;
+    --mxt-surface-hover: #1f2a3c;
+    --mxt-surface-selected: #1b2b44;
+    --mxt-ink: #e6ecf3;
+    --mxt-ink-muted: #9aa7b8;
+    --mxt-ink-faint: #6c7a8d;
+    --mxt-line: #263246;
+    --mxt-rail: #0a0f18;
+    --mxt-rail-line: #1a2232;
+    --mxt-rail-ink: #b4c0d0;
+    --mxt-rail-ink-active: #ffffff;
+    --mxt-tint-info: rgba(127, 166, 217, 0.12);
+    --mxt-tone-info: #7fa6d9;
+    --mxt-focus-halo: 0 0 0 3px rgba(127, 166, 217, 0.16);
+  }
+}

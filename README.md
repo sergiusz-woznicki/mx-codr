@@ -220,6 +220,12 @@ bash mx-codr/mxcodr/install.sh [project-folder] [--no-app] [--no-deps]
 The installer copies `mxcodr/` into the project, so it can be run again from there:
 `bash mxcodr/install.sh`.
 
+### The app's look
+
+For a new app the installer offers eight themes, each shown in the terminal in its own colours,
+with a preview of all of them in the browser. Change it any time: `bash tests/theme.sh` lists
+them, `bash tests/theme.sh teal` switches, and a running app shows it in seconds.
+
 ### Windows
 
 `bootstrap.ps1` asks for the project folder first, installs Git for Windows, Python and

@@ -1,0 +1,47 @@
+/* Forest -- Forest green on pale sage -- grounded, for field and operations.
+ * A palette for `mxcli theme create forest --from forest.css --base signal`: everything
+ * not set here (status colours, radius, density, fonts) comes from signal. */
+:root {
+  --mxt-brand: #2f6b3a;
+  --mxt-brand-hover: #24542d;
+  --mxt-brand-ink: #ffffff;
+  --mxt-ground: #f2f6f1;
+  --mxt-surface: #ffffff;
+  --mxt-surface-alt: #f8faf7;
+  --mxt-surface-hover: #e6efe5;
+  --mxt-surface-selected: #d6e8d6;
+  --mxt-ink: #1b2b1e;
+  --mxt-ink-muted: #5a6a5e;
+  --mxt-ink-faint: #97a59a;
+  --mxt-line: #d9e3d8;
+  --mxt-rail: #1f4527;
+  --mxt-rail-line: #2a5532;
+  --mxt-rail-ink: #c8dccb;
+  --mxt-rail-ink-active: #ffffff;
+  --mxt-tint-info: rgba(47, 107, 58, 0.12);
+  --mxt-tone-info: #2f6b3a;
+  --mxt-focus-halo: 0 0 0 3px rgba(47, 107, 58, 0.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mxt-brand: #6fbf7e;
+    --mxt-brand-hover: #8acf97;
+    --mxt-brand-ink: #0a1f0e;
+    --mxt-ground: #0e140f;
+    --mxt-surface: #151d16;
+    --mxt-surface-alt: #1a241b;
+    --mxt-surface-hover: #1f2b21;
+    --mxt-surface-selected: #1c3321;
+    --mxt-ink: #e5eee6;
+    --mxt-ink-muted: #9db0a0;
+    --mxt-ink-faint: #6e8172;
+    --mxt-line: #25312a;
+    --mxt-rail: #090d0a;
+    --mxt-rail-line: #1a221b;
+    --mxt-rail-ink: #b5c8b8;
+    --mxt-rail-ink-active: #ffffff;
+    --mxt-tint-info: rgba(111, 191, 126, 0.12);
+    --mxt-tone-info: #6fbf7e;
+    --mxt-focus-halo: 0 0 0 3px rgba(111, 191, 126, 0.16);
+  }
+}

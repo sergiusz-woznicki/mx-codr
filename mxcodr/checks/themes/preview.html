@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Choose your app's look</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Source+Sans+3:wght@400;600&family=Source+Serif+4:wght@600&family=Space+Grotesk:wght@400;600&display=swap">
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1a1d23;--muted:#5e6673;--line:#dfe3e8;--pick:#2563eb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111317;--card:#1a1d23;--text:#e8eaee;--muted:#9aa2ae;--line:#2b3038;--pick:#60a5fa}}
+:root[data-theme="dark"]{--bg:#111317;--card:#1a1d23;--text:#e8eaee;--muted:#9aa2ae;--line:#2b3038;--pick:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:28px 16px 48px}
+.wrap{max-width:1280px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between;margin-bottom:22px}
+h1{font-size:26px;margin:0 0 4px;text-wrap:balance}
+.lead{color:var(--muted);margin:0;max-width:62ch}
+.mode{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
+.mode button{border:0;background:none;color:var(--muted);padding:7px 16px;font:inherit;cursor:pointer}
+.mode button[aria-pressed="true"]{background:var(--text);color:var(--bg)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:10px}
+.card:hover{border-color:var(--muted)}
+.card:focus-visible{outline:3px solid var(--pick);outline-offset:2px}
+.card[aria-pressed="true"]{border-color:var(--pick);box-shadow:0 0 0 3px color-mix(in srgb,var(--pick) 25%,transparent)}
+.meta{display:flex;gap:12px;align-items:center}
+.num{font:700 26px/1 system-ui,sans-serif;width:44px;height:44px;border-radius:10px;display:grid;place-items:center;background:var(--text);color:var(--bg);flex:none}
+.name{font-weight:650;font-size:17px}
+.desc{color:var(--muted);font-size:13px;line-height:1.35}
+.tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--pick);font-weight:650}
+/* the mock app, painted from the theme's own tokens */
+.app{display:flex;height:196px;border-radius:8px;overflow:hidden;border:1px solid var(--t-line);background:var(--t-ground);color:var(--t-ink);font-family:var(--t-font);font-size:11px}
+.rail{width:62px;background:var(--t-rail);color:var(--t-rail-ink);padding:8px 6px;display:flex;flex-direction:column;gap:5px;flex:none}
+.rail b{color:var(--t-rail-ink-active);font-size:10px;margin-bottom:4px}
+.rail span{padding:3px 5px;border-radius:var(--t-radius)}
+.rail span.on{background:color-mix(in srgb,var(--t-brand) 45%,transparent);color:var(--t-rail-ink-active)}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{height:26px;background:var(--t-surface);border-bottom:1px solid var(--t-line);display:flex;align-items:center;justify-content:space-between;padding:0 8px;color:var(--t-ink-muted)}
+.page{padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.titlebar{display:flex;justify-content:space-between;align-items:center}
+.title{font-family:var(--t-font-heading);font-weight:600;font-size:14px}
+.btn{background:var(--t-brand);color:var(--t-brand-ink);border-radius:var(--t-radius);padding:3px 8px;font-weight:600}
+.btn.ghost{background:var(--t-surface);color:var(--t-ink);border:1px solid var(--t-line)}
+.table{background:var(--t-surface);border:1px solid var(--t-line);border-radius:var(--t-radius);overflow:hidden}
+.row{display:grid;grid-template-columns:1.1fr 1.3fr .9fr .9fr;gap:4px;padding:3px 6px;border-top:1px solid var(--t-line);white-space:nowrap}
+.row:first-child{border-top:0;color:var(--t-ink-muted);font-weight:600;background:var(--t-surface-alt)}
+.row.sel{background:var(--t-surface-selected)}
+.num-cell{text-align:right;font-variant-numeric:tabular-nums}
+.pill{border-radius:99px;padding:0 6px;font-size:10px;justify-self:start}
+.ok{background:color-mix(in srgb,var(--t-success) 16%,transparent);color:var(--t-success)}
+.warn{background:color-mix(in srgb,var(--t-warning) 16%,transparent);color:var(--t-warning)}
+.bad{background:color-mix(in srgb,var(--t-danger) 16%,transparent);color:var(--t-danger)}
+.actions{display:flex;gap:6px;justify-content:flex-end}
+.howto{position:sticky;bottom:12px;margin-top:22px;background:var(--text);color:var(--bg);border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;justify-content:space-between}
+.howto code{background:color-mix(in srgb,var(--bg) 18%,transparent);padding:1px 6px;border-radius:5px}
+@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s,box-shadow .15s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Choose your app's look</h1>
+      <p class="lead">Each card is a small piece of a Mendix app in that theme: the menu, the page, a list with statuses and the buttons. Pick one by its number in the terminal; you can change it later in seconds.</p>
+    </div>
+    <div class="mode" role="group" aria-label="Light or dark">
+      <button id="mode-light" type="button" aria-pressed="true">Light</button>
+      <button id="mode-dark" type="button" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+  <div class="grid" id="grid"></div>
+  <div class="howto" id="howto">
+    <span id="howto-text">Click a card to see its number, then type it in the terminal and press Enter.</span>
+    <span>Later: <code>bash tests/theme.sh &lt;name&gt;</code></span>
+  </div>
+</div>
+<script>
+const CATALOG = [{"name": "signal", "title": "Signal", "description": "Cool slate, one teal signal colour, 4px radius, 32px rows", "source": "builtin", "light": {"brand": "#0f6e6b", "brand-hover": "#0b5754", "brand-ink": "#ffffff", "ground": "#f4f6f8", "surface": "#ffffff", "surface-alt": "#f9fafb", "surface-hover": "#edf2f2", "surface-selected": "#e3efef", "ink": "#14181f", "ink-muted": "#5a6572", "ink-faint": "#98a1ad", "line": "#dce1e7", "rail": "#14181f", "rail-ink": "#d3d8de", "rail-ink-active": "#ffffff", "success": "#1f7a4d", "warning": "#b45309", "danger": "#b42318", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#2aa39f", "brand-hover": "#3fbdb8", "brand-ink": "#06231f", "ground": "#0e1116", "surface": "#161b22", "surface-alt": "#1b212a", "surface-hover": "#1f2630", "surface-selected": "#14312f", "ink": "#e6edf3", "ink-muted": "#98a3b3", "ink-faint": "#6b7787", "line": "#262c36", "rail": "#0a0d11", "rail-ink": "#b6c0cc", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}, {"name": "ledger", "title": "Ledger", "description": "Warm paper, hairline rules instead of cards, serif headings, 30px rows", "source": "builtin", "light": {"brand": "#1f3a5f", "brand-hover": "#2b4f7d", "brand-ink": "#ffffff", "ground": "#f7f4ee", "surface": "#fffdf9", "surface-alt": "#f3efe7", "surface-hover": "#efe9dd", "surface-selected": "#e8eef5", "ink": "#1c1917", "ink-muted": "#6b6257", "ink-faint": "#9b9082", "line": "#e2dbce", "rail": "#211e1a", "rail-ink": "#c3baa9", "rail-ink-active": "#ffffff", "success": "#2f6b4f", "warning": "#a66a15", "danger": "#9b2c1f", "radius": "2px", "font": "\"Source Sans 3\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "\"Source Serif 4\", Georgia, \"Times New Roman\", serif"}, "dark": {"brand": "#7fa3cc", "brand-hover": "#9dbadd", "brand-ink": "#0e1a26", "ground": "#171614", "surface": "#1f1d1a", "surface-alt": "#262320", "surface-hover": "#2d2925", "surface-selected": "#23303d", "ink": "#ede8df", "ink-muted": "#a69c8d", "ink-faint": "#7a7164", "line": "#35302a", "rail": "#12110f", "rail-ink": "#c3baa9", "rail-ink-active": "#ffffff", "success": "#6fbf93", "warning": "#d9a441", "danger": "#e0715c", "radius": "2px", "font": "\"Source Sans 3\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "\"Source Serif 4\", Georgia, \"Times New Roman\", serif"}}, {"name": "console", "title": "Console", "description": "Dark-first, high contrast, geometric type, 28px rows, 6px radius", "source": "builtin", "light": {"brand": "#2dd4bf", "brand-hover": "#5ee7d6", "brand-ink": "#04211d", "ground": "#0e1116", "surface": "#161b22", "surface-alt": "#1c2129", "surface-hover": "#222831", "surface-selected": "#10312e", "ink": "#e6edf3", "ink-muted": "#9aa6b4", "ink-faint": "#6e7b8b", "line": "#262c36", "rail": "#0a0d11", "rail-ink": "#b6c0cc", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "6px", "font": "\"Space Grotesk\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#2dd4bf", "brand-hover": "#5ee7d6", "brand-ink": "#04211d", "ground": "#0e1116", "surface": "#161b22", "surface-alt": "#1c2129", "surface-hover": "#222831", "surface-selected": "#10312e", "ink": "#e6edf3", "ink-muted": "#9aa6b4", "ink-faint": "#6e7b8b", "line": "#262c36", "rail": "#0a0d11", "rail-ink": "#b6c0cc", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "6px", "font": "\"Space Grotesk\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}, {"name": "navy", "title": "Navy", "description": "Ink navy and cool greys -- calm, for finance and back office", "source": "navy.css", "light": {"brand": "#1f3a5f", "brand-hover": "#172c49", "brand-ink": "#ffffff", "ground": "#f3f5f9", "surface": "#ffffff", "surface-alt": "#f8f9fc", "surface-hover": "#e9eef5", "surface-selected": "#dce5f2", "ink": "#14202e", "ink-muted": "#5a6679", "ink-faint": "#98a2b3", "line": "#dce2ea", "rail": "#14263f", "rail-ink": "#c9d3e0", "rail-ink-active": "#ffffff", "success": "#1f7a4d", "warning": "#b45309", "danger": "#b42318", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#7fa6d9", "brand-hover": "#9bbbe5", "brand-ink": "#0b1626", "ground": "#0e1420", "surface": "#151d2b", "surface-alt": "#1a2333", "surface-hover": "#1f2a3c", "surface-selected": "#1b2b44", "ink": "#e6ecf3", "ink-muted": "#9aa7b8", "ink-faint": "#6c7a8d", "line": "#263246", "rail": "#0a0f18", "rail-ink": "#b4c0d0", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}, {"name": "teal", "title": "Teal", "description": "Deep teal on light grey-green -- fresh, for service and support", "source": "teal.css", "light": {"brand": "#0e7c7b", "brand-hover": "#0a5f5e", "brand-ink": "#ffffff", "ground": "#f1f7f6", "surface": "#ffffff", "surface-alt": "#f7fafa", "surface-hover": "#e5f0ef", "surface-selected": "#cfeae8", "ink": "#13292b", "ink-muted": "#557073", "ink-faint": "#93a7a9", "line": "#d6e3e2", "rail": "#0b3b3f", "rail-ink": "#c2dcdb", "rail-ink-active": "#ffffff", "success": "#1f7a4d", "warning": "#b45309", "danger": "#b42318", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#3fb5b3", "brand-hover": "#5cc7c5", "brand-ink": "#04211f", "ground": "#0b1516", "surface": "#111e20", "surface-alt": "#152527", "surface-hover": "#1a2d2f", "surface-selected": "#133a3a", "ink": "#e3efef", "ink-muted": "#93aeae", "ink-faint": "#66807f", "line": "#203234", "rail": "#071012", "rail-ink": "#a9c6c5", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}, {"name": "amber", "title": "Amber", "description": "Graphite with an amber accent -- warm, for operations and logistics", "source": "amber.css", "light": {"brand": "#a35f00", "brand-hover": "#8a5000", "brand-ink": "#ffffff", "ground": "#f5f4f0", "surface": "#ffffff", "surface-alt": "#faf9f6", "surface-hover": "#efece4", "surface-selected": "#f6e3b8", "ink": "#20242c", "ink-muted": "#5e636e", "ink-faint": "#9a9ea8", "line": "#e0ddd4", "rail": "#2e3440", "rail-ink": "#d8dee9", "rail-ink-active": "#ffffff", "success": "#1f7a4d", "warning": "#b45309", "danger": "#b42318", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#e0a33a", "brand-hover": "#ecb75a", "brand-ink": "#241600", "ground": "#14161b", "surface": "#1b1e25", "surface-alt": "#20242c", "surface-hover": "#262a33", "surface-selected": "#3a2e14", "ink": "#eceff4", "ink-muted": "#a3a9b5", "ink-faint": "#737985", "line": "#2c313b", "rail": "#0f1115", "rail-ink": "#c5cbd6", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}, {"name": "plum", "title": "Plum", "description": "Plum and soft lilac -- distinctive, for customer-facing apps", "source": "plum.css", "light": {"brand": "#5b3a70", "brand-hover": "#482d59", "brand-ink": "#ffffff", "ground": "#f7f3f8", "surface": "#ffffff", "surface-alt": "#fbf9fc", "surface-hover": "#efe8f2", "surface-selected": "#e7daee", "ink": "#2a1d33", "ink-muted": "#6a5a73", "ink-faint": "#a497ab", "line": "#e3dae8", "rail": "#3b2449", "rail-ink": "#dccde6", "rail-ink-active": "#ffffff", "success": "#1f7a4d", "warning": "#b45309", "danger": "#b42318", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#b48bcf", "brand-hover": "#c6a3dc", "brand-ink": "#1e1027", "ground": "#140f18", "surface": "#1c1522", "surface-alt": "#221a29", "surface-hover": "#2a2032", "surface-selected": "#33223f", "ink": "#eee6f3", "ink-muted": "#ae9fb8", "ink-faint": "#7d6e87", "line": "#2f2538", "rail": "#0d0911", "rail-ink": "#c9b9d4", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}, {"name": "forest", "title": "Forest", "description": "Forest green on pale sage -- grounded, for field and operations", "source": "forest.css", "light": {"brand": "#2f6b3a", "brand-hover": "#24542d", "brand-ink": "#ffffff", "ground": "#f2f6f1", "surface": "#ffffff", "surface-alt": "#f8faf7", "surface-hover": "#e6efe5", "surface-selected": "#d6e8d6", "ink": "#1b2b1e", "ink-muted": "#5a6a5e", "ink-faint": "#97a59a", "line": "#d9e3d8", "rail": "#1f4527", "rail-ink": "#c8dccb", "rail-ink-active": "#ffffff", "success": "#1f7a4d", "warning": "#b45309", "danger": "#b42318", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}, "dark": {"brand": "#6fbf7e", "brand-hover": "#8acf97", "brand-ink": "#0a1f0e", "ground": "#0e140f", "surface": "#151d16", "surface-alt": "#1a241b", "surface-hover": "#1f2b21", "surface-selected": "#1c3321", "ink": "#e5eee6", "ink-muted": "#9db0a0", "ink-faint": "#6e8172", "line": "#25312a", "rail": "#090d0a", "rail-ink": "#b5c8b8", "rail-ink-active": "#ffffff", "success": "#3fb950", "warning": "#d29922", "danger": "#f85149", "radius": "4px", "font": "\"IBM Plex Sans\", system-ui, -apple-system, \"Segoe UI\", sans-serif", "font-heading": "var(--mxt-font)"}}];
+let mode = "light", picked = null;
+const grid = document.getElementById("grid");
+const keys = ["brand","brand-ink","ground","surface","surface-alt","surface-selected","ink","ink-muted","line","rail","rail-ink","rail-ink-active","success","warning","danger","radius","font","font-heading"];
+function paint(card, theme) {
+  const t = theme[mode];
+  keys.forEach(k => { if (t[k]) card.style.setProperty("--t-" + k, t[k]); });
+}
+function mock() {
+  return `<div class="app" aria-hidden="true">
+    <div class="rail"><b>InvoiceApp</b><span>Home</span><span class="on">Invoices</span><span>Customers</span><span>Reports</span></div>
+    <div class="main"><div class="top"><span>Invoices</span><span>Anna Kowalska</span></div>
+      <div class="page"><div class="titlebar"><span class="title">Invoices</span><span class="btn">New invoice</span></div>
+        <div class="table">
+          <div class="row"><span>Number</span><span>Customer</span><span class="num-cell">Amount</span><span>Status</span></div>
+          <div class="row"><span>INV-041</span><span>Northwind</span><span class="num-cell">1,240.00</span><span class="pill ok">Paid</span></div>
+          <div class="row sel"><span>INV-042</span><span>Globex</span><span class="num-cell">860.50</span><span class="pill warn">Sent</span></div>
+          <div class="row"><span>INV-043</span><span>Initech</span><span class="num-cell">2,015.00</span><span class="pill bad">Overdue</span></div>
+        </div>
+        <div class="actions"><span class="btn ghost">Cancel</span><span class="btn">Save</span></div>
+      </div></div></div>`;
+}
+CATALOG.forEach((theme, i) => {
+  const card = document.createElement("button");
+  card.type = "button"; card.className = "card"; card.id = "theme-" + theme.name;
+  card.setAttribute("aria-pressed", "false");
+  card.innerHTML = `<div class="meta"><span class="num">${i + 1}</span><div><div class="name">${theme.title}${i === 0 ? ' <span class="tag">default</span>' : ""}</div><div class="desc">${theme.description.replace(/ -- /g, " — ")}</div></div></div>` + mock();
+  card.addEventListener("click", () => {
+    picked = i;
+    document.querySelectorAll(".card").forEach(c => c.setAttribute("aria-pressed", String(c === card)));
+    document.getElementById("howto-text").textContent = `${theme.title}: type ${i + 1} in the terminal and press Enter.`;
+  });
+  grid.appendChild(card);
+  paint(card, theme);
+});
+function setMode(m) {
+  mode = m;
+  document.getElementById("mode-light").setAttribute("aria-pressed", String(m === "light"));
+  document.getElementById("mode-dark").setAttribute("aria-pressed", String(m === "dark"));
+  document.querySelectorAll(".card").forEach((c, i) => paint(c, CATALOG[i]));
+}
+document.getElementById("mode-light").addEventListener("click", () => setMode("light"));
+document.getElementById("mode-dark").addEventListener("click", () => setMode("dark"));
+</script>
+</body>
+</html>

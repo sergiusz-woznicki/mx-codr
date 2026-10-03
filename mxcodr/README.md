@@ -25,7 +25,7 @@ hooks/            host-specific prompt/PostToolUse adapters plus the Codex and C
 plugins/          mendix-mdl-harness.js (OpenCode) and mendix-mdl-harness.pi.js (Pi) -- the same
                   three jobs as the hooks, in each host's own event API
 tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), precheck.sh, orient.sh,
-                  diagnose.sh, peek.sh, lib.sh + lib/ (timeout, sessions, scenario, results),
+                  diagnose.sh, peek.sh, theme.sh, lib.sh + lib/ (timeout, sessions, scenario, results),
                   portable.sh, scenario-helpers.js, run-app.sh (Windows), run-docker.sh (Docker
                   mode) — the harness, upgraded in place on every install.
                   gate.sh is the done gate: tests, mx check, lint, coverage, naming, layout and
@@ -554,6 +554,24 @@ names the entities whose constraints are doing nothing and prints the shape that
 `Administration.Account`, constrain every entity the role reads, give every entity a rule, prove
 both directions in a test). `MDL_REQUIRE_PRODUCTION=0` in `tests/harness.env` is for an app that
 deliberately has no users at all.
+
+## The app's look
+
+A new app no longer starts in stock Atlas blue. With the other questions, before the unattended
+part, the installer asks how the app should look: eight themes -- mxcli's `signal` (the default),
+`ledger` and `console`, and the bundle's `navy`, `teal`, `amber`, `plum` and `forest` -- each listed
+as a slice of the app in its own colours (menu, page, selected row, Save button; 24-bit colour
+where the terminal has it, the nearest of 256 otherwise), while a preview page opens in the
+browser with every theme on a small app, light and dark. The answer is a number or a name;
+`MDL_THEME` answers it unattended, and with no terminal the default is taken.
+
+A theme is files under `theme/` only, never the model: mxcli's are applied by name, the bundle's
+are created from `checks/themes/<name>.css` (installed as `tools/mdl-checks/themes/`) on the
+signal base. `bash tests/theme.sh` lists them and `bash tests/theme.sh plum` switches; under
+`mxcli run --watch` the running app showed the new look about 7 seconds later, no restart.
+`catalog.json` and `preview.html` are built from the tokens mxcli actually writes, by
+`tests/skills/build-themes.py <any app>` in the mx-codr development repo -- run it when a palette
+or mxcli changes.
 
 ## Rebuilding after a source change
 

@@ -1,0 +1,47 @@
+/* Plum -- Plum and soft lilac -- distinctive, for customer-facing apps.
+ * A palette for `mxcli theme create plum --from plum.css --base signal`: everything
+ * not set here (status colours, radius, density, fonts) comes from signal. */
+:root {
+  --mxt-brand: #5b3a70;
+  --mxt-brand-hover: #482d59;
+  --mxt-brand-ink: #ffffff;
+  --mxt-ground: #f7f3f8;
+  --mxt-surface: #ffffff;
+  --mxt-surface-alt: #fbf9fc;
+  --mxt-surface-hover: #efe8f2;
+  --mxt-surface-selected: #e7daee;
+  --mxt-ink: #2a1d33;
+  --mxt-ink-muted: #6a5a73;
+  --mxt-ink-faint: #a497ab;
+  --mxt-line: #e3dae8;
+  --mxt-rail: #3b2449;
+  --mxt-rail-line: #4a2f5a;
+  --mxt-rail-ink: #dccde6;
+  --mxt-rail-ink-active: #ffffff;
+  --mxt-tint-info: rgba(91, 58, 112, 0.12);
+  --mxt-tone-info: #5b3a70;
+  --mxt-focus-halo: 0 0 0 3px rgba(91, 58, 112, 0.16);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mxt-brand: #b48bcf;
+    --mxt-brand-hover: #c6a3dc;
+    --mxt-brand-ink: #1e1027;
+    --mxt-ground: #140f18;
+    --mxt-surface: #1c1522;
+    --mxt-surface-alt: #221a29;
+    --mxt-surface-hover: #2a2032;
+    --mxt-surface-selected: #33223f;
+    --mxt-ink: #eee6f3;
+    --mxt-ink-muted: #ae9fb8;
+    --mxt-ink-faint: #7d6e87;
+    --mxt-line: #2f2538;
+    --mxt-rail: #0d0911;
+    --mxt-rail-line: #221a29;
+    --mxt-rail-ink: #c9b9d4;
+    --mxt-rail-ink-active: #ffffff;
+    --mxt-tint-info: rgba(180, 139, 207, 0.12);
+    --mxt-tone-info: #b48bcf;
+    --mxt-focus-halo: 0 0 0 3px rgba(180, 139, 207, 0.16);
+  }
+}
