@@ -14,7 +14,7 @@ from .navigation import MENU_ITEM_RE, PROFILE_RE
 # ACCOUNT01-03 ---------------------------------------------------------------------------------
 ADMIN_PAGE = "Administration.Account_Overview"
 MY_ACCOUNT_FLOW = "Administration.ManageMyAccount"
-ADMIN_ITEM = f"menu item 'Users' page {ADMIN_PAGE} icon Atlas_Core.Atlas_Filled.\"user-neutral-group\";"
+ADMIN_ITEM = f"menu item 'Users' page {ADMIN_PAGE} icon Atlas_Core.Atlas_Filled.\"user-neutral-shield\";"
 MY_ACCOUNT_ITEM = f"menu item 'My account' microflow {MY_ACCOUNT_FLOW} icon Atlas_Core.Atlas_Filled.user;"
 USER_ROLE_RE = re.compile(r"^\s*create\s+user\s+role\s+(?P<name>[\w.]+)\s*\((?P<roles>[^)]*)\)", re.IGNORECASE)
 

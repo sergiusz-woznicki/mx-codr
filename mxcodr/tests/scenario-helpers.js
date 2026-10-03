@@ -12,7 +12,7 @@
 //   await_message(/regex/[, ms])       wait for an app message; returns the page text
 //   dismiss_dialog()                   click OK on an open dialog
 //   page_text()                        all visible page text
-//   look('label')                      measure the page as it renders now (VIS01-03); lib.sh
+//   look('label')                      measure the page as it renders now (VIS01-04); lib.sh
 //                                      calls look('end') after every scenario body by itself
 // Also in scope: page (Playwright), and BASE, USER, PASSWORD, ACTION_TIMEOUT from the settings.
 // Indented two spaces: the code runs inside the scenario's async function.
@@ -244,8 +244,10 @@
   // no named widget inside) are compared, so a container never 'overlaps' what it holds. rects:
   // one box per rendered line of an inline widget -- a span that wraps onto a second line has a
   // bounding box over both, which 'overlapped' its neighbours on the first line.
-  // viewport: {width, scrollWidth}. Returns [{code, widgets, px, message}].
-  const visual_findings = (boxes, viewport) => {
+  // viewport: {width, scrollWidth}. charts: [{name, w, h, availW, availH, inner}] -- each chart's
+  // size, the screen space it has (its scrolling container), and how far a box between them makes
+  // it scroll sideways. Returns [{code, widgets, px, message}].
+  const visual_findings = (boxes, viewport, charts) => {
     const found = [];
     const MIN = 4;   // px both ways: touching borders and 1-2 px rounding are not an overlap
     const leaves = boxes.filter(b => b.leaf && b.w > 0 && b.h > 0);
@@ -280,6 +282,15 @@
     for (const b of leaves) {
       if (b.clipped) found.push({code: 'VIS03', widgets: [b.name], px: b.clipped,
         message: b.name + ' cuts its text off (' + b.clipped + ' px hidden)'});
+    }
+    // A chart is read whole or not at all: it must fit the screen without scrolling either way.
+    for (const c of (charts || [])) {
+      const over = Math.max(c.w - c.availW, c.h - c.availH, c.inner || 0);
+      if (over <= 1) continue;
+      const why = c.inner > 1 ? 'it scrolls sideways inside its container by ' + Math.round(c.inner) + ' px'
+        : Math.round(c.w) + ' x ' + Math.round(c.h) + ' px, but the screen shows ' + Math.round(c.availW) + ' x ' + Math.round(c.availH);
+      found.push({code: 'VIS04', widgets: [c.name], px: Math.round(over),
+        message: 'chart ' + c.name + ' cannot be seen whole on one screen: ' + why});
     }
     return found;
   };
@@ -323,12 +334,34 @@
         const scrollers = [document.documentElement, root].concat(Array.from(root.querySelectorAll('*'))
           .filter(e => e.scrollHeight > e.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(e).overflowY)));
         const doc = document.documentElement;
+        // Charts (Mendix's Charts module draws them with Plotly): the outermost chart element each.
+        const CHART = '.widget-chart, .widget-custom-chart, .js-plotly-plot';
+        const scroller = el => {
+          for (let e = el.parentElement; e && e !== doc; e = e.parentElement) {
+            const st = getComputedStyle(e);
+            // The box that scrolls it up and down; a sideways-only box reports overflowY auto too.
+            if (/auto|scroll/.test(st.overflowY) && e.scrollHeight > e.clientHeight + 1) return e;
+          }
+          return doc;
+        };
+        const charts = Array.from(root.querySelectorAll(CHART))
+          .filter(el => !el.parentElement.closest(CHART) && shown(el)).map(el => {
+            const r = el.getBoundingClientRect(), box = scroller(el);
+            const named = el.closest('[class*="mx-name-"]');
+            const m = named && /(?:^|\s)mx-name-(\S+)/.exec(typeof named.className === 'string' ? named.className : '');
+            let inner = 0;
+            for (let e = el.parentElement; e && e !== box; e = e.parentElement) {
+              if (/auto|scroll/.test(getComputedStyle(e).overflowX)) inner = Math.max(inner, e.scrollWidth - e.clientWidth);
+            }
+            return {name: m ? m[1] : 'chart', w: r.width, h: r.height, inner,
+              availW: Math.min(box.clientWidth, doc.clientWidth), availH: Math.min(box.clientHeight, window.innerHeight)};
+          }).filter(c => c.w > 0 && c.h > 0);
         const sideways = Math.max(doc.scrollWidth - doc.clientWidth, root.scrollWidth - root.clientWidth, 0);
-        return {boxes, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
+        return {boxes, charts, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
           fullHeight: Math.max(...scrollers.map(e => e.scrollHeight - e.clientHeight)) + window.innerHeight,
           title: document.title};
       });
-      const findings = visual_findings(snap.boxes, snap.viewport);
+      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts);
       let shot = '';
       if (VISUAL_DIR) {
         shot = VISUAL_DIR + '/' + TEST_NAME + '-' + (__mdl_visual.length + 1) + '.png';

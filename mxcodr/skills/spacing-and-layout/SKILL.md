@@ -222,7 +222,9 @@ lists the names; hyphenated ones are double-quoted). Ones that fit common screen
 | Screen | Icon |
 |---|---|
 | orders, cart | `Atlas_Core.Atlas_Filled."shopping-cart"` |
-| customers, users, contacts | `Atlas_Core.Atlas_Filled."user-neutral-group"` |
+| customers, contacts | `Atlas_Core.Atlas_Filled."user-neutral-group"` |
+| users (user management) | `Atlas_Core.Atlas_Filled."user-neutral-shield"` |
+| My account | `Atlas_Core.Atlas_Filled.user` |
 | invoices, bills | `Atlas_Core.Atlas_Filled."cash-payment-bill"` |
 | dashboard, overview | `Atlas_Core.Atlas_Filled.dashboard` |
 | reports | `Atlas_Core.Atlas_Filled."analytics-bars"` |
@@ -233,7 +235,9 @@ lists the names; hyphenated ones are double-quoted). Ones that fit common screen
 | home | `Atlas_Core.Atlas_Filled.home` |
 | Log out | `Atlas_Core.Atlas_Filled.logout` |
 
-Two items with the same icon read as the same screen; pick different ones.
+Two items with the same icon read as the same screen; pick different ones. The gate fails
+`NAV06` when two entries one role sees share an icon -- only the entries that role may open
+count, since Mendix hides the rest.
 
 The gate fails `NAV03` when a role's home page is not in the menu, and `NAV04` when
 one of the project's own layouts opens two or more pages from buttons.
@@ -244,7 +248,7 @@ Once users sign in, the menu also carries the Administration module's own accoun
 Nothing needs building, and nothing in the Marketplace module changes:
 
 ```sql
-    menu item 'Users' page Administration.Account_Overview icon Atlas_Core.Atlas_Filled."user-neutral-group";
+    menu item 'Users' page Administration.Account_Overview icon Atlas_Core.Atlas_Filled."user-neutral-shield";
     menu item 'My account' microflow Administration.ManageMyAccount icon Atlas_Core.Atlas_Filled.user;
     menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;
 ```
@@ -420,6 +424,27 @@ create or modify page Sales.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atl
 
 The gate fails `BACK01` for every opened page without it and says which page opens it.
 
+## Buttons that change a grid go in its header
+
+A button that changes the rows a data grid shows -- New, Delete selected, Mark paid, Run the
+overdue check -- goes in the grid's own header, above its rows, where the grid-wide filters sit.
+In MDL that is a `controlbar` inside the `datagrid`, after the columns:
+
+```sql
+datagrid dgOrders (DataSource: database from Sales.Order, Selection: single) {
+  column colNumber (Attribute: Number, Caption: 'Number')
+  controlbar ctbOrders {
+    actionbutton btnNew (Caption: 'New order', Action: microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add')
+    actionbutton btnPaid (Caption: 'Mark paid', Action: microflow Sales.ACT_Order_MarkPaid(Order: $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark')
+  }
+}
+```
+
+The header is not row-scoped: pass the grid's selection (`$dgOrders`) or a page parameter.
+`$currentObject` and an enclosing data view's name do not resolve there (mx check: CE0117).
+A button on one row stays in a column of that row. The gate fails `GRID02` for a button outside
+the grid that creates the grid's entity, uses its selection, or calls a flow that writes it.
+
 ## Alerts and notices: the box class goes on a container
 
 `alert`, `alert-danger`, `card`, `well` draw a box with padding and a border. On a
@@ -438,6 +463,14 @@ container ctCancelNotice (Class: 'alert alert-danger',
 ```
 
 A `badge` is inline by design and stays on the `dynamictext`.
+
+## Charts fit one screen
+
+A chart is read whole or not at all. Size it so it fits the screen without scrolling down or
+sideways: a height that fits (the chart's Height in pixels, about 300-450, or a percentage of its
+width) and no fixed width wider than its column -- let it take the column's width. Do not put a
+chart in a container that scrolls sideways. After every test the gate measures each chart on the
+page the test ends on and warns `VIS04` when one does not fit.
 
 ## Headings
 
@@ -484,9 +517,11 @@ layout: PASS  0 failure(s) over 6 page(s)
 `NAV01` | error | project security is on, a navigation menu has no `sign_out` item, and no page or snippet has a sign-out button |
 `NAV02` | warning | the `sign_out` item is not the last item of its menu |
 `GRID01` | error | a grid filter sits in a column with no `Attribute:` and has none of its own: it renders "Unable to get filter store" and filters nothing |
+`GRID02` | error | a button outside a data grid changes the rows it shows; it goes in the grid's `controlbar` |
 `NAV03` | error | project security is on, and a role's home page (`home page X for Role`) is not in the menu |
 `NAV04` | error | one of the project's own layouts opens two or more pages from buttons: a menu built by hand |
 `NAV05` | error | a menu item or sub-menu has no icon (the message suggests one for its caption) |
+`NAV06` | error | two menu entries one role sees share an icon (the message suggests another) |
 `ACCOUNT01` | error | users sign in and the menu has no `page Administration.Account_Overview` item (user management) |
 `ACCOUNT02` | error | users sign in and the menu has no `microflow Administration.ManageMyAccount` item (own account, password) |
 `ACCOUNT03` | error | a role that signs in lacks `Administration.User`, or no role has `Administration.Administrator` |
@@ -499,6 +534,7 @@ layout: PASS  0 failure(s) over 6 page(s)
 `VIS01` | warning | measured in the browser at the end of every test: two unrelated widgets overlap by 4 px or more |
 `VIS02` | warning | measured: the page scrolls sideways |
 `VIS03` | warning | measured: a widget cuts its text off |
+`VIS04` | warning | measured: a chart cannot be seen whole on one screen |
 `LOOK01` | warning | with `MDL_VISUAL_REVIEW=agent`: a screenshot not reviewed yet — open `.mxcli/visual/review.md`, read each PNG, answer every question, write `verdicts.json` |
 `LOOK02` | warning | with review on: a screenshot you rejected; the line repeats your own fix |
 
