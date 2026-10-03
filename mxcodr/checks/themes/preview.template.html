@@ -30,40 +30,10 @@ h1{margin:0;font-size:clamp(24px,3.4vw,34px);text-wrap:balance}
 .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
 @media (max-width:900px){.layout{grid-template-columns:1fr}}
 
-/* mock InvoiceB2B */
-.app{border-radius:14px;overflow:hidden;border:1px solid var(--page-line);box-shadow:0 12px 30px rgba(20,30,50,.14);background:var(--a-ground);color:var(--a-ink);display:grid;grid-template-columns:56px minmax(0,1fr);min-height:640px}
-.rail{background:var(--rail);display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0}
-.rail span{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:#fff;opacity:.85}
-.rail span.on{background:var(--rail-active);opacity:1}
-.rail svg{width:20px;height:20px;fill:currentColor}
-.main{display:grid;grid-template-rows:auto 1fr;min-width:0}
-.top{background:var(--top);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 18px}
-.logo{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.2px}
-.logo b{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:#fff;color:var(--top);font-size:13px}
-.top .sp{flex:1}.top small{opacity:.9}
-.body{padding:18px 22px;display:grid;gap:16px;align-content:start;overflow-x:auto}
-.userbar{display:flex;justify-content:flex-end;color:var(--brand);font-size:13px;font-weight:500}
-.ttl{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.ttl h2{margin:0;font-size:28px;color:var(--a-ink)}
-.ttl p{margin:0;font-size:13px;color:var(--a-muted)}
-.btns{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid var(--brand);border-radius:6px;padding:7px 14px;font:600 13px var(--sans);background:var(--a-surface);color:var(--brand)}
-.btn.primary{background:var(--brand);color:var(--brand-ink)}
-.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.kpi{background:var(--a-surface);border:1px solid var(--a-line);border-radius:8px;padding:12px 14px}
-.kpi small{color:var(--a-muted);font-size:12px}
-.kpi strong{display:block;font-size:24px;color:var(--a-ink)}
-.kpi.accent{border-top:4px solid var(--brand)}
-.grid{background:var(--a-surface);border:1px solid var(--a-line);border-radius:8px;overflow:hidden}
-.grid table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
-.grid th{text-align:left;padding:10px 12px;color:var(--a-ink);border-bottom:1px solid var(--a-line);font-weight:600}
-.grid td{padding:10px 12px;border-bottom:1px solid var(--a-line);color:var(--a-ink)}
-.grid tr.sel td{background:var(--a-sel)}
-.grid td.num{text-align:right}
-.grid .open{color:var(--brand);font-weight:600}
-.badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;color:#fff}
-.b-new{background:#64748b}.b-conf{background:var(--brand);color:var(--brand-ink)}.b-ship{background:#1d5fa8}.b-inv{background:#1f7a3d}.b-canc{background:#b42318}.b-over{background:#a15c00}
-
+/* the chosen theme on a real Mendix app */
+.shot{margin:0;border-radius:14px;overflow:hidden;border:1px solid var(--page-line);box-shadow:0 12px 30px rgba(20,30,50,.14);background:var(--page-card)}
+.shot img{display:block;width:100%;height:auto}
+.shot figcaption{padding:8px 14px;font-size:12px;color:var(--page-muted)}
 /* side panel */
 .panel{background:var(--page-card);border:1px solid var(--page-line);border-radius:12px;padding:16px;display:grid;gap:12px;position:sticky;top:12px}
 .panel h3{margin:0;font-size:18px}
@@ -87,41 +57,13 @@ pre{margin:0;background:#0f1722;color:#dce6f2;border-radius:8px;padding:10px 12p
 <body>
 <div class="wrap">
   <h1>Choose your app's look</h1>
-  <p class="lead">The same app screen in each theme: the side menu, the top bar, the buttons and the list. Pick one here, then type its number in the terminal. You can change it later in seconds with <code>bash tests/theme.sh</code>.</p>
+  <p class="lead">Each picture is a real Mendix app in that theme: the side menu, the top bar, the buttons, a list and a form. Pick one here, then type its number in the terminal. You can change it later in seconds with <code>bash tests/theme.sh</code>.</p>
   <div class="picker" id="picker" role="group" aria-label="Theme"></div>
   <div class="layout">
-    <div class="app" aria-label="A sample app screen in the chosen theme">
-      <nav class="rail" aria-hidden="true">
-        <span><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg></span>
-        <span class="on"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4zm0 6h16v4H4zm0 6h16v4H4z"/></svg></span>
-        <span><svg viewBox="0 0 24 24"><path d="M8 11a4 4 0 110-8 4 4 0 010 8zm8 0a3 3 0 110-6 3 3 0 010 6zM2 20c0-3 3-6 6-6s6 3 6 6zm12 0c0-2 1-4 3-5 3 0 5 2 5 5z"/></svg></span>
-        <span><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5"/></svg></span>
-        <span><svg viewBox="0 0 24 24"><path d="M9 16l-5-5 2-2 3 3 9-9 2 2z"/></svg></span>
-      </nav>
-      <div class="main">
-        <div class="top"><div class="logo"><b>YA</b> Your App</div><span class="sp"></span><small>English, United States</small></div>
-        <div class="body">
-          <div class="userbar">Signed in as Anna Kowalska</div>
-          <div class="ttl"><div><p>Orders and invoices</p><h2>Orders</h2></div>
-            <div class="btns"><span class="btn">Refresh</span><span class="btn">Export</span><span class="btn primary">+ New order</span></div></div>
-          <div class="kpis">
-            <div class="kpi accent"><small>Order value this month</small><strong>184,520.00</strong></div>
-            <div class="kpi"><small>Average fulfilment (days)</small><strong>6.4</strong></div>
-            <div class="kpi"><small>Overdue invoices</small><strong>3</strong></div>
-          </div>
-          <div class="grid"><table>
-            <thead><tr><th>Order number</th><th>Customer</th><th>Created</th><th class="num">Gross value</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              <tr><td>ORD-0016</td><td>Acme Ltd</td><td>30/09/2026</td><td class="num">60,516.00</td><td><span class="badge b-new">New</span></td><td class="open">Open</td></tr>
-              <tr class="sel"><td>ORD-0015</td><td>Borealis S.A.</td><td>28/09/2026</td><td class="num">12,300.00</td><td><span class="badge b-conf">Confirmed</span></td><td class="open">Open</td></tr>
-              <tr><td>ORD-0014</td><td>Cedar Trade</td><td>25/09/2026</td><td class="num">5,535.00</td><td><span class="badge b-ship">Shipped</span></td><td class="open">Open</td></tr>
-              <tr><td>ORD-0013</td><td>Delta Logistics</td><td>21/09/2026</td><td class="num">32,287.50</td><td><span class="badge b-inv">Invoiced</span></td><td class="open">Open</td></tr>
-              <tr><td>ORD-0012</td><td>Edelweiss AG</td><td>18/09/2026</td><td class="num">2,804.40</td><td><span class="badge b-canc">Cancelled</span></td><td class="open">Open</td></tr>
-              <tr><td>INV-0005</td><td>Acme Ltd</td><td>due 20/09/2026</td><td class="num">2,656.80</td><td><span class="badge b-over">Overdue</span></td><td class="open">Open</td></tr>
-            </tbody></table></div>
-        </div>
-      </div>
-    </div>
+    <figure class="shot">
+      <img id="shot" alt="" width="1024" height="640">
+      <figcaption id="shotcap"></figcaption>
+    </figure>
     <aside class="panel">
       <h3 id="pname"></h3>
       <p id="pdesc"></p>
@@ -138,14 +80,15 @@ var CATALOG = /*CATALOG*/[];
 var root = document.documentElement, pk = document.getElementById('picker'), current = 0, mode = 'light';
 CATALOG.forEach(function (t, i) {
   var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.id = 'opt-' + t.name;
-  b.innerHTML = '<span class="num-badge">' + (i + 1) + '</span><span class="sw"><i style="background:' + t.light.rail + '"></i><i style="background:' + t.frame.top + '"></i><i style="background:' + t.light.brand + '"></i></span><span>' + t.title + (i === 0 ? ' <span class="tag">default</span>' : '') + '<small>' + (t.source === 'builtin' ? 'from mxcli' : 'mx-codr') + '</small></span>';
+  b.innerHTML = '<span class="num-badge">' + (i + 1) + '</span><span class="sw"><i style="background:' + t.light.rail + '"></i><i style="background:' + t.frame.top + '"></i><i style="background:' + t.light.brand + '"></i></span><span>' + t.title + (i === 0 ? ' <span class="tag">default</span>' : '') + '<small>' + (t.source === 'none' ? 'Mendix standard' : 'mx-codr') + '</small></span>';
   b.onclick = function () { current = i; show(); }; pk.appendChild(b);
 });
 function show() {
   var t = CATALOG[current], k = t[mode], f = t.frame;
-  var set = function (n, v) { if (v) root.style.setProperty(n, v); };
-  set('--brand', k.brand); set('--brand-ink', k['brand-ink']); set('--rail', k.rail); set('--top', f.top); set('--rail-active', f['rail-active']);
-  set('--a-ground', k.ground); set('--a-surface', k.surface); set('--a-ink', k.ink); set('--a-muted', k['ink-muted']); set('--a-line', k.line); set('--a-sel', k['surface-selected']);
+  var img = document.getElementById('shot');
+  img.src = 'shots/' + t.name + '-' + mode + '.jpg';
+  img.alt = t.title + ' theme on a Mendix app, ' + mode;
+  document.getElementById('shotcap').textContent = 'A running Mendix app in ' + t.title + ', ' + (mode === 'light' ? 'light' : 'dark') + ' mode' + (t.source === 'none' ? ' (Atlas has no dark palette of its own)' : '') + '.';
   [].slice.call(pk.children).forEach(function (b) { b.setAttribute('aria-pressed', b.id === 'opt-' + t.name); });
   document.getElementById('pname').textContent = t.title;
   document.getElementById('pdesc').textContent = t.description.replace(/ -- /g, ' — ');
