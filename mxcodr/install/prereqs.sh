@@ -73,6 +73,10 @@ docker_ready() {
 # ask "<prompt>" <y|n> -- MDL_ASSUME_YES answers yes (the app-creation guard does not use ask).
 ask() {
   local question="$1" default="$2" reply
+  # The progress bar is redrawn in place on its own line, with no newline: a question printed
+  # now landed on the same line ("0%  checking prerequisites    mxcli v0.24.0 is available...").
+  # Wipe the bar first; the next step draws it again below the answer.
+  ui_clear
   if [ -n "${MDL_ASSUME_YES:-}" ]; then
     printf '%syes  %s(MDL_ASSUME_YES)%s\n' "$question" "$C_GREY" "$C_RESET"
     return 0

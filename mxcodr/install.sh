@@ -98,7 +98,7 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 version="$(cat "$SRC/VERSION")"
 
 # --- The rest, in install/ next to this file, in this order ---
-for _install_part in ui prereqs postgres docker windows mxcli studio_pro toolchain \
+for _install_part in ui prereqs postgres docker windows mxcli studio_pro toolchain theme \
                      target step_prereqs step_app step_skills step_hosts step_harness summary; do
   if [ ! -f "$SRC/install/$_install_part.sh" ]; then
     echo "install/$_install_part.sh is missing -- download the whole mxcodr/ bundle again" >&2

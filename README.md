@@ -220,6 +220,15 @@ bash mx-codr/mxcodr/install.sh [project-folder] [--no-app] [--no-deps]
 The installer copies `mxcodr/` into the project, so it can be run again from there:
 `bash mxcodr/install.sh`.
 
+### The app's look
+
+For a new app the installer offers Mendix's own Atlas (the default) or one of five themes --
+navy, teal, amber, plum, forest -- each shown in the terminal in its own colours, with the same
+app screen in each in the browser. Change it any time: `bash tests/theme.sh` lists
+them, `bash tests/theme.sh teal` switches, and a running app shows it in seconds. The app opens
+light even when the OS is dark, and the mx-codr logo and browser icons take the theme's
+colours.
+
 ### Windows
 
 `bootstrap.ps1` asks for the project folder first, installs Git for Windows, Python and

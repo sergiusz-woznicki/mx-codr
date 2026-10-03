@@ -1,0 +1,30 @@
+
+// ---------------------------------------------------------------------------
+// mx-codr frame for the amber theme: a top bar of its own colour, a lighter active
+// item on the side rail, and outline buttons in the brand colour. Appended to the
+// scaffold by the installer (tests/theme.sh too) before `mxcli theme apply`.
+:root {
+  --mxcodr-top: #2e3440;
+  --mxcodr-rail-active: #434c5e;
+}
+.layout-atlas .region-topbar {
+  background-color: var(--mxcodr-top);
+  color: #ffffff;
+}
+.layout-atlas .region-topbar a,
+.layout-atlas .region-topbar .btn,
+.layout-atlas .region-topbar .mx-name-languageSelector,
+.layout-atlas .region-topbar [class*="dropdown"] {
+  color: #ffffff;
+}
+.layout-atlas .region-sidebar .mx-navigationtree li.active > a,
+.layout-atlas .region-sidebar .mx-navigationtree li.active > .navbar-link,
+.layout-atlas .region-sidebar .mx-navigationtree li > a:hover {
+  background-color: var(--mxcodr-rail-active);
+  color: #ffffff;
+  border-radius: var(--mxt-radius-lg);
+}
+.region-content .btn-default:not(.column-selector-button) {
+  border-color: var(--mxt-brand);
+  color: var(--mxt-brand);
+}

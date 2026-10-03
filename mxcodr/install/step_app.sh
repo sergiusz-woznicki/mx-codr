@@ -119,7 +119,15 @@ create_app() {
   rm -rf "$tmp_app"
   MDL_EXIT_EXTRA=''
   created_app="$app_name.mpr"
-  ui_done "Mendix app created" "$created_app (Mendix $mx_version)"
+  # The look chosen up front; only theme/ files change. A failure is said, never fatal.
+  theme_note=""
+  if [ -n "${THEME:-}" ]; then
+    ui_sub "theme $THEME"
+    if apply_theme "$APP" "$APP/mxcli$EXE" "$THEME"; then theme_note=", theme $THEME"
+    else theme_failed=1; fi
+  fi
+  ui_done "Mendix app created" "$created_app (Mendix $mx_version$theme_note)"
+  [ -n "${theme_failed:-}" ] && ui_note "the $THEME theme could not be applied; try: bash tests/theme.sh $THEME"
   [ -n "${swapped_mxcli:-}" ] && ui_note "./mxcli$EXE swapped for this machine's binary (Linux one kept as mxcli.linux)"
   return 0
 }
