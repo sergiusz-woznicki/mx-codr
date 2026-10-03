@@ -290,6 +290,7 @@ bash tests/gate.sh                    # the done gate
 bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
 bash tests/gate.sh --restart          # stop this project's app and boot it again (Windows too)
 bash tests/gate.sh --only <feature>   # one test, warm browser, red loop (ends PASSED, never DONE)
+bash tests/gate.sh --changed          # the tests a model change touched since they last ran (never DONE)
 bash tests/orient.sh                  # what is in this project
 bash tests/diagnose.sh                # why is the app not answering
 ```

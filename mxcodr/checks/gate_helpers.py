@@ -19,6 +19,13 @@
     gate_helpers.py visual-report <findings.jsonl> [<scripts-dir>] [--review <dir>]
                                                   one warning line per page problem look() measured;
                                                   with --review, the screenshots still to be judged
+    gate_helpers.py doc-map                        {qualified name: unit id} from catalog SELECT
+                                                  listings (pages, microflows, nanoflows) on stdin
+    gate_helpers.py record-tests-seen <app-dir> <doc-map.json> <test.sh>...
+                                                  remember the model state each of these tests ran on
+    gate_helpers.py changed-tests <app-dir> <doc-map.json>
+                                                  RUN <test> -- <why> for each test whose covered
+                                                  documents changed since it last ran (gate.sh --changed)
 
 Exit 0 unless noted: qualified-names exits 1 when stdin is not a JSON list.
 Warnings are printed to stdout, ready to show under the gate's output.
@@ -422,6 +429,149 @@ def review_screenshots(looks, pages, folder):
               " question and write verdicts.json there" % (pending, os.path.join(folder, "review.md")))
 
 
+# --- gate.sh --changed: the tests a change touched ---------------------------------------
+# A document (page, microflow, nanoflow) is one .mxunit under mprcontents/, named by its id; the
+# catalog maps a qualified name to that id. After a run, each test remembers the state of the
+# units its `# covers:` line names, plus one digest over every unit no test can name (the domain
+# model, security, navigation, enumerations). `--changed` runs a test when any of that moved,
+# or when the test itself did, or when it never ran here. Never a DONE: the full gate stays.
+SEEN_FILE = os.path.join(".mxcli", "gate-cache", "tests-seen.json")
+
+
+def doc_map():
+    """Stdin: catalog SELECT listings, each 'Found N result(s)' then a JSON list with Id and
+    QualifiedName. Prints {qualified name: unit id}."""
+    mapping, text, at = {}, sys.stdin.read(), 0
+    decoder = json.JSONDecoder()
+    # Every JSON list in the text, wherever the "Found N result(s)" lines fall around it.
+    while True:
+        at = text.find("[", at)
+        if at < 0:
+            break
+        try:
+            rows, at = decoder.raw_decode(text, at)
+        except ValueError:
+            at += 1
+            continue
+        for row in rows if isinstance(rows, list) else []:
+            name, unit = row.get("QualifiedName") or row.get("Qualified Name"), row.get("Id")
+            if name and unit:
+                mapping[name] = unit
+    print(json.dumps(mapping, indent=0, sort_keys=True))
+    return 0
+
+
+def unit_states(app_dir):
+    """{unit id: 'size:mtime_ns'} for every .mxunit under mprcontents/."""
+    states = {}
+    for folder, _dirs, files in os.walk(os.path.join(app_dir, "mprcontents")):
+        for name in files:
+            if name.endswith(".mxunit"):
+                try:
+                    st = os.stat(os.path.join(folder, name))
+                except OSError:
+                    continue
+                states[name[:-len(".mxunit")]] = "%d:%d" % (st.st_size, st.st_mtime_ns)
+    return states
+
+
+def file_state(path):
+    try:
+        st = os.stat(path)
+    except OSError:
+        return "missing"
+    return "%d:%d" % (st.st_size, st.st_mtime_ns)
+
+
+def model_wide_digest(states, mapping):
+    """One digest over the units no document name reaches."""
+    named = set(mapping.values())
+    digest = hashlib.sha256()
+    for unit in sorted(states):
+        if unit not in named:
+            digest.update(("%s %s\n" % (unit, states[unit])).encode())
+    return digest.hexdigest()
+
+
+def test_claims(app_dir):
+    """{test script name: [qualified names its # covers: line names]}."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from check_test_coverage import covered  # the same parser the coverage check uses
+    by_test = {}
+    for element, scripts in covered(__import__("pathlib").Path(app_dir) / "tests").items():
+        for script in scripts:
+            by_test.setdefault(script, []).append(element)
+    return by_test
+
+
+def load_json(path):
+    try:
+        with open(path) as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def record_tests_seen(app_dir, docmap_path, scripts):
+    mapping, states = load_json(docmap_path), unit_states(app_dir)
+    claims, seen = test_claims(app_dir), load_json(os.path.join(app_dir, SEEN_FILE))
+    model = model_wide_digest(states, mapping)
+    for script in scripts:
+        name = os.path.basename(script)
+        covers = claims.get(name, [])
+        seen[name] = {
+            "script": file_state(os.path.join(app_dir, "tests", name)),
+            "model": model,
+            "covers": covers,
+            "units": {mapping[e]: states.get(mapping[e], "missing") for e in covers if e in mapping},
+        }
+    seen["_units"] = states
+    path = os.path.join(app_dir, SEEN_FILE)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
+        json.dump(seen, handle, indent=0, sort_keys=True)
+    return 0
+
+
+def changed_tests(app_dir, docmap_path):
+    mapping, states = load_json(docmap_path), unit_states(app_dir)
+    claims, seen = test_claims(app_dir), load_json(os.path.join(app_dir, SEEN_FILE))
+    model = model_wide_digest(states, mapping)
+    tests_dir = os.path.join(app_dir, "tests")
+    scripts = sorted(n for n in os.listdir(tests_dir) if n.startswith("verify-") and n.endswith(".test.sh")) \
+        if os.path.isdir(tests_dir) else []
+    for name in scripts:
+        label = name[:-len(".test.sh")]
+        record = seen.get(name)
+        if not record:
+            print("RUN %s -- never ran under this gate" % label)
+            continue
+        if record.get("script") != file_state(os.path.join(tests_dir, name)):
+            print("RUN %s -- the test script changed" % label)
+            continue
+        if record.get("model") != model:
+            print("RUN %s -- a change no test can name: the domain model, security, navigation or an enumeration" % label)
+            continue
+        moved = []
+        for element in record.get("covers", []):
+            unit = mapping.get(element)
+            before = record.get("units", {}).get(unit) if unit else None
+            now = states.get(unit) if unit else None
+            if before != now:
+                moved.append(element)
+        if moved:
+            print("RUN %s -- changed: %s" % (label, ", ".join(moved)))
+    # A changed document no test names: coverage will say so; one line here saves the surprise.
+    before_units = seen.get("_units", {})
+    named = {e for elements in claims.values() for e in elements}
+    orphans = sorted(name for name, unit in mapping.items()
+                     if states.get(unit) != before_units.get(unit) and name not in named and before_units)
+    if orphans:
+        print("NOTE changed, and no test covers them: %s" % ", ".join(orphans[:8]))
+    return 0
+
+
 def main(argv):
     if len(argv) < 2:
         print(__doc__.strip(), file=sys.stderr)
@@ -456,6 +606,12 @@ def main(argv):
         return watch_state(args[0])
     if command == "missing-browser" and len(args) == 1:
         return missing_browser(args[0])
+    if command == "doc-map":
+        return doc_map()
+    if command == "record-tests-seen" and len(args) >= 2:
+        return record_tests_seen(args[0], args[1], args[2:])
+    if command == "changed-tests" and len(args) == 2:
+        return changed_tests(*args)
     print("unknown or incomplete command: %s" % " ".join(argv[1:]), file=sys.stderr)
     return 2
 

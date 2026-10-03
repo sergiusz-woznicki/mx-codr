@@ -683,6 +683,13 @@ of any repository you push.
 
 ## Faster without being weaker
 
+`bash tests/gate.sh --changed` runs the tests a model change touched: each test remembers, after
+a run, the state of the units (`mprcontents/*.mxunit`) its `# covers:` line names, and the gate
+picks the tests whose units moved since, every test after a change no test can name (the domain
+model, security, navigation), and a test that never ran here. It fills the gap between `--only`
+(one test, ~2s) and the full gate (every test, ~50s): a session once ran seven full gates, several
+only to see whether anything else had broken. It ends in PASSED, never DONE.
+
 A 36-minute agent session was recorded end to end (`docs/sessions/` in the source
 repo) and 20 of those minutes were inside tools. Two harness defects manufactured
 most of the waste, and neither was about the tests being slow:

@@ -36,6 +36,8 @@ bash tests/gate.sh --only <feature> --boot-if-needed
 #    nothing needs a restart by hand; the gate waits for the change to land. Nothing
 #    applied it? --restart. Stop the app (before `mxcli fix widgets`)? --stop
 bash tests/gate.sh --only <feature>
+#    did the fix break another test? --changed runs the tests the change touched (never DONE)
+bash tests/gate.sh --changed
 # 5. the whole gate: suite + mx check + lint + coverage + naming + layout + security, ends DONE / NOT DONE.
 #    Scripts run alphabetically and keep their rows: verify-000-reset restores the seed,
 #    exact counts go in verify-001-. A test that changes a seeded row owns that row
