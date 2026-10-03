@@ -26,12 +26,15 @@ if have npm || [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
 fi
 
 mxcli_offer_update
-found_mxcli="$(mxcli_for_project || true)"
-if [ -z "$found_mxcli" ]; then
+# Still no ./mxcli (the release API was unreachable, or MDL_NO_UPDATE_CHECK): the compatible tag's
+# download URL, verified only against MXCLI_SHA256. Never an older or newer mxcli from the PATH.
+if [ ! -x "$APP/mxcli$EXE" ]; then
   dep_apply "mxcli" '[ -x "$APP/mxcli$EXE" ]' \
     "curl -fsSL -o \"$APP/mxcli$EXE\" \"$(mxcli_release_url)\" && chmod +x \"$APP/mxcli$EXE\"" || true
   [ -x "$APP/mxcli$EXE" ] && mxcli_verify_download "$APP/mxcli$EXE"
+  mxcli_compatible_local || true
 fi
+found_mxcli="$(mxcli_for_project || true)"
 
 # MxBuild for the project's version: mx check needs it, and without it mxcli new may use another version.
 setup_mxcli="$(first_executable "$APP/mxcli$EXE" "$found_mxcli" || true)"

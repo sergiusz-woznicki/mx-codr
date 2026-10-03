@@ -10,7 +10,7 @@
 #                (winget/brew/apt/dnf). --with-deps is still accepted and changes nothing.
 #   No dir: the current directory, or the project the bundle sits in when run from inside it.
 # Env: MX_VERSION, APP_NAME (new app); MDL_ASSUME_YES=1; MDL_DEPS_DRY_RUN=1 (print installs only);
-#   MDL_NO_UPDATE_CHECK=1; MXCLI_TAG, MXCLI_SHA256; MDL_DB_HOST, MDL_DB_USER, MDL_DB_PASSWORD,
+#   MDL_NO_UPDATE_CHECK=1; MXCLI_TAG (default: the tag in MXCLI_TESTED), MXCLI_SHA256; MDL_DB_HOST, MDL_DB_USER, MDL_DB_PASSWORD,
 #   PGPASSWORD; DOCKER_WAIT, DOCKER_PROBE_TIMEOUT (seconds); NO_COLOR.
 # Exit: 0 installed; 1 ui_fail (bad argument, no project, no Python, app creation failed);
 #   other non-zero = unexpected command failure. Missing prerequisites do not fail the install.

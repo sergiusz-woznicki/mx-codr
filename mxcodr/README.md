@@ -16,8 +16,9 @@ install/          the rest in order: 8 files of helpers (ui, prereqs, postgres, 
                   step_skills, step_hosts, step_harness, summary). Its header lists which is which
 bootstrap.ps1     Windows only: gets Git Bash, Python and Node, then hands over to install.sh
 VERSION           date-based version, copied to tools/mdl-checks/VERSION in the target
-MXCLI_TESTED      the mxcli build this bundle was verified against; orient.sh warns when the
-                  project's ./mxcli is older
+MXCLI_TESTED      the one mxcli release this bundle works with ("<tag> <build-date>"): the
+                  installer downloads exactly that release and offers to swap any other
+                  ./mxcli, newer ones too; orient.sh warns when ./mxcli is not it
 rules/            mdl-skills.md (Claude, OpenCode, and Pi through its extension) and
                   mdl-skills.mdc (Cursor) — the always-loaded rule
 hooks/            host-specific prompt/PostToolUse adapters plus the Codex and Cursor gates; each
@@ -555,6 +556,20 @@ names the entities whose constraints are doing nothing and prints the shape that
 `Administration.Account`, constrain every entity the role reads, give every entity a rule, prove
 both directions in a test). `MDL_REQUIRE_PRODUCTION=0` in `tests/harness.env` is for an app that
 deliberately has no users at all.
+
+## One compatible mxcli
+
+The harness works with one mxcli release, the tag in `MXCLI_TESTED` (now `v0.24.0`). The
+installer downloads exactly that release, checksum-verified against the digest GitHub publishes
+for it, and offers to swap any other `./mxcli` for it -- an older one and a newer one alike, the
+old binary kept beside it as `mxcli.<version>`. A fresh project never takes the mxcli on the PATH.
+`orient.sh` warns at the start of every session when `./mxcli` is not that release.
+
+Why newer is not better: mxcli main after v0.24.0 describes the model in `mdl 1` (menu items as
+`( OnClick: …, Icon: … )`, user roles as property lists, unnamed rows and columns). The gate's
+checkers read the v0.24.0 form; on the new one they found nothing and passed. `MXCLI_TESTED` is
+raised only after the harness reads the new release and its tests pass on it. `MXCLI_TAG=<tag>`
+overrides it for one run, on purpose.
 
 ## The app's look
 

@@ -226,14 +226,19 @@ mdl_check_mxcli_freshness() {
     return 0
   fi
   echo "   mxcli $have_ver (built ${have_date%%T*})"
-  # ISO build dates compare correctly as strings.
-  [[ "$have_date" < "$want_date" ]] || return 0
+  [ "$have_ver" = "$want_ver" ] && return 0
   for candidate in mxcodr dist; do
     if [ -f "$app/$candidate/install.sh" ]; then bundle="$candidate"; break; fi
   done
-  echo "   !! ./mxcli is older than the build this harness was validated with ($want_ver, ${want_date%%T*})."
-  echo "      An older check misses errors the newer one names at check time, so they surface at the build instead."
-  echo "      Swap it before building:  bash ${bundle:-mxcodr}/install.sh .   (it offers the newer binary it finds)"
+  # ISO build dates compare correctly as strings.
+  if [[ "$have_date" < "$want_date" ]]; then
+    echo "   !! ./mxcli is older than $want_ver, the mxcli this harness works with."
+    echo "      An older check misses errors the newer one names at check time, so they surface at the build instead."
+  else
+    echo "   !! ./mxcli is not $want_ver, the mxcli this harness works with: a newer one can describe the"
+    echo "      model in a form the gate's checks do not read yet, and they then pass what they should fail."
+  fi
+  echo "      Swap it before building:  bash ${bundle:-mxcodr}/install.sh .   (it puts $want_ver in ./mxcli)"
 }
 
 mdl_check_install_freshness() {
