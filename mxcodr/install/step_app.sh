@@ -40,7 +40,8 @@ create_app() {
     if [ -n "$direct_mx" ]; then offer_studio_pro_junction "$mx_version" "$direct_mx" || true; fi
   fi
 
-  ui_begin "creating $app_name (Mendix $mx_version)"
+  # The name goes in the done line: with it the label outgrew an 80-column bar ("(Mendix ~").
+  ui_begin "creating the app (Mendix $mx_version)"
   # --theme/--layout none: stock Atlas (mxcli's theme follows the OS dark mode).
   # mxcli new needs an empty --output-dir: create in a temp dir, then move in.
   # tmp_app stays global: install.sh's EXIT trap runs MDL_EXIT_EXTRA after this function has returned.
@@ -74,12 +75,20 @@ create_app() {
     "$creator_mxcli" init "$tmp_app/app" >> "$tmp_app/new.log" 2>&1 || true
     ui_tick
   elif ! "$creator_mxcli" new "$app_name" --version "$mx_version" --output-dir "$tmp_app/app" \
-       --theme none --layout none $skip_build 2>&1 | while IFS= read -r line; do
-         printf '%s\n' "$line" >> "$tmp_app/new.log"
-         case "$line" in
-           "Executing step "*) phase="${line#Executing step \'}"; ui_sub "${phase%\'}" ;;
-           *...)               ui_tick ;;
-         esac
+       --theme none --layout none $skip_build 2>&1 | while :; do
+         # mxcli prints nothing for minutes during the first build: redraw every 2s anyway, so
+         # the elapsed time moves. read -t times out with a status above 128; EOF ends the loop.
+         if IFS= read -r -t 2 line; then
+           printf '%s\n' "$line" >> "$tmp_app/new.log"
+           case "$line" in
+             "Executing step "*) phase="${line#Executing step \'}"; ui_sub "${phase%\'}" ;;
+             *...)               ui_tick ;;
+           esac
+         elif [ $? -gt 128 ]; then
+           ui_bar
+         else
+           break
+         fi
        done; then
     ui_clear
     printf '  %s%s%s %slast lines of mxcli new:%s\n' "$C_RED" "$I_FAIL" "$C_RESET" "$C_BOLD" "$C_RESET" >&2
@@ -110,7 +119,7 @@ create_app() {
   rm -rf "$tmp_app"
   MDL_EXIT_EXTRA=''
   created_app="$app_name.mpr"
-  ui_done "Mendix app created" "$created_app"
+  ui_done "Mendix app created" "$created_app (Mendix $mx_version)"
   [ -n "${swapped_mxcli:-}" ] && ui_note "./mxcli$EXE swapped for this machine's binary (Linux one kept as mxcli.linux)"
   return 0
 }

@@ -99,6 +99,11 @@ step_tests() {
   fi
   record_red_first "$out" "$environment"
   record_suite_result "$out" "$status" "$environment"
+  # Only a run on the current model counts as having exercised it.
+  if [ -z "$environment" ] && [ ! -s "$WORK/stale.note" ]; then
+    record_tests_seen "${targets[@]}"
+  fi
+  targets_ran=("${targets[@]}")
 }
 
 # syntax_notes <target>... -- one line per test script bash cannot parse. Such a script dies before
@@ -120,10 +125,56 @@ syntax_notes() {
   done
 }
 
-# Sets targets: tests/ for the whole suite, or the scripts --only names (exit 2 when none match).
+# document_unit_map -- $WORK/docmap.json, {qualified name: unit id} for pages, microflows and
+# nanoflows. The catalog gives it: a refresh reads the .mpr and writes .mxcli/catalog.db (0.05s,
+# the .mpr untouched). When the catalog cannot be read the map is empty, and every unit then
+# counts as one no test can name: --changed runs everything, which is the safe side.
+document_unit_map() {
+  local kind
+  echo '{}' > "$WORK/docmap.json"
+  "$MXCLI" -p "$MPR" -c "REFRESH CATALOG" >/dev/null 2>&1 || return 0
+  { for kind in PAGES MICROFLOWS NANOFLOWS; do
+      "$MXCLI" -p "$MPR" --json -c "SELECT Id, QualifiedName FROM CATALOG.$kind" 2>/dev/null
+    done; } | gate_py doc-map > "$WORK/docmap.json" 2>/dev/null || echo '{}' > "$WORK/docmap.json"
+}
+
+# record_tests_seen <target>... -- after a run that exercised the current model: remember, per test
+# that ran, the state of the units it covers, so --changed can tell what a later change touched.
+record_tests_seen() {
+  local target script
+  local -a scripts=()
+  for target in "$@"; do
+    case "$target" in
+      */) for script in "$target"verify-*.test.sh; do [ -f "$script" ] && scripts+=("$script"); done ;;
+      *)  scripts+=("$target") ;;
+    esac
+  done
+  [ ${#scripts[@]} -gt 0 ] || return 0
+  [ -f "$WORK/docmap.json" ] || document_unit_map
+  gate_py record-tests-seen . "$WORK/docmap.json" "${scripts[@]}" >/dev/null 2>&1 || true
+}
+
+# Sets targets: tests/ for the whole suite, the scripts --only names (exit 2 when none match), or
+# under --changed the tests whose covered documents changed since they last ran here.
 select_test_targets() {
-  local script
+  local script line
   targets=("tests/")
+  if [ "${CHANGED:-0}" = "1" ]; then
+    document_unit_map
+    targets=()
+    echo "== changed since each test last ran"
+    while IFS= read -r line; do
+      case "$line" in
+        "RUN "*)  line="${line#RUN }"; targets+=("tests/${line%% *}.test.sh"); echo "   $line" ;;
+        "NOTE "*) echo "   ${line#NOTE }" ;;
+      esac
+    done < <(gate_py changed-tests . "$WORK/docmap.json" 2>/dev/null)
+    if [ ${#targets[@]} -eq 0 ]; then
+      echo "   nothing: every test ran on this model already -- run the full gate, bash tests/gate.sh"
+      exit 0
+    fi
+    return 0
+  fi
   [ -n "$ONLY" ] || return 0
   targets=()
   for script in tests/verify-*"$ONLY"*.test.sh; do

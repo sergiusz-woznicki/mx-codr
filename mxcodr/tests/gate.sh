@@ -3,6 +3,7 @@
 #
 #   bash tests/gate.sh                    # the suite and every model check (listed below)
 #   bash tests/gate.sh --only crud        # one script by name fragment, warm browser
+#   bash tests/gate.sh --changed          # the tests a model change touched since they last ran
 #   bash tests/gate.sh --tests-only       # the suite alone
 #   bash tests/gate.sh --boot-if-needed   # start the app first if nothing answers
 #   bash tests/gate.sh --restart          # stop this project's runtime, boot it again, then gate
@@ -54,6 +55,7 @@ parse_arguments() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --only) ONLY="$2"; shift 2 ;;
+      --changed) CHANGED=1; TESTS_ONLY=1; shift ;;
       --tests-only) TESTS_ONLY=1; shift ;;
       --boot-if-needed) BOOT=1; shift ;;
       --restart) RESTART=1; BOOT=1; shift ;;
@@ -177,6 +179,7 @@ print_verdict_and_exit() {
   if [ -n "${ONLY:-}" ] || [ "${TESTS_ONLY:-0}" = "1" ]; then
     local scope="tests only"
     [ -n "${ONLY:-}" ] && scope="--only $ONLY"
+    [ "${CHANGED:-0}" = "1" ] && scope="--changed (${#targets_ran[@]} of $(ls tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ') tests)"
     echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
     only_coverage_note
     exit 0
@@ -239,8 +242,11 @@ print_failure_details() {
 }
 
 main() {
-  ONLY=""; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; USE_CACHE="${MDL_GATE_CACHE:-1}"
+  ONLY=""; CHANGED=0; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; USE_CACHE="${MDL_GATE_CACHE:-1}"; targets_ran=()
   parse_arguments "$@"
+  if [ "$CHANGED" = "1" ] && [ -n "$ONLY" ]; then
+    echo "--changed picks the tests itself; it cannot be combined with --only" >&2; exit 2
+  fi
   find_project
   SCRIPT_TIMEOUT="${SCRIPT_TIMEOUT:-90s}"
   APP_PORT="${APP_PORT:-8081}"
