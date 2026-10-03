@@ -572,7 +572,7 @@ A theme is files under `theme/` only, never the model. The five are created from
 colour, the active menu item, and outline buttons in the brand colour. Atlas removes any mxcli
 theme. A theme is applied with `--variant light`, so the app opens light even when the OS is dark
 (the dark palette stays in the files; `./mxcli theme apply <name> --variant auto` follows the OS).
-The mx-codr logo ("mx" over "codr") comes with every theme, Atlas too, in that theme's
+The mx-codr logo (a prompt `>` and a heavy "c", sharp even at 16px) comes with every theme, Atlas too, in that theme's
 colours: `checks/themes/logos/<name>/` is copied over `theme/web/` and replaces Mendix's browser and
 home-screen icons, the sign-in logo and the top bar logo (`img/Atlas_Core$Layout$logo.svg`, by
 name; mxbuild copies `theme/web/` over its own files). The sets are rendered by
