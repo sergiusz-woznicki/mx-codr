@@ -16,7 +16,22 @@ dep_report_only() {      # dep_report_only <label> <detect> <winget> <brew> <apt
   return 1
 }
 
-# mxcli_release_url -- download URL of the mxcli binary for this OS and CPU.
+# The harness is verified against ONE mxcli release, named by $SRC/MXCLI_TESTED ("<tag> <build-date>").
+# The installer downloads that release and offers to swap any other ./mxcli for it -- a newer
+# mxcli can change what DESCRIBE prints, and a checker that cannot read it goes quiet instead of
+# failing. MXCLI_TESTED is raised only after the harness has been adapted to the new release.
+# MXCLI_TAG overrides it for one run (a person trying a build on purpose).
+
+# mxcli_compat_tag -- the release tag this harness works with, or nothing.
+mxcli_compat_tag() {
+  local tag=""
+  if [ -n "${MXCLI_TAG:-}" ]; then printf '%s\n' "$MXCLI_TAG"; return 0; fi
+  [ -f "$SRC/MXCLI_TESTED" ] && read -r tag _ < "$SRC/MXCLI_TESTED" 2>/dev/null
+  [ -n "$tag" ] || return 1
+  printf '%s\n' "$tag"
+}
+
+# mxcli_release_url -- download URL of the compatible mxcli binary for this OS and CPU.
 mxcli_release_url() {
   local os arch
   case "$(uname -s 2>/dev/null)" in
@@ -29,7 +44,7 @@ mxcli_release_url() {
     *)             arch=amd64 ;;
   esac
   printf 'https://github.com/mendixlabs/mxcli/releases/download/%s/mxcli-%s-%s%s\n' \
-    "${MXCLI_TAG:-nightly}" "$os" "$arch" "$EXE"
+    "$(mxcli_compat_tag || echo v0.24.0)" "$os" "$arch" "$EXE"
 }
 
 # ui_fail when the sha256 differs from MXCLI_SHA256; with it unset the download is only reported.
@@ -47,7 +62,7 @@ sha256_of() {
 mxcli_verify_download() {   # mxcli_verify_download <file>
   local want="${MXCLI_SHA256:-}" got
   if [ -z "$want" ]; then
-    ui_note "mxcli came from the ${MXCLI_TAG:-nightly} release and is not checksum-verified (set MXCLI_SHA256 to pin it)"
+    ui_note "mxcli came from the $(mxcli_compat_tag || echo '?') release and is not checksum-verified (set MXCLI_SHA256 to pin it)"
     return 0
   fi
   got="$(sha256_of "$1")"
@@ -56,8 +71,6 @@ mxcli_verify_download() {   # mxcli_verify_download <file>
     ui_fail "The mxcli download does not match MXCLI_SHA256." "  expected $want" "  got      ${got:-nothing}"
   fi
 }
-
-# Use the newest runnable mxcli and offer to update ./mxcli (MDL_NO_UPDATE_CHECK=1 skips the online check).
 
 # mxcli_describe <binary> -- "<build-date> <version>", or nothing when it cannot run here.
 mxcli_describe() {
@@ -70,30 +83,33 @@ mxcli_describe() {
   printf '%s %s\n' "$date" "$ver"
 }
 
-# mxcli_newest_local -- set MXCLI_BEST/MXCLI_BEST_DESC to the newest runnable candidate (tie: earlier wins); sets MXCLI_CANDIDATES.
-mxcli_newest_local() {
-  local candidate desc
+# mxcli_compatible_local -- set MXCLI_BEST/MXCLI_BEST_DESC to the first runnable candidate that IS
+# the compatible release (a newer one is no better); sets MXCLI_CANDIDATES.
+mxcli_compatible_local() {
+  local candidate desc want
   MXCLI_BEST=""; MXCLI_BEST_DESC=""
+  want="$(mxcli_compat_tag || true)"
   # Every place mxcli may be, in order; mxcli_for_project reuses this list.
   MXCLI_CANDIDATES=("$APP/mxcli$EXE" "$(command -v "mxcli$EXE" 2>/dev/null || true)"
                     "$SRC/../mxcli$EXE" "$SRC/mxcli$EXE")
   for candidate in "${MXCLI_CANDIDATES[@]}"; do
     desc="$(mxcli_describe "$candidate")" || continue
-    candidate="$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
-    # ISO build dates compare correctly as strings.
-    if [ -z "$MXCLI_BEST" ] || [[ "${desc%% *}" > "${MXCLI_BEST_DESC%% *}" ]]; then
-      MXCLI_BEST="$candidate"; MXCLI_BEST_DESC="$desc"
-    fi
+    [ -n "$want" ] && [ "${desc#* }" = "$want" ] || continue
+    MXCLI_BEST="$(cd "$(dirname "$candidate")" && pwd)/$(basename "$candidate")"
+    MXCLI_BEST_DESC="$desc"
+    return 0
   done
-  [ -n "$MXCLI_BEST" ]
+  return 1
 }
 
-# mxcli_latest_release -- "<published-at> <tag> <sha256> <url>" of the latest release, or nothing; fields validated.
-mxcli_latest_release() {
+# mxcli_compat_release -- "<tag> <sha256> <url>" of the compatible release's binary for this
+# machine, or nothing; fields validated.
+mxcli_compat_release() {
   [ -z "${MDL_NO_UPDATE_CHECK:-}" ] || return 1
   have curl || return 1
-  local api="${MXCLI_RELEASES_API:-https://api.github.com/repos/mendixlabs/mxcli/releases/latest}"
-  local asset line published tag sha url
+  local tag api asset line got_tag sha url
+  tag="$(mxcli_compat_tag)" || return 1
+  api="${MXCLI_RELEASES_API:-https://api.github.com/repos/mendixlabs/mxcli/releases/tags/$tag}"
   asset="$(basename "$(mxcli_release_url)")"
   line="$(curl -fsSL -m 10 "$api" 2>/dev/null | "$PY" -c 'import json, sys
 asset = sys.argv[1]
@@ -104,29 +120,40 @@ except Exception:
 for item in data.get("assets") or []:
     digest = str(item.get("digest") or "")
     if item.get("name") == asset and digest.startswith("sha256:"):
-        print(data.get("published_at", ""), data.get("tag_name", ""), digest[7:],
-              item.get("browser_download_url", ""))
+        print(data.get("tag_name", ""), digest[7:], item.get("browser_download_url", ""))
         break
 else:
     sys.exit(1)' "$asset" 2>/dev/null)" || return 1
-  read -r published tag sha url <<< "$line"
-  [[ "$published" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$ ]] || return 1
-  [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+  read -r got_tag sha url <<< "$line"
+  [ "$got_tag" = "$tag" ] || return 1
   [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || return 1
   if [ -z "${MXCLI_RELEASES_API:-}" ]; then
     case "$url" in https://github.com/mendixlabs/mxcli/releases/download/*) ;; *) return 1 ;; esac
   fi
-  printf '%s %s %s %s\n' "$published" "$tag" "$sha" "$url"
+  printf '%s %s %s\n' "$tag" "$sha" "$url"
 }
 
-# mxcli_older_than_release <desc> <published-at> <tag> -- older only if not that tag and built >12h before release.
-mxcli_older_than_release() {
-  local date="${1%% *}" ver="${1#* }"
-  [ "$ver" = "$3" ] && return 1
-  "$PY" -c 'import datetime, sys
-parse = lambda text: datetime.datetime.strptime(text, "%Y-%m-%dT%H:%M:%SZ")
-sys.exit(0 if parse(sys.argv[1]) + datetime.timedelta(hours=12) < parse(sys.argv[2]) else 1)' \
-    "$date" "$2" 2>/dev/null
+# mxcli_download_compat -- put the compatible release into ./mxcli, checksum-verified against the
+# release. Returns 1 (with the reason in DEPS_MISSING) when it cannot.
+mxcli_download_compat() {
+  local release tag sha url tmp got
+  release="$(mxcli_compat_release)" || return 1
+  read -r tag sha url <<< "$release"
+  tmp="$(mktemp "${TMPDIR:-/tmp}/mxcli-download.XXXXXX")"
+  if ! curl -fsSL -m 600 -o "$tmp" "$url" 2>/dev/null; then
+    rm -f "$tmp"
+    DEPS_MISSING+=("mxcli $tag -- the download failed, so ./mxcli$EXE was left as it was.")
+    return 1
+  fi
+  got="$(sha256_of "$tmp")"
+  if [ "$got" = "$sha" ] && mxcli_put_in_project "$tmp"; then
+    rm -f "$tmp"
+    ui_note "./mxcli$EXE is mxcli $tag, the version this harness works with (checksum verified against the release)"
+    return 0
+  fi
+  rm -f "$tmp"
+  DEPS_MISSING+=("mxcli $tag -- the download did not match the release checksum, so ./mxcli$EXE was left as it was.")
+  return 1
 }
 
 # mxcli_put_in_project <file> -- replace ./mxcli, keeping the old one beside it under its version.
@@ -144,52 +171,40 @@ mxcli_label() {
   if [ -n "${1:-}" ]; then printf '%s, built %s' "${1#* }" "${1%%T*}"; else printf 'none'; fi
 }
 
-# mxcli_offer_update -- offer a newer release or local build over ./mxcli; sets MXCLI_BEST*. Returns 0.
+# mxcli_offer_update -- make ./mxcli the compatible release: copy one found on this machine, or
+# download it. Any other version is swapped, newer ones too; the old binary is kept beside it.
+# Sets MXCLI_BEST*. Returns 0.
 mxcli_offer_update() {
-  local project_desc="" latest published tag sha url tmp got prompt
+  local project_desc="" want prompt
+  want="$(mxcli_compat_tag || true)"
   project_desc="$(mxcli_describe "$APP/mxcli$EXE" || true)"
-  mxcli_newest_local || true
-
-  if latest="$(mxcli_latest_release)"; then
-    read -r published tag sha url <<< "$latest"
-    if [ -z "$MXCLI_BEST_DESC" ] || mxcli_older_than_release "$MXCLI_BEST_DESC" "$published" "$tag"; then
-      prompt="    mxcli $tag is available (this project uses $(mxcli_label "$project_desc")). Download it into ./mxcli$EXE? [Y/n] "
-      if [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
-        ui_note "would download mxcli $tag into ./mxcli$EXE"
-      elif [ -z "${MDL_ASSUME_YES:-}" ] && ! [ -t 0 ]; then
-        ui_note "mxcli $tag is available; this project uses $(mxcli_label "$project_desc"). Re-run interactively, or with MDL_ASSUME_YES=1, to update."
-      elif ask "$prompt" y; then
-        tmp="$(mktemp "${TMPDIR:-/tmp}/mxcli-download.XXXXXX")"
-        if curl -fsSL -m 600 -o "$tmp" "$url" 2>/dev/null; then
-          got="$(sha256_of "$tmp")"
-          if [ "$got" = "$sha" ] && mxcli_put_in_project "$tmp"; then
-            ui_note "./mxcli$EXE updated to $tag (checksum verified against the release)"
-          else
-            DEPS_MISSING+=("mxcli $tag -- the download did not match the release checksum, so ./mxcli$EXE was left as it was.")
-          fi
-        else
-          DEPS_MISSING+=("mxcli $tag -- the download failed, so ./mxcli$EXE was left as it was.")
-        fi
-        rm -f "$tmp"
-        mxcli_newest_local || true
-        return 0
-      fi
+  mxcli_compatible_local || true
+  [ -n "$want" ] || return 0
+  [ -n "$project_desc" ] && [ "${project_desc#* }" = "$want" ] && return 0
+  # No ./mxcli yet: put the compatible release there, never an older or newer one from the PATH.
+  if [ ! -e "$APP/mxcli$EXE" ]; then
+    [ -z "${MDL_DEPS_DRY_RUN:-}" ] || { ui_note "would put mxcli $want into ./mxcli$EXE"; return 0; }
+    if [ -n "$MXCLI_BEST" ] && mxcli_put_in_project "$MXCLI_BEST"; then
+      ui_note "./mxcli$EXE is mxcli $want (copied from $MXCLI_BEST)"
+    else
+      mxcli_download_compat || true
     fi
+    mxcli_compatible_local || true
+    return 0
   fi
 
-  if [ -n "$MXCLI_BEST" ] && [ "$MXCLI_BEST" != "$APP/mxcli$EXE" ] && [ -e "$APP/mxcli$EXE" ] \
-     && { [ -z "$project_desc" ] || [[ "${MXCLI_BEST_DESC%% *}" > "${project_desc%% *}" ]]; }; then
-    prompt="    This project's ./mxcli$EXE is $(mxcli_label "$project_desc"); $MXCLI_BEST is $(mxcli_label "$MXCLI_BEST_DESC"). Use the newer one? [Y/n] "
-    if [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
-      ui_note "would copy mxcli ${MXCLI_BEST_DESC#* } into ./mxcli$EXE"
-    elif [ -z "${MDL_ASSUME_YES:-}" ] && ! [ -t 0 ]; then
-      ui_note "a newer mxcli ($(mxcli_label "$MXCLI_BEST_DESC")) is at $MXCLI_BEST; this project uses $(mxcli_label "$project_desc"). Re-run interactively, or with MDL_ASSUME_YES=1, to update."
-    elif ask "$prompt" y; then
-      if mxcli_put_in_project "$MXCLI_BEST"; then
-        ui_note "./mxcli$EXE updated to ${MXCLI_BEST_DESC#* }"
-        mxcli_newest_local || true
-      fi
+  prompt="    This harness works with mxcli $want; this project's ./mxcli$EXE is $(mxcli_label "$project_desc"). Swap it for $want? [Y/n] "
+  if [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
+    ui_note "would make ./mxcli$EXE mxcli $want"
+  elif [ -z "${MDL_ASSUME_YES:-}" ] && ! [ -t 0 ]; then
+    ui_note "this harness works with mxcli $want; this project uses $(mxcli_label "$project_desc"). Re-run interactively, or with MDL_ASSUME_YES=1, to swap it."
+  elif ask "$prompt" y; then
+    if [ -n "$MXCLI_BEST" ] && [ "$MXCLI_BEST" != "$APP/mxcli$EXE" ] && mxcli_put_in_project "$MXCLI_BEST"; then
+      ui_note "./mxcli$EXE is now mxcli $want (copied from $MXCLI_BEST)"
+    else
+      mxcli_download_compat || true
     fi
+    mxcli_compatible_local || true
   fi
   return 0
 }
@@ -205,12 +220,14 @@ first_executable() {
   return 1
 }
 
-# mxcli_for_project -- print the mxcli to use: ./mxcli if it runs, else MXCLI_BEST, else the first executable candidate.
-# Needs mxcli_newest_local to have run: it sets MXCLI_BEST and MXCLI_CANDIDATES.
+# mxcli_for_project -- print the mxcli to use: the compatible release (./mxcli first), else ./mxcli
+# if it runs at all, else the first executable candidate.
+# Needs mxcli_compatible_local to have run: it sets MXCLI_BEST and MXCLI_CANDIDATES.
 mxcli_for_project() {
-  if mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
+  if [ -n "${MXCLI_BEST:-}" ]; then
+    printf '%s\n' "$MXCLI_BEST"
+  elif mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
     printf '%s\n' "$APP/mxcli$EXE"
-  elif [ -n "${MXCLI_BEST:-}" ]; then
     printf '%s\n' "$MXCLI_BEST"
   else
     # Nothing answered --version.

@@ -5,9 +5,9 @@
 # create_app -- create the app in a temp dir and copy it in. Sets mx_version, created_app, swapped_mxcli (read by the summary).
 create_app() {
   local creator_mxcli app_name direct_mx stash_mxcli
-  # Same choice as for the prerequisites, but look for the newest mxcli again when ./mxcli does not run.
+  # Same choice as for the prerequisites, but look for the compatible mxcli again when ./mxcli does not run.
   if ! mxcli_describe "$APP/mxcli$EXE" >/dev/null; then
-    mxcli_newest_local || true
+    mxcli_compatible_local || true
   fi
   creator_mxcli="$(mxcli_for_project || true)"
   if [ -z "$creator_mxcli" ]; then
