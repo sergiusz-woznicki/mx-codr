@@ -3,7 +3,8 @@
 
     themes.py list [--plain]     one row per theme: number, name, a slice of the app in its colours
     themes.py resolve <choice>   the theme name for a number or name, or nothing (exit 1)
-    themes.py source <name>      "builtin", or the path of the bundle's <name>.css
+    themes.py source <name>      "none" (Mendix's Atlas), "builtin", or the path of the bundle's <name>.css
+    themes.py skin <name>        the path of the bundle's <name>.skin.scss (its frame), if it has one
     themes.py preview            the path of preview.html
 
 Colours are 24-bit when COLORTERM says so, else the nearest of the 256-colour palette;
@@ -45,9 +46,11 @@ def list_themes(plain):
         if plain:
             print("    %d  %-8s %s%s" % (number, theme["name"], desc, default))
             continue
-        # A slice of the app: the side menu, the page with its text, a selected row, the Save button.
+        # A slice of the app: the side menu, the top bar, the page, a selected row, the Save button.
+        top = theme.get("frame", {}).get("top") or t["rail"]
         swatch = (bg(t["rail"]) + fg(t["rail-ink-active"]) + " ▤ " + reset +
-                  bg(t["ground"]) + fg(t["ink"]) + " Invoices " + reset +
+                  bg(top) + fg("#ffffff") + " Your App " + reset +
+                  bg(t["ground"]) + fg(t["ink"]) + " Orders " + reset +
                   bg(t["surface-selected"]) + fg(t["ink"]) + " INV-042 " + reset +
                   bg(t["brand"]) + fg(t["brand-ink"]) + " Save " + reset)
         print("    %s%d%s  %-8s %s  %s%s%s%s" % (bold, number, reset, theme["name"], swatch, grey, desc, default, reset))
@@ -79,8 +82,15 @@ def main(argv):
     if command == "source" and len(argv) == 3:
         for theme in catalog():
             if theme["name"] == argv[2]:
-                print("builtin" if theme["source"] == "builtin" else os.path.join(HERE, theme["source"]))
+                source = theme["source"]
+                print(source if source in ("none", "builtin") else os.path.join(HERE, source))
                 return 0
+        return 1
+    if command == "skin" and len(argv) == 3:
+        path = os.path.join(HERE, argv[2] + ".skin.scss")
+        if os.path.isfile(path):
+            print(path)
+            return 0
         return 1
     if command == "preview":
         print(os.path.join(HERE, "preview.html"))

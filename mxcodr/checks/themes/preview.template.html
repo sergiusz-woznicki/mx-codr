@@ -4,121 +4,160 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Choose your app's look</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=Source+Sans+3:wght@400;600&family=Source+Serif+4:wght@600&family=Space+Grotesk:wght@400;600&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--text:#1a1d23;--muted:#5e6673;--line:#dfe3e8;--pick:#2563eb}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111317;--card:#1a1d23;--text:#e8eaee;--muted:#9aa2ae;--line:#2b3038;--pick:#60a5fa}}
-:root[data-theme="dark"]{--bg:#111317;--card:#1a1d23;--text:#e8eaee;--muted:#9aa2ae;--line:#2b3038;--pick:#60a5fa}
+:root{
+  --page:#eef1f5;--page-ink:#17202c;--page-muted:#5b6676;--page-card:#ffffff;--page-line:#d9dee6;--page-accent:#264ae5;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;--sans:"Poppins",system-ui,sans-serif;
+  /* palette driven by the chosen option */
+  --brand:#264ae5;--brand-ink:#fff;--rail:#1f3fbf;--rail-active:#16309a;--top:#2a4fe0;
+  --a-ground:#f5f6f8;--a-surface:#fff;--a-ink:#14202e;--a-muted:#5a6577;--a-line:#dfe3ea;--a-sel:#eef2f8;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--page:#0f141b;--page-ink:#e6ebf2;--page-muted:#97a3b4;--page-card:#161d27;--page-line:#28323f;--page-accent:#8fb0ff}}
+:root[data-theme="dark"]{--page:#0f141b;--page-ink:#e6ebf2;--page-muted:#97a3b4;--page-card:#161d27;--page-line:#28323f;--page-accent:#8fb0ff}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:28px 16px 48px}
-.wrap{max-width:1280px;margin:0 auto}
-header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:end;justify-content:space-between;margin-bottom:22px}
-h1{font-size:26px;margin:0 0 4px;text-wrap:balance}
-.lead{color:var(--muted);margin:0;max-width:62ch}
-.mode{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
-.mode button{border:0;background:none;color:var(--muted);padding:7px 16px;font:inherit;cursor:pointer}
-.mode button[aria-pressed="true"]{background:var(--text);color:var(--bg)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px}
-.card{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px;cursor:pointer;text-align:left;font:inherit;color:inherit;display:flex;flex-direction:column;gap:10px}
-.card:hover{border-color:var(--muted)}
-.card:focus-visible{outline:3px solid var(--pick);outline-offset:2px}
-.card[aria-pressed="true"]{border-color:var(--pick);box-shadow:0 0 0 3px color-mix(in srgb,var(--pick) 25%,transparent)}
-.meta{display:flex;gap:12px;align-items:center}
-.num{font:700 26px/1 system-ui,sans-serif;width:44px;height:44px;border-radius:10px;display:grid;place-items:center;background:var(--text);color:var(--bg);flex:none}
-.name{font-weight:650;font-size:17px}
-.desc{color:var(--muted);font-size:13px;line-height:1.35}
-.tag{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--pick);font-weight:650}
-/* the mock app, painted from the theme's own tokens */
-.app{display:flex;height:196px;border-radius:8px;overflow:hidden;border:1px solid var(--t-line);background:var(--t-ground);color:var(--t-ink);font-family:var(--t-font);font-size:11px}
-.rail{width:62px;background:var(--t-rail);color:var(--t-rail-ink);padding:8px 6px;display:flex;flex-direction:column;gap:5px;flex:none}
-.rail b{color:var(--t-rail-ink-active);font-size:10px;margin-bottom:4px}
-.rail span{padding:3px 5px;border-radius:var(--t-radius)}
-.rail span.on{background:color-mix(in srgb,var(--t-brand) 45%,transparent);color:var(--t-rail-ink-active)}
-.main{flex:1;display:flex;flex-direction:column;min-width:0}
-.top{height:26px;background:var(--t-surface);border-bottom:1px solid var(--t-line);display:flex;align-items:center;justify-content:space-between;padding:0 8px;color:var(--t-ink-muted)}
-.page{padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
-.titlebar{display:flex;justify-content:space-between;align-items:center}
-.title{font-family:var(--t-font-heading);font-weight:600;font-size:14px}
-.btn{background:var(--t-brand);color:var(--t-brand-ink);border-radius:var(--t-radius);padding:3px 8px;font-weight:600}
-.btn.ghost{background:var(--t-surface);color:var(--t-ink);border:1px solid var(--t-line)}
-.table{background:var(--t-surface);border:1px solid var(--t-line);border-radius:var(--t-radius);overflow:hidden}
-.row{display:grid;grid-template-columns:1.1fr 1.3fr .9fr .9fr;gap:4px;padding:3px 6px;border-top:1px solid var(--t-line);white-space:nowrap}
-.row:first-child{border-top:0;color:var(--t-ink-muted);font-weight:600;background:var(--t-surface-alt)}
-.row.sel{background:var(--t-surface-selected)}
-.num-cell{text-align:right;font-variant-numeric:tabular-nums}
-.pill{border-radius:99px;padding:0 6px;font-size:10px;justify-self:start}
-.ok{background:color-mix(in srgb,var(--t-success) 16%,transparent);color:var(--t-success)}
-.warn{background:color-mix(in srgb,var(--t-warning) 16%,transparent);color:var(--t-warning)}
-.bad{background:color-mix(in srgb,var(--t-danger) 16%,transparent);color:var(--t-danger)}
-.actions{display:flex;gap:6px;justify-content:flex-end}
-.howto{position:sticky;bottom:12px;margin-top:22px;background:var(--text);color:var(--bg);border-radius:12px;padding:12px 16px;display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;justify-content:space-between}
-.howto code{background:color-mix(in srgb,var(--bg) 18%,transparent);padding:1px 6px;border-radius:5px}
-@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s,box-shadow .15s}}
+body{margin:0;background:var(--page);color:var(--page-ink);font:15px/1.5 var(--sans);padding-inline:16px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:24px 40px;display:grid;gap:18px}
+h1{margin:0;font-size:clamp(24px,3.4vw,34px);text-wrap:balance}
+.lead{margin:0;color:var(--page-muted);max-width:70ch}
+.picker{display:flex;flex-wrap:wrap;gap:10px}
+.opt{display:flex;align-items:center;gap:10px;border:2px solid var(--page-line);background:var(--page-card);color:var(--page-ink);border-radius:12px;padding:8px 14px 8px 8px;cursor:pointer;font:600 14px var(--sans)}
+.opt[aria-pressed="true"]{border-color:var(--page-accent)}
+.opt:focus-visible,.copy:focus-visible{outline:2px solid var(--page-accent);outline-offset:2px}
+.sw{display:flex;border-radius:8px;overflow:hidden;height:34px}
+.sw i{display:block;width:16px}
+.opt small{display:block;font:400 12px var(--mono);color:var(--page-muted)}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+/* mock InvoiceB2B */
+.app{border-radius:14px;overflow:hidden;border:1px solid var(--page-line);box-shadow:0 12px 30px rgba(20,30,50,.14);background:var(--a-ground);color:var(--a-ink);display:grid;grid-template-columns:56px minmax(0,1fr);min-height:640px}
+.rail{background:var(--rail);display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 0}
+.rail span{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;color:#fff;opacity:.85}
+.rail span.on{background:var(--rail-active);opacity:1}
+.rail svg{width:20px;height:20px;fill:currentColor}
+.main{display:grid;grid-template-rows:auto 1fr;min-width:0}
+.top{background:var(--top);color:#fff;display:flex;align-items:center;gap:14px;padding:10px 18px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.2px}
+.logo b{display:grid;place-items:center;width:28px;height:28px;border-radius:7px;background:#fff;color:var(--top);font-size:13px}
+.top .sp{flex:1}.top small{opacity:.9}
+.body{padding:18px 22px;display:grid;gap:16px;align-content:start;overflow-x:auto}
+.userbar{display:flex;justify-content:flex-end;color:var(--brand);font-size:13px;font-weight:500}
+.ttl{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ttl h2{margin:0;font-size:28px;color:var(--a-ink)}
+.ttl p{margin:0;font-size:13px;color:var(--a-muted)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--brand);border-radius:6px;padding:7px 14px;font:600 13px var(--sans);background:var(--a-surface);color:var(--brand)}
+.btn.primary{background:var(--brand);color:var(--brand-ink)}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kpi{background:var(--a-surface);border:1px solid var(--a-line);border-radius:8px;padding:12px 14px}
+.kpi small{color:var(--a-muted);font-size:12px}
+.kpi strong{display:block;font-size:24px;color:var(--a-ink)}
+.kpi.accent{border-top:4px solid var(--brand)}
+.grid{background:var(--a-surface);border:1px solid var(--a-line);border-radius:8px;overflow:hidden}
+.grid table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.grid th{text-align:left;padding:10px 12px;color:var(--a-ink);border-bottom:1px solid var(--a-line);font-weight:600}
+.grid td{padding:10px 12px;border-bottom:1px solid var(--a-line);color:var(--a-ink)}
+.grid tr.sel td{background:var(--a-sel)}
+.grid td.num{text-align:right}
+.grid .open{color:var(--brand);font-weight:600}
+.badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;color:#fff}
+.b-new{background:#64748b}.b-conf{background:var(--brand);color:var(--brand-ink)}.b-ship{background:#1d5fa8}.b-inv{background:#1f7a3d}.b-canc{background:#b42318}.b-over{background:#a15c00}
+
+/* side panel */
+.panel{background:var(--page-card);border:1px solid var(--page-line);border-radius:12px;padding:16px;display:grid;gap:12px;position:sticky;top:12px}
+.panel h3{margin:0;font-size:18px}
+.panel p{margin:0;color:var(--page-muted);font-size:13px}
+.vals{display:grid;gap:6px;font:13px var(--mono)}
+.vals div{display:flex;align-items:center;gap:8px}
+.vals i{width:18px;height:18px;border-radius:4px;border:1px solid rgba(0,0,0,.15)}
+.vals em{font-style:normal;color:var(--page-muted)}
+.contrast{font-size:13px}
+.ok{color:#1f7a3d;font-weight:600}.bad{color:#b42318;font-weight:600}
+pre{margin:0;background:#0f1722;color:#dce6f2;border-radius:8px;padding:10px 12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-all}
+.copy{justify-self:start;font:600 13px var(--sans);border:1px solid var(--page-line);background:var(--page-card);color:var(--page-ink);border-radius:8px;padding:6px 12px;cursor:pointer}
+.num-badge{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:var(--page-ink);color:var(--page);font:700 14px var(--sans);flex:none}
+.seg{display:inline-flex;border:1px solid var(--page-line);border-radius:999px;overflow:hidden;background:var(--page-card)}
+.seg button{border:0;background:none;color:var(--page-muted);padding:6px 14px;font:600 13px var(--sans);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--page-ink);color:var(--page)}
+.type{font-size:15px;font-weight:600}.type code{font:700 15px var(--mono);background:var(--page);padding:2px 8px;border-radius:6px}
+.tag{font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--page-accent)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div>
-      <h1>Choose your app's look</h1>
-      <p class="lead">Each card is a small piece of a Mendix app in that theme: the menu, the page, a list with statuses and the buttons. Pick one by its number in the terminal; you can change it later in seconds.</p>
+  <h1>Choose your app's look</h1>
+  <p class="lead">The same app screen in each theme: the side menu, the top bar, the buttons and the list. Pick one here, then type its number in the terminal. You can change it later in seconds with <code>bash tests/theme.sh</code>.</p>
+  <div class="picker" id="picker" role="group" aria-label="Theme"></div>
+  <div class="layout">
+    <div class="app" aria-label="A sample app screen in the chosen theme">
+      <nav class="rail" aria-hidden="true">
+        <span><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10h-6v-6H9v6H3z"/></svg></span>
+        <span class="on"><svg viewBox="0 0 24 24"><path d="M4 4h16v4H4zm0 6h16v4H4zm0 6h16v4H4z"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M8 11a4 4 0 110-8 4 4 0 010 8zm8 0a3 3 0 110-6 3 3 0 010 6zM2 20c0-3 3-6 6-6s6 3 6 6zm12 0c0-2 1-4 3-5 3 0 5 2 5 5z"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 3v5h5"/></svg></span>
+        <span><svg viewBox="0 0 24 24"><path d="M9 16l-5-5 2-2 3 3 9-9 2 2z"/></svg></span>
+      </nav>
+      <div class="main">
+        <div class="top"><div class="logo"><b>YA</b> Your App</div><span class="sp"></span><small>English, United States</small></div>
+        <div class="body">
+          <div class="userbar">Signed in as Anna Kowalska</div>
+          <div class="ttl"><div><p>Orders and invoices</p><h2>Orders</h2></div>
+            <div class="btns"><span class="btn">Refresh</span><span class="btn">Export</span><span class="btn primary">+ New order</span></div></div>
+          <div class="kpis">
+            <div class="kpi accent"><small>Order value this month</small><strong>184,520.00</strong></div>
+            <div class="kpi"><small>Average fulfilment (days)</small><strong>6.4</strong></div>
+            <div class="kpi"><small>Overdue invoices</small><strong>3</strong></div>
+          </div>
+          <div class="grid"><table>
+            <thead><tr><th>Order number</th><th>Customer</th><th>Created</th><th class="num">Gross value</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>ORD-0016</td><td>Acme Ltd</td><td>30/09/2026</td><td class="num">60,516.00</td><td><span class="badge b-new">New</span></td><td class="open">Open</td></tr>
+              <tr class="sel"><td>ORD-0015</td><td>Borealis S.A.</td><td>28/09/2026</td><td class="num">12,300.00</td><td><span class="badge b-conf">Confirmed</span></td><td class="open">Open</td></tr>
+              <tr><td>ORD-0014</td><td>Cedar Trade</td><td>25/09/2026</td><td class="num">5,535.00</td><td><span class="badge b-ship">Shipped</span></td><td class="open">Open</td></tr>
+              <tr><td>ORD-0013</td><td>Delta Logistics</td><td>21/09/2026</td><td class="num">32,287.50</td><td><span class="badge b-inv">Invoiced</span></td><td class="open">Open</td></tr>
+              <tr><td>ORD-0012</td><td>Edelweiss AG</td><td>18/09/2026</td><td class="num">2,804.40</td><td><span class="badge b-canc">Cancelled</span></td><td class="open">Open</td></tr>
+              <tr><td>INV-0005</td><td>Acme Ltd</td><td>due 20/09/2026</td><td class="num">2,656.80</td><td><span class="badge b-over">Overdue</span></td><td class="open">Open</td></tr>
+            </tbody></table></div>
+        </div>
+      </div>
     </div>
-    <div class="mode" role="group" aria-label="Light or dark">
-      <button id="mode-light" type="button" aria-pressed="true">Light</button>
-      <button id="mode-dark" type="button" aria-pressed="false">Dark</button>
-    </div>
-  </header>
-  <div class="grid" id="grid"></div>
-  <div class="howto" id="howto">
-    <span id="howto-text">Click a card to see its number, then type it in the terminal and press Enter.</span>
-    <span>Later: <code>bash tests/theme.sh &lt;name&gt;</code></span>
+    <aside class="panel">
+      <h3 id="pname"></h3>
+      <p id="pdesc"></p>
+      <div class="type" id="ptype"></div>
+      <div class="seg" role="group" aria-label="Light or dark">
+        <button id="m-light" type="button" aria-pressed="true">Light</button><button id="m-dark" type="button" aria-pressed="false">Dark</button>
+      </div>
+      <div class="vals" id="pvals"></div>
+    </aside>
   </div>
 </div>
 <script>
-const CATALOG = /*CATALOG*/[];
-let mode = "light", picked = null;
-const grid = document.getElementById("grid");
-const keys = ["brand","brand-ink","ground","surface","surface-alt","surface-selected","ink","ink-muted","line","rail","rail-ink","rail-ink-active","success","warning","danger","radius","font","font-heading"];
-function paint(card, theme) {
-  const t = theme[mode];
-  keys.forEach(k => { if (t[k]) card.style.setProperty("--t-" + k, t[k]); });
-}
-function mock() {
-  return `<div class="app" aria-hidden="true">
-    <div class="rail"><b>InvoiceApp</b><span>Home</span><span class="on">Invoices</span><span>Customers</span><span>Reports</span></div>
-    <div class="main"><div class="top"><span>Invoices</span><span>Anna Kowalska</span></div>
-      <div class="page"><div class="titlebar"><span class="title">Invoices</span><span class="btn">New invoice</span></div>
-        <div class="table">
-          <div class="row"><span>Number</span><span>Customer</span><span class="num-cell">Amount</span><span>Status</span></div>
-          <div class="row"><span>INV-041</span><span>Northwind</span><span class="num-cell">1,240.00</span><span class="pill ok">Paid</span></div>
-          <div class="row sel"><span>INV-042</span><span>Globex</span><span class="num-cell">860.50</span><span class="pill warn">Sent</span></div>
-          <div class="row"><span>INV-043</span><span>Initech</span><span class="num-cell">2,015.00</span><span class="pill bad">Overdue</span></div>
-        </div>
-        <div class="actions"><span class="btn ghost">Cancel</span><span class="btn">Save</span></div>
-      </div></div></div>`;
-}
-CATALOG.forEach((theme, i) => {
-  const card = document.createElement("button");
-  card.type = "button"; card.className = "card"; card.id = "theme-" + theme.name;
-  card.setAttribute("aria-pressed", "false");
-  card.innerHTML = `<div class="meta"><span class="num">${i + 1}</span><div><div class="name">${theme.title}${i === 0 ? ' <span class="tag">default</span>' : ""}</div><div class="desc">${theme.description.replace(/ -- /g, " — ")}</div></div></div>` + mock();
-  card.addEventListener("click", () => {
-    picked = i;
-    document.querySelectorAll(".card").forEach(c => c.setAttribute("aria-pressed", String(c === card)));
-    document.getElementById("howto-text").textContent = `${theme.title}: type ${i + 1} in the terminal and press Enter.`;
-  });
-  grid.appendChild(card);
-  paint(card, theme);
+var CATALOG = /*CATALOG*/[];
+var root = document.documentElement, pk = document.getElementById('picker'), current = 0, mode = 'light';
+CATALOG.forEach(function (t, i) {
+  var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.id = 'opt-' + t.name;
+  b.innerHTML = '<span class="num-badge">' + (i + 1) + '</span><span class="sw"><i style="background:' + t.light.rail + '"></i><i style="background:' + t.frame.top + '"></i><i style="background:' + t.light.brand + '"></i></span><span>' + t.title + (i === 0 ? ' <span class="tag">default</span>' : '') + '<small>' + (t.source === 'builtin' ? 'from mxcli' : 'mx-codr') + '</small></span>';
+  b.onclick = function () { current = i; show(); }; pk.appendChild(b);
 });
-function setMode(m) {
-  mode = m;
-  document.getElementById("mode-light").setAttribute("aria-pressed", String(m === "light"));
-  document.getElementById("mode-dark").setAttribute("aria-pressed", String(m === "dark"));
-  document.querySelectorAll(".card").forEach((c, i) => paint(c, CATALOG[i]));
+function show() {
+  var t = CATALOG[current], k = t[mode], f = t.frame;
+  var set = function (n, v) { if (v) root.style.setProperty(n, v); };
+  set('--brand', k.brand); set('--brand-ink', k['brand-ink']); set('--rail', k.rail); set('--top', f.top); set('--rail-active', f['rail-active']);
+  set('--a-ground', k.ground); set('--a-surface', k.surface); set('--a-ink', k.ink); set('--a-muted', k['ink-muted']); set('--a-line', k.line); set('--a-sel', k['surface-selected']);
+  [].slice.call(pk.children).forEach(function (b) { b.setAttribute('aria-pressed', b.id === 'opt-' + t.name); });
+  document.getElementById('pname').textContent = t.title;
+  document.getElementById('pdesc').textContent = t.description.replace(/ -- /g, ' — ');
+  document.getElementById('ptype').innerHTML = 'In the terminal, type <code>' + (current + 1) + '</code> and press Enter.';
+  var rows = [['Buttons, links', k.brand], ['Side menu', k.rail], ['Top bar', f.top], ['Page', k.ground]];
+  document.getElementById('pvals').innerHTML = rows.map(function (r) { return '<div><i style="background:' + r[1] + '"></i>' + r[1] + ' <em>' + r[0] + '</em></div>'; }).join('');
+  document.getElementById('m-light').setAttribute('aria-pressed', mode === 'light');
+  document.getElementById('m-dark').setAttribute('aria-pressed', mode === 'dark');
 }
-document.getElementById("mode-light").addEventListener("click", () => setMode("light"));
-document.getElementById("mode-dark").addEventListener("click", () => setMode("dark"));
+document.getElementById('m-light').onclick = function () { mode = 'light'; show(); };
+document.getElementById('m-dark').onclick = function () { mode = 'dark'; show(); };
+show();
 </script>
 </body>
 </html>

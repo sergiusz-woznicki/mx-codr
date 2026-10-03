@@ -30,7 +30,8 @@ applied() {   # the theme(s) the app has now, from the partials mxcli wrote
 
 case "${1:-}" in
   ""|list)
-    echo "The app's look (now: $(applied || true))"
+    now="$(applied || true)"
+    echo "The app's look (now: ${now:-atlas, the Mendix default})"
     echo
     if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then "$PY" "$HELPER" list; else "$PY" "$HELPER" list --plain; fi
     echo
@@ -46,9 +47,18 @@ case "${1:-}" in
   *)
     name="$("$PY" "$HELPER" resolve "$1")" || { echo "no theme '$1' -- bash tests/theme.sh lists them" >&2; exit 2; }
     source="$("$PY" "$HELPER" source "$name")"
+    if [ "$source" = "none" ]; then
+      # Mendix's own Atlas: no mxcli theme at all.
+      "$MXCLI" theme remove -p "$MPR" >/dev/null 2>&1 || true
+      echo "Theme: Mendix Atlas. With the app running under --watch, reload the page in a few seconds."
+      exit 0
+    fi
     if [ "$source" != "builtin" ] && [ ! -d "theme/mxcli-themes/$name" ]; then
       "$MXCLI" theme create "$name" -p "$MPR" --from "$source" --base signal >/dev/null \
         || { echo "mxcli theme create $name failed" >&2; exit 1; }
+      # The frame (top bar, active menu item, outline buttons) goes into the scaffold's own partial.
+      skin="$("$PY" "$HELPER" skin "$name")" \
+        && cat "$skin" >> "theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
     fi
     "$MXCLI" theme apply "$name" -p "$MPR" >/dev/null || { echo "mxcli theme apply $name failed" >&2; exit 1; }
     echo "Theme: $name. With the app running under --watch, reload the page in a few seconds."

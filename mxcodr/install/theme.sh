@@ -13,12 +13,12 @@ open_in_browser() {
 }
 
 # choose_theme -- sets THEME for a new app. MDL_THEME picks it without asking; with no terminal,
-# or MDL_ASSUME_YES, the first theme (signal) is taken. Asked together with the other questions,
+# or MDL_ASSUME_YES, the first theme (atlas, Mendix's own look) is taken. Asked together with the other questions,
 # before the minutes of unattended work.
 choose_theme() {
   local helper="$SRC/checks/themes/themes.py" reply preview opened=0
-  # The default even when nothing can be asked: Python may only arrive with the prerequisites.
-  THEME="signal"
+  # The default even when nothing can be asked: Mendix's own Atlas, the app as mxcli new makes it.
+  THEME="atlas"
   [ -n "${PY:-}" ] || PY="$(mdl_find_python 2>/dev/null || true)"
   [ -f "$helper" ] && [ -n "${PY:-}" ] || return 0
   if [ -n "${MDL_THEME:-}" ]; then
@@ -37,7 +37,7 @@ choose_theme() {
     printf '\n  %sPreview: %s%s\n\n' "$C_GREY" "$preview" "$C_RESET"
   fi
   if [ "$UI_TTY" = 1 ]; then "$PY" "$helper" list; else "$PY" "$helper" list --plain; fi
-  printf '\n    %smenu · page · selected row · button. Change it later: bash tests/theme.sh%s\n' "$C_GREY" "$C_RESET"
+  printf '\n    %smenu · top bar · page · selected row · button. Change it later: bash tests/theme.sh%s\n' "$C_GREY" "$C_RESET"
   while :; do
     printf '\n  Theme [1]: '
     read -r reply
@@ -50,13 +50,21 @@ choose_theme() {
 # apply_theme <app-dir> <mxcli> <name> -- a built-in theme by name; the bundle's own are created
 # from their token file on the signal base first. Only theme/ files change, never the model.
 apply_theme() {
-  local app="$1" mxcli="$2" name="$3" source mpr
+  local app="$1" mxcli="$2" name="$3" source mpr skin
   [ -n "$name" ] || return 0
   mpr="$(cd "$app" && ls *.mpr 2>/dev/null | head -1)"
   [ -n "$mpr" ] || return 1
   source="$("$PY" "$SRC/checks/themes/themes.py" source "$name" 2>/dev/null)" || return 1
+  # Atlas is no theme at all: take away any mxcli theme the app carries.
+  if [ "$source" = "none" ]; then
+    ( cd "$app" && "$mxcli" theme remove -p "$mpr" ) >/dev/null 2>&1 || true
+    return 0
+  fi
   if [ "$source" != "builtin" ] && [ ! -d "$app/theme/mxcli-themes/$name" ]; then
     ( cd "$app" && "$mxcli" theme create "$name" -p "$mpr" --from "$source" --base signal ) >/dev/null 2>&1 || return 1
+    # The frame (top bar, active menu item, outline buttons) goes into the scaffold's own partial.
+    skin="$("$PY" "$SRC/checks/themes/themes.py" skin "$name" 2>/dev/null)" \
+      && cat "$skin" >> "$app/theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
   fi
   ( cd "$app" && "$mxcli" theme apply "$name" -p "$mpr" ) >/dev/null 2>&1
 }
