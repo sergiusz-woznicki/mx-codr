@@ -13,8 +13,9 @@ here blocks DONE unless the line says "warning".
 | `NAV03` | every role's home page in the menu | `menu item '<caption>' page <Page> icon <icon>;` before Log out |
 | `NAV04` | no hand-built menu of link buttons in a layout | put those pages in the navigation profile's menu; the layout keeps Atlas's own menu |
 | `NAV05` | an icon on every menu entry | `icon Atlas_Core.Atlas_Filled.<name>` at the end of the item |
+| `NAV06` | no icon twice in what one role sees | the other icon the message suggests |
 | `HOME01` | administrators open on a page of the app's own module | create `<Module>.Admin_Home` and `home page <Module>.Admin_Home for Administrator` |
-| `ACCOUNT01` | a Users item for administrators | `menu item 'Users' page Administration.Account_Overview icon Atlas_Core.Atlas_Filled."user-neutral-group";` before Log out |
+| `ACCOUNT01` | a Users item for administrators | `menu item 'Users' page Administration.Account_Overview icon Atlas_Core.Atlas_Filled."user-neutral-shield";` before Log out |
 | `ACCOUNT02` | a My account item | `menu item 'My account' microflow Administration.ManageMyAccount icon Atlas_Core.Atlas_Filled.user;` before Log out |
 | `ACCOUNT03` | every signing-in role can open My account; someone can manage users | `alter user role <Role> add module roles (Administration.User);` and `Administration.Administrator` on the administrators' role |
 | `MODULE01` | `MyFirstModule` gone once the app has its own module | re-point home pages, drop `MyFirstModule.User` from user roles, `drop module MyFirstModule;` |
@@ -58,7 +59,7 @@ here blocks DONE unless the line says "warning".
 | stale client bundle | a test failed on a 404 for `dist/*.js` after a `--watch` rebuild (the failure line says so) | `bash tests/gate.sh --restart --only <feature>` -- not the page, not a widget |
 | `SCOPE01` | a page's data source microflow ties its retrieve to the user when the page's role reads that entity through an XPath-scoped rule (warning) | a microflow does not apply entity access: add the same constraint to its retrieve (`where [...Customer_Account = '[%CurrentUser%]']`, or `= $SignedInCustomer`); `MDL_SCOPE=error` makes it block |
 | `RUNTIME01` | no `ERROR` in the server log while the suite ran (warning) | the log line names the microflow or page; `MDL_RUNTIME_ERRORS=error` makes it block |
-| `VIS01` `VIS02` `VIS03` | no overlapping widgets, sideways scroll or cut-off text on the page a test ends on (warning) | usually a box class on inline text or a negative margin; `MDL_VISUAL=error` makes them block |
+| `VIS01` `VIS02` `VIS03` `VIS04` | no overlapping widgets, sideways scroll, cut-off text, or chart bigger than the screen, on the page a test ends on (warning) | usually a box class on inline text or a negative margin; a chart needs a height that fits; `MDL_VISUAL=error` makes them block |
 | `LOOK01` `LOOK02` | screenshots reviewed when `MDL_VISUAL_REVIEW=agent` (warning) | read each PNG named in `.mxcli/visual/review.md`, write `verdicts.json` |
 | "went green without ever being red" | a test that was seen to fail once (warning) | break the feature, `bash tests/gate.sh --only <feature>`, fix it; or list the test in `MDL_ALLOW_GREEN_FIRST` when green by nature |
 | `CE0582` | no classic drop-down (not React-client compatible) | `combobox` or `radiobuttons` on the same enumeration or Boolean attribute |

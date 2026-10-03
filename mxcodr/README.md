@@ -349,7 +349,8 @@ topic list changes, not only when mxcli does.
 The gate looks at the rendered page, not only the MDL. At the end of every test, `look()`
 in `tests/scenario-helpers.js` measures the page the test left open: two unrelated widgets that
 overlap by 4 px or more (`VIS01`), a page that scrolls sideways (`VIS02`), text cut off
-(`VIS03`). The gate names the page from the widget names in `mdlsource/` and lists each problem
+(`VIS03`), a chart that cannot be seen whole on one screen (`VIS04`: taller or wider than the
+screen it scrolls in, or inside a box that scrolls sideways). The gate names the page from the widget names in `mdlsource/` and lists each problem
 once under `== warnings`. The layout check adds `ALERT01`: a box class (`alert`, `card`, `well`)
 on a `dynamictext`, which renders inline and draws its box over the line below. A cancellation
 notice did exactly that on an order page and the gate said DONE.
@@ -854,6 +855,7 @@ project's own layouts:
 `NAV03` | error | project security is on and a role's home page (`home page X for Role`) is not in the menu |
 `NAV04` | error | one of the project's own layouts opens two or more pages from buttons — a menu built by hand |
 `NAV05` | error | a menu item or sub-menu has no icon; the message suggests an Atlas_Filled icon for its caption |
+`NAV06` | error | two menu entries one user role sees share an icon; only the entries the role may open count (`SHOW ACCESS` on each page and microflow the menu links to), and with security off every entry; the message suggests another icon |
 `ACCOUNT01`-`03` | error | users sign in and the Administration module is there, but the menu lacks `Users` (`page Administration.Account_Overview`) or `My account` (`microflow Administration.ManageMyAccount`, which opens `MyAccount` for the signed-in user), or a signed-in role lacks `Administration.User`, or no role has `Administration.Administrator` |
 `MODULE01` | error | the app has its own module with pages and the template's `MyFirstModule` is still there; the message lists what still uses it (home pages, user roles, pages or flows) and the steps to remove it |
 `HOME01` | error | users sign in and the administrators' role opens on a page outside the app's own modules (the template's `Home_Web`, an Administration page) |

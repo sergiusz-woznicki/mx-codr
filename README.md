@@ -77,7 +77,8 @@ what to fix. Codes in brackets are what the gate prints.
 
 **Screens**
 - One menu for all roles on a standard Atlas layout (`NAV03`, `NAV04`), an icon on every
-  item (`NAV05`), Log out last (`NAV01`, `NAV02`).
+  item (`NAV05`), never the same icon twice in what one role sees (`NAV06`), Log out last
+  (`NAV01`, `NAV02`).
 - "Users" for admins and "My account" for everyone once people sign in
   (`ACCOUNT01`-`03`); admins start on a page of the app (`HOME01`).
 - One layout for all pages except pop-ups (`LAYOUT01`).
@@ -89,7 +90,8 @@ what to fix. Codes in brackets are what the gate prints.
 - Everything on a page inside a layout grid, so nothing touches the edge of the window (`EDGE01`).
 - A heading on every page (`HEAD01`, a warning).
 - Pages checked as they render: after every test the gate measures the page for widgets
-  that overlap, sideways scrolling and cut-off text (`VIS01`-`03`), and flags an alert
+  that overlap, sideways scrolling, cut-off text and charts that do not fit one screen
+  (`VIS01`-`04`), and flags an alert
   class on plain text (`ALERT01`). With `MDL_VISUAL_REVIEW=agent`, a model that reads
   images also judges a screenshot of each page (`LOOK01`-`02`). Warnings for now.
 - Server errors logged while the tests ran are listed (`RUNTIME01`): a test can pass while the

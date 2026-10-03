@@ -296,6 +296,7 @@ VISUAL_FIX = {
     "VIS01": "a box class on inline text (alert, card) or a negative margin is the usual cause",
     "VIS02": "a fixed width or a long unbroken value is the usual cause; check the page at phone width",
     "VIS03": "the text needs room: a wider column, wrapping, or an ellipsis on purpose",
+    "VIS04": "give the chart a height that fits the screen (its Height in pixels, or a percentage of its width) and no fixed width wider than its column; a chart split over two scrolls cannot be read",
 }
 
 RUBRIC = [

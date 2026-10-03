@@ -266,6 +266,17 @@ except Exception:
 for row in rows if isinstance(rows, list) else []:
     print(row.get("Name", ""))' 2>/dev/null)
   nav_args+=(--user-roles "$WORK/userroles.mdl")
+  # NAV06: who may open each page and microflow the menu links to, so the checker knows which
+  # entries each role sees. An unreadable answer counts as "everyone" and can only add findings.
+  local kind target
+  while read -r kind target; do
+    printf '%s %s\t' "$kind" "$target"
+    "$MXCLI" -p "$MPR" --json -c "SHOW ACCESS ON $kind $target" 2>/dev/null | tr -d '\n\r'
+    echo
+  done < <(grep -iE "^[[:space:]]*menu[[:space:]]+item[[:space:]]+'" "$WORK/navigation.mdl" \
+             | sed -E "s/^[[:space:]]*menu[[:space:]]+item[[:space:]]+'[^']*'//" \
+             | grep -oiE "(page|microflow)[[:space:]]+[A-Za-z0-9_]+\.[A-Za-z0-9_]+" | sort -u) > "$WORK/menu-access.tsv"
+  nav_args+=(--menu-access "$WORK/menu-access.tsv")
   guest="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | grep -iE '^(Guest|Anonymous) (User )?Role:' | head -1 | sed -E 's/^[^:]*:[[:space:]]*//')"
   if [ -n "$guest" ]; then nav_args+=(--guest-role "$guest"); fi
   # ACCOUNT01-02: only when the Administration module is there to link to.

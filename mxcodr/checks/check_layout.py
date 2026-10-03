@@ -42,6 +42,8 @@ Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 #                  there; lists everything that still uses it and how to remove it
 #   HOME01   FAIL  the administrators' role does not open on a page of the app's own modules
 #   NAV05    FAIL  a menu item or sub-menu with no icon (the message suggests one for its caption)
+#   NAV06    FAIL  two menu entries one user role sees (Mendix hides those whose page or microflow
+#                  the role may not open) show the same icon; with security off, any two entries
 #   NAV04    FAIL  one of the project's own layouts opens two or more pages from buttons: a menu
 #                  built by hand, with no hamburger, no active item and no phone view
 #   ALERT01  WARN  a block class (alert, alert-*, card, well) on a dynamictext or text: it renders
@@ -52,7 +54,7 @@ Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 # Where each rule lives, in layout_rules/ next to this file (this file only reads the arguments
 # and runs them): pages.py parses the dumps; spacing.py SPACE01-03, HEAD01, ALERT01; controls.py
 # GRID01, ICON01; page_top.py BACK01, USER01; layouts.py LAYOUT01, NAV04; navigation.py NAV01-03,
-# NAV05; accounts.py ACCOUNT01-03, MODULE01, HOME01; edges.py EDGE01.
+# NAV05-06; accounts.py ACCOUNT01-03, MODULE01, HOME01; edges.py EDGE01.
 
 from __future__ import annotations
 
@@ -64,11 +66,12 @@ from pathlib import Path
 # The rules live next to this file, in layout_rules/; the gate runs this file by path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from layout_rules.accounts import account_findings, admin_home_findings, template_module_findings  # noqa: E402
+from layout_rules.accounts import USER_ROLE_RE, account_findings, admin_home_findings, template_module_findings  # noqa: E402
 from layout_rules.controls import button_icon_findings  # noqa: E402
 from layout_rules.edges import edge_findings  # noqa: E402
 from layout_rules.layouts import layout_menu_findings, one_layout_findings  # noqa: E402
-from layout_rules.navigation import menu_icon_findings, role_home_findings, sign_out_findings  # noqa: E402
+from layout_rules.navigation import (duplicate_icon_findings, menu_icon_findings, read_menu_access,  # noqa: E402
+                                     role_home_findings, sign_out_findings)
 from layout_rules.page_top import back_button_findings, current_user_findings  # noqa: E402
 from layout_rules.pages import page_blocks  # noqa: E402
 from layout_rules.spacing import check  # noqa: E402
@@ -101,6 +104,8 @@ def main() -> int:
     parser.add_argument("--admin-module", action="store_true",
                         help="the Administration module (Account_Overview, ManageMyAccount) is in the project")
     parser.add_argument("--user-roles", type=Path, help="DESCRIBE USER ROLE output for every user role")
+    parser.add_argument("--menu-access", type=Path,
+                        help="per menu target, `<page|microflow> <Mod.Name><TAB><SHOW ACCESS --json>` (NAV06)")
     parser.add_argument("--guest-role", default="", help="the anonymous user role, which does not sign in")
     parser.add_argument("--own-modules", default="",
                         help="the app's own modules, space-separated (not System, Marketplace or MyFirstModule)")
@@ -144,6 +149,11 @@ def main() -> int:
         failures += account_findings(navigation, roles, args.guest_role)
     if has_navigation:
         failures += menu_icon_findings(navigation)
+        # NAV06 per user role when security is on and who may open what is known; else for everyone.
+        access = read_menu_access(read_optional(args.menu_access)) if args.users_sign_in and args.menu_access else None
+        by_role = {m.group("name"): {r.strip() for r in m.group("roles").split(",")}
+                   for m in map(USER_ROLE_RE.match, roles.splitlines()) if m}
+        failures += duplicate_icon_findings(navigation, by_role, access)
     failures += one_layout_findings(lines, navigation, layouts)
     failures += button_icon_findings(lines + snippets.splitlines())
     failures += back_button_findings(lines, flows, navigation)
