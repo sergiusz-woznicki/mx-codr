@@ -6,12 +6,14 @@
     themes.py source <name>      "none" (Mendix's Atlas), "builtin", or the path of the bundle's <name>.css
     themes.py skin <name>        the path of the bundle's <name>.skin.scss (its frame), if it has one
     themes.py preview            the path of preview.html
+    themes.py logo <name> <app>  copy the mx-codr mark in that theme's colours into <app>/theme/web/
 
 Colours are 24-bit when COLORTERM says so, else the nearest of the 256-colour palette;
 --plain (or NO_COLOR) prints names and descriptions only.
 """
 import json
 import os
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -92,6 +94,22 @@ def main(argv):
             print(path)
             return 0
         return 1
+    if command == "logo" and len(argv) == 4:
+        # The browser and home-screen icons, the sign-in logo and Atlas's top bar logo, by the
+        # names mxbuild copies from theme/web/ over its own (logos/<name>/ mirrors theme/web/).
+        source = os.path.join(HERE, "logos", argv[2])
+        if not os.path.isdir(source) or not os.path.isdir(os.path.join(argv[3], "theme", "web")):
+            return 1
+        for folder, _dirs, files in os.walk(source):
+            target = os.path.join(argv[3], "theme", "web", os.path.relpath(folder, source))
+            os.makedirs(target, exist_ok=True)
+            for name in files:
+                shutil.copyfile(os.path.join(folder, name), os.path.join(target, name))
+        # `mxcli run --watch` copies theme/web/ only when a stylesheet changes: nudge one.
+        main_scss = os.path.join(argv[3], "theme", "web", "main.scss")
+        if os.path.isfile(main_scss):
+            os.utime(main_scss)
+        return 0
     if command == "preview":
         print(os.path.join(HERE, "preview.html"))
         return 0

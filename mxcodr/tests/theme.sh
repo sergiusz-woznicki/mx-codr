@@ -8,6 +8,8 @@
 # A theme is a set of files under theme/ -- the model is never touched. Under
 # `mxcli run --watch` (the gate's boot) the app shows the new look in a few seconds;
 # reload the page. The bundle's own themes are created from tools/mdl-checks/themes/<name>.css.
+# The mx-codr logo and icons follow the theme (tools/mdl-checks/themes/logos/<name>/); the
+# browser may keep its old tab icon until a hard reload.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 PORTABLE_APP_DIR="$PWD"
@@ -47,6 +49,8 @@ case "${1:-}" in
   *)
     name="$("$PY" "$HELPER" resolve "$1")" || { echo "no theme '$1' -- bash tests/theme.sh lists them" >&2; exit 2; }
     source="$("$PY" "$HELPER" source "$name")"
+    # The mx-codr mark in this theme's colours: browser icons, sign-in and top bar logo.
+    "$PY" "$HELPER" logo "$name" . || echo "no logo for $name -- the icons stay as they were" >&2
     if [ "$source" = "none" ]; then
       # Mendix's own Atlas: no mxcli theme at all.
       "$MXCLI" theme remove -p "$MPR" >/dev/null 2>&1 || true

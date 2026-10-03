@@ -55,6 +55,8 @@ apply_theme() {
   mpr="$(cd "$app" && ls *.mpr 2>/dev/null | head -1)"
   [ -n "$mpr" ] || return 1
   source="$("$PY" "$SRC/checks/themes/themes.py" source "$name" 2>/dev/null)" || return 1
+  # The mx-codr mark in this theme's colours replaces Mendix's icons and logos (theme/web/ only).
+  "$PY" "$SRC/checks/themes/themes.py" logo "$name" "$app" >/dev/null 2>&1 || true
   # Atlas is no theme at all: take away any mxcli theme the app carries.
   if [ "$source" = "none" ]; then
     ( cd "$app" && "$mxcli" theme remove -p "$mpr" ) >/dev/null 2>&1 || true

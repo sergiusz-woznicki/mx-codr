@@ -226,7 +226,8 @@ For a new app the installer offers Mendix's own Atlas (the default) or one of fi
 navy, teal, amber, plum, forest -- each shown in the terminal in its own colours, with the same
 app screen in each in the browser. Change it any time: `bash tests/theme.sh` lists
 them, `bash tests/theme.sh teal` switches, and a running app shows it in seconds. The app opens
-light even when the OS is dark.
+light even when the OS is dark, and the mx-codr logo and browser icons take the theme's
+colours.
 
 ### Windows
 
