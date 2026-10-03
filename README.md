@@ -159,6 +159,10 @@ agent polishing after DONE.
 
 `mxcodr/` is the whole bundle. Everything below is about installing and using it.
 
+[`docs/harness-wiring.html`](docs/harness-wiring.html) shows it moving: pick a moment (a prompt,
+a broken `mxcli exec`, the gate, the agent trying to stop) and watch which file calls which, with
+the exact text each step puts into the agent's context. Open it in a browser.
+
 Nothing in this harness is a tool you operate. There is no Python script to invoke,
 no checker to remember the arguments of, no order to run things in. After
 `install.sh`, every piece is found and used by the agent on its own:
