@@ -47,9 +47,6 @@ h1{margin:0;font-size:clamp(24px,3.4vw,34px);text-wrap:balance}
 pre{margin:0;background:#0f1722;color:#dce6f2;border-radius:8px;padding:10px 12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-all}
 .copy{justify-self:start;font:600 13px var(--sans);border:1px solid var(--page-line);background:var(--page-card);color:var(--page-ink);border-radius:8px;padding:6px 12px;cursor:pointer}
 .num-badge{display:grid;place-items:center;width:26px;height:26px;border-radius:7px;background:var(--page-ink);color:var(--page);font:700 14px var(--sans);flex:none}
-.seg{display:inline-flex;border:1px solid var(--page-line);border-radius:999px;overflow:hidden;background:var(--page-card)}
-.seg button{border:0;background:none;color:var(--page-muted);padding:6px 14px;font:600 13px var(--sans);cursor:pointer}
-.seg button[aria-pressed="true"]{background:var(--page-ink);color:var(--page)}
 .type{font-size:15px;font-weight:600}.type code{font:700 15px var(--mono);background:var(--page);padding:2px 8px;border-radius:6px}
 .tag{font:600 11px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--page-accent)}
 </style>
@@ -68,38 +65,31 @@ pre{margin:0;background:#0f1722;color:#dce6f2;border-radius:8px;padding:10px 12p
       <h3 id="pname"></h3>
       <p id="pdesc"></p>
       <div class="type" id="ptype"></div>
-      <div class="seg" role="group" aria-label="Light or dark">
-        <button id="m-light" type="button" aria-pressed="true">Light</button><button id="m-dark" type="button" aria-pressed="false">Dark</button>
-      </div>
       <div class="vals" id="pvals"></div>
     </aside>
   </div>
 </div>
 <script>
 var CATALOG = /*CATALOG*/[];
-var root = document.documentElement, pk = document.getElementById('picker'), current = 0, mode = 'light';
+var root = document.documentElement, pk = document.getElementById('picker'), current = 0;
 CATALOG.forEach(function (t, i) {
   var b = document.createElement('button'); b.type = 'button'; b.className = 'opt'; b.id = 'opt-' + t.name;
   b.innerHTML = '<span class="num-badge">' + (i + 1) + '</span><span class="sw"><i style="background:' + t.light.rail + '"></i><i style="background:' + t.frame.top + '"></i><i style="background:' + t.light.brand + '"></i></span><span>' + t.title + (i === 0 ? ' <span class="tag">default</span>' : '') + '<small>' + (t.source === 'none' ? 'Mendix standard' : 'mx-codr') + '</small></span>';
   b.onclick = function () { current = i; show(); }; pk.appendChild(b);
 });
 function show() {
-  var t = CATALOG[current], k = t[mode], f = t.frame;
+  var t = CATALOG[current], k = t.light, f = t.frame;
   var img = document.getElementById('shot');
-  img.src = 'shots/' + t.name + '-' + mode + '.jpg';
-  img.alt = t.title + ' theme on a Mendix app, ' + mode;
-  document.getElementById('shotcap').textContent = 'A running Mendix app in ' + t.title + ', ' + (mode === 'light' ? 'light' : 'dark') + ' mode' + (t.source === 'none' ? ' (Atlas has no dark palette of its own)' : '') + '.';
+  img.src = 'shots/' + t.name + '.jpg';
+  img.alt = t.title + ' theme on a Mendix app';
+  document.getElementById('shotcap').textContent = 'A running Mendix app in ' + t.title + '.';
   [].slice.call(pk.children).forEach(function (b) { b.setAttribute('aria-pressed', b.id === 'opt-' + t.name); });
   document.getElementById('pname').textContent = t.title;
   document.getElementById('pdesc').textContent = t.description.replace(/ -- /g, ' — ');
   document.getElementById('ptype').innerHTML = 'In the terminal, type <code>' + (current + 1) + '</code> and press Enter.';
   var rows = [['Buttons, links', k.brand], ['Side menu', k.rail], ['Top bar', f.top], ['Page', k.ground]];
   document.getElementById('pvals').innerHTML = rows.map(function (r) { return '<div><i style="background:' + r[1] + '"></i>' + r[1] + ' <em>' + r[0] + '</em></div>'; }).join('');
-  document.getElementById('m-light').setAttribute('aria-pressed', mode === 'light');
-  document.getElementById('m-dark').setAttribute('aria-pressed', mode === 'dark');
 }
-document.getElementById('m-light').onclick = function () { mode = 'light'; show(); };
-document.getElementById('m-dark').onclick = function () { mode = 'dark'; show(); };
 show();
 </script>
 </body>

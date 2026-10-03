@@ -2,7 +2,7 @@
 # tests/theme.sh -- the app's look: list the themes, open the preview, or switch.
 #
 #   bash tests/theme.sh              the themes, each as a slice of the app in its colours
-#   bash tests/theme.sh preview      open the preview page (every theme, light and dark)
+#   bash tests/theme.sh preview      open the preview page (every theme on a real app)
 #   bash tests/theme.sh <n|name>     apply that theme
 #
 # A theme is a set of files under theme/ -- the model is never touched. Under
