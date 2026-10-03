@@ -60,7 +60,7 @@ case "${1:-}" in
       skin="$("$PY" "$HELPER" skin "$name")" \
         && cat "$skin" >> "theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
     fi
-    "$MXCLI" theme apply "$name" -p "$MPR" >/dev/null || { echo "mxcli theme apply $name failed" >&2; exit 1; }
+    "$MXCLI" theme apply "$name" -p "$MPR" --variant light >/dev/null || { echo "mxcli theme apply $name failed" >&2; exit 1; }
     echo "Theme: $name. With the app running under --watch, reload the page in a few seconds."
     ;;
 esac

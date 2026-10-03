@@ -66,5 +66,5 @@ apply_theme() {
     skin="$("$PY" "$SRC/checks/themes/themes.py" skin "$name" 2>/dev/null)" \
       && cat "$skin" >> "$app/theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
   fi
-  ( cd "$app" && "$mxcli" theme apply "$name" -p "$mpr" ) >/dev/null 2>&1
+  ( cd "$app" && "$mxcli" theme apply "$name" -p "$mpr" --variant light ) >/dev/null 2>&1
 }
