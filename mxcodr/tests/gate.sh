@@ -88,12 +88,22 @@ cleanup_work() {
       if command -v pgrep >/dev/null 2>&1 && declare -F descendants >/dev/null; then
         # shellcheck disable=SC2046
         kill -TERM $(descendants "$pid") 2>/dev/null
+      elif [ -r "/proc/$pid/winpid" ] && command -v taskkill >/dev/null 2>&1; then
+        # Git Bash has no pgrep, and `kill` stops the bash subshell but not the Windows programs
+        # under it: mx.exe went on writing into $WORK/mxcheck after an early exit, and the
+        # removal below failed with "Directory not empty". taskkill /T stops the whole tree.
+        taskkill //F //T //PID "$(cat "/proc/$pid/winpid")" >/dev/null 2>&1
       fi
       kill -TERM "$pid" 2>/dev/null
     done
     wait 2>/dev/null
   fi
-  rm -rf "$WORK"
+  # A program that is still closing its files can hold the directory for a moment (Windows).
+  local tries=0
+  while ! rm -rf "$WORK" 2>/dev/null && [ "$tries" -lt 5 ]; do
+    sleep 1; tries=$((tries + 1))
+  done
+  [ ! -e "$WORK" ] || echo "   (the gate's scratch directory $WORK could not be removed; it is temporary and can be deleted by hand)" >&2
 }
 
 # Merges the notes a background step left in files into the summary.
