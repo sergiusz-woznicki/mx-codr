@@ -315,7 +315,7 @@ if [ "$what" = "outside" ]; then
 Blocked: that searches or reads outside this project ($path). Nothing outside the project answers
 a Mendix question, and a whole-disk scan runs for minutes: the model is read with ./mxcli (SHOW,
 DESCRIBE), syntax with ./mxcli syntax <topic> (the digest in your context lists the topics), widgets
-in .ai-context/skills/widgets/, and what a check wants in tests/CHECKS.md. Users sign in on the
+in .ai-context/skills/widgets/, and what a check wants in tests/checks/<step>.md (index: tests/CHECKS.md). Users sign in on the
 runtime's own page: security PRODUCTION and demo users, no login code of your own. Studio Pro,
 mxbuild and the mxcli source hold nothing you need.
 MSG

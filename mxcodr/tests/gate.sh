@@ -206,7 +206,13 @@ print_blockers() {
   local entry name label detail count shown pattern
   pattern='^[[:space:]]*- \[|\[error\]|^[[:space:]]*FAIL[[:space:]:]|^[[:space:]]+- '
   # Three sessions grepped tests/gate/*.sh for what a code required; the page says it in one line.
-  echo "   what each code wants and its fix: tests/CHECKS.md -- not the gate's source"
+  # One file per step (tests/checks/), so a session reads the codes of what failed, not all of them.
+  local guides="" guide failed
+  for failed in ${failures[@]+"${failures[@]}"} ${cannot_run[@]+"${cannot_run[@]}"}; do
+    case "$failed" in layout|lint|naming) guide="tests/checks/$failed.md" ;; *) guide="tests/checks/app.md" ;; esac
+    case " $guides " in *" $guide "*) ;; *) guides="${guides:+$guides }$guide" ;; esac
+  done
+  echo "   what each code wants and its fix: ${guides:-tests/CHECKS.md} -- not the gate's source"
   echo "== still blocking DONE"
   # details holds name|label for every failed or unrunnable check, in the order they printed.
   # Every finding up to BLOCKERS_SHOWN, each with its fix: a session that saw only the first one

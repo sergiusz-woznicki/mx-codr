@@ -135,7 +135,8 @@ it does.
 
 The agent reads one skill before the first feature (`test-first-delivery`); every other
 project skill is named by the gate finding that needs it, with the fix in the finding. What each
-check code wants is one page, `tests/CHECKS.md`. Measured on seven sessions, a session read about
+check code wants is in one file per gate step, `tests/checks/<step>.md`, indexed by
+`tests/CHECKS.md`; a red verdict names the file of the step that failed. Measured on seven sessions, a session read about
 113 kB before its first change; the new shape is about 48 kB, to be confirmed by an A/B run. The
 gate is unchanged.
 
@@ -292,6 +293,7 @@ whole table filtered with `if`, or a loop that only keeps the largest value (`PE
 the fix named is an OQL view, an XPath, or one sorted retrieve with `limit 1`.
 A query no database index serves is listed too (`PERF07`), with the index it wants: its `=`
 columns first, then the range or sort column. An index no query needs is listed as well (`PERF08`).
+Both read view entities' OQL too, and skip a query that follows an association: Mendix indexes those.
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 When `--watch` misses an exec, the gate restarts the app so the tests run on the current model.
 After an exec, the agent is told when it re-created a page another script alters, or granted

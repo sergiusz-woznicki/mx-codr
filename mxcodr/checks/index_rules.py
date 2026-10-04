@@ -42,6 +42,13 @@ SORT = re.compile(r"sort\s+by\s+(?P<list>[\w.\"]+(?:\s+(?:asc|desc))?(?:\s*,\s*[
 GRID = re.compile(r"\bdatagrid\s+\w+\s*\(\s*DataSource:\s*database\s+from\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
 COLUMN = re.compile(r"^\s*column\s+\"?\w+\"?\s*\(\s*Attribute:\s*\"?(?P<attr>\w+)", re.I)
 FILTER = re.compile(r"^\s*(?P<kind>dropdownfilter|datefilter|numberfilter)\b", re.I)
+VIEW_HEAD = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?view\s+entity\s+(?P<name>[\w.]+)", re.I)
+# `from Orders.Invoice as i`, `inner join Orders.Order_Customer/Orders."Order" as o`: the alias of an entity.
+OQL_SOURCE = re.compile(r"\b(?:from|join)\s+(?:[\w.\"]+/)*(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))\s+as\s+(?P<alias>\w+)", re.I)
+OQL_ORDER = re.compile(r"\border\s+by\s+(?P<list>[^;)]*)", re.I)
+# `[Orders.Order_Customer = $Customer]`, `[A/B.C/D.E = $x]`: a query that follows an association,
+# whose own index (Mendix makes one) narrows the rows before any attribute is read.
+ASSOCIATION = re.compile(r"(?<![\w.$'\"])\w+\.\w+(?:/[\w.\"]+)*\s*=(?!=)")
 SKIP_TYPES = {"boolean", "binary", "hashstring", "autonumber"}
 
 
@@ -84,9 +91,9 @@ def entities(lines: list[str]) -> dict[str, dict]:
     return found
 
 
-def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str], str, int]]:
-    """(entity, attributes compared with =, compared with < > <= >=, sorted on, document, line)
-    for every retrieve and page database source."""
+def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str], str, int, bool]]:
+    """(entity, attributes compared with =, compared with < > <= >=, sorted on, document, line,
+    follows an association) for every retrieve, page database source and grid filter."""
     text = "\n".join(lines)
     starts = [(m.start(), m.group("name")) for m in re.finditer(DOC_HEAD.pattern, text, re.I | re.M)]
 
@@ -102,17 +109,18 @@ def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str]
     for pattern in (RETRIEVE, SOURCE):
         for match in pattern.finditer(text):
             tail = match.group("tail")
-            equal, ranged, sort = [], [], []
+            equal, ranged, sort, through = [], [], [], False
             for xpath in XPATH.finditer(tail):
                 # contains(Attr, ...) and starts-with(...) are left out: an index does not help them.
                 condition = xpath.group("xpath") if xpath.group("xpath") is not None else xpath.group("bare")
                 cleaned = re.sub(r"\b(contains|starts-with|ends-with)\s*\([^)]*\)", "", condition, flags=re.I)
+                through = through or bool(ASSOCIATION.search(cleaned))
                 for compared in COMPARED.finditer(cleaned):
                     (equal if compared.group("op") == "=" else ranged).append(compared.group("attr"))
             for sorted_by in SORT.finditer(tail):
                 sort += [_plain(item.strip().split()[0]).split(".")[-1] for item in sorted_by.group("list").split(",")]
             found.append((_plain(match.group("entity")), equal, ranged, sort, document_at(match.start()),
-                          text.count("\n", 0, match.start()) + 1))
+                          text.count("\n", 0, match.start()) + 1, through))
     # A data grid's column filter is a query too: a drop-down filter compares with `=`, a date or
     # number filter with a range. A text filter is `contains()`, which an index does not help.
     grid, column = None, None
@@ -129,8 +137,36 @@ def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str]
         if widget and grid and column:
             kind = widget.group("kind").lower()
             equal, ranged = ([column], []) if kind == "dropdownfilter" else ([], [column])
-            found.append((grid, equal, ranged, [], document_at(text.find(line)), number))
+            found.append((grid, equal, ranged, [], document_at(text.find(line)), number, False))
             column = None
+    return found
+
+
+def oql_queries(entity_lines: list[str]) -> list[tuple[str, list[str], list[str], list[str], str, int, bool]]:
+    """The queries in view entities' OQL, one per alias of an entity it reads: `i.Status = 'x'`
+    compares with `=`, `i.DueDate < ...` with a range, `order by i.Date` sorts. A view's query
+    runs every time a page or a retrieve reads the view. Pi kept a (DueDate) index that two views
+    filter on, and PERF08 called it unused because it read no OQL (2026-10-04)."""
+    found = []
+    view, body, start = None, [], 0
+    for number, line in enumerate(entity_lines + ["/"], 1):
+        head = VIEW_HEAD.match(line)
+        if head or line.strip() == "/" or ENTITY_HEAD.match(line):
+            if view and body:
+                text = "\n".join(body)
+                for source in OQL_SOURCE.finditer(text):
+                    alias = re.escape(source.group("alias"))
+                    equal, ranged, sort = [], [], []
+                    for compared in re.finditer(rf"(?<![\w.]){alias}\.\"?(?P<attr>\w+)\"?\s*(?P<op><=|>=|=|<|>)", text):
+                        (equal if compared.group("op") == "=" else ranged).append(compared.group("attr"))
+                    for order in OQL_ORDER.finditer(text):
+                        sort += [m.group(1) for m in re.finditer(rf"(?<![\w.]){alias}\.\"?(\w+)", order.group("list"))]
+                    through = bool(re.search(rf"(?<![\w.]){alias}/\w+\.", text))
+                    found.append((_plain(source.group("entity")), equal, ranged, sort, view, start, through))
+            view, body, start = (head.group("name"), [], number) if head else (None, [], 0)
+            continue
+        if view:
+            body.append(line)
     return found
 
 
@@ -154,9 +190,11 @@ def index_findings(entity_lines: list[str], document_lines: list[str]) -> list[t
     known = entities(entity_lines)
     places: dict[tuple[str, tuple[str, ...]], list[str]] = {}
     first_line: dict[tuple[str, tuple[str, ...]], int] = {}
-    for entity, equal, ranged, sort, document, line in queries(document_lines):
+    for entity, equal, ranged, sort, document, line, through in queries(document_lines) + oql_queries(entity_lines):
         info = known.get(entity)
-        if not info or (document and ONE_TIME.search(document)):
+        # A query along an association is served by the association's index: Mendix model indexes
+        # cannot include it, and an attribute index adds little after it.
+        if not info or through or (document and ONE_TIME.search(document)):
             continue
         columns = wanted(info, equal, ranged, sort)
         if not columns:
@@ -223,7 +261,7 @@ def redundant_findings(entity_lines: list[str], document_lines: list[str]) -> li
     CapturedOn) and (PaymentStatus, DueDate) for the same queries: each slows every commit."""
     known = entities(entity_lines)
     wants: dict[str, list[tuple[str, ...]]] = {}
-    for entity, equal, ranged, sort, document, _ in queries(document_lines):
+    for entity, equal, ranged, sort, document, _, _ in queries(document_lines) + oql_queries(entity_lines):
         info = known.get(entity)
         if not info or (document and ONE_TIME.search(document)):
             continue
@@ -247,9 +285,9 @@ def redundant_findings(entity_lines: list[str], document_lines: list[str]) -> li
                              for want in wants.get(entity, []))
                 if needed:
                     continue
-                reason = ("no retrieve, page data source or grid filter in the model needs it: another index "
+                reason = ("no retrieve, page data source, grid filter or view entity in the model needs it: another index "
                           "serves each query that touches these columns, or none does")
             findings.append(("PERF08", (
                 f"{entity} has the index ({spelled}), but {reason}. It only slows every commit: {drop} "
-                f"-- keep it if Java, OQL or an external client filters on it"), 0))
+                f"-- keep it if Java, an OQL query outside a view or an external client filters on it"), 0))
     return findings

@@ -417,6 +417,12 @@ index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both st
 naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
 entities and seed flows are left out: an index does not help them, or they run once.
 
+PERF07 and PERF08 also read the queries inside view entities: `i.DueDate < ...` in a view's OQL
+wants an index like a retrieve's XPath does. Pi kept a `(DueDate)` index two views filter on, and
+PERF08 called it unused. A query that compares an association with `=` gets no PERF07: Mendix
+indexes every association itself, a model index cannot include one, and an attribute index adds
+little after it. For PERF08 such a query still counts as a use.
+
 PERF07 suggests one index per query, not per attribute: the attributes its XPath compares with `=`
 first, then the first range comparison or sort. `PaymentStatus = ... and DueDate < ...` gets one
 `(PaymentStatus, DueDate)`; at 200,000 rows the newest order of one status took 9.9 ms with no index,
@@ -518,8 +524,13 @@ it the loop told twice).
 
 So the rules are 8 kB and name one skill to read first; the others are named by the finding
 that needs them, and the per-prompt reminder says the same. What each check code wants and its
-fix is one page, `tests/CHECKS.md` -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it
-per session) for what `HOME01` or `--only` required -- and a red verdict points at it. The
+fix is written down once -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it per
+session) for what `HOME01` or `--only` required -- and a red verdict points at it. Since bundle
+2026.10.04.9 that is one file per gate step, `tests/checks/layout.md`, `lint.md`, `naming.md` and
+`app.md` (mx check, coverage, security, scope, the suite, visual and runtime), each under 4,500
+characters, with `tests/CHECKS.md` as the index of which file holds which code. The one page had
+reached its 9,300-character budget, and a red verdict now names only the files of the steps that
+failed, so a session reads 1.3 to 3.7k characters instead of 9.3k. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.
