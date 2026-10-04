@@ -299,6 +299,8 @@ When `--watch` misses an exec, the gate restarts the app so the tests run on the
 The model checks read the model with one mxcli call per module, not one per document (11 s became 2 s).
 When Studio Pro has the project open, the gate and each exec say so: what Studio Pro saves next
 replaces what mxcli wrote.
+Captions are warnings until the first DONE; after it, the agent is told once to add the missing
+ones, and a microflow it adds or changes needs them before the next DONE.
 After an exec, the agent is told when it re-created a page another script alters, or granted
 access another script revoked.
 

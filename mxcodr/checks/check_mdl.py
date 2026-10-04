@@ -31,6 +31,7 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -344,6 +345,24 @@ CAPTION_RULES = {"decision-caption", "caption-restates-expression", "caption-not
                  "loop-annotation", "action-caption", "action-caption-is-default"}
 
 
+FLOW_START = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)", re.I)
+LAYOUT_ONLY = re.compile(r"^\s*@(?:position|anchor|merge)\b", re.I)
+
+
+def flow_blocks(lines: list[str]) -> list[tuple[str, int, int]]:
+    """(flow, first line, last line), 1-based, for every microflow and nanoflow in the dump."""
+    starts = [(i + 1, m.group("name")) for i, line in enumerate(lines) if (m := FLOW_START.match(line))]
+    return [(name, start, (starts[k + 1][0] - 1) if k + 1 < len(starts) else len(lines))
+            for k, (start, name) in enumerate(starts)]
+
+
+def flow_hashes(lines: list[str]) -> dict[str, str]:
+    """{flow: hash of its text}; where its boxes sit on the canvas does not count."""
+    return {name: hashlib.sha256("\n".join(l for l in lines[start - 1:end] if not LAYOUT_ONLY.match(l))
+                                 .encode()).hexdigest()[:16]
+            for name, start, end in flow_blocks(lines)}
+
+
 def collect_text(sources: list[Path]) -> tuple[str, list[Path]]:
     """Joined text of every .mdl under sources, and the files read; missing paths are skipped."""
     chunks, used = [], []
@@ -374,6 +393,11 @@ def main() -> int:
                         help="DESCRIBE ENTITY output (file or directory): adds PERF07, an attribute "
                              "filtered or sorted on with no index")
     parser.add_argument("--pages", type=Path, help="DESCRIBE PAGE output, read for PERF07 data sources")
+    parser.add_argument("--flow-hashes", type=Path,
+                        help="write {flow: hash of its text} here (the gate keeps the one of each DONE)")
+    parser.add_argument("--captions-baseline", type=Path,
+                        help="with --captions warn: caption findings in a flow that is new or changed "
+                             "since this baseline stay failures")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -398,10 +422,31 @@ def main() -> int:
                    index_findings(entity_text.splitlines(), documents) + redundant_findings(entity_text.splitlines(), documents)]
         perf = [w for w in warnings if w["check"].startswith("PERF")]
         warnings = perf + indexes + [w for w in warnings if not w["check"].startswith("PERF")]
+    hashes = flow_hashes(lines)
+    if args.flow_hashes:
+        args.flow_hashes.write_text(json.dumps(hashes, indent=0, sort_keys=True))
+    # After the first DONE (the gate passes the hashes it kept then), a microflow that is new or
+    # changed since the last DONE needs its captions; older ones keep them as warnings, a backlog.
+    fresh: set[str] = set()
+    if args.captions_baseline and args.captions_baseline.is_file():
+        try:
+            baseline = json.loads(args.captions_baseline.read_text())
+        except (OSError, ValueError):
+            baseline = {}
+        fresh = {name for name, digest in hashes.items() if baseline.get(name) != digest}
+    blocks = flow_blocks(lines)
+
+    def flow_at(line: int) -> str:
+        return next((name for name, start, end in blocks if start <= (line or 0) <= end), "")
+
     caption_warnings = 0
     if args.captions == "warn":
-        demoted = [f for f in failures if f["check"] in CAPTION_RULES]
-        failures = [f for f in failures if f["check"] not in CAPTION_RULES]
+        for failure in failures:
+            if failure["check"] in CAPTION_RULES and flow_at(failure["line"]) in fresh:
+                failure["message"] += (f" -- {flow_at(failure['line'])} is new or changed since the last DONE, "
+                                       f"so its captions are required now")
+        demoted = [f for f in failures if f["check"] in CAPTION_RULES and flow_at(f["line"]) not in fresh]
+        failures = [f for f in failures if not (f["check"] in CAPTION_RULES and flow_at(f["line"]) not in fresh)]
         warnings.extend(Warning_(f["check"], f["message"], f["line"]) for f in demoted)
         caption_warnings = len(demoted)
 

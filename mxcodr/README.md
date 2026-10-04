@@ -544,7 +544,15 @@ running). Studio Pro keeps the model in memory and saves its own copy of a docum
 mxcli wrote. On InvoiceB2B it rewrote the Orders domain model at 19:13, and twelve indexes an exec
 had added at 18:47 were gone from the model and, after a restart, the database; the session took
 the gate for the cause. The runtime Studio Pro starts carries `-Dmendix.running.locally.by.studiopro`
-and is not counted. The
+and is not counted.
+
+Captions bind after the first DONE. While the app is built they stay warnings (286 at once had
+swamped a session with no test green), but InvoiceB2B then carried 640 of them through every
+DONE, since nothing asked for them. Each full DONE now keeps a hash of every microflow's text
+(`.mxcli/gate-cache/captions-baseline.json`; where its boxes sit does not count). From then on a
+microflow that is new or changed since the last DONE fails naming until its actions, decisions
+and loops have captions; older ones stay warnings. The first DONE with a backlog says once:
+clear it module by module, then run the full gate once. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

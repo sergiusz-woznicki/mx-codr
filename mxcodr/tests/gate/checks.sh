@@ -230,8 +230,14 @@ check_naming() {
   # PERF07 reads the entities' indexes and the pages' data sources as well.
   describe_entities_into "$WORK/naming-entities"
   describe_all naming-pages "$WORK/naming-pages" "PAGES" || true
+  # Captions: a backlog of warnings until the first DONE; from then on a microflow that is new or
+  # changed since the last DONE needs them (the hashes each DONE keeps, tests/gate.sh).
+  local -a baseline=()
+  [ -f "$CACHE_DIR/captions-baseline.json" ] && baseline=(--captions-baseline "$CACHE_DIR/captions-baseline.json")
+  mkdir -p "$CACHE_DIR" 2>/dev/null
   out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" \
-    --entities "$WORK/naming-entities" --pages "$WORK/naming-pages" 2>&1)"; code=$?
+    --entities "$WORK/naming-entities" --pages "$WORK/naming-pages" \
+    --flow-hashes "$CACHE_DIR/naming.flows.json" ${baseline[@]+"${baseline[@]}"} 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
     echo "naming: could not run -- check_mdl.py exited $code" > "$WORK/naming.summary"
@@ -421,7 +427,7 @@ start_model_checks() {
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py tools/mdl-checks/perf_rules.py tools/mdl-checks/index_rules.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py tools/mdl-checks/perf_rules.py tools/mdl-checks/index_rules.py "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.py "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.py "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &

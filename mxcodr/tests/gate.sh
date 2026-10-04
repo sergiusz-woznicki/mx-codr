@@ -152,6 +152,24 @@ done_repeat_note() {
   return 0
 }
 
+# Captions are warnings while the app is built: 286 of them once landed on a session with no test
+# green. Each full DONE keeps a hash of every microflow; from then on a new or changed one needs its
+# captions (check_naming). The first DONE with a backlog says once to clear it, module by module.
+captions_after_done() {
+  local backlog
+  [ -f "$CACHE_DIR/naming.flows.json" ] || return 0
+  backlog="$(sed -n 's/.* \([0-9][0-9]*\) caption warning(s).*/\1/p' "$WORK/naming.summary" 2>/dev/null | head -1)"
+  if [ ! -f "$CACHE_DIR/captions-baseline.json" ] && [ "${backlog:-0}" -gt 0 ]; then
+    echo "   Next: the app is done, so give its microflows their captions -- the ${backlog} caption warning(s) above."
+    echo "   Module by module (skill naming-and-captions): a business @caption on each action, a question"
+    echo "   on each decision, an @annotation on each loop. Then run the full gate once. From now on a"
+    echo "   microflow you add or change needs its captions before DONE; the older ones stay warnings."
+    WARNINGS_SHOWN=0
+  fi
+  cp "$CACHE_DIR/naming.flows.json" "$CACHE_DIR/captions-baseline.json" 2>/dev/null
+  return 0
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -188,6 +206,7 @@ print_verdict_and_exit() {
   fi
   echo "   DONE — every check passed"
   done_repeat_note
+  captions_after_done
   if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
     echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
   fi
