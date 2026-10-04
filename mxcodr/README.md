@@ -638,7 +638,15 @@ heredocs (the merges into `.claude/settings.local.json`, `.codex/config.toml`, `
 `.cursor/hooks.json` and `opencode.json`) are files under `install/hosts/`, byte for byte the
 same code, run with the same argument. Old and new were run on the same inputs (no file, an
 existing file, twice in a row) and the whole hosts step on an empty project: the files written
-and the output are identical. `step_hosts.sh` went from 237 lines to 53. The
+and the output are identical. `step_hosts.sh` went from 237 lines to 53.
+
+Bundle 2026.10.04.19: on Windows an early exit of the gate once printed `rm: cannot remove
+.../mxcheck: Directory not empty`. Git Bash has no `pgrep`, so the cleanup stopped the bash job
+but not `mx.exe` under it, which was still writing into the scratch copy. The cleanup now stops
+the whole tree with `taskkill /T` there, retries the removal for up to five seconds, and says so
+in one line if the directory still cannot go. The verdict never depended on it. Twelve early
+exits and a full gate in the Windows VM left no scratch directory behind; the original message
+itself did not come back in any of them, old bundle or new. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.
