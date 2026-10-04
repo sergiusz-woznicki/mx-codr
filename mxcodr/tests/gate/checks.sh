@@ -75,10 +75,22 @@ describe_one() {
   printf '%s\n' "$text"
 }
 
+# describe_many <kind> <names, one per line> -- their MDL from one mxcli call, or false (and
+# nothing printed) when any of them fails or the list is empty.
+describe_many() {
+  local kind="$1" statements="" document text
+  while IFS= read -r document; do
+    [ -n "$document" ] && statements="$statements describe $kind $document;"
+  done <<< "$2"
+  [ -n "$statements" ] || return 1
+  text="$("$MXCLI" -p "$MPR" -c "$statements" 2>/dev/null)" || return 1
+  printf '%s\n' "$text"
+}
+
 # Describes every document of <kinds> into <dir>/<module>.mdl; failures go to
 # $WORK/<label>.broken. False when anything failed.
 describe_all() {
-  local label="$1" dir="$2" kinds="$3" module kind listing names document
+  local label="$1" dir="$2" kinds="$3" module kind listing names document text
   local broken="$WORK/$label.broken"
   : > "$broken"
   mkdir -p "$dir"
@@ -89,6 +101,13 @@ describe_all() {
       fi
       if ! names="$(printf '%s' "$listing" | qualified_names)"; then
         echo "SHOW $kind IN $module did not return a JSON list" >> "$broken"; continue
+      fi
+      # One mxcli for the whole list: 135 microflows took 9.0 s one process each and 1.3 s in one,
+      # the same text. It stops at the first document it cannot describe, so then each is tried
+      # on its own, which names the one that failed.
+      if text="$(describe_many "${kind%S}" "$names")"; then
+        printf '%s\n' "$text" >> "$dir/$module.mdl"
+        continue
       fi
       while IFS= read -r document; do
         [ -n "$document" ] || continue
@@ -209,11 +228,7 @@ check_naming() {
   local captions=warn total
   [ "${MDL_CAPTIONS:-warn}" = "error" ] && captions=error
   # PERF07 reads the entities' indexes and the pages' data sources as well.
-  local entity
-  mkdir -p "$WORK/naming-entities"
-  for entity in $(entity_names); do
-    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$WORK/naming-entities/$entity.mdl" 2>/dev/null || true
-  done
+  describe_entities_into "$WORK/naming-entities"
   describe_all naming-pages "$WORK/naming-pages" "PAGES" || true
   out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" \
     --entities "$WORK/naming-entities" --pages "$WORK/naming-pages" 2>&1)"; code=$?
@@ -439,11 +454,41 @@ for row in rows if isinstance(rows, list) else []:
 # Describes every entity of the project's own modules once, one file per entity, for the
 # security checks below.
 describe_entities() {
-  local entity
-  mkdir -p "$WORK/entities"
-  for entity in $(entity_names); do
-    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$WORK/entities/$entity.mdl" 2>/dev/null || true
-  done
+  describe_entities_into "$WORK/entities"
+}
+
+# describe_entities_into <dir> -- <dir>/<Module.Entity>.mdl for every entity of the project's own
+# modules: one mxcli call for all of them, cut at each `create ... entity` line; one call each
+# when that call fails.
+describe_entities_into() {
+  local dir="$1" names entity
+  mkdir -p "$dir"
+  names="$(entity_names)"
+  [ -n "$names" ] || return 0
+  if describe_many entity "$names" > "$dir/.all.mdl"; then
+    "$PY" -c 'import re, sys
+current, pending, out = None, [], {}
+for line in open(sys.argv[1], encoding="utf-8"):
+    head = re.match(r"\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:\S+\s+)?entity\s+([\w.]+)", line, re.I)
+    if head:
+        current = head.group(1)
+        out[current], pending = pending, []
+    if current:
+        out[current].append(line)
+        if line.strip() == "/":
+            current = None
+    else:
+        pending.append(line)   # the doc comment and position above the next entity
+for name, lines in out.items():
+    open(sys.argv[2] + "/" + name + ".mdl", "w", encoding="utf-8").write("".join(lines))' "$dir/.all.mdl" "$dir"
+    rm -f "$dir/.all.mdl"
+    return 0
+  fi
+  rm -f "$dir/.all.mdl"
+  while IFS= read -r entity; do
+    [ -n "$entity" ] || continue
+    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$dir/$entity.mdl" 2>/dev/null || true
+  done <<< "$names"
 }
 
 # VIEW01 lines (view_access.py): a view entity a row-scoped role reads with no XPath constraint.

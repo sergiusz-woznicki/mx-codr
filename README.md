@@ -296,6 +296,7 @@ columns first, then the range or sort column. An index no query needs is listed 
 Both read view entities' OQL too, and skip a query that follows an association: Mendix indexes those.
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 When `--watch` misses an exec, the gate restarts the app so the tests run on the current model.
+The model checks read the model with one mxcli call per module, not one per document (11 s became 2 s).
 After an exec, the agent is told when it re-created a page another script alters, or granted
 access another script revoked.
 

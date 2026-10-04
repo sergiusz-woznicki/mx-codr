@@ -530,7 +530,13 @@ session) for what `HOME01` or `--only` required -- and a red verdict points at i
 `app.md` (mx check, coverage, security, scope, the suite, visual and runtime), each under 4,500
 characters, with `tests/CHECKS.md` as the index of which file holds which code. The one page had
 reached its 9,300-character budget, and a red verdict now names only the files of the steps that
-failed, so a session reads 1.3 to 3.7k characters instead of 9.3k. The
+failed, so a session reads 1.3 to 3.7k characters instead of 9.3k.
+
+The model checks describe each module's documents with one mxcli call per module and kind, not
+one per document. On InvoiceB2B's model the microflows took 2 s instead of 11 s and the entities
+under 1 s instead of 2 s, with byte-identical text; `naming` and `layout` each spent about 18 s,
+most of it starting mxcli once per document. mxcli stops at the first document it cannot
+describe, so then the step falls back to one call each, which names the one that failed. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.
