@@ -303,6 +303,8 @@ Captions are warnings until the first DONE; after it, the agent is told once to 
 ones, and a microflow it adds or changes needs them before the next DONE.
 A check that could not run (a crashed checker, a model that could not be read) is never a pass:
 the gate says "could not run" and does not say DONE.
+The guard also reads a `cd` before a write, a link to a guarded file, a copy into its directory and
+inline code that writes `tests/harness.env`; the test password no longer shows in `ps`.
 After an exec, the agent is told when it re-created a page another script alters, or granted
 access another script revoked.
 

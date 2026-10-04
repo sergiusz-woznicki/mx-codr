@@ -279,6 +279,12 @@ main() {
   APP_PORT="${APP_PORT:-8081}"
   BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
   CACHE_DIR="$APP_DIR/.mxcli/gate-cache"
+  # The gate writes its cache there. A link (a repository can ship one) would send those writes
+  # elsewhere, so the gate stops and says so; the person removes the link.
+  if [ -L "$APP_DIR/.mxcli" ] || [ -L "$CACHE_DIR" ]; then
+    echo "   !! .mxcli or .mxcli/gate-cache is a symbolic link; the gate does not write through one -- remove it" >&2
+    exit 2
+  fi
   # Scratch directory for this run's result files; removed on exit.
   WORK="$(mdl_tmpdir mdl-gate)"
   trap cleanup_work EXIT

@@ -572,7 +572,25 @@ in the development repo): security, and checks that passed without running.
   and PERF07 no longer tells you to drop the index of a `unique` attribute.
 - The timeout watchdog ran into "BASHPID: unbound variable" on macOS's own bash 3.2.
 - `--restart` and the boot stop only this project's `mxcli run`: one started in this directory or
-  naming it. Two projects whose `.mpr` has the same name used to stop each other's app. The
+  naming it. Two projects whose `.mpr` has the same name used to stop each other's app.
+
+Bundle 2026.10.04.14 is the audit's second step: the rules written on 2026-10-04, and the guard.
+- PERF07: an `or` in a condition is two lookups, each with its own index, not one index on both
+  attributes; `[$Wanted = Status]`, the attribute on the right, is read; a page source written
+  `database X` without `from` is read; a grid filter is reported on the page that has the grid.
+- PERF02: `$Text = $Text + $Item/Code + ','` builds a text and is not a sum. A comment after a
+  statement no longer joins it to the next line, which hid the loop that followed a retrieve.
+- VIEW01 matches an entity whose name is quoted (`Orders."Order"`).
+- The after-exec note follows the order the scripts ran in: `exec 20_access.mdl 07_dashboard.mdl`
+  grants again what 20 revoked, and is now reported. A property set by an `alter` counts as
+  already in the page source only when it is on that widget.
+- The guard reads four ways around it: a `cd` before the write, a link to a guarded file, a copy
+  into its directory, and inline `python3 -c` or `node -e` that writes `harness.env`. Without a
+  working Python it no longer lets a call that names `harness.env` through unread.
+- `scenario()` hands its script to playwright-cli by file (`--filename`): as an argument the test
+  password showed in `ps`. An older playwright-cli gets it the old way.
+- The gate does not write its boot log or cache through a symbolic link, and the installer's EXIT
+  trap no longer evals a value from the caller's environment. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

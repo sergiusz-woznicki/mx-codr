@@ -67,14 +67,27 @@ def operations(path: str):
     return found
 
 
-SET = re.compile(r"^set\s+(?:\((?P<many>.*)\)|(?P<one>.+?))\s+on\s+\w+\s*;?$", re.I | re.S)
+SET = re.compile(r"^set\s+(?:\((?P<many>.*)\)|(?P<one>.+?))\s+on\s+(?P<widget>\w+)\s*;?$", re.I | re.S)
+
+
+def _widget_properties(source: str, widget: str) -> str:
+    """The text between the parentheses of `<type> <widget> ( ... )` in a page source, or ''."""
+    start = re.search(rf"\b{re.escape(widget)}\s*\(", source)
+    if not start:
+        return ""
+    depth, at = 1, start.end()
+    while at < len(source) and depth:
+        depth += {"(": 1, ")": -1}.get(source[at], 0)
+        at += 1
+    return source[start.end():at - 1]
 
 
 def _alter_block(path: str, key: str) -> list[str]:
     """The statements inside the `alter <page|snippet> <name> { ... };` blocks of <path>."""
     kind, name = key.split(" ", 1)
     try:
-        text = open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
     except OSError:
         return []
     found = []
@@ -89,7 +102,8 @@ def _already_in(alter_path: str, key: str, create_path: str) -> bool:
     a session moved `set (Height = 360) on chart` into the page source and kept the old alter."""
     statements = _alter_block(alter_path, key)
     try:
-        source = open(create_path, encoding="utf-8").read()
+        with open(create_path, encoding="utf-8") as handle:
+            source = handle.read()
     except OSError:
         return False
     if not statements:
@@ -98,9 +112,11 @@ def _already_in(alter_path: str, key: str, create_path: str) -> bool:
         match = SET.match(statement)
         if not match:
             return False        # insert, drop, replace: the page source cannot be compared
+        # The value must be on that widget: `Height: 360` on another one hid a lost alter.
+        properties = _widget_properties(source, match.group("widget"))
         for pair in re.split(r",\s*(?=\w+\s*=)", match.group("many") or match.group("one")):
             prop, _, value = pair.partition("=")
-            if not re.search(rf"\b{re.escape(prop.strip())}\s*:\s*{re.escape(value.strip())}", source, re.I):
+            if not re.search(rf"\b{re.escape(prop.strip())}\s*:\s*{re.escape(value.strip())}", properties, re.I):
                 return False
     return True
 
@@ -143,15 +159,21 @@ def findings(executed: list[str]) -> list[str]:
                 creator[key] = path
             elif op == "alter":
                 alters.setdefault(key, []).append(path)
+    # `net` is what this exec left, in the order it ran; `final` is what the scripts leave in name
+    # order. A grant or a create that came last here undid the later script, also when that script
+    # was part of this exec but ran first (`exec 20_access.mdl 07_dashboard.mdl`).
     found = []
     for key, op in net.items():
-        if op == "grant" and final.get(key, ("", ""))[0] == "revoke" and final[key][1] not in run:
+        if op == "grant" and final.get(key, ("", ""))[0] == "revoke":
             what, role = key
-            found.append(f"{os.path.basename(final[key][1])} revokes {what} from {role}; this exec granted it again")
+            name = os.path.basename(final[key][1])
+            how = "this exec ran it before the script that grants" if final[key][1] in run else "this exec granted"
+            found.append(f"{name} revokes {what} from {role}; {how} it again")
         elif op == "create":
             for path in alters.get(key, []):
-                if path not in run and not _already_in(path, key, creator[key]):
-                    found.append(f"{os.path.basename(path)} alters {key}; this exec re-created the "
+                if not _already_in(path, key, creator[key]):
+                    how = "this exec ran it before the script that re-creates" if path in run else "this exec re-created"
+                    found.append(f"{os.path.basename(path)} alters {key}; {how} the "
                                  f"{key.split()[0]} without that change")
     return list(dict.fromkeys(found))
 

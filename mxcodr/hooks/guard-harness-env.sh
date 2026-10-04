@@ -60,7 +60,16 @@ mdl_find_python() {
   return 1
 }
 PY="$(mdl_find_python || true)"
-[ -n "$PY" ] || exit 0
+if [ -z "$PY" ]; then
+  # Without Python nothing below can read the call. Everything passes except a call that names
+  # harness.env, the file whose values the harness runs: that one is not waved through unread.
+  case "$input" in
+    *harness.env*)
+      echo "Blocked: this call names tests/harness.env and the guard cannot read it (no working Python found). tests/harness.env belongs to the person; ask them to make the change." >&2
+      exit 2 ;;
+  esac
+  exit 0
+fi
 
 reason="$(printf '%s' "$input" | "$PY" -c '
 import json, os, re, shlex, sys
@@ -113,10 +122,22 @@ def kind(path):
     return None
 
 def shell_targets(command):
-    """Paths a shell command writes: redirect targets, and the written operands of write verbs."""
+    """Paths a shell command writes: redirect targets, and the written operands of write verbs.
+    Four ways around it were found in the audit of 2026-10-04 and are read now: a `cd` before the
+    write (`cd tests && echo x > harness.env`), a link to a guarded file (`ln -s tests/harness.env
+    x`, then write x), a copy into a directory (`cp x tests/`), and a write from inline code
+    (`python3 -c`, `node -e`) that names harness.env."""
     targets = []
+    here = ""                       # where a `cd` earlier in the command left the shell, under the project
+
+    def placed(path):
+        path = path.strip().strip("\x22\x27")
+        if not here or path.startswith(("/", "~", "$")) or re.match(r"^[A-Za-z]:", path):
+            return path
+        return os.path.normpath(here + "/" + path).replace("\\", "/")
+
     for segment in re.split(r"&&|\|\||[;|\n]", command):
-        targets += re.findall(r">>?\s*([^\s;&|<>]+)", segment)
+        targets += [placed(t) for t in re.findall(r">>?\s*([^\s;&|<>]+)", segment)]
         try:
             words = shlex.split(segment)
         except ValueError:
@@ -126,14 +147,25 @@ def shell_targets(command):
             continue
         verb = os.path.basename(words[0])
         operands = [w for w in words[1:] if not w.startswith("-")]
-        if verb == "tee" or verb in ("rm", "truncate", "shred", "unlink"):
-            targets += operands
+        if verb == "cd" and len(operands) == 1:
+            here = rel(placed(operands[0]))
+        elif verb == "tee" or verb in ("rm", "truncate", "shred", "unlink"):
+            targets += [placed(o) for o in operands]
         elif verb in ("sed", "perl") and any(w.startswith("-i") or w == "--in-place" for w in words[1:]):
-            targets += operands
-        elif verb in ("cp", "mv", "install", "ln", "rsync") and operands:
-            targets.append(operands[-1])
+            targets += [placed(o) for o in operands]
+        elif verb == "ln" and operands:
+            targets += [placed(o) for o in operands]          # a link to it is a way to write it
+        elif verb in ("cp", "mv", "install", "rsync") and operands:
+            destination = placed(operands[-1])
+            targets.append(destination)
+            if destination.endswith("/") or os.path.isdir(destination):
+                targets += [destination.rstrip("/") + "/" + os.path.basename(o.rstrip("/")) for o in operands[:-1]]
         elif verb == "dd":
-            targets += [w[3:] for w in words if w.startswith("of=")]
+            targets += [placed(w[3:]) for w in words if w.startswith("of=")]
+        elif re.match(r"^(python[\d.]*|node|ruby|perl|php)$", verb) and any(w in ("-c", "-e") for w in words[1:]):
+            code = " ".join(words[1:])
+            if "harness.env" in code and re.search(r"write|open\s*\([^)]*[\x22\x27][wa]|>", code):
+                targets.append(ENV)
     return targets
 
 HOME = os.path.expanduser("~").replace("\\", "/").rstrip("/")

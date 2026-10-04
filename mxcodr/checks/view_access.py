@@ -17,8 +17,9 @@ import re
 import sys
 
 HEAD = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?P<kind>view\s+|(?:non-)?persistent\s+)?"
-                  r"entity\s+(?P<name>[\w.]+)", re.I)
-GRANT = re.compile(r"^\s*grant\s+(?P<role>[\w.]+)\s+on\s+(?P<entity>[\w.]+)\s*\((?P<rights>[^)]*)\)"
+                  r"entity\s+(?P<name>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
+# Names may be quoted (Orders."Order"): the heads and grants read them as the query's sources do.
+GRANT = re.compile(r"^\s*grant\s+(?P<role>[\w.]+)\s+on\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))\s*\((?P<rights>[^)]*)\)"
                    r"(?P<where>\s+where\s+')?", re.I)
 SOURCE = re.compile(r"\b(?:from|join)\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
 
@@ -35,7 +36,7 @@ def read(lines: list[str]):
     for line in lines:
         head = HEAD.match(line)
         if head:
-            current = head.group("name")
+            current = _name(head.group("name"))
             in_query = bool(head.group("kind")) and head.group("kind").lower().startswith("view")
             if in_query:
                 views[current] = []
@@ -44,9 +45,12 @@ def read(lines: list[str]):
         if grant:
             in_query = False
             if "read" in grant.group("rights").lower():
-                key = (grant.group("role"), grant.group("entity"))
+                key = (grant.group("role"), _name(grant.group("entity")))
                 # Two rules for one role: the unconstrained one wins, as at runtime.
                 rules[key] = rules.get(key, True) and bool(grant.group("where"))
+            continue
+        if line.strip() == "/":      # the end of this entity: what follows is not its query
+            in_query = False
             continue
         if in_query and current in views:
             for match in SOURCE.finditer(line):

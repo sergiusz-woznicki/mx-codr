@@ -26,7 +26,9 @@ LOOP = re.compile(r"^\s*loop\s+\$(?P<item>\w+)\s+in\s+\$(?P<list>\w+)", re.I)
 WHILE = re.compile(r"^\s*while\b", re.I)
 END_LOOP = re.compile(r"^\s*end\s+(?:loop|while)\s*;", re.I)
 # `set` is optional: `$Sum = $Sum + ...` assigns too (Pi wrote it that way and PERF02 missed it).
-ACCUM = re.compile(r"^\s*(?:set\s+)?\$(?P<var>\w+)\s*=\s*\$(?P=var)\s*[-+]", re.I)
+# Not a line with a string literal: `$Text = $Text + $O/Code + ','` builds a text, it sums nothing.
+ACCUM = re.compile(r"^\s*(?:set\s+)?\$(?P<var>\w+)\s*=\s*\$(?P=var)\s*[-+][^']*$", re.I)
+TRAILING_COMMENT = re.compile(r"^((?:[^'-]|'[^']*'|-(?!-))*?)\s+--.*$")
 SET = re.compile(r"^\s*(?:set\s+)?\$\w+\s*=(?!=)", re.I)
 COMPARE = re.compile(r"^\s*(?:if|elsif)\s+\$(?P<a>\w+)(?:/\w+)?\s*(?P<op>>=?|<=?)\s*\$(?P<b>\w+)(?:/\w+)?\s+then", re.I)
 KEEP = re.compile(r"^\s*(?:set\s+)?\$(?P<to>\w+)\s*=\s*\$(?P<from>\w+)(?:/\w+)?\s*;", re.I)
@@ -50,7 +52,9 @@ def _statements(lines: list[str]) -> dict[str, list[tuple[int, str]]]:
     flows: dict[str, list[tuple[int, str]]] = {}
     name, buffer, start = None, "", 0
     for index, raw in enumerate(lines, 1):
-        stripped = raw.strip()
+        # A comment after a statement would hide its `;`, and the next line joined it: a retrieve
+        # followed by `loop` on the next line became one statement, and the loop was lost.
+        stripped = TRAILING_COMMENT.sub(r"\1", raw.strip())
         head = FLOW_HEAD.match(stripped)
         if head:
             name, buffer = head.group("name"), ""

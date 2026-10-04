@@ -318,6 +318,12 @@ MSG
 # The boot log is emptied for each boot (see boot_with_command); the previous one is kept, so a
 # failure that a later boot overwrote can still be read: .mxcli/gate-boot.prev.log.
 mdl_rotate_boot_log() {
+  # A repository can ship .mxcli/gate-boot.prev.log as a link to a file elsewhere, and the copy
+  # below would write through it: a link in either place is removed, never followed.
+  local log
+  for log in .mxcli/gate-boot.log .mxcli/gate-boot.prev.log; do
+    [ -L "$log" ] && rm -f "$log"
+  done
   [ -s .mxcli/gate-boot.log ] && cp .mxcli/gate-boot.log .mxcli/gate-boot.prev.log 2>/dev/null
   : > .mxcli/gate-boot.log
 }

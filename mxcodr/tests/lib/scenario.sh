@@ -15,18 +15,30 @@ scenario() {
   # So the EXIT trap can delete it (it holds the password) after a timeout.
   _MDL_SCENARIO_FILE="$code_file"
   _MDL_SCENARIO_START="$(date '+%Y-%m-%d %H:%M:%S')"
-  output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
+  output="$(_mdl_run_code_file "$code_file")"
   # Outside the runner (peek.sh, a test run by hand after the gate) nothing opened the browser, and
   # two sessions retried the same command on "Browser 'default' is not open". Open it and run once more.
   if _mdl_browser_not_open "$output"; then
     _mdl_bounded 30 playwright-cli open
-    output="$(playwright-cli run-code "$(cat "$code_file")" 2>&1)"
+    output="$(_mdl_run_code_file "$code_file")"
   fi
   rm -f "$code_file"; _MDL_SCENARIO_FILE=""
 
   # Called directly, not in $(...): fail() must end the script, not a subshell.
   _mdl_fail_on_scenario_error "$output"
   _mdl_scenario_result "$output"
+}
+
+# _mdl_run_code_file <file> -- run the scenario from its file. As an argument the whole script,
+# the test password in it, showed in `ps` for as long as it ran. A playwright-cli too old to know
+# --filename says "Unknown option", and only then is the script passed the old way.
+_mdl_run_code_file() {
+  local out
+  out="$(playwright-cli run-code --filename "$1" 2>&1)"
+  case "$out" in
+    *"Unknown option"*|*"unknown option"*) out="$(playwright-cli run-code "$(cat "$1")" 2>&1)" ;;
+  esac
+  printf '%s\n' "$out"
 }
 
 # _mdl_browser_not_open <output> -- true when playwright-cli refused because no browser is open.

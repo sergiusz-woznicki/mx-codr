@@ -433,6 +433,8 @@ def main() -> int:
             baseline = json.loads(args.captions_baseline.read_text())
         except (OSError, ValueError):
             baseline = {}
+        if not isinstance(baseline, dict):      # a damaged file is no baseline, not a crash
+            baseline = {}
         fresh = {name for name, digest in hashes.items() if baseline.get(name) != digest}
     blocks = flow_blocks(lines)
 

@@ -32,14 +32,18 @@ ATTRIBUTE = re.compile(r"^\s*\"?(?P<name>\w+)\"?\s*:\s*(?P<type>\w+)(?P<rest>.*)
 INDEX = re.compile(r"^\s*index\s+(?:\w+\s+)?(?:on\s+)?\((?P<columns>[^)]*)\)", re.I)
 DOC_HEAD = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow|page|snippet)\s+(?P<name>[\w.]+)", re.I)
 RETRIEVE = re.compile(r"\bretrieve\s+\$\w+\s+from\s+(?:database\s+)?(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))(?P<tail>[^;]*)", re.I | re.S)
-SOURCE = re.compile(r"\bdatabase\s+from\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))(?P<tail>(?:\s+where\s+(?:\[[^\]]*\]|[^,\n]*?(?=\s+sort\s+by|,|\n)))?"
+SOURCE = re.compile(r"\bdatabase\s+(?:from\s+)?(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))(?P<tail>(?:\s+where\s+(?:\[[^\]]*\]|[^,\n]*?(?=\s+sort\s+by|,|\n)))?"
                     r"(?:\s+sort\s+by\s+[\w.\"]+(?:\s+(?:asc|desc))?(?:\s*,\s*[\w.\"]+(?:\s+(?:asc|desc))?)*)?)", re.I | re.S)
 # Scripts write `where [A = 1]`; DESCRIBE prints `where A = 1` up to sort by / limit / the end.
 XPATH = re.compile(r"where\s*(?:\[(?P<xpath>[^\]]*)\]|(?P<bare>.*?)(?=\s+sort\s+by\b|\s+limit\b|\s+first\b|,\s*\w+\s*:|\)\s*$|$))",
                    re.I | re.S)
 COMPARED = re.compile(r"(?<![\w./$'\"])\"?(?P<attr>[A-Za-z_]\w*)\"?\s*(?P<op><=|>=|=|<|>)")
+# `[$Wanted = Status]`: the attribute on the right. Not `= true`, `= empty` (no such attribute, so
+# wanted() drops them), `= Module.Enum.Value` (a dot follows) or `= $Var/Attr` (starts with $).
+COMPARED_RIGHT = re.compile(r"(?P<op><=|>=|=|<|>)\s*\"?(?P<attr>[A-Za-z_]\w*)\"?(?![\w.(/'\"$%])")
+OR = re.compile(r"\s+or\s+", re.I)
 SORT = re.compile(r"sort\s+by\s+(?P<list>[\w.\"]+(?:\s+(?:asc|desc))?(?:\s*,\s*[\w.\"]+(?:\s+(?:asc|desc))?)*)", re.I)
-GRID = re.compile(r"\bdatagrid\s+\w+\s*\(\s*DataSource:\s*database\s+from\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
+GRID = re.compile(r"\bdatagrid\s+\w+\s*\(\s*DataSource:\s*database\s+(?:from\s+)?(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
 COLUMN = re.compile(r"^\s*column\s+\"?\w+\"?\s*\(\s*Attribute:\s*\"?(?P<attr>\w+)", re.I)
 FILTER = re.compile(r"^\s*(?P<kind>dropdownfilter|datefilter|numberfilter)\b", re.I)
 VIEW_HEAD = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?view\s+entity\s+(?P<name>[\w.]+)", re.I)
@@ -109,22 +113,33 @@ def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str]
     for pattern in (RETRIEVE, SOURCE):
         for match in pattern.finditer(text):
             tail = match.group("tail")
-            equal, ranged, sort, through = [], [], [], False
+            sort, through = [], False
+            # One (equal, ranged) pair per `or` branch: `[A = 1 or B = 2]` is two lookups, each
+            # wanting its own index, not one on (A, B).
+            branches: list[tuple[list[str], list[str]]] = []
             for xpath in XPATH.finditer(tail):
                 # contains(Attr, ...) and starts-with(...) are left out: an index does not help them.
                 condition = xpath.group("xpath") if xpath.group("xpath") is not None else xpath.group("bare")
                 cleaned = re.sub(r"\b(contains|starts-with|ends-with)\s*\([^)]*\)", "", condition, flags=re.I)
+                cleaned = re.sub(r"'[^']*'", "''", cleaned)       # a literal is not an attribute
                 through = through or bool(ASSOCIATION.search(cleaned))
-                for compared in COMPARED.finditer(cleaned):
-                    (equal if compared.group("op") == "=" else ranged).append(compared.group("attr"))
+                for branch in OR.split(cleaned):
+                    equal, ranged = [], []
+                    for compared in list(COMPARED.finditer(branch)) + list(COMPARED_RIGHT.finditer(branch)):
+                        (equal if compared.group("op") == "=" else ranged).append(compared.group("attr"))
+                    branches.append((equal, ranged))
             for sorted_by in SORT.finditer(tail):
                 sort += [_plain(item.strip().split()[0]).split(".")[-1] for item in sorted_by.group("list").split(",")]
-            found.append((_plain(match.group("entity")), equal, ranged, sort, document_at(match.start()),
-                          text.count("\n", 0, match.start()) + 1, through))
+            alone = len(branches) <= 1
+            for equal, ranged in branches or [([], [])]:
+                # A sort belongs to the query as a whole; with `or` no single index gives the order.
+                found.append((_plain(match.group("entity")), equal, ranged, sort if alone else [],
+                              document_at(match.start()), text.count("\n", 0, match.start()) + 1, through))
     # A data grid's column filter is a query too: a drop-down filter compares with `=`, a date or
     # number filter with a range. A text filter is `contains()`, which an index does not help.
-    grid, column = None, None
+    grid, column, offset = None, None, 0
     for number, line in enumerate(text.splitlines(), 1):
+        at, offset = offset, offset + len(line) + 1
         source = GRID.search(line)
         if source:
             grid = _plain(source.group("entity"))
@@ -137,7 +152,7 @@ def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str]
         if widget and grid and column:
             kind = widget.group("kind").lower()
             equal, ranged = ([column], []) if kind == "dropdownfilter" else ([], [column])
-            found.append((grid, equal, ranged, [], document_at(text.find(line)), number, False))
+            found.append((grid, equal, ranged, [], document_at(at), number, False))
             column = None
     return found
 
@@ -218,7 +233,7 @@ def index_findings(entity_lines: list[str], document_lines: list[str]) -> list[t
                        for other_entity, other in keys)]
     findings = []
     for entity, columns in sorted(keys):
-        documents = places[(entity, columns)]
+        documents = list(places[(entity, columns)])
         for other_entity, other in places:     # the places of the queries this index also serves
             if other_entity == entity and len(other) < len(columns) and columns[:len(other)] == other:
                 documents += [d for d in places[(other_entity, other)] if d not in documents]
@@ -285,7 +300,9 @@ def redundant_findings(entity_lines: list[str], document_lines: list[str]) -> li
                 reason = (f"the index ({longer[0]}) starts with the same columns and serves every "
                           f"query this one does")
             else:
-                others = [index for index in info["indexes"] if index is not columns]
+                # Every other index: the explicit ones but this, and the unique attributes' own.
+                others = [other for i, (other, _) in enumerate(explicit) if i != position] + \
+                         [index for index in info["indexes"] if index not in [e for e, _ in explicit]]
                 needed = any(match_length(columns, want) > 0 and
                              match_length(columns, want) >= max([match_length(o, want) for o in others] or [0])
                              for want in wants.get(entity, []))
