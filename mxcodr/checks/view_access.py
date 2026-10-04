@@ -1,6 +1,6 @@
 """VIEW01: a view entity that hands a row-scoped role every row of the data it summarises.
 
-    python3 view_access.py <entities.mdl>
+    python3 view_access.py <entities.mdl> [--expect <entities described>]
 
 <entities.mdl> is DESCRIBE ENTITY output for the project's own entities, one after another.
 A role that reads only its own rows of an entity (an access rule with an XPath constraint) must
@@ -83,6 +83,9 @@ def findings(lines: list[str]) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    expect = 0
+    if len(argv) == 4 and argv[2] == "--expect" and argv[3].isdigit():
+        expect, argv = int(argv[3]), argv[:2]
     if len(argv) != 2:
         print(__doc__, file=sys.stderr)
         return 2
@@ -90,6 +93,11 @@ def main(argv: list[str]) -> int:
     try:
         with open(argv[1], encoding="utf-8") as handle:
             lines = handle.read().splitlines()
+        # Entities were described and no head was recognised: not "no view hands out rows".
+        if expect > 0 and not any(HEAD.match(line) for line in lines):
+            print(f"view_access.py could not run: {expect} entities were described and none was "
+                  f"recognised (a describe format it does not read)", file=sys.stderr)
+            return 2
         out = findings(lines)
     except Exception as exc:  # noqa: BLE001 -- whatever stopped it, the model was not checked
         print(f"view_access.py could not run: {type(exc).__name__}: {exc}", file=sys.stderr)

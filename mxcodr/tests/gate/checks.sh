@@ -90,7 +90,7 @@ describe_many() {
 # Describes every document of <kinds> into <dir>/<module>.mdl; failures go to
 # $WORK/<label>.broken. False when anything failed.
 describe_all() {
-  local label="$1" dir="$2" kinds="$3" module kind listing names document text
+  local label="$1" dir="$2" kinds="$3" module kind listing names document text listed=0
   local broken="$WORK/$label.broken"
   : > "$broken"
   mkdir -p "$dir"
@@ -100,8 +100,9 @@ describe_all() {
         echo "SHOW $kind IN $module failed" >> "$broken"; continue
       fi
       if ! names="$(printf '%s' "$listing" | qualified_names)"; then
-        echo "SHOW $kind IN $module did not return a JSON list" >> "$broken"; continue
+        echo "SHOW $kind IN $module did not return a JSON list of Module.Name" >> "$broken"; continue
       fi
+      [ -z "$names" ] || listed=$((listed + $(printf '%s\n' "$names" | grep -c .)))
       # One mxcli for the whole list: 135 microflows took 9.0 s one process each and 1.3 s in one,
       # the same text. It stops at the first document it cannot describe, so then each is tried
       # on its own, which names the one that failed.
@@ -116,6 +117,9 @@ describe_all() {
       done <<< "$names"
     done
   done
+  # How many documents were listed: a checker that then recognises none of them in the describe
+  # text is reading a format it does not know, and says "could not run" instead of PASS.
+  echo "$listed" > "$WORK/$label.count"
   [ ! -s "$broken" ]
 }
 
@@ -241,7 +245,8 @@ check_naming() {
   [ -f "$CACHE_DIR/captions-baseline.json" ] && baseline=(--captions-baseline "$CACHE_DIR/captions-baseline.json")
   mkdir -p "$CACHE_DIR" 2>/dev/null
   out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" \
-    ${index_inputs[@]+"${index_inputs[@]}"} \
+    ${index_inputs[@]+"${index_inputs[@]}"} --expect-flows "$(cat "$WORK/naming.count" 2>/dev/null || echo 0)" \
+    --format "$("$MXCLI" --version 2>/dev/null | head -1)" \
     --flow-hashes "$CACHE_DIR/naming.flows.json" ${baseline[@]+"${baseline[@]}"} 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
@@ -387,7 +392,8 @@ check_layout() {
   # and write entities, for buttons that change a grid's rows outside its header (GRID02).
   describe_all layout-flows "$WORK/layout-flows" "MICROFLOWS NANOFLOWS" || layout_unread flows "BACK01, GRID02"
   ls "$WORK"/layout-flows/*.mdl >/dev/null 2>&1 && nav_args+=(--opened-from "$WORK/layout-flows")
-  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" "${nav_args[@]}" 2>&1)"; code=$?
+  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" "${nav_args[@]}" \
+    --expect-pages "$(cat "$WORK/layout.count" 2>/dev/null || echo 0)" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
     echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
@@ -549,7 +555,8 @@ view_findings() {
   local out code
   [ -f tools/mdl-checks/view_access.py ] || { echo "tools/mdl-checks/view_access.py is missing" > "$WORK/view.error"; return 2; }
   cat "$WORK/entities/"*.mdl 2>/dev/null > "$WORK/entities.mdl"
-  out="$("$PY" tools/mdl-checks/view_access.py "$WORK/entities.mdl" 2>"$WORK/view.error")"; code=$?
+  out="$("$PY" tools/mdl-checks/view_access.py "$WORK/entities.mdl" \
+    --expect "$(ls "$WORK/entities/" 2>/dev/null | grep -c '\.mdl$')" 2>"$WORK/view.error")"; code=$?
   case "$code" in
     0) return 0 ;;
     1) if printf '%s\n' "$out" | grep -q '^\[VIEW01\]'; then printf '%s\n' "$out"; return 1; fi ;;

@@ -590,7 +590,22 @@ Bundle 2026.10.04.14 is the audit's second step: the rules written on 2026-10-04
 - `scenario()` hands its script to playwright-cli by file (`--filename`): as an argument the test
   password showed in `ps`. An older playwright-cli gets it the old way.
 - The gate does not write its boot log or cache through a symbolic link, and the installer's EXIT
-  trap no longer evals a value from the caller's environment. The
+  trap no longer evals a value from the caller's environment.
+
+Bundle 2026.10.04.15 is the audit's third step: a checker that recognises nothing has not passed.
+The checkers are regular expressions over what mxcli prints, and mxcli's next release prints it
+differently (`create or modify navigation`, user roles as property lists). A checker that matches
+nothing used to report zero findings, a PASS. Now the gate tells each checker how many documents
+it described: `naming` with none of the microflows recognised, `layout` with none of the pages,
+no navigation profile or no user role recognised, and `security` with no entity recognised each
+say "could not run", naming the describe format as the cause. The index rules say "not checked"
+instead of calling every index unneeded. The caption baseline carries the mxcli version that
+produced it and starts over when it changes, so a new describe format does not turn every
+caption warning into a failure at once. Names that mxcli lists are checked (`Module.Name`)
+before they become MDL statements or file names. In the development repo a real project's
+describe output is kept as a fixture, with the number of documents mxcli listed; a test asserts
+that every parser recognises that many (`tools/dev/make-golden-dump.py` regenerates it with a new
+mxcli, and the test then names the parsers that went silent). The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

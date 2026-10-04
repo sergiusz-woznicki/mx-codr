@@ -39,7 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from perf_rules import perf_findings  # noqa: E402
-from index_rules import index_findings, redundant_findings  # noqa: E402
+from index_rules import entity_heads, index_findings, redundant_findings  # noqa: E402
 
 # Any `@word rest`; group 1 is the word (caption, annotation, position).
 ANNOTATION_RE = re.compile(r"^\s*@(\w+)\s*(.*)$")
@@ -393,6 +393,10 @@ def main() -> int:
                         help="DESCRIBE ENTITY output (file or directory): adds PERF07, an attribute "
                              "filtered or sorted on with no index")
     parser.add_argument("--pages", type=Path, help="DESCRIBE PAGE output, read for PERF07 data sources")
+    parser.add_argument("--expect-flows", type=int, default=0,
+                        help="how many microflows and nanoflows were described; recognising none of them is an error")
+    parser.add_argument("--format", default="",
+                        help="what produced the describe text (the mxcli version): kept with the flow hashes")
     parser.add_argument("--flow-hashes", type=Path,
                         help="write {flow: hash of its text} here (the gate keeps the one of each DONE)")
     parser.add_argument("--captions-baseline", type=Path,
@@ -418,13 +422,23 @@ def main() -> int:
         entity_text, _ = collect_text([args.entities])
         page_text, _ = collect_text([args.pages]) if args.pages else ("", [])
         documents = lines + strip_comments(page_text).splitlines()
-        indexes = [Warning_(code, message, line) for code, message, line in
-                   index_findings(entity_text.splitlines(), documents) + redundant_findings(entity_text.splitlines(), documents)]
+        if entity_text.strip() and not entity_heads(entity_text.splitlines()):
+            indexes = [Warning_("PERF07", "not checked: no entity was recognised in the describe text "
+                                "(a describe format index_rules.py does not read)", None)]
+        else:
+            indexes = [Warning_(code, message, line) for code, message, line in
+                       index_findings(entity_text.splitlines(), documents) + redundant_findings(entity_text.splitlines(), documents)]
         perf = [w for w in warnings if w["check"].startswith("PERF")]
         warnings = perf + indexes + [w for w in warnings if not w["check"].startswith("PERF")]
     hashes = flow_hashes(lines)
+    # Documents were described and not one head was recognised: a describe format these rules do
+    # not read. Zero findings would be a PASS for a check that saw nothing.
+    if args.expect_flows > 0 and not hashes:
+        print(f"could not run -- {args.expect_flows} microflow(s) and nanoflow(s) were described and "
+              f"none was recognised in the text: this mxcli's describe format is not one check_mdl.py reads")
+        return 2
     if args.flow_hashes:
-        args.flow_hashes.write_text(json.dumps(hashes, indent=0, sort_keys=True))
+        args.flow_hashes.write_text(json.dumps(dict(hashes, _format=args.format), indent=0, sort_keys=True))
     # After the first DONE (the gate passes the hashes it kept then), a microflow that is new or
     # changed since the last DONE needs its captions; older ones keep them as warnings, a backlog.
     fresh: set[str] = set()
@@ -435,6 +449,10 @@ def main() -> int:
             baseline = {}
         if not isinstance(baseline, dict):      # a damaged file is no baseline, not a crash
             baseline = {}
+        # Another mxcli describes the same microflow in other words: every hash would differ and
+        # the whole caption backlog would block at once. The next DONE keeps a new baseline.
+        if baseline.get("_format", "") != args.format:
+            baseline = dict(hashes)
         fresh = {name for name, digest in hashes.items() if baseline.get(name) != digest}
     blocks = flow_blocks(lines)
 

@@ -305,6 +305,8 @@ A check that could not run (a crashed checker, a model that could not be read) i
 the gate says "could not run" and does not say DONE.
 The guard also reads a `cd` before a write, a link to a guarded file, a copy into its directory and
 inline code that writes `tests/harness.env`; the test password no longer shows in `ps`.
+A checker that recognises none of the documents mxcli described (a describe format it does not
+read) says "could not run" instead of passing.
 After an exec, the agent is told when it re-created a page another script alters, or granted
 access another script revoked.
 

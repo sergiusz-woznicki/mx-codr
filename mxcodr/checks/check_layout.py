@@ -74,7 +74,7 @@ from layout_rules.controls import button_icon_findings  # noqa: E402
 from layout_rules.edges import edge_findings  # noqa: E402
 from layout_rules.grids import header_button_findings  # noqa: E402
 from layout_rules.layouts import layout_menu_findings, one_layout_findings  # noqa: E402
-from layout_rules.navigation import (duplicate_icon_findings, menu_icon_findings, read_menu_access,  # noqa: E402
+from layout_rules.navigation import (PROFILE_RE, duplicate_icon_findings, menu_icon_findings, read_menu_access,  # noqa: E402
                                      role_home_findings, sign_out_findings)
 from layout_rules.page_top import back_button_findings, current_user_findings  # noqa: E402
 from layout_rules.pages import page_blocks  # noqa: E402
@@ -118,6 +118,8 @@ def main() -> int:
                         help="microflow/nanoflow dumps whose `show page` opens pages (BACK01)")
     parser.add_argument("--users-sign-in", action="store_true",
                         help="project security is on, so the menu needs a Log out item")
+    parser.add_argument("--expect-pages", type=int, default=0,
+                        help="how many pages were described; recognising none of them is an error")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -137,6 +139,18 @@ def main() -> int:
     own_modules = args.own_modules.split()
 
     failures, warnings, pages = check(lines)
+    # Input was described and nothing in it was recognised: a describe format these rules do not
+    # read. Every rule would find nothing, and that would be a PASS for a check that saw nothing.
+    unread = []
+    if args.expect_pages > 0 and not page_blocks(lines):
+        unread.append(f"{args.expect_pages} page(s) were described and none was recognised")
+    if has_navigation and navigation.strip() and not any(PROFILE_RE.match(line) for line in navigation.splitlines()):
+        unread.append("the navigation was described and no profile was recognised")
+    if roles.strip() and not any(USER_ROLE_RE.match(line) for line in roles.splitlines()):
+        unread.append("the user roles were described and none was recognised")
+    if unread:
+        print("could not run -- " + "; ".join(unread) + ": this mxcli's describe format is not one check_layout.py reads")
+        return 2
     if args.users_sign_in and has_navigation:
         nav_failures, nav_warnings = sign_out_findings(navigation, text + "\n" + snippets)
         failures += nav_failures

@@ -60,6 +60,11 @@ def _plain(name: str) -> str:
     return name.replace('"', "")
 
 
+def entity_heads(lines: list[str]) -> int:
+    """How many `create ... entity` heads the text has, of any kind."""
+    return sum(1 for line in lines if ENTITY_HEAD.match(line))
+
+
 def entities(lines: list[str]) -> dict[str, dict]:
     """{entity: {"attributes": {lower: (name, type)}, "indexes": [(lower columns...)]}}; a unique
     attribute counts as an index of its own (Mendix creates one)."""
