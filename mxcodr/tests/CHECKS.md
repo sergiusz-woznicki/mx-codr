@@ -48,7 +48,7 @@ here blocks DONE unless the line says "warning".
 | `placeholder-variable` | a name that says what it holds | `$OpenInvoiceCount`, not `$Int1`, `$tmp`, `$x` |
 | `type-echo-variable` | no `_List`, `_Object`, `_Obj` suffix | `$OverdueInvoices`, not `$Invoice_List` |
 | `REFRESH01` | a microflow that closes its page (a popup's Save) commits with `refresh`, so the grid under the popup shows the new row at once | `commit $Invoice refresh;`, `change $Invoice (...) commit refresh;` -- blocks DONE |
-| `PERF02/03/05/06` | a loop that sums rows, queries per row, filters a whole table with `if`, or keeps the maximum (warning) | an OQL view for totals; the condition in XPath; `sort by ... desc limit 1` |
+| `PERF02`-`07` | a loop that sums, queries per row, filters with `if` or keeps the max; a filtered or sorted attribute with no index (warning) | an OQL view; XPath; `sort by ... limit 1`; `add index` |
 | `action-caption`, `action-caption-is-default`, `decision-caption`, `caption-not-a-question`, `caption-restates-expression`, `loop-annotation`, `caption-on-loop` | a business `@caption` on every action and decision (a question, no `$`), `@annotation` on loops | warnings by default; `MDL_CAPTIONS=error` in `tests/harness.env` makes them block |
 
 ## coverage, precheck, the suite and the runtime

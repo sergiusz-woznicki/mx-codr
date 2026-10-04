@@ -208,7 +208,15 @@ check_naming() {
   fi
   local captions=warn total
   [ "${MDL_CAPTIONS:-warn}" = "error" ] && captions=error
-  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" 2>&1)"; code=$?
+  # PERF07 reads the entities' indexes and the pages' data sources as well.
+  local entity
+  mkdir -p "$WORK/naming-entities"
+  for entity in $(entity_names); do
+    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$WORK/naming-entities/$entity.mdl" 2>/dev/null || true
+  done
+  describe_all naming-pages "$WORK/naming-pages" "PAGES" || true
+  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" \
+    --entities "$WORK/naming-entities" --pages "$WORK/naming-pages" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
     echo "naming: could not run -- check_mdl.py exited $code" > "$WORK/naming.summary"
@@ -393,7 +401,7 @@ start_model_checks() {
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py tools/mdl-checks/perf_rules.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py tools/mdl-checks/perf_rules.py tools/mdl-checks/index_rules.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.py "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.py "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &

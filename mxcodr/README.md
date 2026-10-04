@@ -408,6 +408,15 @@ condition in the retrieve's XPath. `PERF06` is a loop that only keeps the larges
 without `set` counts as an assignment too; Pi wrote it that way and PERF02 missed it. Seed and
 demo-data flows are skipped.
 
+`PERF07`, also a warning from the naming step: an attribute a retrieve or a page's data source
+filters (`=`, `<`, `>`) or sorts on, with no index that starts with it. Mendix indexes `id`, every
+association and every attribute with a uniqueness rule itself (checked in PostgreSQL); InvoiceB2B
+filtered invoices on `PaymentStatus` and `DueDate` and sorted orders by `DateCreated` with none.
+Measured on a copy of its orders: at 200,000 rows the newest order by date took 35 ms without an
+index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both stay under 2 ms. The
+naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
+entities and seed flows are left out: an index does not help them, or they run once.
+
 After a full DONE the gate remembers what it saw. A DONE on the same model, tests and `theme/` says
 "a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
 unchanged app, "to confirm stability". `theme/` counts because a session that only sized a chart

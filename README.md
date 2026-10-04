@@ -290,6 +290,7 @@ A commit inside a loop (lint `CONV011`) is listed among them with its fix.
 So is row-by-row database work: a loop that sums retrieved rows, a database call per row, or a
 whole table filtered with `if`, or a loop that only keeps the largest value (`PERF02`/`03`/`05`/`06`);
 the fix named is an OQL view, an XPath, or one sorted retrieve with `limit 1`.
+An attribute the app filters or sorts on without a database index is listed too (`PERF07`).
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 When `--watch` misses an exec, the gate restarts the app so the tests run on the current model.
 After an exec, the agent is told when it re-created a page another script alters, or granted
