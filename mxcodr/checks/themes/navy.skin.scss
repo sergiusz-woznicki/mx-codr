@@ -1,30 +1,22 @@
-
 // ---------------------------------------------------------------------------
-// mx-codr frame for the navy theme: a top bar of its own colour, a lighter active
-// item on the side rail, and outline buttons in the brand colour. Appended to the
-// scaffold by the installer (tests/theme.sh too) before `mxcli theme apply`.
+// mx-codr frame for the navy theme: a top bar of its own colour, a lighter active item on
+// the side rail, and outline buttons in the brand colour. Appended to the scaffold by the
+// installer (tests/theme.sh too) before `mxcli theme apply`.
+//
+// Only Atlas's own variables are set -- the ones Atlas Core paints these parts with
+// (layouts/_layout-atlas.scss, helpers/_navigation-tree.scss, helpers/_button.scss). No
+// Atlas property is restyled, so an Atlas update keeps working. This comes after the
+// theme's own block, at the same scope, so it wins without !important.
 :root {
-  --mxcodr-top: #1b3354;
-  --mxcodr-rail-active: #24456f;
+  --navtopbar-bg: #1b3354;
+  --navsidebar-bg-active: #24456f;
+  --navsidebar-bg-hover: #24456f;
+  --navsidebar-border-radius: var(--mxt-radius-lg);
 }
-.layout-atlas .region-topbar {
-  background-color: var(--mxcodr-top);
-  color: #ffffff;
-}
-.layout-atlas .region-topbar a,
-.layout-atlas .region-topbar .btn,
-.layout-atlas .region-topbar .mx-name-languageSelector,
-.layout-atlas .region-topbar [class*="dropdown"] {
-  color: #ffffff;
-}
-.layout-atlas .region-sidebar .mx-navigationtree li.active > a,
-.layout-atlas .region-sidebar .mx-navigationtree li.active > .navbar-link,
-.layout-atlas .region-sidebar .mx-navigationtree li > a:hover {
-  background-color: var(--mxcodr-rail-active);
-  color: #ffffff;
-  border-radius: var(--mxt-radius-lg);
-}
-.region-content .btn-default:not(.column-selector-button) {
-  border-color: var(--mxt-brand);
-  color: var(--mxt-brand);
+// Buttons a page author set to the Default style (Mendix renders them `mx-button btn-default`)
+// take the brand colour. The variables are scoped to them, so the grid's column selector
+// (`btn-default` only) and the date picker's button (`mx-button` only) keep the neutral look.
+.mx-button.btn-default {
+  --btn-default-color: var(--mxt-brand);
+  --btn-default-border-color: var(--mxt-brand);
 }
