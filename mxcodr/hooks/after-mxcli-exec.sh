@@ -56,6 +56,9 @@ elif re.search(r"\bgrep\b.*error", command, re.I):
 ' 2>/dev/null)"
 [ -n "$_verdict" ] && printf '%s\n' "$_verdict"
 case "$_verdict" in "exec: FAILED"*) exit 0 ;; esac
+# Re-running an older script undoes a later one: `create or modify page` drops another script's
+# `alter page`, and a `grant` puts back access another script revoked (script_overrides.py).
+[ -f tools/mdl-checks/script_overrides.py ] && "$PY" tools/mdl-checks/script_overrides.py --command "$command" 2>/dev/null
 # Restart advice: under `mxcli run --watch` every change applies by itself (logic and pages by reload,
 # schema, module and security by an in-place restart); without it, schema and security need a restart.
 _app_running=0

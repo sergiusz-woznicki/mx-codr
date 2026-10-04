@@ -19,8 +19,9 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 #   placeholder-variable         FAIL  $Int1, $List2, $tmp, $x ...
 #   type-echo-variable           FAIL  name ends in _List, _Object or _Obj
 #   REFRESH01                    FAIL  a microflow that closes its page commits without `refresh`
-#   PERF02 PERF03 PERF05         WARN  a loop that only sums a retrieved list; a database call per row
-#                                      in such a loop; a whole table filtered by an `if` (perf_rules.py)
+#   PERF02 PERF03 PERF05 PERF06  WARN  a loop that only sums a retrieved list; a database call per row
+#                                      in such a loop; a whole table filtered by an `if`; a loop that
+#                                      only keeps the largest value (perf_rules.py)
 # --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
 # default, since 286 of them landed at once on a session with no test green yet.
 
@@ -326,7 +327,7 @@ def refresh_findings(lines: list[str]) -> list[Failure]:
 
 def check_naming_and_refresh(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
     failures, warnings = check_naming(lines)
-    # Performance (PERF02/03/05, perf_rules.py): warnings, listed before the caption warnings.
+    # Performance (PERF02/03/05/06, perf_rules.py): warnings, listed before the caption warnings.
     perf = [Warning_(code, message, line) for code, message, line in perf_findings(lines)]
     return failures + refresh_findings(lines), perf + warnings
 

@@ -301,6 +301,11 @@ through an XPath-scoped access rule. A microflow does not apply entity access, s
 reaches those rows: a customer portal showed another customer's invoice this way and only its
 verify test caught it.
 
+`VIEW01` (check `security`, blocks DONE): a view entity a role reads with no XPath constraint,
+while that role sees only its own rows of an entity the view's query reads. Pi gave its Customer
+role `read *` on two views that total every customer's invoices, so each customer could read the
+others' figures. A role with no rule on that data at all (a manager on a dashboard) is not flagged.
+
 A scenario run outside the gate's runner (peek.sh, or a test run by hand after the gate) opens the
 browser itself when playwright-cli says none is open, and runs once more; two sessions retried the
 same command on "Browser 'default' is not open". `MDL_CLOSE_BROWSER=1` in `tests/harness.env`
@@ -321,6 +326,18 @@ sat out the full two minutes before its first test. And when a `--watch` rebuild
 now stops at once and names the error (`CE0116 ... (Page 'X', Action button 'y')`): before, it
 waited two minutes, then tested the model from before the exec, and a session took a fix that
 never reached the app for a fix that did not work.
+
+When `--watch` does not rebuild at all after an exec -- the model is newer than the boot log's last
+line for 15 seconds (`MDL_WATCH_MISSED_SECONDS`) -- the gate restarts the app itself, as
+`--restart` would, so the suite runs on the current model. Pi's exec of three view entities left
+the watcher silent, and `mxcli oql` said the new entities did not exist.
+
+After an `mxcli exec`, the hook names what the scripts it ran put back that another script had
+changed (`script_overrides.py`): a `create or modify page` drops another script's `alter page`, and
+a `grant` restores access another script revoked. It replays the scripts beside it in name order,
+so a revoke that a later script grants back again is not reported, and an `alter page` that only
+sets values the page source already has is not either. Pi re-ran `07_dashboard.mdl` and gave the
+Dashboard back to a role `20_access.mdl` had taken it from; a test failed on it.
 
 A `# covers:` list wrapped over several `#` lines now counts every line of names, not the first
 only: a session saw its new flows reported untested until it joined the list by hand. BACK01
@@ -381,12 +398,15 @@ surfaced at the end of the work, or not at all: Pi fixed seven of them a turn la
 lists each one under its warnings, with the fix, while the code is fresh, and the pitfalls in the
 syntax digest show the right form up front. They still do not block DONE.
 
-`PERF02`, `PERF03` and `PERF05`, warnings from the naming step: a loop over a retrieved list that only
+`PERF02`, `PERF03`, `PERF05` and `PERF06`, warnings from the naming step: a loop over a retrieved list that only
 adds up its rows, a database call per row inside such a loop (a retrieve, a Java action, or a flow
 that reads or writes), and a whole table retrieved and filtered with `if`. Pi's B2B dashboard summed
 10,680 orders in a loop on every open. Measured on a copy: the loop 160 ms, `count()`/`sum()` right
 after the retrieve 159 ms, one OQL view entity 60 ms -- so the fix named is the view, and the
-condition in the retrieve's XPath. Seed and demo-data flows are skipped.
+condition in the retrieve's XPath. `PERF06` is a loop that only keeps the largest or smallest value
+(the next invoice number): one `retrieve ... sort by ... desc limit 1` returns that row. `$X = ...`
+without `set` counts as an assignment too; Pi wrote it that way and PERF02 missed it. Seed and
+demo-data flows are skipped.
 
 After a full DONE the gate remembers what it saw. A DONE on the same model, tests and `theme/` says
 "a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an

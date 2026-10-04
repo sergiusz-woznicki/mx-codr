@@ -6,6 +6,8 @@ row in a microflow instead. Part of check_mdl.py --skill naming; warnings, never
             the row's association, a Java action, or a microflow that reads or writes the database
     PERF05  a whole table is retrieved and the loop keeps rows with an `if` -- a filter the
             retrieve's XPath should do
+    PERF06  the loop only keeps the largest or smallest value of its rows (the next number,
+            the latest date) -- one sorted retrieve with `limit 1` returns that row
 
 Measured 2026-10-04 on InvoiceB2B, 10,680 orders and 2,360 invoices of one customer: the
 customer panel computed in loops took 160 ms; the same figures as count()/sum() right after a
@@ -23,8 +25,11 @@ RETRIEVE = re.compile(r"^\s*retrieve\s+\$(?P<var>\w+)\s+from\s+(?:database\s+)?(
 LOOP = re.compile(r"^\s*loop\s+\$(?P<item>\w+)\s+in\s+\$(?P<list>\w+)", re.I)
 WHILE = re.compile(r"^\s*while\b", re.I)
 END_LOOP = re.compile(r"^\s*end\s+(?:loop|while)\s*;", re.I)
-ACCUM = re.compile(r"^\s*set\s+\$(?P<var>\w+)\s*=\s*\$(?P=var)\s*[-+]", re.I)
-SET = re.compile(r"^\s*set\s+\$\w+\s*=", re.I)
+# `set` is optional: `$Sum = $Sum + ...` assigns too (Pi wrote it that way and PERF02 missed it).
+ACCUM = re.compile(r"^\s*(?:set\s+)?\$(?P<var>\w+)\s*=\s*\$(?P=var)\s*[-+]", re.I)
+SET = re.compile(r"^\s*(?:set\s+)?\$\w+\s*=(?!=)", re.I)
+COMPARE = re.compile(r"^\s*(?:if|elsif)\s+\$(?P<a>\w+)(?:/\w+)?\s*(?P<op>>=?|<=?)\s*\$(?P<b>\w+)(?:/\w+)?\s+then", re.I)
+KEEP = re.compile(r"^\s*(?:set\s+)?\$(?P<to>\w+)\s*=\s*\$(?P<from>\w+)(?:/\w+)?\s*;", re.I)
 CALL = re.compile(r"\bcall\s+(?P<kind>microflow|nanoflow|java\s+action)\s+(?P<name>[\w.]+)", re.I)
 WRITE = re.compile(r"^\s*(?:\$\w+\s*=\s*)?(change|commit|delete|rollback|create|add|remove|show\s+page|"
                    r"close\s+page|show\s+message|validation\s+feedback|download|send|import|export|"
@@ -95,6 +100,20 @@ def _touches_db(statements: list[tuple[int, str]]) -> bool:
                or re.match(r"^\s*(commit|delete)\b", t, re.I) for _, t in statements)
 
 
+def _keeps_extreme(body: list[str]) -> bool:
+    """True when an `if $a > $b then` is followed by `$b = $a` (or the other way round)."""
+    for index, text in enumerate(body):
+        compare = COMPARE.match(text)
+        if not compare:
+            continue
+        pair = {compare.group("a").lower(), compare.group("b").lower()}
+        for after in body[index + 1:index + 3]:
+            keep = KEEP.match(after)
+            if keep and {keep.group("to").lower(), keep.group("from").lower()} == pair:
+                return True
+    return False
+
+
 def perf_findings(lines: list[str]) -> list[tuple[str, str, int]]:
     """(code, message, line) for every finding."""
     flows = _statements(lines)
@@ -137,6 +156,11 @@ def perf_findings(lines: list[str]) -> list[tuple[str, str, int]]:
                     f"{name}: the loop over ${lst} ({entity}) {'; '.join(sorted(set(per_row)))} for every "
                     f"row -- one database call per row (N+1). Get what the loop needs in one retrieve "
                     f"before it (an XPath over the association), or compute it in an OQL view{where}"), line))
+            if not accumulated and not writes and not others and not per_row and _keeps_extreme(body):
+                findings.append(("PERF06", (
+                    f"{name}: the loop over ${lst} ({entity}) reads every row to keep the largest or "
+                    f"smallest value -- retrieve only that row, sorted: `retrieve $Last from {entity} "
+                    f"where [...] sort by {entity}.<Attr> desc limit 1;` (`asc` for the smallest){where}"), line))
             if whole and any(re.match(IF_ON_ITEM % re.escape(item), t, re.I) for t in body):
                 findings.append(("PERF05", (
                     f"{name}: retrieves all of {entity} and keeps rows with an `if` in the loop -- put "

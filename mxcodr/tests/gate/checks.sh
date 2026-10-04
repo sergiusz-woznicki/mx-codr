@@ -393,9 +393,9 @@ start_model_checks() {
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py tools/mdl-checks/perf_rules.py "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
-  ( run_cached security check_security "${cache_inputs[@]}" "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
+  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.py "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.py "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
   echo "== mx check, lint, coverage, naming, layout, security and scope started (they need no app; running while the suite does)"
 }
@@ -423,23 +423,49 @@ for row in rows if isinstance(rows, list) else []:
   done
 }
 
+# Describes every entity of the project's own modules once, one file per entity, for the
+# security checks below.
+describe_entities() {
+  local entity
+  mkdir -p "$WORK/entities"
+  for entity in $(entity_names); do
+    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$WORK/entities/$entity.mdl" 2>/dev/null || true
+  done
+}
+
+# VIEW01 lines (view_access.py): a view entity a row-scoped role reads with no XPath constraint.
+view_findings() {
+  [ -f tools/mdl-checks/view_access.py ] || return 0
+  cat "$WORK/entities/"*.mdl 2>/dev/null > "$WORK/entities.mdl"
+  "$PY" tools/mdl-checks/view_access.py "$WORK/entities.mdl" 2>/dev/null
+}
+
 check_security() {
-  local level rules entity
+  local level rules entity views
   [ "${MDL_REQUIRE_PRODUCTION:-1}" = "0" ] && { echo "security: not checked (MDL_REQUIRE_PRODUCTION=0)" > "$WORK/security.summary"; return 0; }
   level="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | sed -n 's/^Security Level:[[:space:]]*//p' | head -1)"
   if [ -z "$level" ]; then
     echo "security: could not run -- SHOW PROJECT SECURITY printed no level" > "$WORK/security.summary"
     return 2
   fi
+  describe_entities
+  views="$(view_findings)"
+  : > "$WORK/security.detail"
+  if [ -n "$views" ]; then
+    printf '%s\n' "$views" | sed 's/^/   /' >> "$WORK/security.detail"
+  fi
   case "$level" in
-    Production*) echo "security: level Production" > "$WORK/security.summary"; return 0 ;;
+    Production*)
+      if [ -z "$views" ]; then echo "security: level Production" > "$WORK/security.summary"; return 0; fi
+      echo "security: level Production, but $(printf '%s\n' "$views" | grep -c .) view entity rule(s) hand a row-scoped role every row (VIEW01)" > "$WORK/security.summary"
+      return 1 ;;
   esac
   echo "security: level $level, and the gate requires Production" > "$WORK/security.summary"
-  : > "$WORK/security.detail"
   # Name the rules that are silently doing nothing, so the cost is concrete.
   rules=0
-  for entity in $(entity_names); do
-    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" 2>/dev/null | grep -q "where '" || continue
+  for entity in "$WORK/entities/"*.mdl; do
+    grep -q "where '" "$entity" 2>/dev/null || continue
+    entity="$(basename "$entity" .mdl)"
     rules=$((rules + 1))
     [ "$rules" -le 5 ] && echo "   $entity has an access rule with an XPath constraint" >> "$WORK/security.detail"
   done

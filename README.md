@@ -64,6 +64,7 @@ what to fix. Codes in brackets are what the gate prints.
 **Done**
 - A failing test before each feature; a test for every page and action microflow.
 - Mendix's consistency check at 0 errors; project security at Production.
+- A role that sees only its own rows does not read a view of everyone's totals (`VIEW01`).
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
 
@@ -287,8 +288,12 @@ The agent fixes them along with its next fix, never in a gate run of their own. 
 left at DONE goes into its report as the next thing to fix.
 A commit inside a loop (lint `CONV011`) is listed among them with its fix.
 So is row-by-row database work: a loop that sums retrieved rows, a database call per row, or a
-whole table filtered with `if` (`PERF02`/`03`/`05`); the fix named is an OQL view or an XPath.
+whole table filtered with `if`, or a loop that only keeps the largest value (`PERF02`/`03`/`05`/`06`);
+the fix named is an OQL view, an XPath, or one sorted retrieve with `limit 1`.
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
+When `--watch` misses an exec, the gate restarts the app so the tests run on the current model.
+After an exec, the agent is told when it re-created a page another script alters, or granted
+access another script revoked.
 
 ```
 == gate
