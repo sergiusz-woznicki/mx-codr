@@ -56,6 +56,17 @@ elif re.search(r"\bgrep\b.*error", command, re.I):
 ' 2>/dev/null)"
 [ -n "$_verdict" ] && printf '%s\n' "$_verdict"
 case "$_verdict" in "exec: FAILED"*) exit 0 ;; esac
+# Studio Pro with this project open saves its own copy of a document over what the exec wrote
+# (it dropped 12 indexes on 2026-10-04). Same test as tests/portable.sh mdl_studio_pro_open.
+if command -v pgrep >/dev/null 2>&1; then
+  _here="$(pwd -P)"
+  for _pid in $(pgrep -f '(/MacOS/studiopro|[Ss]tudio[Pp]ro(\.exe)?)$' 2>/dev/null); do
+    if ! command -v lsof >/dev/null 2>&1 || lsof -p "$_pid" -Fn 2>/dev/null | grep -qF "n$_here"; then
+      echo "!! Studio Pro has this project open: what it saves next replaces what that exec wrote. Close it without saving, or make the change in Studio Pro."
+      break
+    fi
+  done
+fi
 # Re-running an older script undoes a later one: `create or modify page` drops another script's
 # `alter page`, and a `grant` puts back access another script revoked (script_overrides.py).
 [ -f tools/mdl-checks/script_overrides.py ] && "$PY" tools/mdl-checks/script_overrides.py --command "$command" 2>/dev/null

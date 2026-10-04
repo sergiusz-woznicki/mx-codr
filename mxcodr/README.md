@@ -536,7 +536,15 @@ The model checks describe each module's documents with one mxcli call per module
 one per document. On InvoiceB2B's model the microflows took 2 s instead of 11 s and the entities
 under 1 s instead of 2 s, with byte-identical text; `naming` and `layout` each spent about 18 s,
 most of it starting mxcli once per document. mxcli stops at the first document it cannot
-describe, so then the step falls back to one call each, which names the one that failed. The
+describe, so then the step falls back to one call each, which names the one that failed.
+
+The gate and the after-exec hook warn when Studio Pro has the project open: lsof shows a Studio
+Pro process holding a file in the project directory (on Windows, without lsof: Studio Pro is
+running). Studio Pro keeps the model in memory and saves its own copy of a document over what
+mxcli wrote. On InvoiceB2B it rewrote the Orders domain model at 19:13, and twelve indexes an exec
+had added at 18:47 were gone from the model and, after a restart, the database; the session took
+the gate for the cause. The runtime Studio Pro starts carries `-Dmendix.running.locally.by.studiopro`
+and is not counted. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

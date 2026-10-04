@@ -9,6 +9,7 @@ says "warning". The finding already says what to change; this says why. Not `tes
 | `SCRIPT01` | each document created in one script only | change it there or with `alter`, never a second `create or modify` in a later script |
 | `security` | `PRODUCTION` once users sign in | `alter project security level PRODUCTION;` in the first script (`MDL_REQUIRE_PRODUCTION=0` only for an app with no users) |
 | stale client bundle | a test failed on a 404 for `dist/*.js` after a `--watch` rebuild (the failure line says so) | `bash tests/gate.sh --restart --only <feature>` -- not the page, not a widget |
+| Studio Pro has this project open | nothing edits the model through mxcli while Studio Pro holds it: what it saves next replaces what mxcli wrote (warning, gate and after each exec) | close Studio Pro without saving, or make the change in Studio Pro |
 | `VIEW01` | a view a role reads with no XPath while it sees only its own rows of its data | constrain the rule, or revoke it and read the view in a data-source microflow |
 | `SCOPE01` | a page's data source microflow ties its retrieve to the user when the page's role reads that entity through an XPath-scoped rule (warning) | microflows ignore entity access: constrain its retrieve (`... = '[%CurrentUser%]'` or `= $SignedInCustomer`); `MDL_SCOPE=error` blocks |
 | `RUNTIME01` | no `ERROR` in the server log while the suite ran (warning) | the log line names the microflow or page; `MDL_RUNTIME_ERRORS=error` makes it block |

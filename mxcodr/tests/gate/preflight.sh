@@ -177,6 +177,16 @@ warn_if_runtime_older() {
   gate_py runtime-age "$MPR" "$started" | tee -a "$WORK/stale.note"
 }
 
+# Studio Pro with this project open overwrites what mxcli writes: say so up front and under the
+# verdict, where a session reading the tail sees it.
+preflight_studio_pro() {
+  local warning
+  warning="$(mdl_studio_pro_warning "$APP_DIR")"
+  [ -n "$warning" ] || return 0
+  echo "   $warning"
+  summary+=("$warning")
+}
+
 # Warns about a missing browser binary, a broken local database, and missing credentials.
 preflight_environment() {
   local config="$APP_DIR/.playwright/cli.config.json"

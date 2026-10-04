@@ -296,6 +296,7 @@ main() {
   preflight_session
   preflight_debugger
   preflight_environment
+  preflight_studio_pro
   preflight_stale_model
   step_tests
   step_visual
