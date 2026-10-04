@@ -22,8 +22,9 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 #   PERF02 PERF03 PERF05 PERF06  WARN  a loop that only sums a retrieved list; a database call per row
 #                                      in such a loop; a whole table filtered by an `if`; a loop that
 #                                      only keeps the largest value (perf_rules.py)
-#   PERF07                       WARN  with --entities: an attribute filtered or sorted on, with
-#                                      no index starting with it (index_rules.py)
+#   PERF07                       WARN  with --entities: a query (retrieve, page source, grid filter)
+#                                      no index serves (index_rules.py)
+#   PERF08                       WARN  with --entities: an index no query in the model needs
 # --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
 # default, since 286 of them landed at once on a session with no test green yet.
 
@@ -37,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from perf_rules import perf_findings  # noqa: E402
-from index_rules import index_findings  # noqa: E402
+from index_rules import index_findings, redundant_findings  # noqa: E402
 
 # Any `@word rest`; group 1 is the word (caption, annotation, position).
 ANNOTATION_RE = re.compile(r"^\s*@(\w+)\s*(.*)$")
@@ -392,8 +393,9 @@ def main() -> int:
     if args.entities and "naming" in args.skill:
         entity_text, _ = collect_text([args.entities])
         page_text, _ = collect_text([args.pages]) if args.pages else ("", [])
+        documents = lines + strip_comments(page_text).splitlines()
         indexes = [Warning_(code, message, line) for code, message, line in
-                   index_findings(entity_text.splitlines(), lines + strip_comments(page_text).splitlines())]
+                   index_findings(entity_text.splitlines(), documents) + redundant_findings(entity_text.splitlines(), documents)]
         perf = [w for w in warnings if w["check"].startswith("PERF")]
         warnings = perf + indexes + [w for w in warnings if not w["check"].startswith("PERF")]
     caption_warnings = 0

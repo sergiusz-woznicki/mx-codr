@@ -291,7 +291,7 @@ So is row-by-row database work: a loop that sums retrieved rows, a database call
 whole table filtered with `if`, or a loop that only keeps the largest value (`PERF02`/`03`/`05`/`06`);
 the fix named is an OQL view, an XPath, or one sorted retrieve with `limit 1`.
 A query no database index serves is listed too (`PERF07`), with the index it wants: its `=`
-columns first, then the range or sort column.
+columns first, then the range or sort column. An index no query needs is listed as well (`PERF08`).
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 When `--watch` misses an exec, the gate restarts the app so the tests run on the current model.
 After an exec, the agent is told when it re-created a page another script alters, or granted

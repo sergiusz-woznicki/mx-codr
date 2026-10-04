@@ -34,7 +34,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   attributes. One index per query, its `=` attributes first, then the range or sort:
   `alter entity Sales.Invoice add index if not exists (PaymentStatus, DueDate);` -- at 200k rows the newest
   row of one status: 9.9 ms without, 2.6 ms with two single indexes, 0.01 ms with that one. It also serves
-  a query on PaymentStatus alone. Not booleans, `!=` or `contains()`; each index costs a little on commit.
+  a query on PaymentStatus alone, so drop the old (PaymentStatus) and any index no query needs (PERF08).
+  Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).

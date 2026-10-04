@@ -425,6 +425,15 @@ first, then the first range comparison or sort. `PaymentStatus = ... and DueDate
 the new index replaces is named with its `drop index` line. Pi, told to index each attribute on its
 own, added twelve single indexes where two queries wanted one of two columns each.
 
+`PERF08`, a warning too: an index of the model that no query needs. Either another index starts
+with the same columns and serves every query it does, or no retrieve, page data source or grid
+filter uses it better than another index. Grid filters count as queries: a drop-down filter
+compares with `=`, a date or number filter with a range (a text filter is `contains()`, which no
+index helps). The `drop index` line spells the index as written, `desc` included, since mxcli
+matches it exactly. Pi kept `(CapturedOn)` and `(DueDate)` after adding `(Currency, CapturedOn)`
+and `(PaymentStatus, DueDate)` for the same queries. Keep an index Java, OQL or an outside client
+filters on; the model does not show those.
+
 After a full DONE the gate remembers what it saw. A DONE on the same model, tests and `theme/` says
 "a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
 unchanged app, "to confirm stability". `theme/` counts because a session that only sized a chart

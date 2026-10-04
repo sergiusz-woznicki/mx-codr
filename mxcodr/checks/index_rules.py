@@ -39,6 +39,9 @@ XPATH = re.compile(r"where\s*(?:\[(?P<xpath>[^\]]*)\]|(?P<bare>.*?)(?=\s+sort\s+
                    re.I | re.S)
 COMPARED = re.compile(r"(?<![\w./$'\"])\"?(?P<attr>[A-Za-z_]\w*)\"?\s*(?P<op><=|>=|=|<|>)")
 SORT = re.compile(r"sort\s+by\s+(?P<list>[\w.\"]+(?:\s+(?:asc|desc))?(?:\s*,\s*[\w.\"]+(?:\s+(?:asc|desc))?)*)", re.I)
+GRID = re.compile(r"\bdatagrid\s+\w+\s*\(\s*DataSource:\s*database\s+from\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
+COLUMN = re.compile(r"^\s*column\s+\"?\w+\"?\s*\(\s*Attribute:\s*\"?(?P<attr>\w+)", re.I)
+FILTER = re.compile(r"^\s*(?P<kind>dropdownfilter|datefilter|numberfilter)\b", re.I)
 SKIP_TYPES = {"boolean", "binary", "hashstring", "autonumber"}
 
 
@@ -57,7 +60,7 @@ def entities(lines: list[str]) -> dict[str, dict]:
             kind = (head.group("kind") or "persistent").strip().lower()
             current = _plain(head.group("name")) if kind == "persistent" else None
             if current:
-                found[current] = {"attributes": {}, "indexes": []}
+                found[current] = {"attributes": {}, "indexes": [], "explicit": []}
             continue
         if current is None:
             continue
@@ -70,6 +73,7 @@ def entities(lines: list[str]) -> dict[str, dict]:
         if index:
             columns = tuple(_plain(part.strip().split()[0]).lower() for part in index.group("columns").split(","))
             found[current]["indexes"].append(columns)
+            found[current]["explicit"].append((columns, index.group("columns").strip()))
             continue
         attribute = ATTRIBUTE.match(line)
         if attribute:
@@ -109,6 +113,24 @@ def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str]
                 sort += [_plain(item.strip().split()[0]).split(".")[-1] for item in sorted_by.group("list").split(",")]
             found.append((_plain(match.group("entity")), equal, ranged, sort, document_at(match.start()),
                           text.count("\n", 0, match.start()) + 1))
+    # A data grid's column filter is a query too: a drop-down filter compares with `=`, a date or
+    # number filter with a range. A text filter is `contains()`, which an index does not help.
+    grid, column = None, None
+    for number, line in enumerate(text.splitlines(), 1):
+        source = GRID.search(line)
+        if source:
+            grid = _plain(source.group("entity"))
+            continue
+        attribute = COLUMN.search(line)
+        if attribute:
+            column = attribute.group("attr")
+            continue
+        widget = FILTER.search(line)
+        if widget and grid and column:
+            kind = widget.group("kind").lower()
+            equal, ranged = ([column], []) if kind == "dropdownfilter" else ([], [column])
+            found.append((grid, equal, ranged, [], document_at(text.find(line)), number))
+            column = None
     return found
 
 
@@ -181,4 +203,53 @@ def index_findings(entity_lines: list[str], document_lines: list[str]) -> list[t
                        f"index, 2.6 ms with an index on each attribute, 0.01 ms with one (Status, DateCreated). It "
                        f"also serves queries on {columns[0]} alone")
         findings.append(("PERF07", message, first_line[(entity, columns)]))
+    return findings
+
+
+def match_length(index: tuple[str, ...], want: tuple[str, ...]) -> int:
+    """How many leading columns of <index> the query that wants <want> can use."""
+    length = 0
+    for have, needed in zip(index, want):
+        if have != needed:
+            break
+        length += 1
+    return length
+
+
+def redundant_findings(entity_lines: list[str], document_lines: list[str]) -> list[tuple[str, str, int]]:
+    """PERF08: an index of the model that no query needs. Another index that starts with the same
+    columns serves everything it does; or no retrieve, page data source or grid filter uses it
+    better than another index. Pi kept (CapturedOn) and (DueDate) after adding (Currency,
+    CapturedOn) and (PaymentStatus, DueDate) for the same queries: each slows every commit."""
+    known = entities(entity_lines)
+    wants: dict[str, list[tuple[str, ...]]] = {}
+    for entity, equal, ranged, sort, document, _ in queries(document_lines):
+        info = known.get(entity)
+        if not info or (document and ONE_TIME.search(document)):
+            continue
+        columns = wanted(info, equal, ranged, sort)
+        if columns:
+            wants.setdefault(entity, []).append(tuple(name.lower() for name in columns))
+    findings = []
+    for entity, info in sorted(known.items()):
+        explicit = info["explicit"]
+        for position, (columns, spelled) in enumerate(explicit):
+            longer = [other_spelled for i, (other, other_spelled) in enumerate(explicit)
+                      if i != position and other[:len(columns)] == columns and (len(other) > len(columns) or i < position)]
+            drop = f"`alter entity {entity} drop index if exists ({spelled});`"
+            if longer:
+                reason = (f"the index ({longer[0]}) starts with the same columns and serves every "
+                          f"query this one does")
+            else:
+                others = [index for index in info["indexes"] if index is not columns]
+                needed = any(match_length(columns, want) > 0 and
+                             match_length(columns, want) >= max([match_length(o, want) for o in others] or [0])
+                             for want in wants.get(entity, []))
+                if needed:
+                    continue
+                reason = ("no retrieve, page data source or grid filter in the model needs it: another index "
+                          "serves each query that touches these columns, or none does")
+            findings.append(("PERF08", (
+                f"{entity} has the index ({spelled}), but {reason}. It only slows every commit: {drop} "
+                f"-- keep it if Java, OQL or an external client filters on it"), 0))
     return findings
