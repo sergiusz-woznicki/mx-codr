@@ -228,10 +228,15 @@ check_naming() {
   total="$(printf '%s\n' "$out" | grep -cE '^\s+- ')"
   printf '%s\n' "$out" | grep -E '^\s+- ' | head -10 > "$WORK/naming.detail"
   [ "$total" -gt 10 ] && echo "  ... 10 of $total shown -- the rest are the same kinds; fix them script by script" >> "$WORK/naming.detail"
-  total="$(printf '%s\n' "$out" | grep -cE '^\s+! ')"
-  if [ "$total" -gt 0 ]; then
-    { printf '%s\n' "$out" | grep -E '^\s+! ' | head -8 | sed -E 's/^[[:space:]]+! /   - /'
-      [ "$total" -gt 8 ] && echo "   ... 8 of $total naming warnings shown (MDL_CAPTIONS=error makes caption rules block)"
+  # Every performance warning is listed: each names a different table or loop, and Pi, shown 8 of
+  # 12 PERF07 lines, hunted the cache and the dumps for the other four. The rest stay capped at 8.
+  local perf_lines other_total
+  perf_lines="$(printf '%s\n' "$out" | grep -E '^\s+! \[PERF' | sed -E 's/^[[:space:]]+! /   - /')"
+  other_total="$(printf '%s\n' "$out" | grep -E '^\s+! ' | grep -cv '\[PERF')"
+  if [ -n "$perf_lines" ] || [ "$other_total" -gt 0 ]; then
+    { [ -n "$perf_lines" ] && printf '%s\n' "$perf_lines"
+      printf '%s\n' "$out" | grep -E '^\s+! ' | grep -v '\[PERF' | head -8 | sed -E 's/^[[:space:]]+! /   - /'
+      [ "$other_total" -gt 8 ] && echo "   ... 8 of $other_total naming warnings shown (MDL_CAPTIONS=error makes caption rules block)"
     } > "$WORK/naming.warnings"
   fi
   return "$gate"
