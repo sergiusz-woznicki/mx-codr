@@ -286,6 +286,8 @@ tests that were never seen to fail.
 The agent fixes them along with its next fix, never in a gate run of their own. Whatever is
 left at DONE goes into its report as the next thing to fix.
 A commit inside a loop (lint `CONV011`) is listed among them with its fix.
+So is row-by-row database work: a loop that sums retrieved rows, a database call per row, or a
+whole table filtered with `if` (`PERF02`/`03`/`05`); the fix named is an OQL view or an XPath.
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
 
 ```

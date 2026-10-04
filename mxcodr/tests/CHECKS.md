@@ -39,7 +39,8 @@ here blocks DONE unless the line says "warning".
 | `MOD001` | documents in process folders, not at module root or in a folder named after a type | `move microflow <Mod>.<Name> to folder '<Process>'` (skill `module-structure`) |
 | `REU001` | shared documents shared for real (info, never blocks) | a snippet used by one page is a page section; a `SUB_` with one caller is inline logic (skill `reuse-and-snippets`) |
 | `MPR*`, `SEC*`, `CONV*`, `ARCH*`, `QUAL*` | mxcli's built-in rules; errors block, warnings do not | `./mxcli lint -p <app>.mpr --list-rules` names each |
-| `CONV011` | a commit inside a loop: one database call per row (warning, listed under the gate's warnings) | change the objects in the loop, `commit $List;` once after `end loop;`; new objects are `add`ed to a list first |
+| `CONV011` | a commit inside a loop: one database call per row (warning) | change the objects in the loop, `commit $List;` once after `end loop;`; new objects are `add`ed to a list first |
+| `PERF02/03/05` | a loop that sums rows, calls the database per row, or keeps rows of a whole table with `if` (warning) | totals in an OQL view entity; the condition in the retrieve's XPath |
 
 ## naming -- microflows and nanoflows (`check_mdl.py --skill naming`, skill `naming-and-captions`)
 

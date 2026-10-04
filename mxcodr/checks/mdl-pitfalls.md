@@ -20,6 +20,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
   `commit $Lines;` after `end loop;`. A new object goes into a list first (`$New = create list of
   Mod.Line;` before the loop, `add $Copy to $New;` in it, `commit $New;` after it).
+- **Totals and counts over many rows come from an OQL view**, not a loop (gate PERF02/03/05). One view
+  computes them in one query: `create or modify view entity Sales.CustomerTotals (CustomerName: String(200),
+  OrderCount: Integer) as (select c.Name as CustomerName, (select count(o.ID) from Sales."Order" as o
+  where o/Sales.Order_Customer = c.ID) as OrderCount from Sales.Customer as c);` plus a grant with an XPath.
+  Measured at 10k rows: view 60 ms, loop 160 ms, `count()`/`sum()` after a retrieve 159 ms. Filter in the
+  retrieve, not with an `if` in a loop: `retrieve $Due from Sales.Invoice where [Status != 'Paid'];`.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).

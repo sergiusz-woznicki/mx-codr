@@ -381,6 +381,13 @@ surfaced at the end of the work, or not at all: Pi fixed seven of them a turn la
 lists each one under its warnings, with the fix, while the code is fresh, and the pitfalls in the
 syntax digest show the right form up front. They still do not block DONE.
 
+`PERF02`, `PERF03` and `PERF05`, warnings from the naming step: a loop over a retrieved list that only
+adds up its rows, a database call per row inside such a loop (a retrieve, a Java action, or a flow
+that reads or writes), and a whole table retrieved and filtered with `if`. Pi's B2B dashboard summed
+10,680 orders in a loop on every open. Measured on a copy: the loop 160 ms, `count()`/`sum()` right
+after the retrieve 159 ms, one OQL view entity 60 ms -- so the fix named is the view, and the
+condition in the retrieve's XPath. Seed and demo-data flows are skipped.
+
 After a full DONE the gate remembers what it saw. A DONE on the same model, tests and `theme/` says
 "a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
 unchanged app, "to confirm stability". `theme/` counts because a session that only sized a chart

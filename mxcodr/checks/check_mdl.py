@@ -19,6 +19,8 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 #   placeholder-variable         FAIL  $Int1, $List2, $tmp, $x ...
 #   type-echo-variable           FAIL  name ends in _List, _Object or _Obj
 #   REFRESH01                    FAIL  a microflow that closes its page commits without `refresh`
+#   PERF02 PERF03 PERF05         WARN  a loop that only sums a retrieved list; a database call per row
+#                                      in such a loop; a whole table filtered by an `if` (perf_rules.py)
 # --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
 # default, since 286 of them landed at once on a session with no test green yet.
 
@@ -29,6 +31,9 @@ import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from perf_rules import perf_findings  # noqa: E402
 
 # Any `@word rest`; group 1 is the word (caption, annotation, position).
 ANNOTATION_RE = re.compile(r"^\s*@(\w+)\s*(.*)$")
@@ -321,7 +326,9 @@ def refresh_findings(lines: list[str]) -> list[Failure]:
 
 def check_naming_and_refresh(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
     failures, warnings = check_naming(lines)
-    return failures + refresh_findings(lines), warnings
+    # Performance (PERF02/03/05, perf_rules.py): warnings, listed before the caption warnings.
+    perf = [Warning_(code, message, line) for code, message, line in perf_findings(lines)]
+    return failures + refresh_findings(lines), perf + warnings
 
 
 CHECKS = {"naming": check_naming_and_refresh}
@@ -393,7 +400,9 @@ def main() -> int:
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        extra = f", {caption_warnings} caption warning(s)" if caption_warnings else ""
+        perf = sum(1 for w in warnings if w["check"].startswith("PERF"))
+        extra = (f", {perf} performance warning(s)" if perf else "") + (
+            f", {caption_warnings} caption warning(s)" if caption_warnings else "")
         print(f"{report['verdict']}  {len(failures)} failure(s) over {len(lines)} lines{extra}")
         for failure in failures:
             location = f"line {failure['line']}" if failure["line"] else "-"
