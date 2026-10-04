@@ -1,12 +1,16 @@
-"""PERF07: an attribute the app filters or sorts on, with no database index that starts with it.
+"""PERF07: a query the app runs often, with no database index that serves it.
 
     from index_rules import index_findings
     index_findings(entity_lines, document_lines) -> [(code, message, line)]
 
 <entity_lines> is DESCRIBE ENTITY output for the project's own entities; <document_lines> is
-DESCRIBE output for its microflows, nanoflows and pages. An attribute counts as used when a
-retrieve or a page's database source compares it in its XPath (`=`, `<`, `>`, `<=`, `>=`) or
-sorts by it. Mendix indexes `id`, every association and every attribute with a uniqueness rule
+DESCRIBE output for its microflows, nanoflows and pages. Each retrieve and page database source
+wants one index: the attributes its XPath compares with `=` first, then the first one it compares
+with `<`, `>`, `<=`, `>=`, or else the first it sorts by. An existing index whose leading columns
+are those serves it; an index on (A, B) also serves a query on A alone, so a shorter suggestion
+another one starts with is dropped, and an existing (A) that (A, B) would replace is named.
+Measured at 200,000 rows, the newest order of one status: 9.9 ms with no index, 2.6 ms with an
+index on each attribute, 0.01 ms with one (Status, DateCreated). Mendix indexes `id`, every association and every attribute with a uniqueness rule
 by itself (measured on PostgreSQL, 2026-10-04); everything else is a full table scan. Measured
 the same day on a copy of InvoiceB2B's orders at 200,000 rows: the latest order by date 35 ms
 without an index and 0.01 ms with one; one status 9.7 ms and 2.0 ms. At 10,000 rows both are
@@ -25,7 +29,7 @@ from perf_rules import ONE_TIME
 ENTITY_HEAD = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?P<kind>view\s+|non-persistent\s+|persistent\s+)?"
                          r"entity\s+(?P<name>\w+\.(?:\"[^\"]+\"|\w+))", re.I)
 ATTRIBUTE = re.compile(r"^\s*\"?(?P<name>\w+)\"?\s*:\s*(?P<type>\w+)(?P<rest>.*)$")
-INDEX = re.compile(r"^\s*index\s+(?:\w+\s+)?(?:on\s+)?\(\s*\"?(?P<first>\w+)\"?", re.I)
+INDEX = re.compile(r"^\s*index\s+(?:\w+\s+)?(?:on\s+)?\((?P<columns>[^)]*)\)", re.I)
 DOC_HEAD = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow|page|snippet)\s+(?P<name>[\w.]+)", re.I)
 RETRIEVE = re.compile(r"\bretrieve\s+\$\w+\s+from\s+(?:database\s+)?(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))(?P<tail>[^;]*)", re.I | re.S)
 SOURCE = re.compile(r"\bdatabase\s+from\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))(?P<tail>(?:\s+where\s+(?:\[[^\]]*\]|[^,\n]*?(?=\s+sort\s+by|,|\n)))?"
@@ -33,7 +37,7 @@ SOURCE = re.compile(r"\bdatabase\s+from\s+(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))(?P
 # Scripts write `where [A = 1]`; DESCRIBE prints `where A = 1` up to sort by / limit / the end.
 XPATH = re.compile(r"where\s*(?:\[(?P<xpath>[^\]]*)\]|(?P<bare>.*?)(?=\s+sort\s+by\b|\s+limit\b|\s+first\b|,\s*\w+\s*:|\)\s*$|$))",
                    re.I | re.S)
-COMPARED = re.compile(r"(?<![\w./$'\"])\"?(?P<attr>[A-Za-z_]\w*)\"?\s*(?:<=|>=|=|<|>)")
+COMPARED = re.compile(r"(?<![\w./$'\"])\"?(?P<attr>[A-Za-z_]\w*)\"?\s*(?P<op><=|>=|=|<|>)")
 SORT = re.compile(r"sort\s+by\s+(?P<list>[\w.\"]+(?:\s+(?:asc|desc))?(?:\s*,\s*[\w.\"]+(?:\s+(?:asc|desc))?)*)", re.I)
 SKIP_TYPES = {"boolean", "binary", "hashstring", "autonumber"}
 
@@ -43,7 +47,8 @@ def _plain(name: str) -> str:
 
 
 def entities(lines: list[str]) -> dict[str, dict]:
-    """{entity: {"attributes": {name: type}, "indexed": {first columns, unique attributes}}}."""
+    """{entity: {"attributes": {lower: (name, type)}, "indexes": [(lower columns...)]}}; a unique
+    attribute counts as an index of its own (Mendix creates one)."""
     found: dict[str, dict] = {}
     current = None
     for line in lines:
@@ -52,7 +57,7 @@ def entities(lines: list[str]) -> dict[str, dict]:
             kind = (head.group("kind") or "persistent").strip().lower()
             current = _plain(head.group("name")) if kind == "persistent" else None
             if current:
-                found[current] = {"attributes": {}, "indexed": set()}
+                found[current] = {"attributes": {}, "indexes": []}
             continue
         if current is None:
             continue
@@ -63,19 +68,21 @@ def entities(lines: list[str]) -> dict[str, dict]:
             continue
         index = INDEX.match(line)
         if index:
-            found[current]["indexed"].add(index.group("first").lower())
+            columns = tuple(_plain(part.strip().split()[0]).lower() for part in index.group("columns").split(","))
+            found[current]["indexes"].append(columns)
             continue
         attribute = ATTRIBUTE.match(line)
         if attribute:
             name = attribute.group("name")
             found[current]["attributes"][name.lower()] = (name, attribute.group("type").lower())
             if re.search(r"\bunique\b", attribute.group("rest"), re.I):
-                found[current]["indexed"].add(name.lower())
+                found[current]["indexes"].append((name.lower(),))
     return found
 
 
-def uses(lines: list[str]) -> list[tuple[str, str, str, int]]:
-    """(entity, attribute, document, line) for every attribute compared or sorted on."""
+def queries(lines: list[str]) -> list[tuple[str, list[str], list[str], list[str], str, int]]:
+    """(entity, attributes compared with =, compared with < > <= >=, sorted on, document, line)
+    for every retrieve and page database source."""
     text = "\n".join(lines)
     starts = [(m.start(), m.group("name")) for m in re.finditer(DOC_HEAD.pattern, text, re.I | re.M)]
 
@@ -90,45 +97,88 @@ def uses(lines: list[str]) -> list[tuple[str, str, str, int]]:
     found = []
     for pattern in (RETRIEVE, SOURCE):
         for match in pattern.finditer(text):
-            entity = _plain(match.group("entity"))
             tail = match.group("tail")
-            line = text.count("\n", 0, match.start()) + 1
-            names = []
+            equal, ranged, sort = [], [], []
             for xpath in XPATH.finditer(tail):
                 # contains(Attr, ...) and starts-with(...) are left out: an index does not help them.
                 condition = xpath.group("xpath") if xpath.group("xpath") is not None else xpath.group("bare")
                 cleaned = re.sub(r"\b(contains|starts-with|ends-with)\s*\([^)]*\)", "", condition, flags=re.I)
-                names += [m.group("attr") for m in COMPARED.finditer(cleaned)]
-            for sort in SORT.finditer(tail):
-                for item in sort.group("list").split(","):
-                    names.append(_plain(item.strip().split()[0]).split(".")[-1])
-            found += [(entity, name, document_at(match.start()), line) for name in names]
+                for compared in COMPARED.finditer(cleaned):
+                    (equal if compared.group("op") == "=" else ranged).append(compared.group("attr"))
+            for sorted_by in SORT.finditer(tail):
+                sort += [_plain(item.strip().split()[0]).split(".")[-1] for item in sorted_by.group("list").split(",")]
+            found.append((_plain(match.group("entity")), equal, ranged, sort, document_at(match.start()),
+                          text.count("\n", 0, match.start()) + 1))
     return found
+
+
+def wanted(info: dict, equal: list[str], ranged: list[str], sort: list[str]) -> tuple[str, ...]:
+    """The index one query wants: its `=` attributes first, then its first range or sort attribute
+    (a B-tree serves equality on the leading columns, then one range or the order). At most three."""
+    def usable(names):
+        out = []
+        for attr in names:
+            entry = info["attributes"].get(attr.lower())
+            if entry and entry[1] not in SKIP_TYPES and entry[0] not in out:
+                out.append(entry[0])
+        return out
+    columns = usable(equal)
+    tail = usable(ranged)[:1] or usable(sort)[:1]
+    columns += [name for name in tail if name not in columns]
+    return tuple(columns[:3])
 
 
 def index_findings(entity_lines: list[str], document_lines: list[str]) -> list[tuple[str, str, int]]:
     known = entities(entity_lines)
-    places: dict[tuple[str, str], list[str]] = {}
-    first_line: dict[tuple[str, str], int] = {}
-    for entity, attr, document, line in uses(document_lines):
+    places: dict[tuple[str, tuple[str, ...]], list[str]] = {}
+    first_line: dict[tuple[str, tuple[str, ...]], int] = {}
+    for entity, equal, ranged, sort, document, line in queries(document_lines):
         info = known.get(entity)
-        if not info or attr.lower() not in info["attributes"] or (document and ONE_TIME.search(document)):
+        if not info or (document and ONE_TIME.search(document)):
             continue
-        name, kind = info["attributes"][attr.lower()]
-        if kind in SKIP_TYPES or attr.lower() in info["indexed"]:
+        columns = wanted(info, equal, ranged, sort)
+        if not columns:
             continue
-        key = (entity, name)
+        key = (entity, columns)
         places.setdefault(key, [])
         if document and document not in places[key]:
             places[key].append(document)
         first_line.setdefault(key, line)
+
+    def lower(columns):
+        return tuple(name.lower() for name in columns)
+
+    def covered(entity, columns):
+        return any(index[:len(columns)] == lower(columns) for index in known[entity]["indexes"])
+
+    keys = [key for key in places if not covered(*key)]
+    # An index on (A, B) also serves a query on A alone: drop a suggestion another one starts with.
+    keys = [(entity, columns) for entity, columns in keys
+            if not any(other_entity == entity and len(other) > len(columns) and other[:len(columns)] == columns
+                       for other_entity, other in keys)]
     findings = []
-    for (entity, name), documents in sorted(places.items()):
+    for entity, columns in sorted(keys):
+        documents = places[(entity, columns)]
+        for other_entity, other in places:     # the places of the queries this index also serves
+            if other_entity == entity and len(other) < len(columns) and columns[:len(other)] == other:
+                documents += [d for d in places[(other_entity, other)] if d not in documents]
         where = ", ".join(documents[:3]) + (f" and {len(documents) - 3} more" if len(documents) > 3 else "")
-        findings.append(("PERF07", (
-            f"{entity}.{name} is filtered or sorted on ({where or 'a retrieve'}) and no index starts with it: "
-            f"every such query reads the whole table. `alter entity {entity} add index if not exists ({name});` "
-            f"-- measured at 200k rows: the latest row by date 35 ms -> 0.01 ms, one status 9.7 -> 2.0 ms. An "
-            f"index costs a little on every commit, so index what is filtered or sorted, not every attribute"),
-            first_line[(entity, name)]))
+        listed = ", ".join(columns)
+        add = f"`alter entity {entity} add index if not exists ({listed});`"
+        if len(columns) == 1:
+            message = (f"{entity}.{columns[0]} is filtered or sorted on ({where or 'a retrieve'}) and no index "
+                       f"starts with it: every such query reads the whole table. {add} -- measured at 200k rows: "
+                       f"the latest row by date 35 ms -> 0.01 ms, one status 9.7 -> 2.0 ms. An index costs a "
+                       f"little on every commit, so index what is filtered or sorted, not every attribute")
+        else:
+            replaced = [index for index in known[entity]["indexes"]
+                        if len(index) < len(columns) and lower(columns)[:len(index)] == index]
+            drop = "".join(f" then `alter entity {entity} drop index if exists ({', '.join(c for c in columns[:len(index)])});`, which it replaces."
+                           for index in replaced)
+            message = (f"{entity} is filtered on {', '.join(columns[:-1])} and filtered or sorted on {columns[-1]} in "
+                       f"one query ({where or 'a retrieve'}): one index ({listed}) serves it, the `=` attributes "
+                       f"first -- {add}{drop} Measured at 200k rows, the newest order of one status: 9.9 ms with no "
+                       f"index, 2.6 ms with an index on each attribute, 0.01 ms with one (Status, DateCreated). It "
+                       f"also serves queries on {columns[0]} alone")
+        findings.append(("PERF07", message, first_line[(entity, columns)]))
     return findings

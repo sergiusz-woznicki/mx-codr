@@ -31,9 +31,10 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   must not read the view unconstrained (gate VIEW01): constrain the grant, or revoke it and read the
   view in the page's data-source microflow, filtered to the object it was given.
 - **Index what you filter or sort on** (gate PERF07): Mendix indexes only `id`, associations and unique
-  attributes. `alter entity Sales.Invoice add index if not exists (DueDate);` -- at 200k rows the newest
-  row by date went from 35 ms to 0.01 ms. Not booleans, not `!=` or `contains()`; each index costs a
-  little on every commit.
+  attributes. One index per query, its `=` attributes first, then the range or sort:
+  `alter entity Sales.Invoice add index if not exists (PaymentStatus, DueDate);` -- at 200k rows the newest
+  row of one status: 9.9 ms without, 2.6 ms with two single indexes, 0.01 ms with that one. It also serves
+  a query on PaymentStatus alone. Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).

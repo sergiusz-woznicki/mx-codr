@@ -417,6 +417,14 @@ index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both st
 naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
 entities and seed flows are left out: an index does not help them, or they run once.
 
+PERF07 suggests one index per query, not per attribute: the attributes its XPath compares with `=`
+first, then the first range comparison or sort. `PaymentStatus = ... and DueDate < ...` gets one
+`(PaymentStatus, DueDate)`; at 200,000 rows the newest order of one status took 9.9 ms with no index,
+2.6 ms with an index on each attribute and 0.01 ms with one `(Status, DateCreated)`. An index on
+(A, B) also serves a query on A alone, so that shorter suggestion is dropped, and an existing (A)
+the new index replaces is named with its `drop index` line. Pi, told to index each attribute on its
+own, added twelve single indexes where two queries wanted one of two columns each.
+
 After a full DONE the gate remembers what it saw. A DONE on the same model, tests and `theme/` says
 "a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
 unchanged app, "to confirm stability". `theme/` counts because a session that only sized a chart
