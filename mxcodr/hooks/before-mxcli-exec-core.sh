@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # hooks/before-mxcli-exec-core.sh -- the part of the before-exec hook every host shares. Sourced by
-# before-mxcli-exec.sh (Claude Code, Codex) and before-mxcli-exec-cursor.sh (Cursor); never run on
+# before-mxcli-exec.sh (Claude Code) and before-mxcli-exec-cursor.sh (Cursor); never run on
 # its own. The two hooks differed only in how they read the call and answer it, and three changes
 # in one day were made twice each. Provides: PY, hook_sleep_message, inline_mdl,
 # steps_before_exec, hook_scripts, script_written_before_exec, hook_marketplace_wait, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.

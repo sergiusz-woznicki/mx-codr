@@ -10,8 +10,8 @@
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
 #
-# Seven verdicts: the browser suite (tests/verify-*.test.sh) and six model checks that need no
-# app -- mx check, lint, coverage, naming, layout, security. Every step runs even if another
+# Eight verdicts: the browser suite (tests/verify-*.test.sh) and seven model checks that need no
+# app -- mx check, lint, coverage, naming, layout, security, scope. Every step runs even if another
 # fails; a passing model check is replayed while its inputs are unchanged.
 #   DONE — every check passed               exit 0 (--only/--tests-only print PASSED, never DONE)
 #   NOT DONE — failed: <checks>             exit 1

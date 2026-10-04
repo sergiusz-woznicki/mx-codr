@@ -605,7 +605,23 @@ caption warning into a failure at once. Names that mxcli lists are checked (`Mod
 before they become MDL statements or file names. In the development repo a real project's
 describe output is kept as a fixture, with the number of documents mxcli listed; a test asserts
 that every parser recognises that many (`tools/dev/make-golden-dump.py` regenerates it with a new
-mxcli, and the test then names the parsers that went silent). The
+mxcli, and the test then names the parsers that went silent).
+
+Bundle 2026.10.04.16 is the first part of the audit's fourth step: copies that had drifted, and
+the guard as a module. No rule changed.
+- The Cursor before-exec hook had lost two rules the Claude Code hook has: a `sleep` before the
+  gate, and a script named through a shell variable (`mxcli exec mdlsource/$f.mdl`), which
+  precheck could not find and let through.
+- The after-exec hook's own module list did not leave out `MxTest`; `tests/orient.sh` asked the
+  coverage checker one module at a time, which reports a test covering another module's page as
+  stale. Both now do what the gate does.
+- The guard's decision moved out of the hook, where it was 227 lines of Python in a shell string,
+  into `checks/guard_harness.py` (installed as `tools/mdl-checks/guard_harness.py`), unchanged. The
+  hook finds it in the bundle and installed, and without it blocks a call that names `harness.env`.
+- A test compares the copies hooks keep of shared helpers (`mdl_find_python` in ten files, the
+  Studio Pro process pattern, the module list), so a fix made in one copy and not the others fails.
+- `gate_helpers.py runtime-age` no longer stops with a traceback when the `.mpr` is gone; comments
+  that described older behaviour ("five model checks") say what the code does. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

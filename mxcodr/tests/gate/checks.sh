@@ -1,4 +1,5 @@
-# tests/gate/checks.sh -- the five model checks that need no app, and their cache.
+# tests/gate/checks.sh -- the model checks that need no app (mx check, lint, coverage, naming,
+# layout, security, scope), and their cache.
 # Sourced by tests/gate.sh; defines functions only. Entry points: start_model_checks, collect_model_checks.
 
 # Each check runs in a background subshell, so it reports through files: check_<name> writes
@@ -459,7 +460,7 @@ run_cached() {
   return "$status"
 }
 
-# Starts the five model checks in the background, each through the cache.
+# Starts the model checks in the background, each through the cache.
 start_model_checks() {
   # Upgrading the gate, its config or mxcli must not replay an old pass.
   local -a cache_inputs=(tests/gate.sh tests/gate tools/mdl-checks/gate_helpers.py tests/harness.env "meta:$MXCLI")

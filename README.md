@@ -307,6 +307,7 @@ The guard also reads a `cd` before a write, a link to a guarded file, a copy int
 inline code that writes `tests/harness.env`; the test password no longer shows in `ps`.
 A checker that recognises none of the documents mxcli described (a describe format it does not
 read) says "could not run" instead of passing.
+The Cursor hook applies the same rules before an `mxcli exec` as the Claude Code hook.
 After an exec, the agent is told when it re-created a page another script alters, or granted
 access another script revoked.
 

@@ -57,7 +57,8 @@ elif re.search(r"\bgrep\b.*error", command, re.I):
 [ -n "$_verdict" ] && printf '%s\n' "$_verdict"
 case "$_verdict" in "exec: FAILED"*) exit 0 ;; esac
 # Studio Pro with this project open saves its own copy of a document over what the exec wrote
-# (it dropped 12 indexes on 2026-10-04). Same test as tests/portable.sh mdl_studio_pro_open.
+# (it dropped 12 indexes on 2026-10-04). The same process pattern as mdl_studio_pro_open in
+# tests/portable.sh, which also covers Windows; a test keeps the two patterns identical.
 if command -v pgrep >/dev/null 2>&1; then
   _here="$(pwd -P)"
   for _pid in $(pgrep -f '(/MacOS/studiopro|[Ss]tudio[Pp]ro(\.exe)?)$' 2>/dev/null); do
@@ -169,12 +170,14 @@ fi
 [ -f tools/mdl-checks/check_test_coverage.py ] || exit 0
 mpr="$(ls -1 *.mpr 2>/dev/null | head -1)"; [ -n "$mpr" ] || exit 0
 
-# Own modules: not System, MyFirstModule or Marketplace (non-empty Source).
+# Own modules: not System, MyFirstModule, MxTest (`mxcli test` injects it) or Marketplace (non-empty
+# Source). The same list as mdl_user_modules in tests/portable.sh, which this copy had fallen behind.
 MXCLI="./mxcli"; [ -x "$MXCLI" ] || { [ -x "./mxcli.exe" ] && MXCLI="./mxcli.exe"; }
 modules="$("$MXCLI" -p "$mpr" --json -c "SHOW MODULES" 2>/dev/null \
   | "$PY" -c 'import json,sys
+sys.stdout.reconfigure(newline="\n")
 for row in json.load(sys.stdin):
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule"):
+    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule","MxTest"):
         print(row["Module"])' 2>/dev/null)"
 [ -n "$modules" ] || exit 0
 

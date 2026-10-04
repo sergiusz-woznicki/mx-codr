@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # tests/portable.sh -- platform shims and shared helpers (macOS, Linux, Git Bash on Windows).
-# Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh and run-app.sh; not run on its own.
+# Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh, precheck.sh, theme.sh, run-app.sh,
+# run-docker.sh and marketplace-login.sh; not run on its own.
 # Provides: $MXCLI, $PY, mdl_find_python, mdl_load_harness_env, mdl_json_object,
 #   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_runtime_running, mdl_check_local_database,
-#   mdl_check_install_freshness, mdl_studio_pro_open, mdl_studio_pro_warning, mdl_tmpdir, mdl_tmpfile,
-#   mdl_find_mpr, mdl_user_modules.
+#   mdl_check_mxcli_freshness, mdl_check_install_freshness, mdl_syntax_digest, mdl_studio_pro_open,
+#   mdl_studio_pro_warning, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr, mdl_user_modules.
 # Sourcing it also loads tests/harness.env as data (never sourced) and repairs JAVA_HOME.
 # Inputs: MXCLI, PY, PORTABLE_APP_DIR, APP_DIR, LOCALAPPDATA. Nothing else is exported.
 

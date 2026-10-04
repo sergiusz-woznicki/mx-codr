@@ -137,7 +137,10 @@ def runtime_age(mpr, started):
         boot = datetime.datetime.strptime(" ".join(started.split()), "%a %b %d %H:%M:%S %Y")
     except ValueError:
         return 0
-    changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
+    try:
+        changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
+    except OSError:      # no .mpr to compare: nothing to say, as deployment_age does
+        return 0
     gap = (changed - boot).total_seconds()
     if gap > 5:
         print("   !! the model changed %ds after the runtime started and nothing applied it"

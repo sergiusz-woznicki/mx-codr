@@ -48,9 +48,11 @@ tests_section() {
   done
   echo "== coverage"
   if [ -f tools/mdl-checks/check_test_coverage.py ]; then
-    for module in $(mdl_user_modules "$MPR"); do
-      printf '   %-20s %s\n' "$module" "$("$PY" tools/mdl-checks/check_test_coverage.py . "$module" 2>&1 | tail -1)"
-    done
+    # One call for all modules, as the gate and the after-exec hook do: asked one module at a
+    # time, a test that covers another module's page is reported as naming something stale.
+    # shellcheck disable=SC2046
+    "$PY" tools/mdl-checks/check_test_coverage.py . $(mdl_user_modules "$MPR") 2>&1 \
+      | grep -E '^(PASS|FAIL|ERROR)' | sed 's/^/   /'
   fi
 }
 
