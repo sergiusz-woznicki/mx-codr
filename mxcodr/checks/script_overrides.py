@@ -106,8 +106,12 @@ def _already_in(alter_path: str, key: str, create_path: str) -> bool:
 
 
 def scripts_in(command: str) -> list[str]:
+    # punctuation_chars splits `;`, `&&` and `|` off a word: `for f in a.mdl b.mdl; do` named
+    # `b.mdl;`, which is no file, so the last script of a loop did not count as run (2026-10-04).
     try:
-        words = shlex.split(command)
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
     except ValueError:
         words = command.split()
     paths = []
