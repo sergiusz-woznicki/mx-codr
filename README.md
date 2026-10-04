@@ -433,6 +433,7 @@ host. A change to what the harness says or checks is one edit.
 `mxcodr/` is a copy of files that live in the harness repo — `mxcodr/README.md` has the
 table of which file comes from where. Edit it there, not here.
 
-The long scripts are split into short parts: `install.sh` sources `install/*.sh`, `tests/lib.sh`
+The long scripts are split into short parts: `install.sh` sources `install/*.sh` (whose Python is
+in `install/hosts/`), `tests/lib.sh`
 sources `tests/lib/*.sh` and `checks/check_layout.py` imports its rules from
 `checks/layout_rules/`. The map of what is where is under "What is in here" in `mxcodr/README.md`.

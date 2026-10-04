@@ -14,6 +14,7 @@ install.sh        copies the payload into a Mendix project; the entry, ~90 lines
 install/          the rest in order: 8 files of helpers (ui, prereqs, postgres, docker, windows,
                   mxcli, studio_pro, toolchain), then the steps (target, step_prereqs, step_app,
                   step_skills, step_hosts, step_harness, summary). Its header lists which is which
+install/hosts/    the five Python scripts step_hosts runs, one per host config it merges
 bootstrap.ps1     Windows only: gets Git Bash, Python and Node, then hands over to install.sh
 VERSION           date-based version, copied to tools/mdl-checks/VERSION in the target
 MXCLI_TESTED      the one mxcli release this bundle works with ("<tag> <build-date>"): the
@@ -630,7 +631,14 @@ so `VIEW01` and the index rules (`PERF07`, `PERF08`) never ran on Windows; once 
 could not run stopped counting as a pass, `security` said "could not run" there and the gate could
 not say DONE. The two inline scripts whose lines bash reads (entity names, user roles) now write
 LF, as the module list already did. Verified in the Parallels Windows 11 VM: the installer, then
-the gate with the app booted by `tests/run-app.sh`. The
+the gate with the app booted by `tests/run-app.sh`.
+
+Bundle 2026.10.04.18 changes no behaviour. The five Python blocks `install/step_hosts.sh` held as
+heredocs (the merges into `.claude/settings.local.json`, `.codex/config.toml`, `.codex/hooks.json`,
+`.cursor/hooks.json` and `opencode.json`) are files under `install/hosts/`, byte for byte the
+same code, run with the same argument. Old and new were run on the same inputs (no file, an
+existing file, twice in a row) and the whole hosts step on an empty project: the files written
+and the output are identical. `step_hosts.sh` went from 237 lines to 53. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.
