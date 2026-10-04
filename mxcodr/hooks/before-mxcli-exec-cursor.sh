@@ -37,6 +37,9 @@ if [ -f "$guard" ]; then
     exit 0
   }
 fi
+# The same two rules the Claude Code hook has; this copy had lost them (audit of 2026-10-04).
+message="$(hook_sleep_message "$command")"
+[ -z "$message" ] || deny "$message"
 # The app needs a Marketplace module and mxcli is not logged in: wait for the person's login.
 hook_marketplace_wait "$command" || deny "$HOOK_MARKETPLACE_OUT"
 inline=()
@@ -48,6 +51,8 @@ case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) [ "${#inline[@]}" -g
 
 scripts="$(hook_scripts "$command")"
 [ -n "$scripts" ] || [ "${#inline[@]}" -gt 0 ] || allow
+# `for f in a b; do mxcli exec mdlsource/$f.mdl` hands the hook a literal `$f`: nothing to check.
+if printf '%s\n' "$scripts" | grep -q '[$]'; then deny "$HOOK_VARIABLE_MESSAGE"; fi
 
 args=()
 while IFS= read -r script; do

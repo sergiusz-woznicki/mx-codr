@@ -20,6 +20,22 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
   `commit $Lines;` after `end loop;`. A new object goes into a list first (`$New = create list of
   Mod.Line;` before the loop, `add $Copy to $New;` in it, `commit $New;` after it).
+- **Totals and counts over many rows come from an OQL view**, not a loop (gate PERF02/03/05/06). One view
+  computes them in one query: `create or modify view entity Sales.CustomerTotals (CustomerName: String(200),
+  OrderCount: Integer) as (select c.Name as CustomerName, (select count(o.ID) from Sales."Order" as o
+  where o/Sales.Order_Customer = c.ID) as OrderCount from Sales.Customer as c);` plus a grant with an XPath.
+  Measured at 10k rows: view 60 ms, loop 160 ms, `count()`/`sum()` after a retrieve 159 ms. Filter in the
+  retrieve, not with an `if` in a loop: `retrieve $Due from Sales.Invoice where [Status != 'Paid'];`. The
+  highest value (the next number) is one sorted row: `retrieve $Last from Sales.Invoice where
+  [Number != empty] sort by Sales.Invoice.Number desc limit 1;`. A role that sees only its own rows
+  must not read the view unconstrained (gate VIEW01): constrain the grant, or revoke it and read the
+  view in the page's data-source microflow, filtered to the object it was given.
+- **Index what you filter or sort on** (gate PERF07): Mendix indexes only `id`, associations and unique
+  attributes. One index per query, its `=` attributes first, then the range or sort:
+  `alter entity Sales.Invoice add index if not exists (PaymentStatus, DueDate);` -- at 200k rows the newest
+  row of one status: 9.9 ms without, 2.6 ms with two single indexes, 0.01 ms with that one. It also serves
+  a query on PaymentStatus alone, so drop the old (PaymentStatus) and any index no query needs (PERF08).
+  Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).

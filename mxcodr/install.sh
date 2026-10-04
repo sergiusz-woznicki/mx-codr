@@ -40,6 +40,9 @@ set -Eeuo pipefail
 # deliberate stop (ui_fail) keeps its own message alone.
 # A missing shasum on Windows once ended the install with no word at all.
 MDL_STOPPED_AT=""
+# Set by step_app.sh while a scratch project exists; never taken from the caller's environment,
+# since the EXIT trap evals it.
+MDL_EXIT_EXTRA=""
 trap 'MDL_STOPPED_AT="${BASH_SOURCE[0]##*/mxcodr/}:${LINENO}: ${BASH_COMMAND}"' ERR
 mdl_install_exit() {
   local code=$?

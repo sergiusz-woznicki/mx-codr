@@ -37,6 +37,7 @@ MSG
 preflight_stale_model() {
   if [ "${MDL_RUN_MODE:-}" = "docker" ]; then docker_apply_latest_model; return 0; fi
   watch_applied_latest_change && return 0
+  [ "${WATCH_MISSED:-0}" = "1" ] && { restart_after_missed_watch; return 0; }
   warn_if_deployment_older
   warn_if_runtime_older
 }
@@ -64,11 +65,27 @@ watch_applied_latest_change() {
        && [ "$(log_age "$boot_log")" -ge "$quiet" ] && [ ! "$MPR" -nt "$boot_log" ]; then
       break
     fi
+    # The model changed, and the watcher wrote nothing since: it missed the exec. A session's
+    # `mxcli oql` then said the three new view entities did not exist (2026-10-04).
+    if { [ "$state" = "ready" ] || [ "$state" = "applied" ]; } && [ "$MPR" -nt "$boot_log" ] \
+       && [ "$(log_age "$MPR")" -ge "${MDL_WATCH_MISSED_SECONDS:-15}" ]; then
+      WATCH_MISSED=1; return 1
+    fi
     [ "$waited" = "0" ] && echo "   (waiting for --watch to apply the latest model change)"
     sleep 1; waited=$((waited + 1))
   done
   case "$(gate_py watch-state "$boot_log" | head -1)" in ready|applied) ;; *) return 1 ;; esac
   client_served
+}
+
+# --watch did not notice the last exec, so the app runs the model from before it. Restarting is
+# what the agent would do next anyway; the gate does it, so the suite runs on the current model.
+restart_after_missed_watch() {
+  echo "   !! --watch did not rebuild after the last model change (the model is newer than its log's"
+  echo "      last line), so the app still ran the old model -- restarting it, as --restart would"
+  restart_app
+  BOOT=1
+  ensure_app
 }
 
 # The last --watch rebuild failed, so the app still runs the model from before it: tests would
@@ -158,6 +175,16 @@ warn_if_runtime_older() {
   started="$(ps -o lstart= -p "$oldest" 2>/dev/null)"
   [ -n "$started" ] || return 0
   gate_py runtime-age "$MPR" "$started" | tee -a "$WORK/stale.note"
+}
+
+# Studio Pro with this project open overwrites what mxcli writes: say so up front and under the
+# verdict, where a session reading the tail sees it.
+preflight_studio_pro() {
+  local warning
+  warning="$(mdl_studio_pro_warning "$APP_DIR")"
+  [ -n "$warning" ] || return 0
+  echo "   $warning"
+  summary+=("$warning")
 }
 
 # Warns about a missing browser binary, a broken local database, and missing credentials.

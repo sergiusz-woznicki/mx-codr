@@ -43,8 +43,11 @@ def qualified_names():
     rows = json.load(sys.stdin)
     if not isinstance(rows, list):
         return 1
-    for row in rows:
-        name = row.get("Qualified Name") or row.get("QualifiedName")
+    names = [row.get("Qualified Name") or row.get("QualifiedName") for row in rows]
+    # The names become MDL statements and file names: anything that is not Module.Name is refused.
+    if any(name and not re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", name) for name in names):
+        return 1
+    for name in names:
         if name:
             print(name)
     return 0
@@ -134,7 +137,10 @@ def runtime_age(mpr, started):
         boot = datetime.datetime.strptime(" ".join(started.split()), "%a %b %d %H:%M:%S %Y")
     except ValueError:
         return 0
-    changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
+    try:
+        changed = datetime.datetime.fromtimestamp(os.path.getmtime(mpr))
+    except OSError:      # no .mpr to compare: nothing to say, as deployment_age does
+        return 0
     gap = (changed - boot).total_seconds()
     if gap > 5:
         print("   !! the model changed %ds after the runtime started and nothing applied it"

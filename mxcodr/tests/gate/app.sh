@@ -80,10 +80,22 @@ wait_for_boot() {   # wait_for_boot <log>
 # The path is followed by a separator or the end of the argument, because one project's
 # directory is often a prefix of another's: an unanchored match let a --stop in .../InvoiceB2B
 # kill the runtime of .../InvoiceB2BOpus5.5, whose deployment path starts with the same text.
+# `mxcli run` names only the .mpr file, and two projects can share that name (`App.mpr`): a
+# --restart in one stopped the other's app. So such a process counts when its command line names
+# this project's directory or, read with lsof, it was started in it. Without lsof the name decides.
 project_pids() {
   command -v pgrep >/dev/null 2>&1 || return 0
+  local pid dir here
+  here="$(cd "$APP_DIR" 2>/dev/null && pwd -P)"
   { pgrep -f "runtimelauncher.*$(mdl_ere_quote "$APP_DIR")(/|[[:space:]]|$)" 2>/dev/null
-    pgrep -f "mxcli(\.exe)? run .*$(mdl_ere_quote "$MPR")([[:space:]]|$)" 2>/dev/null; } | sort -un
+    for pid in $(pgrep -f "mxcli(\.exe)? run .*$(mdl_ere_quote "$MPR")([[:space:]]|$)" 2>/dev/null); do
+      if command -v lsof >/dev/null 2>&1 \
+         && ! ps -o command= -p "$pid" 2>/dev/null | grep -qE "$(mdl_ere_quote "$APP_DIR")(/|[[:space:]]|$)"; then
+        dir="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
+        [ -z "$dir" ] || [ "$(cd "$dir" 2>/dev/null && pwd -P)" = "$here" ] || continue
+      fi
+      echo "$pid"
+    done; } | sort -un
 }
 descendants() {   # every process under <pid>, deepest first
   local child
@@ -306,6 +318,12 @@ MSG
 # The boot log is emptied for each boot (see boot_with_command); the previous one is kept, so a
 # failure that a later boot overwrote can still be read: .mxcli/gate-boot.prev.log.
 mdl_rotate_boot_log() {
+  # A repository can ship .mxcli/gate-boot.prev.log as a link to a file elsewhere, and the copy
+  # below would write through it: a link in either place is removed, never followed.
+  local log
+  for log in .mxcli/gate-boot.log .mxcli/gate-boot.prev.log; do
+    [ -L "$log" ] && rm -f "$log"
+  done
   [ -s .mxcli/gate-boot.log ] && cp .mxcli/gate-boot.log .mxcli/gate-boot.prev.log 2>/dev/null
   : > .mxcli/gate-boot.log
 }

@@ -10,16 +10,19 @@ if [ "$_MDL_LIMIT" -gt 15 ]; then _MDL_LIMIT=$((_MDL_LIMIT - 5)); fi
 
 # Print every process under <pid>, deepest first (pgrep, or ps -ef on Git Bash).
 _mdl_descendants() {
-  local child
-  # Skip $BASHPID: the watchdog subshell must not kill itself.
+  local child self="${BASHPID:-}"
+  # Skip this shell: the subshell that lists the tree must not be in it. macOS's own bash is 3.2
+  # and has no $BASHPID ("unbound variable" under set -u, on the timeout path only); there the
+  # parent of a process exec'd from a command substitution is this shell.
+  [ -n "$self" ] || self="$(exec sh -c 'echo "$PPID"')"
   if command -v pgrep >/dev/null 2>&1; then
     for child in $(pgrep -P "$1" 2>/dev/null); do
-      [ "$child" = "$BASHPID" ] && continue
+      [ "$child" = "$self" ] && continue
       _mdl_descendants "$child"; echo "$child"
     done
   else
     for child in $(ps -ef 2>/dev/null | awk -v p="$1" 'NR > 1 && $2 == p {print $1}'); do
-      [ "$child" = "$BASHPID" ] && continue
+      [ "$child" = "$self" ] && continue
       _mdl_descendants "$child"; echo "$child"
     done
   fi

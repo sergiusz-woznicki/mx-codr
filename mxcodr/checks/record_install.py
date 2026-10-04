@@ -37,6 +37,9 @@ def destinations(src):
     for name in listdir(os.path.join(src, "tests", "lib"), ".sh"):
         yield os.path.join(src, "tests", "lib", name), "tests/lib/" + name
 
+    for name in listdir(os.path.join(src, "tests", "checks"), ".md"):
+        yield os.path.join(src, "tests", "checks", name), "tests/checks/" + name
+
     for name in listdir(os.path.join(src, "checks"), ".py"):
         yield os.path.join(src, "checks", name), "tools/mdl-checks/" + name
 

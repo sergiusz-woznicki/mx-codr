@@ -31,7 +31,7 @@ Never wrap a harness command in `timeout` (macOS has none). Never hand-roll a wa
 or a reload (`sleep` before the gate is blocked). Microflow tests (`*.test.mdl`) are not run by
 the gate and do not count for DONE; only `tests/verify-*.test.sh` do.
 
-**What each check code wants, and its fix, is one page: `tests/CHECKS.md`** (layout codes such
+**What each check code wants, and its fix: `tests/checks/<step>.md`**, the file the gate names for the step that failed; `tests/CHECKS.md` says which file holds a code (layout codes such
 as `USER01`, `NAV01`, `EDGE01`, lint `UI001`, precheck `SCRIPT01`, `RUNTIME01`, `VIS01`). Read
 that, never `tests/gate/*.sh` or the checkers: three sessions grepped the gate's source for
 what a code required, and the page says it in one line.
@@ -87,7 +87,7 @@ Users who sign in need no login screen of your own (two sessions lost 15-25 minu
   startup with `None.get`.
 - The shape of a signed-in app -- Log out, a menu and home page per role, Users and My account,
   the signed-in user top right, Back top left, icons, one layout, `MyFirstModule` gone -- is
-  what the `layout` check enforces: `tests/CHECKS.md` names each code and its fix, the skill
+  what the `layout` check enforces: `tests/checks/layout.md` names each code and its fix, the skill
   `spacing-and-layout` has the snippets.
 - **Brand colours or a logo:** skill `theme-styling` and `./mxcli theme` (`create`, `apply`). A
   colour set only in `custom-variables.scss` is overwritten by Atlas; the top bar logo is

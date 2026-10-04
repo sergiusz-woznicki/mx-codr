@@ -64,6 +64,7 @@ what to fix. Codes in brackets are what the gate prints.
 **Done**
 - A failing test before each feature; a test for every page and action microflow.
 - Mendix's consistency check at 0 errors; project security at Production.
+- A role that sees only its own rows does not read a view of everyone's totals (`VIEW01`).
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
 
@@ -134,7 +135,8 @@ it does.
 
 The agent reads one skill before the first feature (`test-first-delivery`); every other
 project skill is named by the gate finding that needs it, with the fix in the finding. What each
-check code wants is one page, `tests/CHECKS.md`. Measured on seven sessions, a session read about
+check code wants is in one file per gate step, `tests/checks/<step>.md`, indexed by
+`tests/CHECKS.md`; a red verdict names the file of the step that failed. Measured on seven sessions, a session read about
 113 kB before its first change; the new shape is about 48 kB, to be confirmed by an A/B run. The
 gate is unchanged.
 
@@ -286,7 +288,28 @@ tests that were never seen to fail.
 The agent fixes them along with its next fix, never in a gate run of their own. Whatever is
 left at DONE goes into its report as the next thing to fix.
 A commit inside a loop (lint `CONV011`) is listed among them with its fix.
+So is row-by-row database work: a loop that sums retrieved rows, a database call per row, or a
+whole table filtered with `if`, or a loop that only keeps the largest value (`PERF02`/`03`/`05`/`06`);
+the fix named is an OQL view, an XPath, or one sorted retrieve with `limit 1`.
+A query no database index serves is listed too (`PERF07`), with the index it wants: its `=`
+columns first, then the range or sort column. An index no query needs is listed as well (`PERF08`).
+Both read view entities' OQL too, and skip a query that follows an association: Mendix indexes those.
 A second DONE on an unchanged model and unchanged tests says that the repeat proves nothing new.
+When `--watch` misses an exec, the gate restarts the app so the tests run on the current model.
+The model checks read the model with one mxcli call per module, not one per document (11 s became 2 s).
+When Studio Pro has the project open, the gate and each exec say so: what Studio Pro saves next
+replaces what mxcli wrote.
+Captions are warnings until the first DONE; after it, the agent is told once to add the missing
+ones, and a microflow it adds or changes needs them before the next DONE.
+A check that could not run (a crashed checker, a model that could not be read) is never a pass:
+the gate says "could not run" and does not say DONE.
+The guard also reads a `cd` before a write, a link to a guarded file, a copy into its directory and
+inline code that writes `tests/harness.env`; the test password no longer shows in `ps`.
+A checker that recognises none of the documents mxcli described (a describe format it does not
+read) says "could not run" instead of passing.
+The Cursor hook applies the same rules before an `mxcli exec` as the Claude Code hook.
+After an exec, the agent is told when it re-created a page another script alters, or granted
+access another script revoked.
 
 ```
 == gate

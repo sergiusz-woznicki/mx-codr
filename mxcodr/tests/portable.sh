@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # tests/portable.sh -- platform shims and shared helpers (macOS, Linux, Git Bash on Windows).
-# Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh and run-app.sh; not run on its own.
+# Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh, precheck.sh, theme.sh, run-app.sh,
+# run-docker.sh and marketplace-login.sh; not run on its own.
 # Provides: $MXCLI, $PY, mdl_find_python, mdl_load_harness_env, mdl_json_object,
 #   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_runtime_running, mdl_check_local_database,
-#   mdl_check_install_freshness, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr, mdl_user_modules.
+#   mdl_check_mxcli_freshness, mdl_check_install_freshness, mdl_syntax_digest, mdl_studio_pro_open,
+#   mdl_studio_pro_warning, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr, mdl_user_modules.
 # Sourcing it also loads tests/harness.env as data (never sourced) and repairs JAVA_HOME.
 # Inputs: MXCLI, PY, PORTABLE_APP_DIR, APP_DIR, LOCALAPPDATA. Nothing else is exported.
 
@@ -89,6 +91,20 @@ mdl_load_harness_env() {
 _mdl_harness_env="$(dirname "${BASH_SOURCE[0]}")/harness.env"
 mdl_load_harness_env "$_mdl_harness_env"
 unset _mdl_harness_env
+
+# A port is digits and nothing else. Bash runs a command substitution it finds inside $(( )):
+# APP_PORT=x[$(command)] in tests/harness.env ran that command in every script that sources this
+# file, and APP_PORT=1@host sent the test password to that host (audit of 2026-10-04). A value
+# that is not a port is dropped, and said so, wherever it came from.
+for _mdl_port in APP_PORT ADMIN_PORT; do
+  case "${!_mdl_port:-}" in
+    '') ;;
+    *[!0-9]*|??????*)
+      echo "tests/portable.sh: $_mdl_port is not a port number (digits only) -- ignored; fix it in tests/harness.env" >&2
+      unset "$_mdl_port" ;;
+  esac
+done
+unset _mdl_port
 
 # A second project runs beside the first with APP_PORT=8082 in its tests/harness.env: locally its
 # admin API follows, APP_PORT+9 (8081 and 8090 by default).
@@ -406,6 +422,34 @@ mdl_syntax_digest() {
     rm -f "$tmp"
   fi
   return 0
+}
+
+# mdl_studio_pro_open <project dir> -- prints how Studio Pro holds the project, or nothing.
+# Studio Pro keeps the model in memory and saves its own copy of a document over what mxcli
+# wrote: on 2026-10-04 it rewrote a domain model at 19:13 and twelve indexes an exec had added
+# at 18:47 were gone, model and database. "open" when lsof shows a Studio Pro process with a file
+# under the directory; "running" on Windows, where no lsof says which project it has.
+# The runtime it starts carries -Dmendix.running.locally.by.studiopro; only the program counts.
+mdl_studio_pro_open() {
+  local dir pid
+  dir="$(cd "$1" 2>/dev/null && pwd -P)" || return 0
+  if command -v pgrep >/dev/null 2>&1; then
+    for pid in $(pgrep -f '(/MacOS/studiopro|[Ss]tudio[Pp]ro(\.exe)?)$' 2>/dev/null); do
+      command -v lsof >/dev/null 2>&1 || { echo running; return 0; }
+      lsof -p "$pid" -Fn 2>/dev/null | grep -qF "n$dir" && { echo open; return 0; }
+    done
+  elif command -v tasklist >/dev/null 2>&1; then
+    tasklist 2>/dev/null | grep -qi '^studiopro\.exe' && echo running
+  fi
+  return 0
+}
+
+# One line for the gate and the hooks, or nothing.
+mdl_studio_pro_warning() {   # mdl_studio_pro_warning <project dir>
+  case "$(mdl_studio_pro_open "$1")" in
+    open) echo "!! Studio Pro has this project open: what it saves next replaces what mxcli wrote to the same document (it dropped 12 indexes once). Close it without saving, or make the change in Studio Pro." ;;
+    running) echo "!! Studio Pro is running: if it has this project open, what it saves next replaces what mxcli wrote. Close it without saving first." ;;
+  esac
 }
 
 mdl_tmpdir() {  # mdl_tmpdir <name> -- portable `mktemp -d -t <name>`

@@ -10,11 +10,12 @@ for source_file in "$SRC"/tests/*; do
   name="$(basename "$source_file")"
   target="$APP/tests/$name"
   case "$name" in
-    theme.sh|gate.sh|orient.sh|diagnose.sh|precheck.sh|peek.sh|lib.sh|portable.sh|scenario-helpers.js|run-docker.sh|run-app.sh|marketplace-login.sh|CHECKS.md|gate|lib) ;;
+    theme.sh|gate.sh|orient.sh|diagnose.sh|precheck.sh|peek.sh|lib.sh|portable.sh|scenario-helpers.js|run-docker.sh|run-app.sh|marketplace-login.sh|CHECKS.md|checks|gate|lib) ;;
     *) if [ -e "$target" ]; then continue; fi ;;
   esac
   if [ -d "$source_file" ]; then
-    # tests/gate/ and tests/lib/: the parts of gate.sh and lib.sh, upgraded in place like them.
+    # tests/gate/ and tests/lib/: the parts of gate.sh and lib.sh, upgraded in place like them;
+    # tests/checks/: what each code wants, one file per gate step.
     mkdir -p "$target" && cp -R "$source_file"/. "$target"/
     suite_written=$((suite_written + 1))
     continue

@@ -301,6 +301,11 @@ through an XPath-scoped access rule. A microflow does not apply entity access, s
 reaches those rows: a customer portal showed another customer's invoice this way and only its
 verify test caught it.
 
+`VIEW01` (check `security`, blocks DONE): a view entity a role reads with no XPath constraint,
+while that role sees only its own rows of an entity the view's query reads. Pi gave its Customer
+role `read *` on two views that total every customer's invoices, so each customer could read the
+others' figures. A role with no rule on that data at all (a manager on a dashboard) is not flagged.
+
 A scenario run outside the gate's runner (peek.sh, or a test run by hand after the gate) opens the
 browser itself when playwright-cli says none is open, and runs once more; two sessions retried the
 same command on "Browser 'default' is not open". `MDL_CLOSE_BROWSER=1` in `tests/harness.env`
@@ -321,6 +326,18 @@ sat out the full two minutes before its first test. And when a `--watch` rebuild
 now stops at once and names the error (`CE0116 ... (Page 'X', Action button 'y')`): before, it
 waited two minutes, then tested the model from before the exec, and a session took a fix that
 never reached the app for a fix that did not work.
+
+When `--watch` does not rebuild at all after an exec -- the model is newer than the boot log's last
+line for 15 seconds (`MDL_WATCH_MISSED_SECONDS`) -- the gate restarts the app itself, as
+`--restart` would, so the suite runs on the current model. Pi's exec of three view entities left
+the watcher silent, and `mxcli oql` said the new entities did not exist.
+
+After an `mxcli exec`, the hook names what the scripts it ran put back that another script had
+changed (`script_overrides.py`): a `create or modify page` drops another script's `alter page`, and
+a `grant` restores access another script revoked. It replays the scripts beside it in name order,
+so a revoke that a later script grants back again is not reported, and an `alter page` that only
+sets values the page source already has is not either. Pi re-ran `07_dashboard.mdl` and gave the
+Dashboard back to a role `20_access.mdl` had taken it from; a test failed on it.
 
 A `# covers:` list wrapped over several `#` lines now counts every line of names, not the first
 only: a session saw its new flows reported untested until it joined the list by hand. BACK01
@@ -381,9 +398,52 @@ surfaced at the end of the work, or not at all: Pi fixed seven of them a turn la
 lists each one under its warnings, with the fix, while the code is fresh, and the pitfalls in the
 syntax digest show the right form up front. They still do not block DONE.
 
-After a full DONE the gate remembers what it saw. A DONE on the same model and tests says
+`PERF02`, `PERF03`, `PERF05` and `PERF06`, warnings from the naming step: a loop over a retrieved list that only
+adds up its rows, a database call per row inside such a loop (a retrieve, a Java action, or a flow
+that reads or writes), and a whole table retrieved and filtered with `if`. Pi's B2B dashboard summed
+10,680 orders in a loop on every open. Measured on a copy: the loop 160 ms, `count()`/`sum()` right
+after the retrieve 159 ms, one OQL view entity 60 ms -- so the fix named is the view, and the
+condition in the retrieve's XPath. `PERF06` is a loop that only keeps the largest or smallest value
+(the next invoice number): one `retrieve ... sort by ... desc limit 1` returns that row. `$X = ...`
+without `set` counts as an assignment too; Pi wrote it that way and PERF02 missed it. Seed and
+demo-data flows are skipped.
+
+`PERF07`, also a warning from the naming step: an attribute a retrieve or a page's data source
+filters (`=`, `<`, `>`) or sorts on, with no index that starts with it. Mendix indexes `id`, every
+association and every attribute with a uniqueness rule itself (checked in PostgreSQL); InvoiceB2B
+filtered invoices on `PaymentStatus` and `DueDate` and sorted orders by `DateCreated` with none.
+Measured on a copy of its orders: at 200,000 rows the newest order by date took 35 ms without an
+index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both stay under 2 ms. The
+naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
+entities and seed flows are left out: an index does not help them, or they run once.
+
+PERF07 and PERF08 also read the queries inside view entities: `i.DueDate < ...` in a view's OQL
+wants an index like a retrieve's XPath does. Pi kept a `(DueDate)` index two views filter on, and
+PERF08 called it unused. A query that compares an association with `=` gets no PERF07: Mendix
+indexes every association itself, a model index cannot include one, and an attribute index adds
+little after it. For PERF08 such a query still counts as a use.
+
+PERF07 suggests one index per query, not per attribute: the attributes its XPath compares with `=`
+first, then the first range comparison or sort. `PaymentStatus = ... and DueDate < ...` gets one
+`(PaymentStatus, DueDate)`; at 200,000 rows the newest order of one status took 9.9 ms with no index,
+2.6 ms with an index on each attribute and 0.01 ms with one `(Status, DateCreated)`. An index on
+(A, B) also serves a query on A alone, so that shorter suggestion is dropped, and an existing (A)
+the new index replaces is named with its `drop index` line. Pi, told to index each attribute on its
+own, added twelve single indexes where two queries wanted one of two columns each.
+
+`PERF08`, a warning too: an index of the model that no query needs. Either another index starts
+with the same columns and serves every query it does, or no retrieve, page data source or grid
+filter uses it better than another index. Grid filters count as queries: a drop-down filter
+compares with `=`, a date or number filter with a range (a text filter is `contains()`, which no
+index helps). The `drop index` line spells the index as written, `desc` included, since mxcli
+matches it exactly. Pi kept `(CapturedOn)` and `(DueDate)` after adding `(Currency, CapturedOn)`
+and `(PaymentStatus, DueDate)` for the same queries. Keep an index Java, OQL or an outside client
+filters on; the model does not show those.
+
+After a full DONE the gate remembers what it saw. A DONE on the same model, tests and `theme/` says
 "a repeat proves nothing new": Pi once re-ran a green gate three times in two minutes on an
-unchanged app, "to confirm stability".
+unchanged app, "to confirm stability". `theme/` counts because a session that only sized a chart
+in a stylesheet was told its DONE was a repeat.
 
 ### What the server logged while the suite ran
 
@@ -464,8 +524,104 @@ it the loop told twice).
 
 So the rules are 8 kB and name one skill to read first; the others are named by the finding
 that needs them, and the per-prompt reminder says the same. What each check code wants and its
-fix is one page, `tests/CHECKS.md` -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it
-per session) for what `HOME01` or `--only` required -- and a red verdict points at it. The
+fix is written down once -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it per
+session) for what `HOME01` or `--only` required -- and a red verdict points at it. Since bundle
+2026.10.04.9 that is one file per gate step, `tests/checks/layout.md`, `lint.md`, `naming.md` and
+`app.md` (mx check, coverage, security, scope, the suite, visual and runtime), each under 4,500
+characters, with `tests/CHECKS.md` as the index of which file holds which code. The one page had
+reached its 9,300-character budget, and a red verdict now names only the files of the steps that
+failed, so a session reads 1.3 to 3.7k characters instead of 9.3k.
+
+The model checks describe each module's documents with one mxcli call per module and kind, not
+one per document. On InvoiceB2B's model the microflows took 2 s instead of 11 s and the entities
+under 1 s instead of 2 s, with byte-identical text; `naming` and `layout` each spent about 18 s,
+most of it starting mxcli once per document. mxcli stops at the first document it cannot
+describe, so then the step falls back to one call each, which names the one that failed.
+
+The gate and the after-exec hook warn when Studio Pro has the project open: lsof shows a Studio
+Pro process holding a file in the project directory (on Windows, without lsof: Studio Pro is
+running). Studio Pro keeps the model in memory and saves its own copy of a document over what
+mxcli wrote. On InvoiceB2B it rewrote the Orders domain model at 19:13, and twelve indexes an exec
+had added at 18:47 were gone from the model and, after a restart, the database; the session took
+the gate for the cause. The runtime Studio Pro starts carries `-Dmendix.running.locally.by.studiopro`
+and is not counted.
+
+Captions bind after the first DONE. While the app is built they stay warnings (286 at once had
+swamped a session with no test green), but InvoiceB2B then carried 640 of them through every
+DONE, since nothing asked for them. Each full DONE now keeps a hash of every microflow's text
+(`.mxcli/gate-cache/captions-baseline.json`; where its boxes sit does not count). From then on a
+microflow that is new or changed since the last DONE fails naming until its actions, decisions
+and loops have captions; older ones stay warnings. The first DONE with a backlog says once:
+clear it module by module, then run the full gate once.
+
+Bundle 2026.10.04.13 is the first step of the audit of 2026-10-04 (`docs/audit-mxcodr-2026-10-04.md`
+in the development repo): security, and checks that passed without running.
+- A port from `tests/harness.env` (or the environment) is digits or it is ignored, and said so.
+  Bash runs a command substitution inside `$(( ))`, so `APP_PORT=x[$(cmd)]` ran `cmd` in every
+  script that sources `tests/portable.sh`; `APP_PORT=1@host` sent the test password to that host.
+- "A check that did not run has not passed" now holds in six more places. `scope`: a checker that
+  crashed counted as warnings. `layout`: an unreadable security level read as "security off" and
+  skipped NAV01 and NAV03; user roles that could not be listed or described silenced ACCOUNT03,
+  HOME01 and MODULE01. `security`: a crash of `view_access.py`, or entities that could not be
+  listed, read as "level Production". The suite: no `Total:` line with exit 0. `visual` and the
+  runtime log: a crash of `gate_helpers.py`. Each is now "could not run". Snippets, layouts and
+  flows the layout check reads as extra input still do not block when one cannot be described,
+  but the gate names the rules that may have missed a finding.
+- Entity names from the model are checked (`Module.Entity`) before they become file names.
+- PERF08 reports nothing when no query at all was recognised (it called every index unneeded),
+  and PERF07 no longer tells you to drop the index of a `unique` attribute.
+- The timeout watchdog ran into "BASHPID: unbound variable" on macOS's own bash 3.2.
+- `--restart` and the boot stop only this project's `mxcli run`: one started in this directory or
+  naming it. Two projects whose `.mpr` has the same name used to stop each other's app.
+
+Bundle 2026.10.04.14 is the audit's second step: the rules written on 2026-10-04, and the guard.
+- PERF07: an `or` in a condition is two lookups, each with its own index, not one index on both
+  attributes; `[$Wanted = Status]`, the attribute on the right, is read; a page source written
+  `database X` without `from` is read; a grid filter is reported on the page that has the grid.
+- PERF02: `$Text = $Text + $Item/Code + ','` builds a text and is not a sum. A comment after a
+  statement no longer joins it to the next line, which hid the loop that followed a retrieve.
+- VIEW01 matches an entity whose name is quoted (`Orders."Order"`).
+- The after-exec note follows the order the scripts ran in: `exec 20_access.mdl 07_dashboard.mdl`
+  grants again what 20 revoked, and is now reported. A property set by an `alter` counts as
+  already in the page source only when it is on that widget.
+- The guard reads four ways around it: a `cd` before the write, a link to a guarded file, a copy
+  into its directory, and inline `python3 -c` or `node -e` that writes `harness.env`. Without a
+  working Python it no longer lets a call that names `harness.env` through unread.
+- `scenario()` hands its script to playwright-cli by file (`--filename`): as an argument the test
+  password showed in `ps`. An older playwright-cli gets it the old way.
+- The gate does not write its boot log or cache through a symbolic link, and the installer's EXIT
+  trap no longer evals a value from the caller's environment.
+
+Bundle 2026.10.04.15 is the audit's third step: a checker that recognises nothing has not passed.
+The checkers are regular expressions over what mxcli prints, and mxcli's next release prints it
+differently (`create or modify navigation`, user roles as property lists). A checker that matches
+nothing used to report zero findings, a PASS. Now the gate tells each checker how many documents
+it described: `naming` with none of the microflows recognised, `layout` with none of the pages,
+no navigation profile or no user role recognised, and `security` with no entity recognised each
+say "could not run", naming the describe format as the cause. The index rules say "not checked"
+instead of calling every index unneeded. The caption baseline carries the mxcli version that
+produced it and starts over when it changes, so a new describe format does not turn every
+caption warning into a failure at once. Names that mxcli lists are checked (`Module.Name`)
+before they become MDL statements or file names. In the development repo a real project's
+describe output is kept as a fixture, with the number of documents mxcli listed; a test asserts
+that every parser recognises that many (`tools/dev/make-golden-dump.py` regenerates it with a new
+mxcli, and the test then names the parsers that went silent).
+
+Bundle 2026.10.04.16 is the first part of the audit's fourth step: copies that had drifted, and
+the guard as a module. No rule changed.
+- The Cursor before-exec hook had lost two rules the Claude Code hook has: a `sleep` before the
+  gate, and a script named through a shell variable (`mxcli exec mdlsource/$f.mdl`), which
+  precheck could not find and let through.
+- The after-exec hook's own module list did not leave out `MxTest`; `tests/orient.sh` asked the
+  coverage checker one module at a time, which reports a test covering another module's page as
+  stale. Both now do what the gate does.
+- The guard's decision moved out of the hook, where it was 227 lines of Python in a shell string,
+  into `checks/guard_harness.py` (installed as `tools/mdl-checks/guard_harness.py`), unchanged. The
+  hook finds it in the bundle and installed, and without it blocks a call that names `harness.env`.
+- A test compares the copies hooks keep of shared helpers (`mdl_find_python` in ten files, the
+  Studio Pro process pattern, the module list), so a fix made in one copy and not the others fails.
+- `gate_helpers.py runtime-age` no longer stops with a traceback when the `.mpr` is gone; comments
+  that described older behaviour ("five model checks") say what the code does. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

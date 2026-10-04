@@ -10,8 +10,8 @@
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
 #
-# Seven verdicts: the browser suite (tests/verify-*.test.sh) and six model checks that need no
-# app -- mx check, lint, coverage, naming, layout, security. Every step runs even if another
+# Eight verdicts: the browser suite (tests/verify-*.test.sh) and seven model checks that need no
+# app -- mx check, lint, coverage, naming, layout, security, scope. Every step runs even if another
 # fails; a passing model check is replayed while its inputs are unchanged.
 #   DONE — every check passed               exit 0 (--only/--tests-only print PASSED, never DONE)
 #   NOT DONE — failed: <checks>             exit 1
@@ -137,16 +137,36 @@ only_coverage_note() {
   fi
 }
 
-# After a full DONE: did the last DONE see exactly this model and these tests? Pi re-ran a green
-# gate on an unchanged app three times in two minutes "to confirm stability". Advice only.
+# After a full DONE: did the last DONE see exactly this model, these tests and this theme? Pi
+# re-ran a green gate on an unchanged app three times in two minutes "to confirm stability".
+# theme/ counts: a session that changed only a stylesheet (a chart sized to the screen) was told
+# its DONE was a repeat. Advice only.
 done_repeat_note() {
   local key file="$CACHE_DIR/last-done.key"
-  key="$(fingerprint tests 2>/dev/null)" || return 0
+  key="$(fingerprint tests theme 2>/dev/null)" || return 0
   [ -n "$key" ] || return 0
   if [ -f "$file" ] && [ "$(cat "$file" 2>/dev/null)" = "$key" ]; then
-    echo "   Same model and tests as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- change something before the next run."
+    echo "   Same model, tests and theme as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- change something before the next run."
   fi
   mkdir -p "$CACHE_DIR" 2>/dev/null && echo "$key" > "$file" 2>/dev/null
+  return 0
+}
+
+# Captions are warnings while the app is built: 286 of them once landed on a session with no test
+# green. Each full DONE keeps a hash of every microflow; from then on a new or changed one needs its
+# captions (check_naming). The first DONE with a backlog says once to clear it, module by module.
+captions_after_done() {
+  local backlog
+  [ -f "$CACHE_DIR/naming.flows.json" ] || return 0
+  backlog="$(sed -n 's/.* \([0-9][0-9]*\) caption warning(s).*/\1/p' "$WORK/naming.summary" 2>/dev/null | head -1)"
+  if [ ! -f "$CACHE_DIR/captions-baseline.json" ] && [ "${backlog:-0}" -gt 0 ]; then
+    echo "   Next: the app is done, so give its microflows their captions -- the ${backlog} caption warning(s) above."
+    echo "   Module by module (skill naming-and-captions): a business @caption on each action, a question"
+    echo "   on each decision, an @annotation on each loop. Then run the full gate once. From now on a"
+    echo "   microflow you add or change needs its captions before DONE; the older ones stay warnings."
+    WARNINGS_SHOWN=0
+  fi
+  cp "$CACHE_DIR/naming.flows.json" "$CACHE_DIR/captions-baseline.json" 2>/dev/null
   return 0
 }
 
@@ -186,6 +206,7 @@ print_verdict_and_exit() {
   fi
   echo "   DONE — every check passed"
   done_repeat_note
+  captions_after_done
   if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
     echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
   fi
@@ -204,7 +225,13 @@ print_blockers() {
   local entry name label detail count shown pattern
   pattern='^[[:space:]]*- \[|\[error\]|^[[:space:]]*FAIL[[:space:]:]|^[[:space:]]+- '
   # Three sessions grepped tests/gate/*.sh for what a code required; the page says it in one line.
-  echo "   what each code wants and its fix: tests/CHECKS.md -- not the gate's source"
+  # One file per step (tests/checks/), so a session reads the codes of what failed, not all of them.
+  local guides="" guide failed
+  for failed in ${failures[@]+"${failures[@]}"} ${cannot_run[@]+"${cannot_run[@]}"}; do
+    case "$failed" in layout|lint|naming) guide="tests/checks/$failed.md" ;; *) guide="tests/checks/app.md" ;; esac
+    case " $guides " in *" $guide "*) ;; *) guides="${guides:+$guides }$guide" ;; esac
+  done
+  echo "   what each code wants and its fix: ${guides:-tests/CHECKS.md} -- not the gate's source"
   echo "== still blocking DONE"
   # details holds name|label for every failed or unrunnable check, in the order they printed.
   # Every finding up to BLOCKERS_SHOWN, each with its fix: a session that saw only the first one
@@ -252,6 +279,12 @@ main() {
   APP_PORT="${APP_PORT:-8081}"
   BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
   CACHE_DIR="$APP_DIR/.mxcli/gate-cache"
+  # The gate writes its cache there. A link (a repository can ship one) would send those writes
+  # elsewhere, so the gate stops and says so; the person removes the link.
+  if [ -L "$APP_DIR/.mxcli" ] || [ -L "$CACHE_DIR" ]; then
+    echo "   !! .mxcli or .mxcli/gate-cache is a symbolic link; the gate does not write through one -- remove it" >&2
+    exit 2
+  fi
   # Scratch directory for this run's result files; removed on exit.
   WORK="$(mdl_tmpdir mdl-gate)"
   trap cleanup_work EXIT
@@ -288,6 +321,7 @@ main() {
   preflight_session
   preflight_debugger
   preflight_environment
+  preflight_studio_pro
   preflight_stale_model
   step_tests
   step_visual

@@ -19,16 +19,27 @@ Exit: 0 no failures (warnings allowed), 1 failures or no MDL found, 2 bad argume
 #   placeholder-variable         FAIL  $Int1, $List2, $tmp, $x ...
 #   type-echo-variable           FAIL  name ends in _List, _Object or _Obj
 #   REFRESH01                    FAIL  a microflow that closes its page commits without `refresh`
+#   PERF02 PERF03 PERF05 PERF06  WARN  a loop that only sums a retrieved list; a database call per row
+#                                      in such a loop; a whole table filtered by an `if`; a loop that
+#                                      only keeps the largest value (perf_rules.py)
+#   PERF07                       WARN  with --entities: a query (retrieve, page source, grid filter)
+#                                      no index serves (index_rules.py)
+#   PERF08                       WARN  with --entities: an index no query in the model needs
 # --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
 # default, since 286 of them landed at once on a session with no test green yet.
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from perf_rules import perf_findings  # noqa: E402
+from index_rules import entity_heads, index_findings, redundant_findings  # noqa: E402
 
 # Any `@word rest`; group 1 is the word (caption, annotation, position).
 ANNOTATION_RE = re.compile(r"^\s*@(\w+)\s*(.*)$")
@@ -321,7 +332,9 @@ def refresh_findings(lines: list[str]) -> list[Failure]:
 
 def check_naming_and_refresh(lines: list[str]) -> tuple[list[Failure], list[Warning_]]:
     failures, warnings = check_naming(lines)
-    return failures + refresh_findings(lines), warnings
+    # Performance (PERF02/03/05/06, perf_rules.py): warnings, listed before the caption warnings.
+    perf = [Warning_(code, message, line) for code, message, line in perf_findings(lines)]
+    return failures + refresh_findings(lines), perf + warnings
 
 
 CHECKS = {"naming": check_naming_and_refresh}
@@ -330,6 +343,24 @@ CHECKS = {"naming": check_naming_and_refresh}
 # mxcli drops stay failures.
 CAPTION_RULES = {"decision-caption", "caption-restates-expression", "caption-not-a-question",
                  "loop-annotation", "action-caption", "action-caption-is-default"}
+
+
+FLOW_START = re.compile(r"^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)", re.I)
+LAYOUT_ONLY = re.compile(r"^\s*@(?:position|anchor|merge)\b", re.I)
+
+
+def flow_blocks(lines: list[str]) -> list[tuple[str, int, int]]:
+    """(flow, first line, last line), 1-based, for every microflow and nanoflow in the dump."""
+    starts = [(i + 1, m.group("name")) for i, line in enumerate(lines) if (m := FLOW_START.match(line))]
+    return [(name, start, (starts[k + 1][0] - 1) if k + 1 < len(starts) else len(lines))
+            for k, (start, name) in enumerate(starts)]
+
+
+def flow_hashes(lines: list[str]) -> dict[str, str]:
+    """{flow: hash of its text}; where its boxes sit on the canvas does not count."""
+    return {name: hashlib.sha256("\n".join(l for l in lines[start - 1:end] if not LAYOUT_ONLY.match(l))
+                                 .encode()).hexdigest()[:16]
+            for name, start, end in flow_blocks(lines)}
 
 
 def collect_text(sources: list[Path]) -> tuple[str, list[Path]]:
@@ -358,6 +389,19 @@ def main() -> int:
     )
     parser.add_argument("--captions", choices=("error", "warn"), default="error",
                         help="warn: caption rules are warnings, not failures")
+    parser.add_argument("--entities", type=Path,
+                        help="DESCRIBE ENTITY output (file or directory): adds PERF07, an attribute "
+                             "filtered or sorted on with no index")
+    parser.add_argument("--pages", type=Path, help="DESCRIBE PAGE output, read for PERF07 data sources")
+    parser.add_argument("--expect-flows", type=int, default=0,
+                        help="how many microflows and nanoflows were described; recognising none of them is an error")
+    parser.add_argument("--format", default="",
+                        help="what produced the describe text (the mxcli version): kept with the flow hashes")
+    parser.add_argument("--flow-hashes", type=Path,
+                        help="write {flow: hash of its text} here (the gate keeps the one of each DONE)")
+    parser.add_argument("--captions-baseline", type=Path,
+                        help="with --captions warn: caption findings in a flow that is new or changed "
+                             "since this baseline stay failures")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -374,10 +418,55 @@ def main() -> int:
         skill_failures, skill_warnings = CHECKS[skill](lines)
         failures.extend(skill_failures)
         warnings.extend(skill_warnings)
+    if args.entities and "naming" in args.skill:
+        entity_text, _ = collect_text([args.entities])
+        page_text, _ = collect_text([args.pages]) if args.pages else ("", [])
+        documents = lines + strip_comments(page_text).splitlines()
+        if entity_text.strip() and not entity_heads(entity_text.splitlines()):
+            indexes = [Warning_("PERF07", "not checked: no entity was recognised in the describe text "
+                                "(a describe format index_rules.py does not read)", None)]
+        else:
+            indexes = [Warning_(code, message, line) for code, message, line in
+                       index_findings(entity_text.splitlines(), documents) + redundant_findings(entity_text.splitlines(), documents)]
+        perf = [w for w in warnings if w["check"].startswith("PERF")]
+        warnings = perf + indexes + [w for w in warnings if not w["check"].startswith("PERF")]
+    hashes = flow_hashes(lines)
+    # Documents were described and not one head was recognised: a describe format these rules do
+    # not read. Zero findings would be a PASS for a check that saw nothing.
+    if args.expect_flows > 0 and not hashes:
+        print(f"could not run -- {args.expect_flows} microflow(s) and nanoflow(s) were described and "
+              f"none was recognised in the text: this mxcli's describe format is not one check_mdl.py reads")
+        return 2
+    if args.flow_hashes:
+        args.flow_hashes.write_text(json.dumps(dict(hashes, _format=args.format), indent=0, sort_keys=True))
+    # After the first DONE (the gate passes the hashes it kept then), a microflow that is new or
+    # changed since the last DONE needs its captions; older ones keep them as warnings, a backlog.
+    fresh: set[str] = set()
+    if args.captions_baseline and args.captions_baseline.is_file():
+        try:
+            baseline = json.loads(args.captions_baseline.read_text())
+        except (OSError, ValueError):
+            baseline = {}
+        if not isinstance(baseline, dict):      # a damaged file is no baseline, not a crash
+            baseline = {}
+        # Another mxcli describes the same microflow in other words: every hash would differ and
+        # the whole caption backlog would block at once. The next DONE keeps a new baseline.
+        if baseline.get("_format", "") != args.format:
+            baseline = dict(hashes)
+        fresh = {name for name, digest in hashes.items() if baseline.get(name) != digest}
+    blocks = flow_blocks(lines)
+
+    def flow_at(line: int) -> str:
+        return next((name for name, start, end in blocks if start <= (line or 0) <= end), "")
+
     caption_warnings = 0
     if args.captions == "warn":
-        demoted = [f for f in failures if f["check"] in CAPTION_RULES]
-        failures = [f for f in failures if f["check"] not in CAPTION_RULES]
+        for failure in failures:
+            if failure["check"] in CAPTION_RULES and flow_at(failure["line"]) in fresh:
+                failure["message"] += (f" -- {flow_at(failure['line'])} is new or changed since the last DONE, "
+                                       f"so its captions are required now")
+        demoted = [f for f in failures if f["check"] in CAPTION_RULES and flow_at(f["line"]) not in fresh]
+        failures = [f for f in failures if not (f["check"] in CAPTION_RULES and flow_at(f["line"]) not in fresh)]
         warnings.extend(Warning_(f["check"], f["message"], f["line"]) for f in demoted)
         caption_warnings = len(demoted)
 
@@ -393,7 +482,9 @@ def main() -> int:
     if args.json:
         print(json.dumps(report, indent=2))
     else:
-        extra = f", {caption_warnings} caption warning(s)" if caption_warnings else ""
+        perf = sum(1 for w in warnings if w["check"].startswith("PERF"))
+        extra = (f", {perf} performance warning(s)" if perf else "") + (
+            f", {caption_warnings} caption warning(s)" if caption_warnings else "")
         print(f"{report['verdict']}  {len(failures)} failure(s) over {len(lines)} lines{extra}")
         for failure in failures:
             location = f"line {failure['line']}" if failure["line"] else "-"
