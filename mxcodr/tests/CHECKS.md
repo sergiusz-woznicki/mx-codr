@@ -40,7 +40,6 @@ here blocks DONE unless the line says "warning".
 | `REU001` | shared documents shared for real (info, never blocks) | a snippet used by one page is a page section; a `SUB_` with one caller is inline logic (skill `reuse-and-snippets`) |
 | `MPR*`, `SEC*`, `CONV*`, `ARCH*`, `QUAL*` | mxcli's built-in rules; errors block, warnings do not | `./mxcli lint -p <app>.mpr --list-rules` names each |
 | `CONV011` | a commit inside a loop: one database call per row (warning) | change the objects in the loop, `commit $List;` once after `end loop;`; new objects are `add`ed to a list first |
-| `PERF02/03/05` | a loop that sums rows, calls the database per row, or keeps rows of a whole table with `if` (warning) | totals in an OQL view entity; the condition in the retrieve's XPath |
 
 ## naming -- microflows and nanoflows (`check_mdl.py --skill naming`, skill `naming-and-captions`)
 
@@ -49,6 +48,7 @@ here blocks DONE unless the line says "warning".
 | `placeholder-variable` | a name that says what it holds | `$OpenInvoiceCount`, not `$Int1`, `$tmp`, `$x` |
 | `type-echo-variable` | no `_List`, `_Object`, `_Obj` suffix | `$OverdueInvoices`, not `$Invoice_List` |
 | `REFRESH01` | a microflow that closes its page (a popup's Save) commits with `refresh`, so the grid under the popup shows the new row at once | `commit $Invoice refresh;`, `change $Invoice (...) commit refresh;` -- blocks DONE |
+| `PERF02/03/05` | a loop that sums rows, calls the database per row, or keeps rows of a whole table with `if` (warning; naming step, not lint) | totals in an OQL view entity; the condition in the retrieve's XPath |
 | `action-caption`, `action-caption-is-default`, `decision-caption`, `caption-not-a-question`, `caption-restates-expression`, `loop-annotation`, `caption-on-loop` | a business `@caption` on every action and decision (a question, no `$`), `@annotation` on loops | warnings by default; `MDL_CAPTIONS=error` in `tests/harness.env` makes them block |
 
 ## coverage, precheck, the suite and the runtime
