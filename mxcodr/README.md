@@ -585,7 +585,11 @@ a name; `MDL_THEME` answers it unattended, and with no terminal Atlas is kept.
 A theme is files under `theme/` only, never the model. The five are created from
 `checks/themes/<name>.css` (installed as `tools/mdl-checks/themes/`) on mxcli's signal base, with
 `<name>.skin.scss` appended to the scaffold for the frame mxcli does not paint: the top bar's own
-colour, the active menu item, and outline buttons in the brand colour. Atlas removes any mxcli
+colour, the active menu item, and outline buttons in the brand colour. The skin sets only Atlas's
+own variables (`--navtopbar-bg`, `--navsidebar-bg-active`, `--btn-default-color`, ...), never an
+Atlas property, the way Mendix asks a theme to be customised; the button colours are scoped to the
+buttons a page author set to Default (`.mx-button.btn-default`), so the grid's column selector and
+the date picker keep the neutral look. Atlas removes any mxcli
 theme. A theme is applied with `--variant light`, so the app opens light even when the OS is dark
 (the dark palette stays in the files; `./mxcli theme apply <name> --variant auto` follows the OS).
 The mx-codr logo (a prompt `>` and a heavy "c", sharp even at 16px) comes with every theme, Atlas too, in that theme's
