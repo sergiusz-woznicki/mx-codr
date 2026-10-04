@@ -228,15 +228,20 @@ check_naming() {
   local captions=warn total
   [ "${MDL_CAPTIONS:-warn}" = "error" ] && captions=error
   # PERF07 reads the entities' indexes and the pages' data sources as well.
-  describe_entities_into "$WORK/naming-entities"
-  describe_all naming-pages "$WORK/naming-pages" "PAGES" || true
+  rm -f "$WORK/naming.unread"
+  local -a index_inputs=(--entities "$WORK/naming-entities" --pages "$WORK/naming-pages")
+  if ! describe_entities_into "$WORK/naming-entities" || ! describe_all naming-pages "$WORK/naming-pages" "PAGES"; then
+    # The index rules are warnings: without their input they are left out, and the gate says so.
+    index_inputs=()
+    echo "   - naming: the entities or pages could not be read, so the index rules (PERF07, PERF08) did not run" > "$WORK/naming.unread"
+  fi
   # Captions: a backlog of warnings until the first DONE; from then on a microflow that is new or
   # changed since the last DONE needs them (the hashes each DONE keeps, tests/gate.sh).
   local -a baseline=()
   [ -f "$CACHE_DIR/captions-baseline.json" ] && baseline=(--captions-baseline "$CACHE_DIR/captions-baseline.json")
   mkdir -p "$CACHE_DIR" 2>/dev/null
   out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" \
-    --entities "$WORK/naming-entities" --pages "$WORK/naming-pages" \
+    ${index_inputs[@]+"${index_inputs[@]}"} \
     --flow-hashes "$CACHE_DIR/naming.flows.json" ${baseline[@]+"${baseline[@]}"} 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
@@ -254,8 +259,9 @@ check_naming() {
   local perf_lines other_total
   perf_lines="$(printf '%s\n' "$out" | grep -E '^\s+! \[PERF' | sed -E 's/^[[:space:]]+! /   - /')"
   other_total="$(printf '%s\n' "$out" | grep -E '^\s+! ' | grep -cv '\[PERF')"
-  if [ -n "$perf_lines" ] || [ "$other_total" -gt 0 ]; then
-    { [ -n "$perf_lines" ] && printf '%s\n' "$perf_lines"
+  if [ -n "$perf_lines" ] || [ "$other_total" -gt 0 ] || [ -s "$WORK/naming.unread" ]; then
+    { cat "$WORK/naming.unread" 2>/dev/null
+      [ -n "$perf_lines" ] && printf '%s\n' "$perf_lines"
       printf '%s\n' "$out" | grep -E '^\s+! ' | grep -v '\[PERF' | head -8 | sed -E 's/^[[:space:]]+! /   - /'
       [ "$other_total" -gt 8 ] && echo "   ... 8 of $other_total naming warnings shown (MDL_CAPTIONS=error makes caption rules block)"
     } > "$WORK/naming.warnings"
@@ -266,16 +272,32 @@ check_naming() {
 # Adds to nav_args (never replaces it: the caller has put --own-modules there already): the menu icons (NAV05) and the snippets' buttons (ICON01) always; the Log out and role-home rules (NAV01-NAV03) only
 # when project security is on, since only then do users sign in. Returns 1, with the summary
 # written, when security is on and the navigation cannot be read.
+# layout_unread <what> <codes> -- a describe that failed while gathering extra input for the layout
+# check. It does not stop the check (one widget mxcli cannot describe would block every DONE), but
+# the rules that read that input may have missed something, and the gate says which.
+layout_unread() {
+  local what="$1" codes="$2" first
+  first="$(head -1 "$WORK/layout-$what.broken" 2>/dev/null)"
+  echo "   - layout: some $what could not be read (${first:-describe failed}), so $codes may have missed a finding there" >> "$WORK/layout.unread"
+  return 0
+}
+
 layout_sign_out_inputs() {
   local level
   level="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | grep -i 'Security Level' | head -1)"
+  # No level means the command failed. It used to read as "security off", which skips the
+  # sign-in rules (NAV01, NAV03, the accounts and home pages): a pass for a check that never ran.
+  if [ -z "$level" ]; then
+    echo "layout: could not run -- SHOW PROJECT SECURITY printed no level" > "$WORK/layout.summary"
+    return 1
+  fi
   case "$level" in
-    *[Oo]ff*|"")
+    *[Oo]ff*)
       # Without sign-in only the icons are checked, and a navigation that cannot be read does not block.
       "$MXCLI" -p "$MPR" -c "DESCRIBE NAVIGATION" > "$WORK/navigation.mdl" 2>/dev/null \
         && nav_args+=(--navigation "$WORK/navigation.mdl")
-      # Snippets carry buttons too (ICON01); unreadable ones do not block.
-      describe_all layout-snippets "$WORK/snippets" "SNIPPETS" || true
+      # Snippets carry buttons too (ICON01); unreadable ones do not block, and are named.
+      describe_all layout-snippets "$WORK/snippets" "SNIPPETS" || layout_unread snippets ICON01
       nav_args+=(--sign-out-sources "$WORK/snippets")
       return 0 ;;
   esac
@@ -283,22 +305,32 @@ layout_sign_out_inputs() {
     echo "layout: could not run -- DESCRIBE NAVIGATION failed" > "$WORK/layout.summary"
     return 1
   fi
-  # A sign-out button in a snippet (a shared header, say) also counts; unreadable snippets do not block.
-  describe_all layout-snippets "$WORK/snippets" "SNIPPETS" || true
+  # A sign-out button in a snippet (a shared header, say) also counts; unreadable snippets do not
+  # block, and are named.
+  describe_all layout-snippets "$WORK/snippets" "SNIPPETS" || layout_unread snippets "ICON01, NAV01"
   nav_args+=(--navigation "$WORK/navigation.mdl" --sign-out-sources "$WORK/snippets" --users-sign-in)
   # Every user role with its module roles: ACCOUNT03, HOME01 and MODULE01 read them.
-  local role guest
+  # A listing or a role that cannot be read stops the check: without them ACCOUNT03, HOME01 and
+  # MODULE01 find nothing, which read as a pass.
+  local role guest roles
   : > "$WORK/userroles.mdl"
+  if ! roles="$("$MXCLI" -p "$MPR" --json -c "SHOW USER ROLES" 2>/dev/null)" \
+     || ! roles="$(printf '%s' "$roles" | "$PY" -c 'import json, sys
+rows = json.load(sys.stdin)
+if not isinstance(rows, list):
+    raise SystemExit(1)
+for row in rows:
+    print(row.get("Name", ""))' 2>/dev/null)"; then
+    echo "layout: could not run -- SHOW USER ROLES did not return a JSON list" > "$WORK/layout.summary"
+    return 1
+  fi
   while IFS= read -r role; do
-    [ -n "$role" ] && "$MXCLI" -p "$MPR" -c "DESCRIBE USER ROLE $role" >> "$WORK/userroles.mdl" 2>/dev/null
-  done < <("$MXCLI" -p "$MPR" --json -c "SHOW USER ROLES" 2>/dev/null \
-    | "$PY" -c 'import json, sys
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    rows = []
-for row in rows if isinstance(rows, list) else []:
-    print(row.get("Name", ""))' 2>/dev/null)
+    [ -n "$role" ] || continue
+    if ! "$MXCLI" -p "$MPR" -c "DESCRIBE USER ROLE $role" >> "$WORK/userroles.mdl" 2>/dev/null; then
+      echo "layout: could not run -- DESCRIBE USER ROLE $role failed" > "$WORK/layout.summary"
+      return 1
+    fi
+  done <<< "$roles"
   nav_args+=(--user-roles "$WORK/userroles.mdl")
   # NAV06: who may open each page and microflow the menu links to, so the checker knows which
   # entries each role sees. An unreadable answer counts as "everyone" and can only add findings.
@@ -342,17 +374,18 @@ check_layout() {
     echo "layout: no page to check" > "$WORK/layout.summary"; return 0
   fi
   local -a nav_args=(--own-modules "$USER_MODULES")
+  rm -f "$WORK/layout.unread"
   layout_sign_out_inputs || return 2
   # MODULE01: the empty template's module, still in an app that has its own.
   if "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null | grep -q '"MyFirstModule"'; then
     nav_args+=(--template-module)
   fi
   # The project's own layouts, for a menu built from buttons (NAV04); unreadable ones do not block.
-  describe_all layout-layouts "$WORK/layouts" "LAYOUTS" || true
+  describe_all layout-layouts "$WORK/layouts" "LAYOUTS" || layout_unread layouts NAV04
   ls "$WORK"/layouts/*.mdl >/dev/null 2>&1 && nav_args+=(--layouts "$WORK/layouts")
   # Flows open pages too (`show page` in an ACT_ microflow), for the Back-button rule (BACK01),
   # and write entities, for buttons that change a grid's rows outside its header (GRID02).
-  describe_all layout-flows "$WORK/layout-flows" "MICROFLOWS NANOFLOWS" || true
+  describe_all layout-flows "$WORK/layout-flows" "MICROFLOWS NANOFLOWS" || layout_unread flows "BACK01, GRID02"
   ls "$WORK"/layout-flows/*.mdl >/dev/null 2>&1 && nav_args+=(--opened-from "$WORK/layout-flows")
   out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" "${nav_args[@]}" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
@@ -372,6 +405,7 @@ check_layout() {
   elif [ -n "$look" ] && [ "${MDL_VISUAL:-warn}" != "0" ]; then
     printf '%s\n' "$look" > "$WORK/layout.warnings"
   fi
+  [ -s "$WORK/layout.unread" ] && cat "$WORK/layout.unread" >> "$WORK/layout.warnings"
   return "$gate"
 }
 
@@ -442,19 +476,25 @@ start_model_checks() {
 # users at all.
 # Qualified entity names of the project's own modules, one per line. SHOW ENTITIES names its
 # column "Entity", not "Qualified Name", so this does not go through qualified_names.
+# False when a listing fails, is not a JSON list, or holds a name that is not Module.Entity: the
+# names become file names and MDL statements, and a listing that cannot be read is not "no entities".
 entity_names() {
-  local module
+  local module listing status=0
   for module in $USER_MODULES; do
-    "$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $module" 2>/dev/null | "$PY" -c 'import json, sys
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    raise SystemExit(0)
-for row in rows if isinstance(rows, list) else []:
+    listing="$("$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $module" 2>/dev/null)" || { status=1; continue; }
+    printf '%s' "$listing" | "$PY" -c 'import json, re, sys
+rows = json.load(sys.stdin)
+if not isinstance(rows, list):
+    raise SystemExit(1)
+for row in rows:
     name = row.get("Entity") or row.get("Qualified Name") or row.get("QualifiedName")
-    if name:
-        print(name)' 2>/dev/null
+    if not name:
+        continue
+    if not re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", name):
+        raise SystemExit(1)
+    print(name)' 2>/dev/null || status=1
   done
+  return "$status"
 }
 
 # Describes every entity of the project's own modules once, one file per entity, for the
@@ -469,7 +509,7 @@ describe_entities() {
 describe_entities_into() {
   local dir="$1" names entity
   mkdir -p "$dir"
-  names="$(entity_names)"
+  names="$(entity_names)" || return 1
   [ -n "$names" ] || return 0
   if describe_many entity "$names" > "$dir/.all.mdl"; then
     "$PY" -c 'import re, sys
@@ -486,22 +526,35 @@ for line in open(sys.argv[1], encoding="utf-8"):
     else:
         pending.append(line)   # the doc comment and position above the next entity
 for name, lines in out.items():
-    open(sys.argv[2] + "/" + name + ".mdl", "w", encoding="utf-8").write("".join(lines))' "$dir/.all.mdl" "$dir"
+    with open(sys.argv[2] + "/" + name + ".mdl", "w", encoding="utf-8") as handle:
+        handle.write("".join(lines))' "$dir/.all.mdl" "$dir" || { rm -f "$dir/.all.mdl"; return 1; }
     rm -f "$dir/.all.mdl"
-    return 0
+  else
+    rm -f "$dir/.all.mdl"
+    while IFS= read -r entity; do
+      [ -n "$entity" ] || continue
+      "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$dir/$entity.mdl" 2>/dev/null || return 1
+    done <<< "$names"
   fi
-  rm -f "$dir/.all.mdl"
+  # Every listed entity has its file, or the checks that read them saw only part of the model.
   while IFS= read -r entity; do
-    [ -n "$entity" ] || continue
-    "$MXCLI" -p "$MPR" -c "DESCRIBE ENTITY $entity" > "$dir/$entity.mdl" 2>/dev/null || true
+    [ -z "$entity" ] || [ -s "$dir/$entity.mdl" ] || return 1
   done <<< "$names"
+  return 0
 }
 
 # VIEW01 lines (view_access.py): a view entity a row-scoped role reads with no XPath constraint.
+# Exit 0 none, 1 findings (printed), 2 the checker could not run (its last lines in view.error).
 view_findings() {
-  [ -f tools/mdl-checks/view_access.py ] || return 0
+  local out code
+  [ -f tools/mdl-checks/view_access.py ] || { echo "tools/mdl-checks/view_access.py is missing" > "$WORK/view.error"; return 2; }
   cat "$WORK/entities/"*.mdl 2>/dev/null > "$WORK/entities.mdl"
-  "$PY" tools/mdl-checks/view_access.py "$WORK/entities.mdl" 2>/dev/null
+  out="$("$PY" tools/mdl-checks/view_access.py "$WORK/entities.mdl" 2>"$WORK/view.error")"; code=$?
+  case "$code" in
+    0) return 0 ;;
+    1) if printf '%s\n' "$out" | grep -q '^\[VIEW01\]'; then printf '%s\n' "$out"; return 1; fi ;;
+  esac
+  return 2
 }
 
 check_security() {
@@ -512,9 +565,19 @@ check_security() {
     echo "security: could not run -- SHOW PROJECT SECURITY printed no level" > "$WORK/security.summary"
     return 2
   fi
-  describe_entities
-  views="$(view_findings)"
+  # A model that could not be read, or a checker that crashed, is not "no VIEW01": it used to
+  # read as "level Production", and that pass was then cached.
   : > "$WORK/security.detail"
+  if ! describe_entities; then
+    echo "security: could not run -- the project's entities could not be listed or described" > "$WORK/security.summary"
+    return 2
+  fi
+  views="$(view_findings)"
+  if [ "$?" = "2" ]; then
+    echo "security: could not run -- view_access.py did not finish" > "$WORK/security.summary"
+    tail -3 "$WORK/view.error" 2>/dev/null > "$WORK/security.detail"
+    return 2
+  fi
   if [ -n "$views" ]; then
     printf '%s\n' "$views" | sed 's/^/   /' >> "$WORK/security.detail"
   fi
@@ -567,6 +630,13 @@ check_scope() {
   out="$("$PY" tools/mdl-checks/check_scope.py . $USER_MODULES 2>&1)"; code=$?
   if [ "$code" = "2" ]; then
     echo "scope: could not run -- $(printf '%s\n' "$out" | tail -1)" > "$WORK/scope.summary"; return 2
+  fi
+  # 0 passes and 1 has findings, each under a PASS or WARN line; anything else (a traceback
+  # exits 1 too) did not check the model, and counted as "findings", a pass while MDL_SCOPE=warn.
+  if { [ "$code" != "0" ] && [ "$code" != "1" ]; } || ! printf '%s\n' "$out" | head -1 | grep -qE '^(PASS|WARN) '; then
+    echo "scope: could not run -- check_scope.py exited $code" > "$WORK/scope.summary"
+    printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/scope.detail"
+    return 2
   fi
   echo "scope: $(printf '%s\n' "$out" | head -1)" > "$WORK/scope.summary"
   [ "$code" = "0" ] && return 0

@@ -552,7 +552,27 @@ DONE, since nothing asked for them. Each full DONE now keeps a hash of every mic
 (`.mxcli/gate-cache/captions-baseline.json`; where its boxes sit does not count). From then on a
 microflow that is new or changed since the last DONE fails naming until its actions, decisions
 and loops have captions; older ones stay warnings. The first DONE with a backlog says once:
-clear it module by module, then run the full gate once. The
+clear it module by module, then run the full gate once.
+
+Bundle 2026.10.04.13 is the first step of the audit of 2026-10-04 (`docs/audit-mxcodr-2026-10-04.md`
+in the development repo): security, and checks that passed without running.
+- A port from `tests/harness.env` (or the environment) is digits or it is ignored, and said so.
+  Bash runs a command substitution inside `$(( ))`, so `APP_PORT=x[$(cmd)]` ran `cmd` in every
+  script that sources `tests/portable.sh`; `APP_PORT=1@host` sent the test password to that host.
+- "A check that did not run has not passed" now holds in six more places. `scope`: a checker that
+  crashed counted as warnings. `layout`: an unreadable security level read as "security off" and
+  skipped NAV01 and NAV03; user roles that could not be listed or described silenced ACCOUNT03,
+  HOME01 and MODULE01. `security`: a crash of `view_access.py`, or entities that could not be
+  listed, read as "level Production". The suite: no `Total:` line with exit 0. `visual` and the
+  runtime log: a crash of `gate_helpers.py`. Each is now "could not run". Snippets, layouts and
+  flows the layout check reads as extra input still do not block when one cannot be described,
+  but the gate names the rules that may have missed a finding.
+- Entity names from the model are checked (`Module.Entity`) before they become file names.
+- PERF08 reports nothing when no query at all was recognised (it called every index unneeded),
+  and PERF07 no longer tells you to drop the index of a `unique` attribute.
+- The timeout watchdog ran into "BASHPID: unbound variable" on macOS's own bash 3.2.
+- `--restart` and the boot stop only this project's `mxcli run`: one started in this directory or
+  naming it. Two projects whose `.mpr` has the same name used to stop each other's app. The
 summary line about microflow tests (`*.test.mdl`, not run by the gate) is printed once the suite
 is green: while it was red, two sessions took the line as the next job and spent 20-40 minutes
 on tests that do not count for DONE. The gate's requirements themselves are unchanged.

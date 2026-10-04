@@ -301,6 +301,8 @@ When Studio Pro has the project open, the gate and each exec say so: what Studio
 replaces what mxcli wrote.
 Captions are warnings until the first DONE; after it, the agent is told once to add the missing
 ones, and a microflow it adds or changes needs them before the next DONE.
+A check that could not run (a crashed checker, a model that could not be read) is never a pass:
+the gate says "could not run" and does not say DONE.
 After an exec, the agent is told when it re-created a page another script alters, or granted
 access another script revoked.
 

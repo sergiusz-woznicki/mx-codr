@@ -91,6 +91,20 @@ _mdl_harness_env="$(dirname "${BASH_SOURCE[0]}")/harness.env"
 mdl_load_harness_env "$_mdl_harness_env"
 unset _mdl_harness_env
 
+# A port is digits and nothing else. Bash runs a command substitution it finds inside $(( )):
+# APP_PORT=x[$(command)] in tests/harness.env ran that command in every script that sources this
+# file, and APP_PORT=1@host sent the test password to that host (audit of 2026-10-04). A value
+# that is not a port is dropped, and said so, wherever it came from.
+for _mdl_port in APP_PORT ADMIN_PORT; do
+  case "${!_mdl_port:-}" in
+    '') ;;
+    *[!0-9]*|??????*)
+      echo "tests/portable.sh: $_mdl_port is not a port number (digits only) -- ignored; fix it in tests/harness.env" >&2
+      unset "$_mdl_port" ;;
+  esac
+done
+unset _mdl_port
+
 # A second project runs beside the first with APP_PORT=8082 in its tests/harness.env: locally its
 # admin API follows, APP_PORT+9 (8081 and 8090 by default).
 if [ "${MDL_RUN_MODE:-}" != "docker" ] && [ -n "${APP_PORT:-}" ] && [ -z "${ADMIN_PORT:-}" ]; then

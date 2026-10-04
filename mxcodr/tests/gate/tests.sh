@@ -254,6 +254,12 @@ record_suite_result() {
     [ -n "$why" ] || why="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
     echo "   the runner produced no results: $why"
     summary+=("tests: no result -- ${environment:-${why:-the runner printed nothing}}")
+    # Exit 0 without a Total line, with tests there to run: nothing was tested, and nothing failed
+    # either, so this used to count as a pass.
+    if [ "$status" = "0" ] && ls tests/verify-*.test.sh >/dev/null 2>&1; then
+      cannot_run+=("tests")
+      return 0
+    fi
   fi
   [ "$status" != "0" ] || return 0
   failures+=("tests")
@@ -278,7 +284,12 @@ step_visual() {
   [ -z "${ONLY:-}" ] && [ "${TESTS_ONLY:-0}" != "1" ] || return 0
   local -a review=()
   [ "${MDL_VISUAL_REVIEW:-}" = "agent" ] && review=(--review "$APP_DIR/.mxcli/visual")
-  out="$(gate_py visual-report .mxcli/visual/findings.jsonl mdlsource ${review[@]+"${review[@]}"} 2>/dev/null)"
+  out="$(gate_py visual-report .mxcli/visual/findings.jsonl mdlsource ${review[@]+"${review[@]}"} 2>"$WORK/visual.error")" || {
+    # The helper crashed: empty output used to read as "nothing overlaps".
+    summary+=("visual: could not run -- gate_helpers.py visual-report failed: $(tail -1 "$WORK/visual.error" 2>/dev/null)")
+    cannot_run+=("visual")
+    return 0
+  }
   if [ -z "$out" ]; then
     summary+=("visual: nothing overlaps, scrolls sideways or is cut off on the pages the tests reached")
     return 0
@@ -321,7 +332,11 @@ step_runtime_errors() {
   local log="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}" mode="${MDL_RUNTIME_ERRORS:-warn}" out
   [ "$mode" = "0" ] && return 0
   [ -f "$log" ] && [ -s "$WORK/tests.started" ] || return 0
-  out="$(gate_py runtime-errors "$log" "$(cat "$WORK/tests.started")" 2>/dev/null)"
+  out="$(gate_py runtime-errors "$log" "$(cat "$WORK/tests.started")" 2>"$WORK/runtime.error")" || {
+    summary+=("runtime log: could not run -- gate_helpers.py runtime-errors failed: $(tail -1 "$WORK/runtime.error" 2>/dev/null)")
+    cannot_run+=("runtime log")
+    return 0
+  }
   [ -n "$out" ] || return 0
   if [ "$mode" = "error" ]; then
     printf '%s\n' "$out" > "$WORK/runtime.detail"

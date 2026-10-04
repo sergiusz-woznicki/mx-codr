@@ -231,7 +231,9 @@ def index_findings(entity_lines: list[str], document_lines: list[str]) -> list[t
                        f"the latest row by date 35 ms -> 0.01 ms, one status 9.7 -> 2.0 ms. An index costs a "
                        f"little on every commit, so index what is filtered or sorted, not every attribute")
         else:
-            replaced = [index for index in known[entity]["indexes"]
+            # Only an index the model declares can be dropped: a `unique` attribute has one Mendix
+            # made itself, and "drop index (Code)" for it named an index nobody created.
+            replaced = [index for index, _ in known[entity]["explicit"]
                         if len(index) < len(columns) and lower(columns)[:len(index)] == index]
             drop = "".join(f" then `alter entity {entity} drop index if exists ({', '.join(c for c in columns[:len(index)])});`, which it replaces."
                            for index in replaced)
@@ -268,6 +270,10 @@ def redundant_findings(entity_lines: list[str], document_lines: list[str]) -> li
         columns = wanted(info, equal, ranged, sort)
         if columns:
             wants.setdefault(entity, []).append(tuple(name.lower() for name in columns))
+    # No query recognised anywhere is not "no query needs an index": it is a describe format this
+    # file does not read, and every index of the model would be called unneeded.
+    if not wants:
+        return []
     findings = []
     for entity, info in sorted(known.items()):
         explicit = info["explicit"]
