@@ -137,14 +137,16 @@ only_coverage_note() {
   fi
 }
 
-# After a full DONE: did the last DONE see exactly this model and these tests? Pi re-ran a green
-# gate on an unchanged app three times in two minutes "to confirm stability". Advice only.
+# After a full DONE: did the last DONE see exactly this model, these tests and this theme? Pi
+# re-ran a green gate on an unchanged app three times in two minutes "to confirm stability".
+# theme/ counts: a session that changed only a stylesheet (a chart sized to the screen) was told
+# its DONE was a repeat. Advice only.
 done_repeat_note() {
   local key file="$CACHE_DIR/last-done.key"
-  key="$(fingerprint tests 2>/dev/null)" || return 0
+  key="$(fingerprint tests theme 2>/dev/null)" || return 0
   [ -n "$key" ] || return 0
   if [ -f "$file" ] && [ "$(cat "$file" 2>/dev/null)" = "$key" ]; then
-    echo "   Same model and tests as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- change something before the next run."
+    echo "   Same model, tests and theme as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- change something before the next run."
   fi
   mkdir -p "$CACHE_DIR" 2>/dev/null && echo "$key" > "$file" 2>/dev/null
   return 0
