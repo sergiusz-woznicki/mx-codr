@@ -235,7 +235,8 @@ navy, teal, amber, plum, forest -- each shown in the terminal in its own colours
 app screen in each in the browser. Change it any time: `bash tests/theme.sh` lists
 them, `bash tests/theme.sh teal` switches, and a running app shows it in seconds. The app opens
 light even when the OS is dark, and the mx-codr logo and browser icons take the theme's
-colours.
+colours. Inputs, drop-downs and the data grid's filters are all one height (38px). Running the
+installer again in an existing app brings its theme up to date.
 
 ### Windows
 

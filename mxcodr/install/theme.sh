@@ -47,16 +47,17 @@ choose_theme() {
   printf '\n'
 }
 
-# apply_theme <app-dir> <mxcli> <name> -- a built-in theme by name; the bundle's own are created
+# apply_theme <app-dir> <mxcli> <name> [keep-logo] -- a built-in theme by name; the bundle's own are created
 # from their token file on the signal base first. Only theme/ files change, never the model.
 apply_theme() {
-  local app="$1" mxcli="$2" name="$3" source mpr skin
+  local app="$1" mxcli="$2" name="$3" keep_logo="${4:-}" source mpr
   [ -n "$name" ] || return 0
   mpr="$(cd "$app" && ls *.mpr 2>/dev/null | head -1)"
   [ -n "$mpr" ] || return 1
   source="$("$NODE" "$SRC/checks/themes/themes.cjs" source "$name" 2>/dev/null)" || return 1
   # The mx-codr mark in this theme's colours replaces Mendix's icons and logos (theme/web/ only).
-  "$NODE" "$SRC/checks/themes/themes.cjs" logo "$name" "$app" >/dev/null 2>&1 || true
+  # keep-logo: an existing app's refresh, which may carry a logo of its own.
+  [ -n "$keep_logo" ] || "$NODE" "$SRC/checks/themes/themes.cjs" logo "$name" "$app" >/dev/null 2>&1 || true
   # Atlas is no theme at all: take away any mxcli theme the app carries.
   if [ "$source" = "none" ]; then
     ( cd "$app" && "$mxcli" theme remove -p "$mpr" ) >/dev/null 2>&1 || true
@@ -64,9 +65,11 @@ apply_theme() {
   fi
   if [ "$source" != "builtin" ] && [ ! -d "$app/theme/mxcli-themes/$name" ]; then
     ( cd "$app" && "$mxcli" theme create "$name" -p "$mpr" --from "$source" --base signal ) >/dev/null 2>&1 || return 1
-    # The frame (top bar, active menu item, outline buttons) goes into the scaffold's own partial.
-    skin="$("$NODE" "$SRC/checks/themes/themes.cjs" skin "$name" 2>/dev/null)" \
-      && cat "$skin" >> "$app/theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
+  fi
+  # The frame (top bar, active menu item, outline buttons, control heights) goes into the
+  # scaffold's own partial, replacing the one an earlier bundle wrote there.
+  if [ "$source" != "builtin" ]; then
+    "$NODE" "$SRC/checks/themes/themes.cjs" frame "$name" "$app" >/dev/null 2>&1 || true
   fi
   ( cd "$app" && "$mxcli" theme apply "$name" -p "$mpr" --variant light ) >/dev/null 2>&1
 }

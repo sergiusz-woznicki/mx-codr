@@ -60,9 +60,11 @@ case "${1:-}" in
     if [ "$source" != "builtin" ] && [ ! -d "theme/mxcli-themes/$name" ]; then
       "$MXCLI" theme create "$name" -p "$MPR" --from "$source" --base signal >/dev/null \
         || { echo "mxcli theme create $name failed" >&2; exit 1; }
-      # The frame (top bar, active menu item, outline buttons) goes into the scaffold's own partial.
-      skin="$("$NODE" "$HELPER" skin "$name")" \
-        && cat "$skin" >> "theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
+    fi
+    # The frame (top bar, active menu item, outline buttons, control heights) goes into the
+    # scaffold's own partial, replacing the one an earlier bundle wrote there.
+    if [ "$source" != "builtin" ]; then
+      "$NODE" "$HELPER" frame "$name" . || echo "no frame for $name -- the look stays as it was" >&2
     fi
     "$MXCLI" theme apply "$name" -p "$MPR" --variant light >/dev/null || { echo "mxcli theme apply $name failed" >&2; exit 1; }
     echo "Theme: $name. With the app running under --watch, reload the page in a few seconds."
