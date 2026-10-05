@@ -114,8 +114,11 @@ grants as `grant read * on entity E to Role where [ … ]`, unnamed rows, column
   says to swap its `./mxcli`.
 - **Caption baseline:** it records the mxcli version, so the move re-baselines instead of turning
   every caption warning into an error.
-- **Known, unchanged:** a member-level entity rule (`read (A, B) … where`) is read as unconstrained
-  by VIEW01 and skipped by SCOPE01 -- in both formats, as before. mxcli 0.25 describes microflows
+- **Fixed in 2026.10.05.4:** a member-level entity rule (`read (Number, Total) … where`) kept its
+  XPath unread: VIEW01 took it for unconstrained and SCOPE01 never counted the role as scoped (the
+  rights' pattern stopped at the inner bracket), in both formats. Now read: on the 30 projects VIEW01
+  names every source a role sees only partly, and 84 instead of 66 role/entity pairs count as
+  scoped. mxcli 0.25 describes microflows
   about four times slower than 0.24 (1.5 s to 5.9 s for one module of InvoiceB2B); naming and layout
   take a few seconds longer on large models.
 

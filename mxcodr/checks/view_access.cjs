@@ -16,7 +16,10 @@ const { re } = py;
 const HEAD = re.compile(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?P<kind>view\s+|(?:non-)?persistent\s+)?` +
   String.raw`entity\s+(?P<name>\w+\.(?:"[^"]+"|\w+))`, 'i');
 // Names may be quoted (Orders."Order"): the heads and grants read them as the query's sources do.
-const GRANT = re.compile(String.raw`^\s*grant\s+(?P<role>[\w.]+)\s+on\s+(?P<entity>\w+\.(?:"[^"]+"|\w+))\s*\((?P<rights>[^)]*)\)` +
+// The rights may hold a member list, `(read (Number, Total), write (Total))`: one level of nested
+// brackets, so the `where` after them is read (2026-10-05: `[^)]*` stopped at the inner bracket and
+// a member-level rule with an XPath read as unconstrained).
+const GRANT = re.compile(String.raw`^\s*grant\s+(?P<role>[\w.]+)\s+on\s+(?P<entity>\w+\.(?:"[^"]+"|\w+))\s*\((?P<rights>(?:[^()]|\([^()]*\))*)\)` +
   String.raw`(?P<where>\s+where\s+')?`, 'i');
 // mxcli 0.25 (`mdl 1`) names the rights first and writes the XPath in [ ]:
 // `grant read *, write (A) on entity Shop.Order to Shop.Customer, Shop.Clerk where [ … ];`
@@ -46,9 +49,7 @@ function read(lines) {
       if (grantV1.group('rights').toLowerCase().includes('read')) {
         for (const role of grantV1.group('roles').split(',').map(r => py.strip(r))) {
           const key = keyOf(role, name(grantV1.group('entity')));
-          // As the 0.24 reader does: a member-level right (`read (A, B)`) hides the `where` from it
-          // (its `[^)]*` stops at the inner bracket), so such a rule reads as unconstrained.
-          const constrained = Boolean(grantV1.group('where')) && !grantV1.group('rights').includes('(');
+          const constrained = Boolean(grantV1.group('where'));
           rules.set(key, (rules.has(key) ? rules.get(key) : true) && constrained);
         }
       }

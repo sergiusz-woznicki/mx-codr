@@ -64,7 +64,7 @@ what to fix. Codes in brackets are what the gate prints.
 **Done**
 - A failing test before each feature; a test for every page and action microflow.
 - Mendix's consistency check at 0 errors; project security at Production.
-- A role that sees only its own rows does not read a view of everyone's totals (`VIEW01`).
+- A role that sees only its own rows does not read a view of everyone's totals (`VIEW01`), also when its rule limits it to some fields.
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
 

@@ -24,7 +24,9 @@ const PAGE_GRANT_RE = re.compile(String.raw`grant\s+view\s+on\s+page\s+\S+\s+to\
 // A database retrieve: `retrieve $X from Mod.Entity ...;` -- not `from $Obj/Mod.Assoc`, which the
 // object scopes already.
 const RETRIEVE_RE = re.compile(String.raw`\bretrieve\s+\$\w+\s+from\s+([A-Za-z_]\w*\.[A-Za-z_]\w*)\b([^;]*);`, 'is');
-const ENTITY_GRANT_RE = re.compile(String.raw`grant\s+(\S+)\s+on\s+(\S+)\s*\([^)]*\)\s*where\s+'`, 'i');
+// The rights may hold a member list, `(read (Number, Total))`: one level of nested brackets
+// (2026-10-05: `\([^)]*\)` stopped at the inner bracket and such a rule was never counted as scoped).
+const ENTITY_GRANT_RE = re.compile(String.raw`grant\s+(\S+)\s+on\s+(\S+)\s*\((?:[^()]|\([^()]*\))*\)\s*where\s+'`, 'i');
 // mxcli 0.25 (`mdl 1`): `grant read * on entity Shop.Invoice to Shop.Customer, Shop.Clerk where [ … ]`.
 const ENTITY_GRANT_V1_RE = re.compile(String.raw`grant\s+([^;]*?)\s+on\s+entity\s+(\S+)\s+to\s+([^;]*?)\s+where\s+\[`, 'i');
 
@@ -84,10 +86,8 @@ function unscopedRetrieves(text) {
 // Roles whose access rule on the entity carries an XPath constraint.
 function scopedRoles(text, entity) {
   const roles = new Set(ENTITY_GRANT_RE.findall(text).filter(([, target]) => target === entity).map(([role]) => role));
-  // As the 0.24 reader does: a member-level right (`read (A, B)`) is not read as scoped (its
-  // `\([^)]*\)` stops at the inner bracket).
-  for (const [rights, target, named] of ENTITY_GRANT_V1_RE.findall(text)) {
-    if (target === entity && !rights.includes('(')) for (const role of named.split(',')) roles.add(py.strip(role));
+  for (const [, target, named] of ENTITY_GRANT_V1_RE.findall(text)) {
+    if (target === entity) for (const role of named.split(',')) roles.add(py.strip(role));
   }
   return roles;
 }
