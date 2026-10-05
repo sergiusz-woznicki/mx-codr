@@ -799,6 +799,15 @@ error(s) ... fix them first", and a script that adds none passes. An old error s
 against a script that touches what it names, so swapping one broken rule for another does not
 pass.
 
+It refuses a script that creates a page or an `ACT_` microflow the model does not have yet when no
+`# covers:` line of `tests/verify-*.test.sh` names it (`TEST01`, 2026.10.05.11). The skill said
+test first, but coverage was checked only at the end: in InvoiceChaseCodr the session built the
+whole app, then wrote six tests in one go, and three had never failed. Blocked at the exec, the
+test comes after the script that names the page's widgets and before the page exists, so it is
+red first by itself. A fix to a page already in the model, a `SUB_` microflow, an entity and a
+Marketplace module pass; a model that cannot be read never blocks. `MDL_TEST_FIRST=0` in
+`tests/harness.env` turns it off.
+
 It also refuses a script that creates a document another script in the same folder creates too
 (`SCRIPT01`): whichever of the two runs last decides what the page is, so re-running the earlier
 one undoes the later one without any error. In a Pi session `Order_Detail` was created in two
@@ -1362,7 +1371,10 @@ Three things it deliberately does not do:
   Java, Microsoft and Zulu directories, `/usr/lib/jvm` and
   `/Library/Java/JavaVirtualMachines`, and prints the path plus the one-line
   `export PATH=...` that fixes it. The version follows the project, not a
-  constant: Mendix 9 wants 11, 10 and 11 want 21, 11.14+ wants 25.
+  constant: Mendix 9 wants 11, 10 and 11 want 21, 11.14+ wants 25. The version is read from
+  the `version "…"` line wherever it is in `java -version` (2026.10.05.12): with
+  `JAVA_TOOL_OPTIONS` set, the first line is "Picked up JAVA_TOOL_OPTIONS: …", and reading only
+  that line reported "JDK 21 still missing" on a Mac with four JDKs.
 - **Studio Pro** is never installed. On Windows it is the only source of `mx`
   (the Mendix CDN publishes a Linux mxbuild only, and `mxcli setup mxbuild` says
   so and refuses), so the installer *looks for* the Studio Pro versions already on

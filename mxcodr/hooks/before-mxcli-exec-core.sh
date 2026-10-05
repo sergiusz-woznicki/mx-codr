@@ -76,7 +76,9 @@ hook_marketplace_wait() {
 }
 
 HOOK_VARIABLE_MESSAGE="Blocked: that exec names its script through a variable (\`\$f.mdl\` in a loop), so the precheck cannot see which script runs and the model would change unchecked. Exec each script by its own path, one command per script: ./mxcli exec mdlsource/41_pages.mdl -p App.mpr"
-HOOK_BLOCKED_HEAD="Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). Fix the script and exec again:"
+# One head for every precheck refusal: a build error found by mx check on a copy, a document created
+# twice (SCRIPT01), a page with no test yet (TEST01). "would break the build" read wrong on the last two.
+HOOK_BLOCKED_HEAD="Blocked by the precheck (nothing changed in the model). Do what it says below, then exec again:"
 
 # hook_precheck <script>... [--inline <mdl>]... -- runs tests/precheck.sh; HOOK_OUT holds its output,
 # HOOK_STATUS its exit code.

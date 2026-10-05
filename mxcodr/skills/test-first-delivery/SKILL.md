@@ -22,7 +22,8 @@ behind single lines; read one when its line is the thing you are doing (table at
 # 0. say what "working" means: one sentence in the user's words; too vague for one? ask
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call;
 #    a script without `scenario()` hangs for the full timeout. Logic with no screen goes
-#    in tests/*.test.mdl (`mxcli test`, skill test-microflows): extra, the gate skips it
+#    in tests/*.test.mdl (`mxcli test`, skill test-microflows): extra, the gate skips it.
+#    The exec of a new page or ACT_ microflow waits for this header (precheck TEST01)
 # 2. RUN IT AND WATCH IT FAIL, for the right reason; quote the FAIL line and read it --
 #    it names the error, locator, URL and user, so do not rerun or screenshot by hand
 bash tests/gate.sh --only <feature> --boot-if-needed

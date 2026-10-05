@@ -86,6 +86,22 @@ if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
   fi
 fi
 
+# TEST01: test first. A page or ACT_ microflow new to the model, named by no `# covers:` line of
+# tests/verify-*.test.sh, waits for its test. Then the test is red until the exec (red-first comes
+# by itself) and the tests do not pile up at the end. MDL_TEST_FIRST=0 (tests/harness.env) turns it off.
+if [ "${MDL_TEST_FIRST:-1}" != "0" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
+  untested="$("$NODE" tools/mdl-checks/gate_helpers.cjs test-first . "$MPR" "$@" 2>/dev/null)"
+  if [ -n "$untested" ]; then
+    echo "precheck: TEST01 -- test first: these scripts create what no browser test names yet (the real model is untouched):"
+    printf '%s\n' "$untested"
+    echo "  Write tests/verify-<feature>.test.sh first: a \`# covers:\` line naming them and a scenario that"
+    echo "  opens them, does what the person would do and checks the result in the database (skill"
+    echo "  test-first-delivery). Run it with bash tests/gate.sh --only <feature> -- it fails, they are not in the"
+    echo "  app yet -- then run this exec again. One test may cover all the pages of one feature."
+    exit 1
+  fi
+fi
+
 started="$(date +%s)"
 # The model often runs this by hand and the hook then runs it again before the exec: the second
 # run is skipped when the scripts and the .mpr are unchanged since a pass (the exec itself

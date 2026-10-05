@@ -263,4 +263,6 @@ function main() {
   return failed ? 1 : 0;
 }
 
-process.exitCode = main();
+// gate_helpers.cjs test-first reads the model and the covers: lines the same way.
+if (require.main === module) process.exitCode = main();
+module.exports = { mxcliJson, qualifiedNames, projectModules, covered, ModelReadError };

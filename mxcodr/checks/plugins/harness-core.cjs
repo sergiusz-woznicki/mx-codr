@@ -212,8 +212,9 @@ function blockReason(root, tool, args) {
   const { status, out } = run([precheck.replace(/\\/g, "/"), "--for-exec", ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
   if (status === 0 || out.includes("precheck: could not run")) return null
   return (
-    "Blocked: that exec would break the build (mx check on a copy of the model, nothing changed). " +
-    "Fix the script and exec again:\n" +
+    // The same head as the shell hooks (hooks/before-mxcli-exec-core.sh): a build error, a document
+    // created twice (SCRIPT01) and a page with no test yet (TEST01) all land here.
+    "Blocked by the precheck (nothing changed in the model). Do what it says below, then exec again:\n" +
     (stepsBeforeExec(command) ? STEPS_BEFORE_EXEC : "") + out.slice(-OUTPUT_LIMIT)
   )
 }
