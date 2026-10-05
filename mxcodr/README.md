@@ -92,6 +92,15 @@ one detail is skipped. `$PY` is still set in `tests/portable.sh` for project tes
 the switch that call `"$PY"`; new tests read JSON with `field`/`oql_value` and do arithmetic with
 `awk` or `node -e`.
 
+## A session refusal is dated by the line it belongs to
+
+Bundle 2026.10.05.2. A trial-licence runtime logs a refused session as an exception whose stack
+trace lines carry no date, and the gate compared those lines with the suite's start as text:
+`com.mendix...` sorts after every date. One refusal three days old in `.mxcli/runtime.log` then
+labelled every later suite "ENVIRONMENT, not the feature" -- green ones too -- and, since a red run
+blamed on the environment is not recorded, red-first said a test that had failed had never been
+red. A line without a date now takes the time of the dated line above it.
+
 ## Why the suite is written as one scenario per test
 
 `playwright-cli` costs ~0.66s per invocation, before any browser work. The old

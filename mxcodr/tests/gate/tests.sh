@@ -231,11 +231,15 @@ environment_cause() {
 SESSION_LIMIT_CAUSE="the runtime ran out of sessions (trial licence: \"Maximum number of sessions exceeded\" in .mxcli/runtime.log) -- sign-ins were refused and Basic-auth REST/OData calls failed, most likely not the features. bash tests/gate.sh --restart starts with none; each user a scenario signs in as, and each Basic-auth call, can hold one"
 
 # session_limit_in_log -- true when runtime.log has the session-limit line since the suite started.
+# The refusal is logged as an exception whose stack trace lines carry no date: each line takes the
+# time of the dated line above it. Compared as text, "com.mendix..." sorted after every date, so a
+# refusal days old blamed every later suite, green ones too (InvoiceB2B, 2026-10-05).
 session_limit_in_log() {
   local log="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}" started
   [ -f "$log" ] && [ -s "$WORK/tests.started" ] || return 1
   started="$(cat "$WORK/tests.started")"
-  awk -v since="$started" '($1 " " substr($2, 1, 8)) >= since && /Maximum number of sessions exceeded/ { found = 1; exit }
+  awk -v since="$started" '/^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] / { stamp = $1 " " substr($2, 1, 8) }
+    stamp >= since && /Maximum number of sessions exceeded/ { found = 1; exit }
     END { exit !found }' "$log"
 }
 

@@ -339,7 +339,7 @@ bash tests/diagnose.sh                # why is the app not answering
 A failing test always says why, on one line: one that stops on a silent command names its line and command.
 The precheck also covers MDL given with `mxcli -c`, and tells errors already in the model from the script's own.
 An exec whose script a step in the same command writes (an edit, a `mv`, a redirect) is refused: the precheck runs before the command and would check the old file.
-When a trial-licence runtime runs out of sessions ("Maximum number of sessions exceeded"), the gate names that as the cause of the failed sign-ins instead of the features, and says `--restart` clears them.
+When a trial-licence runtime runs out of sessions ("Maximum number of sessions exceeded"), the gate names that as the cause of the failed sign-ins instead of the features, and says `--restart` clears them. Only a refusal logged during this run counts: an old one left in the log no longer blames later runs.
 A hint under a build error follows the error's text, not only its code: CE7247 is a reserved name or an invalid URL, and each gets its own advice.
 When the app needs a Marketplace module and mxcli is not logged in, the harness stops the session with a short instruction (create a token, run `./mxcli auth login` in your own terminal) and holds every build back until you have; `MDL_MARKETPLACE_LOGIN=report` in tests/harness.env is for unattended runs, or when you would rather skip the module. Only a real exec starts the wait, never a precheck the agent runs by hand. The token itself stays out of the session.
 A blocked exec says when the command's earlier steps (an edit) did not run either; a scenario opens the browser when none is open; `# covers:` names may be separated by commas or spaces.
