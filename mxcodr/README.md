@@ -1371,7 +1371,10 @@ Three things it deliberately does not do:
   Java, Microsoft and Zulu directories, `/usr/lib/jvm` and
   `/Library/Java/JavaVirtualMachines`, and prints the path plus the one-line
   `export PATH=...` that fixes it. The version follows the project, not a
-  constant: Mendix 9 wants 11, 10 and 11 want 21, 11.14+ wants 25.
+  constant: Mendix 9 wants 11, 10 and 11 want 21, 11.14+ wants 25. The version is read from
+  the `version "…"` line wherever it is in `java -version` (2026.10.05.12): with
+  `JAVA_TOOL_OPTIONS` set, the first line is "Picked up JAVA_TOOL_OPTIONS: …", and reading only
+  that line reported "JDK 21 still missing" on a Mac with four JDKs.
 - **Studio Pro** is never installed. On Windows it is the only source of `mx`
   (the Mendix CDN publishes a Linux mxbuild only, and `mxcli setup mxbuild` says
   so and refuses), so the installer *looks for* the Studio Pro versions already on

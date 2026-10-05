@@ -17,8 +17,12 @@ jdk_major_for() {         # jdk_major_for <mendix-version>
   esac
 }
 
+# The version line, wherever it is: with JAVA_TOOL_OPTIONS set (a ~/.zshrc had
+# -Djava.awt.headless=true), `java -version` starts with "Picked up JAVA_TOOL_OPTIONS: ...", and
+# reading the first line only found no version in any of the four JDKs installed, so the installer
+# said "JDK 21 -- still missing" (2026-10-06).
 java_major() {            # java_major <path-to-java> -- echo the major version
-  "$1" -version 2>&1 | head -1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p'
+  "$1" -version 2>&1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' | head -1
 }
 
 # Searches beyond PATH; JAVA_HOME may point at the home or at its bin/.
