@@ -134,4 +134,15 @@ create_app() {
 
 if [ "$mpr_count" = "0" ]; then
   create_app
+else
+  # An existing app keeps its look, but the frame of an mx-codr theme is the bundle's: re-apply
+  # the active one so a fix to the frame reaches it (control heights, 2026-10-05). Only theme/
+  # files change; a failure is said, never fatal.
+  for _theme_partial in "$APP"/theme/web/_mxcli-*.scss; do
+    [ -f "$_theme_partial" ] || continue
+    _theme="$(basename "$_theme_partial" .scss)"; _theme="${_theme#_mxcli-}"
+    [ -f "$SRC/checks/themes/$_theme.skin.scss" ] || continue
+    if apply_theme "$APP" "$APP/mxcli$EXE" "$_theme" keep-logo; then ui_note "theme $_theme: frame refreshed"
+    else ui_note "the $_theme theme could not be refreshed; try: bash tests/theme.sh $_theme"; fi
+  done
 fi

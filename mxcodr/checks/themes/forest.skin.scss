@@ -13,6 +13,13 @@
   --navsidebar-bg-hover: #2e5e37;
   --navsidebar-border-radius: var(--mxt-radius-lg);
 }
+// Form controls as tall as Atlas's buttons. The signal base sets 32px, while the data grid's
+// filter buttons (operator, calendar) stay at Atlas's 38px: the filter row was uneven, and the
+// drop-down filter's 8px padding left 16px for a 20px line, so "Select" was cut off at the
+// bottom (InvoiceChaseCodr, plum, 2026-10-05). Every input, drop-down and filter reads this.
+:root {
+  --mxt-control-height: 38px;
+}
 // Buttons a page author set to the Default style (Mendix renders them `mx-button btn-default`)
 // take the brand colour. The variables are scoped to them, so the grid's column selector
 // (`btn-default` only) and the date picker's button (`mx-button` only) keep the neutral look.

@@ -873,6 +873,14 @@ buttons a page author set to Default (`.mx-button.btn-default`), so the grid's c
 the date picker keep the neutral look. Atlas removes any mxcli
 theme. A theme is applied with `--variant light`, so the app opens light even when the OS is dark
 (the dark palette stays in the files; `./mxcli theme apply <name> --variant auto` follows the OS).
+
+The frame also sets `--mxt-control-height: 38px` (2026.10.05.10). mxcli's signal base makes form
+controls 32px, while the data grid's filter buttons (operator, calendar) keep Atlas's 38px: the
+filter row was uneven, and the drop-down filter's 8px padding left too little room, so "Select" was
+cut off at the bottom (plum, InvoiceChaseCodr). The frame used to be appended once, when the theme
+was created, so an existing project never got a fix to it. Now `themes.cjs frame` replaces it in
+place on every apply: `tests/theme.sh` does that, and the installer re-applies an existing app's
+active mx-codr theme (its logo left alone).
 The mx-codr logo (a prompt `>` and a heavy "c", sharp even at 16px) comes with every theme, Atlas too, in that theme's
 colours: `checks/themes/logos/<name>/` is copied over `theme/web/` and replaces Mendix's browser and
 home-screen icons, the sign-in logo and the top bar logo (`img/Atlas_Core$Layout$logo.svg`, by

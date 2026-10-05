@@ -5,6 +5,7 @@
 //     themes.cjs resolve <choice>   the theme name for a number or name, or nothing (exit 1)
 //     themes.cjs source <name>      "none" (Mendix's Atlas), "builtin", or the path of the bundle's <name>.css
 //     themes.cjs skin <name>        the path of the bundle's <name>.skin.scss (its frame), if it has one
+//     themes.cjs frame <name> <app>  write the current frame into <app>'s scaffold partial of that theme
 //     themes.cjs preview            the path of preview.html
 //     themes.cjs logo <name> <app>  copy the mx-codr mark in that theme's colours into <app>/theme/web/
 //
@@ -75,6 +76,7 @@ const USAGE = `The app themes the installer offers, read from catalog.json besid
     themes.cjs resolve <choice>   the theme name for a number or name, or nothing (exit 1)
     themes.cjs source <name>      "none" (Mendix's Atlas), "builtin", or the path of the bundle's <name>.css
     themes.cjs skin <name>        the path of the bundle's <name>.skin.scss (its frame), if it has one
+    themes.cjs frame <name> <app>  write the current frame into <app>'s scaffold partial of that theme
     themes.cjs preview            the path of preview.html
     themes.cjs logo <name> <app>  copy the mx-codr mark in that theme's colours into <app>/theme/web/
 
@@ -109,6 +111,21 @@ function main(argv) {
       return 0;
     }
     return 1;
+  }
+  if (command === 'frame' && argv.length === 3) {
+    // The frame is appended to the scaffold's own partial once, when the theme is created. A
+    // project that already had the theme kept the frame of the bundle it was created with, so a
+    // fix to the frame (control heights, 2026-10-05) never reached it. Replace it on every apply:
+    // everything from the frame's first line to the end of the partial is the old frame.
+    const skin = path.join(HERE, argv[1] + '.skin.scss');
+    const partial = path.join(argv[2], 'theme', 'mxcli-themes', argv[1], 'files', 'theme', 'web', `_mxcli-${argv[1]}.scss`);
+    if (!py.isfile(skin) || !py.isfile(partial)) return 1;
+    const frame = fs.readFileSync(skin, 'utf8');
+    const text = fs.readFileSync(partial, 'utf8');
+    const start = text.search(/^\/\/ -+\n\/\/ mx-codr frame for /m);
+    const kept = start < 0 ? text.replace(/\n*$/, '\n') : text.slice(0, start);
+    fs.writeFileSync(partial, kept + (kept.endsWith('\n\n') || kept === '' ? '' : '\n') + frame);
+    return 0;
   }
   if (command === 'logo' && argv.length === 3) {
     // The browser and home-screen icons, the sign-in logo and Atlas's top bar logo, by the
