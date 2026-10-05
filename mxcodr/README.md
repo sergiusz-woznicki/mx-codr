@@ -144,6 +144,13 @@ the same text, newer for 0.25 (`list impact of`, `task queue`, `mdl 1;` headers)
 `module-structure` links to mxcli's in `.ai-context/skills/`, and the installer removes the copy an
 older install left in `.agents/skills/`, where mxcli writes none.
 
+## A Mac asks which Studio Pro a new app uses (2026.10.05.7)
+
+A new app on a Mac was always created at Mendix 11.12.1 (`DEFAULT_MX_VERSION`), whatever Studio
+Pro the machine had. The installer now lists the Studio Pro apps in `/Applications` and
+`~/Applications` that carry `Contents/modeler/mx` (the version comes from the app's name) and asks
+which one to use when there are several. `MX_VERSION` still decides without asking.
+
 ## A session refusal is dated by the line it belongs to
 
 Bundle 2026.10.05.2. A trial-licence runtime logs a refused session as an exception whose stack
@@ -959,7 +966,10 @@ the same question before its winget stage. It used to guess "the folder above th
 which was the clone itself when the repo was cloned.
 
 `--no-app` declines app creation; `--help` lists the arguments, `MX_VERSION` and
-`APP_NAME` override what gets created.
+`APP_NAME` override what gets created. Without `MX_VERSION` a Mac with several Studio Pro
+installs asks which one the new app uses (the newest is the default, and is taken with no
+terminal or `MDL_ASSUME_YES`); with one it takes that one, with none Mendix 11.12.1. Windows
+takes the newest installed.
 
 It never stops without saying why: an unexpected failure prints the file, line and command
 it stopped at.

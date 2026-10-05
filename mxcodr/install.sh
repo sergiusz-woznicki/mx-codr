@@ -55,7 +55,7 @@ mdl_install_exit() {
 trap mdl_install_exit EXIT
 
 # --- Constants ---
-DEFAULT_MX_VERSION="11.12.1"               # Mendix version for a new app when MX_VERSION is unset
+DEFAULT_MX_VERSION="11.12.1"               # Mendix version for a new app when MX_VERSION is unset and no Studio Pro is found
 PLAYWRIGHT_CLI_PACKAGE="@playwright/cli@0.1.15"   # pinned to the devcontainer's version
 DEFAULT_DOCKER_WAIT=180                    # seconds to wait for the Docker daemon (DOCKER_WAIT)
 UI_BAR_WIDTH=24                            # progress bar width, in characters

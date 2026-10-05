@@ -104,3 +104,66 @@ studio_pro_mx() {        # studio_pro_mx <version-prefix> -- echo the matching m
   done < <(studio_pro_roots)
   return 1
 }
+
+# --- 8b. Choosing the Mendix version of a new app (macOS) ---
+# mac_studio_pro_versions -- Studio Pro apps installed on this Mac that carry mx, oldest first.
+# The version is read from the app's name ("Mendix Studio Pro 11.15.0 Beta.app"): its Info.plist
+# says 1.0. An app without Contents/modeler/mx (10.24 betas ship none) cannot create or check an
+# app, so it is left out. MDL_STUDIO_PRO_APPS (directories, space-separated) replaces where it looks.
+mac_studio_pro_versions() {
+  local root app name version
+  for root in ${MDL_STUDIO_PRO_APPS:-/Applications $HOME/Applications}; do
+    [ -d "$root" ] || continue
+    for app in "$root"/*Studio\ Pro*.app; do
+      [ -x "$app/Contents/modeler/mx" ] || continue
+      name="$(basename "$app")"
+      version="$(printf '%s' "$name" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+      [ -n "$version" ] && printf '%s\n' "$version"
+    done
+  done | sort -V -u
+}
+
+# choose_mx_version -- sets and exports MX_VERSION for a new app on macOS, so creating the app, the
+# MxBuild prerequisite and the target line all use the same version. MX_VERSION already set wins.
+# One Studio Pro installed: that one. Several: asked, the newest offered; with no terminal or
+# MDL_ASSUME_YES the newest is taken. None: MX_VERSION stays unset and DEFAULT_MX_VERSION applies.
+# Windows keeps its own rule (the newest installed, create_app).
+choose_mx_version() {
+  local versions count newest reply i
+  [ -n "${MX_VERSION:-}" ] && return 0
+  [ "$IS_WINDOWS" = "1" ] && return 0
+  versions="$(mac_studio_pro_versions)"
+  [ -n "$versions" ] || return 0
+  count="$(printf '%s\n' "$versions" | wc -l | tr -d ' ')"
+  newest="$(printf '%s\n' "$versions" | tail -1)"
+  if [ "$count" = "1" ] || [ ! -t 0 ] || [ -n "${MDL_ASSUME_YES:-}" ]; then
+    export MX_VERSION="$newest"
+    return 0
+  fi
+  ui_clear
+  printf '  Which Mendix version should the new app use? Studio Pro installed here:\n\n'
+  i=0
+  while IFS= read -r version; do
+    i=$((i + 1))
+    if [ "$version" = "$newest" ]; then
+      printf '    %s%2d%s  %s  %s(newest)%s\n' "$C_BOLD" "$i" "$C_RESET" "$version" "$C_GREY" "$C_RESET"
+    else
+      printf '    %s%2d%s  %s\n' "$C_BOLD" "$i" "$C_RESET" "$version"
+    fi
+  done <<< "$versions"
+  while :; do
+    printf '\n  Version [%s]: ' "$count"
+    read -r reply
+    reply="${reply:-$count}"
+    case "$reply" in
+      *[!0-9]*) # A version typed out, e.g. 11.12.1.
+        if printf '%s\n' "$versions" | grep -qxF "$reply"; then MX_VERSION="$reply"; break; fi ;;
+      *) if [ "$reply" -ge 1 ] && [ "$reply" -le "$count" ]; then
+           MX_VERSION="$(printf '%s\n' "$versions" | sed -n "${reply}p")"; break
+         fi ;;
+    esac
+    printf '  %sType a number from the list, or one of the versions.%s\n' "$C_YELLOW" "$C_RESET"
+  done
+  export MX_VERSION
+  printf '\n'
+}
