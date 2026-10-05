@@ -648,8 +648,11 @@ function testFirst(args) {
   const seen = new Set();
   for (const [kind, name] of wanted) {
     const module = name.split('.')[0];
-    // The project's own modules, or one these scripts create: never a Marketplace module.
-    if (every.has(module) && !own.includes(module)) continue;
+    // The project's own modules, or one these scripts create: never a Marketplace module or System.
+    // MyFirstModule counts as the project's: projectModules() leaves the template out for coverage,
+    // and a session that built its whole screen there walked past this check (Qwen 3.6 Splash,
+    // InvoiceChase2, 2026-10-06).
+    if (every.has(module) && !own.includes(module) && module !== 'MyFirstModule') continue;
     if (existing.has(name) || claims.has(name) || seen.has(name)) continue;
     seen.add(name);
     py.print(`  - ${kind} ${name}`);
