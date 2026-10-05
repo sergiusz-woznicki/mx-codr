@@ -2,7 +2,8 @@
 # tests/portable.sh -- platform shims and shared helpers (macOS, Linux, Git Bash on Windows).
 # Sourced by gate.sh, lib.sh, orient.sh, diagnose.sh, precheck.sh, theme.sh, run-app.sh,
 # run-docker.sh and marketplace-login.sh; not run on its own.
-# Provides: $MXCLI, $PY, mdl_find_python, mdl_load_harness_env, mdl_json_object,
+# Provides: $MXCLI, $NODE, $MDL_SHELL_HELPERS, mdl_find_node, $PY and mdl_find_python (older
+# project tests only), mdl_load_harness_env, mdl_json_object,
 #   mdl_json_string, mdl_json_number, mdl_ere_quote, mdl_runtime_running, mdl_check_local_database,
 #   mdl_check_mxcli_freshness, mdl_check_install_freshness, mdl_syntax_digest, mdl_studio_pro_open,
 #   mdl_studio_pro_warning, mdl_tmpdir, mdl_tmpfile, mdl_find_mpr, mdl_user_modules.
@@ -50,11 +51,40 @@ mdl_find_python() {
   return 1
 }
 
-# A preset PY wins; fall back to `python3` so later errors name a command.
+# Prints a node that runs. The hooks that need it carry a copy; keep them the same.
+mdl_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    printf 'node\n'
+    return 0
+  fi
+  # The Node.js installer (also via winget) puts node on PATH only for shells started after it.
+  local local_app="${LOCALAPPDATA:-}" candidate
+  local_app="${local_app//\\//}"
+  for candidate in "/c/Program Files/nodejs/node.exe" "$local_app/Programs/nodejs/node.exe"; do
+    [ -x "$candidate" ] || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done
+  return 1
+}
+
+# The harness itself no longer runs Python (2026-10-05). PY stays for project tests written before
+# that which call "$PY"; new tests use the lib helpers (field, oql_value, ...) or node.
+# A preset PY wins; fall back to `python3` so such a test names the command it misses.
 if [ -z "${PY:-}" ]; then
   PY="$(mdl_find_python || true)"
   PY="${PY:-python3}"
 fi
+# The checks run on Node. A preset NODE wins; fall back to `node` so later errors name a command.
+if [ -z "${NODE:-}" ]; then
+  NODE="$(mdl_find_node || true)"
+  NODE="${NODE:-node}"
+fi
+# The small jobs of the test scripts (read a JSON field, decode OQL output, ...): installed in
+# tools/mdl-checks/, in the bundle under checks/.
+# `|| true`: a script under set -e must not stop when one of the two places is missing.
+MDL_SHELL_HELPERS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tools/mdl-checks/shell_helpers.cjs" || true
+[ -f "$MDL_SHELL_HELPERS" ] || MDL_SHELL_HELPERS="$(cd "$(dirname "${BASH_SOURCE[0]}")/../checks" 2>/dev/null && pwd)/shell_helpers.cjs" || true
 
 # --- 3. Load tests/harness.env ---
 # Parsed as allowlisted KEY=value, never sourced: sourcing would run shell from the project
@@ -133,13 +163,11 @@ fi
 
 # --- 4. Quoting helpers: keep values from becoming code in generated JSON, JS or regex ---
 mdl_json_object() {   # mdl_json_object k1 v1 k2 v2 ... -> {"k1":"v1",...}
-  "$PY" -c 'import json,sys
-a = sys.argv[1:]
-print(json.dumps(dict(zip(a[0::2], a[1::2])), ensure_ascii=True))' "$@"
+  "$NODE" "$MDL_SHELL_HELPERS" json-object "$@"
 }
 
 mdl_json_string() {   # mdl_json_string <text> -> "text", escaped for JS source
-  "$PY" -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=True))' "$1"
+  "$NODE" "$MDL_SHELL_HELPERS" json-string "$1"
 }
 
 mdl_ere_quote() {     # mdl_ere_quote <text> -- match it literally inside an ERE
@@ -261,13 +289,13 @@ mdl_check_install_freshness() {
   local app="${APP_DIR:-.}"
   local manifest="$app/tools/mdl-checks/INSTALL.json"
   local installed="$app/tools/mdl-checks/VERSION"
-  local python="${PY:-$(mdl_find_python || true)}"
+  local node="${NODE:-$(mdl_find_node || true)}"
   local bundle="" candidate
   for candidate in mxcodr dist; do
     if [ -f "$app/$candidate/VERSION" ]; then bundle="$candidate"; break; fi
   done
 
-  [ -n "$python" ] || return 0
+  [ -n "$node" ] || return 0
 
   if [ ! -f "$manifest" ]; then
     # No manifest: say so, since silence would read as a clean result.
@@ -287,73 +315,7 @@ mdl_check_install_freshness() {
     return 0
   fi
 
-  "$python" - "$app" "$manifest" <<'PY_FRESH'
-import hashlib, json, os, sys
-
-app, manifest_path = sys.argv[1], sys.argv[2]
-try:
-    with open(manifest_path, encoding="utf-8") as handle:
-        manifest = json.load(handle)
-except Exception:
-    raise SystemExit(0)
-
-installed = manifest.get("version", "?")
-changed, missing = [], []
-for relative, expected in sorted((manifest.get("files") or {}).items()):
-    try:
-        with open(os.path.join(app, *relative.split("/")), "rb") as handle:
-            actual = hashlib.sha256(handle.read()).hexdigest()
-    except OSError:
-        missing.append(relative)
-        continue
-    if actual != expected:
-        changed.append(relative)
-
-
-def name_some(paths, limit):
-    shown = ", ".join(paths[:limit])
-    if len(paths) > limit:
-        shown += " and %d more" % (len(paths) - limit)
-    return shown
-
-
-def ordered(version):
-    # 2026.09.11.28 sorts after 2026.09.11.3, which string comparison gets wrong
-    # as soon as a within-day counter passes 9 -- and they reach 28.
-    try:
-        return tuple(int(part) for part in version.split("."))
-    except (AttributeError, ValueError):
-        return ()
-
-
-# A newer bundle sitting in the project is the plainest signal there is. The
-# other direction is the hand-copy case, where the files are ahead of mxcodr/ on
-# purpose, so it is left alone -- the checksums below cover it.
-# mxcodr beside the project, or dist in a copy made before the 2026-09-15 rename.
-name = next((n for n in ("mxcodr", "dist") if os.path.exists(os.path.join(app, n, "VERSION"))), None)
-bundle = os.path.join(app, name, "VERSION") if name else ""
-if bundle:
-    try:
-        with open(bundle, encoding="utf-8") as handle:
-            available = handle.read().strip()
-    except OSError:
-        available = ""
-    if available and ordered(available) > ordered(installed):
-        print("   !! the harness installed here is %s; %s/ holds a newer one (%s)."
-              % (installed, name, available))
-        print("      An out-of-date checker passes what the current one fails:  bash %s/install.sh ." % name)
-
-if missing:
-    print("   !! %d harness file(s) gone since install: %s"
-          % (len(missing), name_some(missing, 3)))
-    print("      re-run the installer to put them back")
-
-if changed:
-    print("   !! differs from the installed harness (%s): %s"
-          % (installed, name_some(changed, 4)))
-    print("      either these were edited here, and the next install overwrites them -- send a")
-    print("      real fix upstream -- or newer files were copied in and the VERSION stamp is stale")
-PY_FRESH
+  "$NODE" "$MDL_SHELL_HELPERS" install-freshness "$app" "$manifest"
 }
 
 # --- 8. Temporary files (GNU and BSD mktemp both accept an XXXXXX template) ---
@@ -485,15 +447,5 @@ mdl_user_modules() {
   listing="$("$MXCLI" -p "$1" --json -c "SHOW MODULES" 2>/dev/null)" || return 2
   # newline="\n": on Windows print() writes \r\n, and every module but the last one kept its \r
   # ("Integration\r" in a two-module app), so the coverage check found no module of that name.
-  printf '%s' "$listing" | "$PY" -c 'import json,sys
-sys.stdout.reconfigure(newline="\n")
-try:
-    rows = json.load(sys.stdin)
-except Exception:
-    sys.exit(1)
-if not isinstance(rows, list):
-    sys.exit(1)
-for row in rows:
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule","MxTest"):
-        print(row["Module"])' 2>/dev/null || return 2
+  printf '%s' "$listing" | "$NODE" "$MDL_SHELL_HELPERS" user-modules 2>/dev/null || return 2
 }

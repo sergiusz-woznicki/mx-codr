@@ -286,7 +286,7 @@ step_visual() {
   [ "${MDL_VISUAL_REVIEW:-}" = "agent" ] && review=(--review "$APP_DIR/.mxcli/visual")
   out="$(gate_py visual-report .mxcli/visual/findings.jsonl mdlsource ${review[@]+"${review[@]}"} 2>"$WORK/visual.error")" || {
     # The helper crashed: empty output used to read as "nothing overlaps".
-    summary+=("visual: could not run -- gate_helpers.py visual-report failed: $(tail -1 "$WORK/visual.error" 2>/dev/null)")
+    summary+=("visual: could not run -- gate_helpers.cjs visual-report failed: $(tail -1 "$WORK/visual.error" 2>/dev/null)")
     cannot_run+=("visual")
     return 0
   }
@@ -333,7 +333,7 @@ step_runtime_errors() {
   [ "$mode" = "0" ] && return 0
   [ -f "$log" ] && [ -s "$WORK/tests.started" ] || return 0
   out="$(gate_py runtime-errors "$log" "$(cat "$WORK/tests.started")" 2>"$WORK/runtime.error")" || {
-    summary+=("runtime log: could not run -- gate_helpers.py runtime-errors failed: $(tail -1 "$WORK/runtime.error" 2>/dev/null)")
+    summary+=("runtime log: could not run -- gate_helpers.cjs runtime-errors failed: $(tail -1 "$WORK/runtime.error" 2>/dev/null)")
     cannot_run+=("runtime log")
     return 0
   }

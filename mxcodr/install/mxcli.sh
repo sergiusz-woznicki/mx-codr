@@ -55,7 +55,7 @@ sha256_of() {
   local sum=""
   sum="$(sha256sum "$1" 2>/dev/null | cut -d" " -f1)" || sum=""
   [ -n "$sum" ] || sum="$(shasum -a 256 "$1" 2>/dev/null | cut -d" " -f1)" || sum=""
-  [ -n "$sum" ] || sum="$("${PY:-python3}" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1" 2>/dev/null)" || sum=""
+  [ -n "$sum" ] || sum="$("${NODE:-node}" "$SRC/install/install_tool.cjs" sha256-file "$1" 2>/dev/null)" || sum=""
   printf '%s\n' "$sum"
 }
 
@@ -111,19 +111,7 @@ mxcli_compat_release() {
   tag="$(mxcli_compat_tag)" || return 1
   api="${MXCLI_RELEASES_API:-https://api.github.com/repos/mendixlabs/mxcli/releases/tags/$tag}"
   asset="$(basename "$(mxcli_release_url)")"
-  line="$(curl -fsSL -m 10 "$api" 2>/dev/null | "$PY" -c 'import json, sys
-asset = sys.argv[1]
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    sys.exit(1)
-for item in data.get("assets") or []:
-    digest = str(item.get("digest") or "")
-    if item.get("name") == asset and digest.startswith("sha256:"):
-        print(data.get("tag_name", ""), digest[7:], item.get("browser_download_url", ""))
-        break
-else:
-    sys.exit(1)' "$asset" 2>/dev/null)" || return 1
+  line="$(curl -fsSL -m 10 "$api" 2>/dev/null | "$NODE" "$SRC/install/install_tool.cjs" release-asset "$asset" 2>/dev/null)" || return 1
   read -r got_tag sha url <<< "$line"
   [ "$got_tag" = "$tag" ] || return 1
   [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || return 1

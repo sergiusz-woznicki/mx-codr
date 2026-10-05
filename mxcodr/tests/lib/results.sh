@@ -9,39 +9,14 @@ field() {
   # An empty result read as "" and failed the check below it with a wrong reason ("customer did
   # not see their invoice") while the page was right: the scenario's output had gone to /dev/null.
   [ -n "$json" ] || fail "field $key: no scenario result to read -- capture it: result=\$(scenario '...') (a scenario sent to /dev/null, or never run, leaves \$result empty)"
-  printf '%s' "$json" | "$PY" -c "
-import json, sys
-raw = sys.stdin.read().strip()
-try:
-    data = json.loads(raw)
-except json.JSONDecodeError:
-    print('')
-    sys.exit()
-if isinstance(data, str):
-    data = json.loads(data)
-value = data.get(sys.argv[1], '')
-print(value if isinstance(value, str) else json.dumps(value))
-" "$key"
+  printf '%s' "$json" | "$NODE" "$MDL_SHELL_HELPERS" field "$key"
 }
 
-# fields <json> <key...> -- one line per key, as field(), in one Python start:
+# fields <json> <key...> -- one line per key, as field(), in one Node start:
 #   { read -r opened; read -r count; } <<< "$(fields "$result" opened count)"
 fields() {
   local json="$1"; shift
-  printf '%s' "$json" | "$PY" -c "
-import json, sys
-raw = sys.stdin.read().strip()
-keys = sys.argv[1:]
-try:
-    data = json.loads(raw)
-    if isinstance(data, str):
-        data = json.loads(data)
-except json.JSONDecodeError:
-    data = {}
-for key in keys:
-    value = data.get(key, '')
-    print(value if isinstance(value, str) else json.dumps(value))
-" "$@"
+  printf '%s' "$json" | "$NODE" "$MDL_SHELL_HELPERS" fields "$@"
 }
 
 # --- 9. Data assertions (~0.03s each) ---
@@ -59,18 +34,7 @@ oql() {
   fi
   # mxcli appends a "(n rows)" line, so decode only the first JSON value.
   local json
-  json="$(printf '%s' "$output" | "$PY" -c "
-import json, sys
-text = sys.stdin.read()
-start = text.find('[')
-if start < 0:
-    sys.exit(1)
-try:
-    value, _ = json.JSONDecoder().raw_decode(text[start:])
-except ValueError:
-    sys.exit(1)
-print(json.dumps(value))
-")" || fail "OQL returned nothing to parse: $(printf '%s' "$output" | grep -v '^$' | head -2 | tr '\n' ' ')"
+  json="$(printf '%s' "$output" | "$NODE" "$MDL_SHELL_HELPERS" oql-decode)" || fail "OQL returned nothing to parse: $(printf '%s' "$output" | grep -v '^$' | head -2 | tr '\n' ' ')"
   printf '%s' "$json"
 }
 
@@ -78,21 +42,7 @@ print(json.dumps(value))
 # take $MODULE, `"Sales.Order"` and `Sales.Order` become Sales."Order". A session spent five
 # queries on "'Order' is not a valid entity path". Association paths (o/...) and subqueries pass.
 oql_qualified() {   # oql_qualified <query>
-  MODULE="${MODULE:-}" "$PY" -c '
-import os, re, sys
-module = os.environ["MODULE"]
-def entity(found):
-    keyword, name = found.group(1), found.group(2).replace("\"", "")
-    if "." in name:
-        owner, name = name.rsplit(".", 1)
-    elif module:
-        owner = module
-    else:
-        return found.group(0)
-    return "%s %s.\"%s\"" % (keyword, owner, name)
-query = sys.argv[1]
-print(re.sub(r"\b(FROM|JOIN)\s+(\"[\w.]+\"|[A-Za-z_][\w.]*(?![\w.\"/]))", entity, query, flags=re.IGNORECASE))
-' "$1"
+  MODULE="${MODULE:-}" "$NODE" "$MDL_SHELL_HELPERS" oql-qualified "$1"
 }
 
 # The entity as OQL reads it: quoted, so one named Order (or another reserved word) parses.
@@ -113,14 +63,10 @@ oql_count() {
   if [ -n "$where" ]; then
     query="$query WHERE $where"
   fi
-  # Captured, not piped: a failing oql must stop here, not feed python empty input.
+  # Captured, not piped: a failing oql must stop here, not feed the parser empty input.
   local json
   json="$(oql "$query")" || exit 1
-  printf '%s' "$json" | "$PY" -c "
-import json, sys
-rows = json.load(sys.stdin)
-print(rows[0].get('Total', 0) if rows else 0)
-"
+  printf '%s' "$json" | "$NODE" "$MDL_SHELL_HELPERS" oql-count
 }
 
 # await_row <Entity> "<where>" [seconds] -- 0 once a row matches, 1 after <seconds> (default 8)
@@ -144,18 +90,5 @@ oql_value() {
   local json
   [ -n "${MODULE:-}" ] || fail "oql_value needs a module: set MODULE=<YourModule> or run through tests/gate.sh"
   json="$(oql "SELECT $attribute FROM $(oql_entity "$entity") WHERE $where")" || exit 1
-  printf '%s' "$json" | "$PY" -c "
-import json, sys
-rows = json.load(sys.stdin)
-if not rows:
-    print('no-such-row')
-else:
-    value = rows[0].get(sys.argv[1])
-    if value is None or value == '':
-        print('empty')
-    elif isinstance(value, bool):
-        print('true' if value else 'false')
-    else:
-        print(value)
-" "$attribute"
+  printf '%s' "$json" | "$NODE" "$MDL_SHELL_HELPERS" oql-value "$attribute"
 }

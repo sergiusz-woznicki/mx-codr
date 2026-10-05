@@ -32,27 +32,14 @@ security_section() {
 # The persistent entities of one module, one qualified name per line.
 persistent_entities() {   # persistent_entities <module>
   "$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $1" 2>/dev/null \
-    | "$PY" -c 'import json,sys
-for row in json.load(sys.stdin):
-    name = row.get("Entity") or ""
-    if name and "non-persistent" not in (row.get("Type") or "").lower():
-        print(name)' 2>/dev/null
+    | "$NODE" "$MDL_SHELL_HELPERS" persistent-entities 2>/dev/null
 }
 
 # The row count of one entity; "?" when the answer has no count, 0 when unreadable.
 row_count() {   # row_count <Module.Entity>
   # Quoted: an entity named Order (a reserved word) does not parse bare, and printed a false 0.
   "$MXCLI" oql -p "$MPR" --json "SELECT COUNT(*) AS n FROM ${1%.*}.\"${1##*.}\"" 2>/dev/null \
-    | "$PY" -c '
-import json, sys
-text = sys.stdin.read()
-start = text.find("[")
-try:
-    rows, _ = json.JSONDecoder().raw_decode(text[start:])
-except Exception:
-    rows = []
-print(rows[0].get("n", "?") if rows else 0)
-'
+    | "$NODE" "$MDL_SHELL_HELPERS" row-count
 }
 
 rows_section() {
@@ -81,12 +68,7 @@ sessions_section() {
   curl -s -m 5 -X POST "http://localhost:${ADMIN_PORT:-8090}/" \
     -H "X-M2EE-Authentication: $(printf '%s' "${ADMIN_PASSWORD:-mxcli-local-dev}" | base64)" \
     -H 'Content-Type: application/json' -d '{"action":"get_logged_in_user_names"}' 2>/dev/null \
-    | "$PY" -c 'import json,sys
-try:
-    f=json.load(sys.stdin)["feedback"]
-    print("   signed in: %s (%s)" % (", ".join(f.get("users") or []) or "nobody", f.get("count", 0)))
-except Exception:
-    print("   admin port did not answer")' 2>/dev/null
+    | "$NODE" "$MDL_SHELL_HELPERS" signed-in 2>/dev/null
   if [ -f "$RUNTIME_LOG" ]; then
     refusals="$(current_run_log | tail -400 | grep -c 'Maximum number of sessions exceeded')"
     [ "$refusals" != "0" ] && echo "   session-cap refusals in the last 400 log lines: $refusals"

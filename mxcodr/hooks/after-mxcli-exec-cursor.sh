@@ -7,38 +7,32 @@ set -uo pipefail
 input="$(cat)"
 case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) printf '{}\n'; exit 0 ;; esac
 
-# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
-mdl_find_python() {
-  local candidate
-  for candidate in python3 python py; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
-    printf '%s\n' "$candidate"
+# Prints a node that runs; inlined so the hook is self-contained (same as tests/portable.sh).
+mdl_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    printf 'node\n'
     return 0
-  done
-  # The python.org installer (also via winget) does not add Python to PATH; search its install dirs too.
-  local local_app="${LOCALAPPDATA:-}"
+  fi
+  # The Node.js installer (also via winget) puts node on PATH only for shells started after it.
+  local local_app="${LOCALAPPDATA:-}" candidate
   local_app="${local_app//\\//}"
-  for candidate in \
-      "$local_app/Programs/Python"/Python3*/python.exe \
-      "$local_app/Programs/Python/Launcher/py.exe" \
-      "/c/Program Files"/Python3*/python.exe \
-      "/c/Program Files (x86)"/Python3*/python.exe; do
+  for candidate in "/c/Program Files/nodejs/node.exe" "$local_app/Programs/nodejs/node.exe"; do
     [ -x "$candidate" ] || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
     printf '%s\n' "$candidate"
     return 0
   done
   return 1
 }
-PY="$(mdl_find_python || true)"
-PY="${PY:-python3}"
+NODE="$(mdl_find_node || true)"
+NODE="${NODE:-node}"
+# hook_tool.cjs holds the small jobs (read a field, wrap a message); installed one directory up
+# from this hook, in the bundle under checks/. An absolute path: the hook may cd into the project.
+HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/hook_tool.cjs"
+[ -f "$HOOK_TOOL" ] || HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/../checks" 2>/dev/null && pwd)/hook_tool.cjs"
 
 # A top-level value of the event payload, or "" when absent or unparsable.
 payload_field() {
-  printf '%s' "$input" | "$PY" -c 'import json,sys
-try: print(json.load(sys.stdin).get(sys.argv[1]) or "")
-except Exception: print("")' "$1" 2>/dev/null
+  printf '%s' "$input" | "$NODE" "$HOOK_TOOL" get "$1" 2>/dev/null
 }
 
 # Resolve before cd: BASH_SOURCE may be relative.
@@ -46,7 +40,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 emit() {  # emit "<text>" -- or nothing at all when there is nothing to say
   [ -n "${1:-}" ] || { printf '{}\n'; exit 0; }
-  printf '%s' "$1" | "$PY" -c 'import json,sys; print(json.dumps({"additional_context": sys.stdin.read().strip()}))'
+  printf '%s' "$1" | "$NODE" "$HOOK_TOOL" wrap additional_context
   exit 0
 }
 
@@ -70,22 +64,7 @@ fi
 
 # Build a Claude-shaped payload for the shared hook; the command is found anywhere in the event
 # because tool_input's shape varies across Cursor versions.
-_payload="$(printf '%s' "$input" | "$PY" -c 'import json, sys
-def strings(value):
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from strings(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from strings(item)
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    data = None
-command = next((s for s in strings(data) if "mxcli exec" in s or "mxcli.exe exec" in s), "mxcli exec")
-print(json.dumps({"tool_input": {"command": command.replace("\\", "/")}}))' 2>/dev/null)"
+_payload="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" cursor-payload 2>/dev/null)"
 [ -n "$_payload" ] || _payload='{"tool_input":{"command":"mxcli exec"}}'
 feedback="$(printf '%s' "$_payload" | bash "$script_dir/after-mxcli-exec.sh" 2>/dev/null)"
 emit "$feedback"

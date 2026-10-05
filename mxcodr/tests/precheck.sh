@@ -77,8 +77,8 @@ set -- "${scripts[@]}"
 
 # SCRIPT01: a document these scripts create that another script in the same folder creates too.
 # Whichever runs last wins, so re-running one silently undoes the other -- no mx check sees it.
-if [ -f tools/mdl-checks/gate_helpers.py ]; then
-  duplicates="$("$PY" tools/mdl-checks/gate_helpers.py duplicate-definitions "$@" 2>/dev/null)"
+if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
+  duplicates="$("$NODE" tools/mdl-checks/gate_helpers.cjs duplicate-definitions "$@" 2>/dev/null)"
   if [ -n "$duplicates" ]; then
     echo "precheck: SCRIPT01 -- a document is created in more than one script (the real model is untouched):"
     printf '%s\n' "$duplicates"
@@ -91,19 +91,7 @@ started="$(date +%s)"
 # run is skipped when the scripts and the .mpr are unchanged since a pass (the exec itself
 # changes the .mpr, so the cache never outlives the model it was checked against).
 cache_dir=".mxcli/precheck"
-fingerprint="$("$PY" - "$MPR" "$@" <<'PY' 2>/dev/null
-import hashlib, os, sys
-h = hashlib.sha256()
-for path in sys.argv[1:]:
-    with open(path, 'rb') as f:
-        h.update(f.read())
-# The .mpr is an index; the units live in mprcontents, so their names, sizes and times count too.
-for root, dirs, files in os.walk('mprcontents'):
-    for name in sorted(files):
-        st = os.stat(os.path.join(root, name))
-        h.update(('%s/%s %d %d\n' % (root, name, st.st_size, st.st_mtime_ns)).encode())
-print(h.hexdigest()[:24])
-PY
+fingerprint="$("$NODE" "$MDL_SHELL_HELPERS" precheck-fingerprint "$MPR" "$@" 2>/dev/null
 )"
 if [ -n "$fingerprint" ] && [ -f "$cache_dir/$fingerprint" ]; then
   echo "precheck: 0 errors -- same scripts and model already passed at $(cat "$cache_dir/$fingerprint") (cached, no second mx check)"
@@ -204,16 +192,7 @@ base="$(mdl_tmpdir mdl-precheck-base)" && {
     # An old error stays the script's when the script touches what it names: CE0161 reads the same
     # for every broken rule of an entity, so a script that swaps one broken rule for another would
     # otherwise pass as "adds no error".
-    new_errors="$(printf '%s\n' "$new_errors" | "$PY" -c '
-import re, sys
-old = set(open(sys.argv[1]).read().splitlines())
-scripts = " ".join(open(path, errors="replace").read() for path in sys.argv[2:])
-for line in sys.stdin.read().splitlines():
-    if not line:
-        continue
-    names = re.findall(r"\x27([A-Za-z_]\w*\.[A-Za-z_]\w*)\x27", line)
-    if line not in old or any(name in scripts for name in names):
-        print(line)' <(printf '%s\n' "$old_errors") "$@")"
+    new_errors="$(printf '%s\n' "$new_errors" | "$NODE" "$MDL_SHELL_HELPERS" new-errors <(printf '%s\n' "$old_errors") "$@")"
   fi
 }
 seconds=$(( $(date +%s) - started ))

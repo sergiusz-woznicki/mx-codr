@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Windows bootstrap: installs Git, Python and Node with winget, then runs install.sh --with-deps in Git Bash.
+  Windows bootstrap: installs Git and Node with winget, then runs install.sh --with-deps in Git Bash.
 
 .PARAMETER Target
   Mendix project to install into (created if missing). Default: asked for, with the current
@@ -41,32 +41,6 @@ function Update-PathFromRegistry {
 
 function Test-Command($name) {
   $null -ne (Get-Command $name -ErrorAction SilentlyContinue)
-}
-
-# Resolve-Python -- path of a Python that really runs, or $null.
-# Skips the WindowsApps Store alias; also searches install dirs not on PATH.
-function Resolve-Python {
-  foreach ($name in @('python3', 'python', 'py')) {
-    $command = Get-Command $name -ErrorAction SilentlyContinue
-    if (-not $command) { continue }
-    if ($command.Source -like '*\WindowsApps\*') { continue }
-    & $command.Source -c 'import json,sys' 2>$null
-    if ($LASTEXITCODE -eq 0) { return $command.Source }
-  }
-  $roots = @(
-    (Join-Path $env:LOCALAPPDATA 'Programs\Python'),
-    $env:ProgramFiles,
-    ${env:ProgramFiles(x86)}
-  ) | Where-Object { $_ -and (Test-Path $_) }
-  foreach ($root in $roots) {
-    $found = Get-ChildItem -Path $root -Filter 'python.exe' -Recurse -Depth 2 -ErrorAction SilentlyContinue |
-             Sort-Object FullName -Descending | Select-Object -First 1
-    if ($found) {
-      & $found.FullName -c 'import json,sys' 2>$null
-      if ($LASTEXITCODE -eq 0) { return $found.FullName }
-    }
-  }
-  return $null
 }
 
 # Test-PackagePresent <package> -- true when the package's Resolver (or its Probe command) finds it.
@@ -154,14 +128,13 @@ if (-not $SkipWinget) {
   if (-not (Test-Command 'winget')) {
     Write-Warn 'winget was not found. It ships with App Installer on Windows 10 1809+.'
     Write-Warn 'Install "App Installer" from the Microsoft Store, or install Git for'
-    Write-Warn 'Windows, Python 3 and Node.js by hand, then re-run with -SkipWinget.'
+    Write-Warn 'Windows and Node.js by hand, then re-run with -SkipWinget.'
     exit 1
   }
 
   $packages = @(
     @{ Id = 'Git.Git';             Probe = 'git';    Why = 'Git Bash - the shell the harness runs in' },
-    @{ Id = 'Python.Python.3.12';  Probe = 'python'; Why = 'the hook merges and the model checkers'; Resolver = 'Resolve-Python' },
-    @{ Id = 'OpenJS.NodeJS.LTS';   Probe = 'node';   Why = 'playwright-cli, which drives the browser tests' }
+    @{ Id = 'OpenJS.NodeJS.LTS';   Probe = 'node';   Why = 'the hooks, the gate''s checks and playwright-cli' }
   )
 
   foreach ($package in $packages) {
@@ -183,22 +156,6 @@ if (-not $SkipWinget) {
 }
 
 Update-PathFromRegistry
-
-# Put the resolved Python on PATH so bash sees it.
-$python = Resolve-Python
-if ($python) {
-  $pythonDir = Split-Path -Parent $python
-  if (($env:Path -split ';') -notcontains $pythonDir) {
-    $env:Path = "$pythonDir;$env:Path"
-    Write-Ok "python: $python  (added to PATH for this run)"
-    Write-Warn "That directory is not on your permanent PATH. To fix it for good:"
-    Write-Warn "  setx PATH `"$pythonDir;%PATH%`""
-  } else {
-    Write-Ok "python: $python"
-  }
-} else {
-  Write-Warn 'No working Python found. install.sh will stop and say so.'
-}
 
 # --- 2. find a real Git Bash -------------------------------------------------
 # `where bash` can return System32\bash.exe, the WSL launcher: reject it, prefer Git's own.

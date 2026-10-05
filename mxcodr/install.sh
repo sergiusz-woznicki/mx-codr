@@ -12,10 +12,10 @@
 # Env: MX_VERSION, APP_NAME (new app); MDL_ASSUME_YES=1; MDL_DEPS_DRY_RUN=1 (print installs only);
 #   MDL_NO_UPDATE_CHECK=1; MXCLI_TAG (default: the tag in MXCLI_TESTED), MXCLI_SHA256; MDL_DB_HOST, MDL_DB_USER, MDL_DB_PASSWORD,
 #   PGPASSWORD; DOCKER_WAIT, DOCKER_PROBE_TIMEOUT (seconds); NO_COLOR.
-# Exit: 0 installed; 1 ui_fail (bad argument, no project, no Python, app creation failed);
+# Exit: 0 installed; 1 ui_fail (bad argument, no project, no Node, app creation failed);
 #   other non-zero = unexpected command failure. Missing prerequisites do not fail the install.
 #
-# How it is laid out: this file holds the constants and finds Python, then sources install/*.sh
+# How it is laid out: this file holds the constants and finds Node, then sources install/*.sh
 # in the order below -- the first eight define functions, the rest run the install step by step.
 #   install/ui.sh            terminal output (ui_*)
 #   install/prereqs.sh       prerequisite helpers (package managers, install or report)
@@ -61,40 +61,32 @@ DEFAULT_DOCKER_WAIT=180                    # seconds to wait for the Docker daem
 UI_BAR_WIDTH=24                            # progress bar width, in characters
 UI_SUB_EXPECTED=6                          # sub-steps expected inside one step, for the bar
 
-# --- 1. Platform and Python ---
-# On Windows (Git Bash) python3 may be a Store stub, so each Python candidate is run before use.
+# --- 1. Platform and Node ---
 case "$(uname -s 2>/dev/null || echo unknown)" in
   MINGW*|MSYS*|CYGWIN*) IS_WINDOWS=1; EXE=".exe" ;;
   *)                    IS_WINDOWS=0; EXE="" ;;
 esac
 
-# mdl_find_python -- print the first Python 3 that really runs; return 1 if none.
-mdl_find_python() {
-  local candidate
-  for candidate in python3 python py; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
-    printf '%s\n' "$candidate"
+# Prints a node that runs. The hooks that need it carry a copy; keep them the same.
+mdl_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    printf 'node\n'
     return 0
-  done
-  # The python.org installer (also via winget) does not add Python to PATH; search its install dirs too.
-  local local_app="${LOCALAPPDATA:-}"
+  fi
+  # The Node.js installer (also via winget) puts node on PATH only for shells started after it.
+  local local_app="${LOCALAPPDATA:-}" candidate
   local_app="${local_app//\\//}"
-  for candidate in \
-      "$local_app/Programs/Python"/Python3*/python.exe \
-      "$local_app/Programs/Python/Launcher/py.exe" \
-      "/c/Program Files"/Python3*/python.exe \
-      "/c/Program Files (x86)"/Python3*/python.exe; do
+  for candidate in "/c/Program Files/nodejs/node.exe" "$local_app/Programs/nodejs/node.exe"; do
     [ -x "$candidate" ] || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
     printf '%s\n' "$candidate"
     return 0
   done
   return 1
 }
 
-PY="$(mdl_find_python || true)"
-# Not fatal: unless --no-deps, the prerequisites step installs Python and re-probes.
+# The harness runs on Node: its hooks, checks and the installer's own jobs (install/install_tool.cjs).
+# Not fatal here: unless --no-deps, the prerequisites step installs Node and probes again.
+NODE="$(mdl_find_node || true)"
 
 # The bundle this script belongs to: every part and file below is read from here.
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

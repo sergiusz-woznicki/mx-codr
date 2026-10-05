@@ -8,52 +8,37 @@
 input="$(cat)"
 case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 
-# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
-mdl_find_python() {
-  local candidate
-  for candidate in python3 python py; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
-    printf '%s\n' "$candidate"
+# Prints a node that runs; inlined so the hook is self-contained (same as tests/portable.sh).
+mdl_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    printf 'node\n'
     return 0
-  done
-  # The python.org installer (also via winget) does not add Python to PATH; search its install dirs too.
-  local local_app="${LOCALAPPDATA:-}"
+  fi
+  # The Node.js installer (also via winget) puts node on PATH only for shells started after it.
+  local local_app="${LOCALAPPDATA:-}" candidate
   local_app="${local_app//\\//}"
-  for candidate in \
-      "$local_app/Programs/Python"/Python3*/python.exe \
-      "$local_app/Programs/Python/Launcher/py.exe" \
-      "/c/Program Files"/Python3*/python.exe \
-      "/c/Program Files (x86)"/Python3*/python.exe; do
+  for candidate in "/c/Program Files/nodejs/node.exe" "$local_app/Programs/nodejs/node.exe"; do
     [ -x "$candidate" ] || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
     printf '%s\n' "$candidate"
     return 0
   done
   return 1
 }
-PY="$(mdl_find_python || true)"
-PY="${PY:-python3}"
+NODE="$(mdl_find_node || true)"
+NODE="${NODE:-node}"
+# hook_tool.cjs holds the small jobs (read a field, split a command); installed one directory up
+# from this hook, in the bundle under checks/.
+# An absolute path: the Cursor hooks cd into the project after this.
+HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/hook_tool.cjs"
+[ -f "$HOOK_TOOL" ] || HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/../checks" 2>/dev/null && pwd)/hook_tool.cjs"
 
-command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
+command="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" command 2>/dev/null)"
 # Precise check on the command field; read-only `mxcli -c` queries are skipped.
 case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 # One line that says whether the exec applied, read from its output (Claude's tool_response; the
 # plugins pass it as tool_response.output). `grep -ci error` on that output always matched --
 # mxcli counts "0 errors, 2 warnings" -- and a session re-ran a clean exec twice to see why.
-_verdict="$(printf '%s' "$input" | "$PY" -c 'import json, re, sys
-d = json.load(sys.stdin)
-r = d.get("tool_response")
-text = "\n".join(str(r.get(k) or "") for k in ("stdout", "stderr", "output")) if isinstance(r, dict) else str(r or "")
-command = d.get("tool_input", {}).get("command", "")
-if re.search(r"Nothing was written|Refusing to execute|^\s*(Parse error|Error|error)\b", text, re.M):
-    print("exec: FAILED -- mxcli wrote nothing; the reason is in its output above. Fix the script and exec it again.")
-elif re.search(r"^\s*(Created|Modified|Replaced|Updated|Dropped|Altered|Moved|Granted|Revoked)\b|already in sync", text, re.M):
-    print("exec: applied. (\"0 errors, N warnings\" in mxcli output is a count, not a failure.)")
-elif re.search(r"\bgrep\b.*error", command, re.I):
-    print("exec: its output went through grep, so this cannot tell whether it applied. mxcli prints "
-          "\"Nothing was written\" and exits 1 when it refuses a script; \"0 errors, N warnings\" is a count, not a failure.")
-' 2>/dev/null)"
+_verdict="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" exec-verdict 2>/dev/null)"
 [ -n "$_verdict" ] && printf '%s\n' "$_verdict"
 case "$_verdict" in "exec: FAILED"*) exit 0 ;; esac
 # Studio Pro with this project open saves its own copy of a document over what the exec wrote
@@ -69,8 +54,8 @@ if command -v pgrep >/dev/null 2>&1; then
   done
 fi
 # Re-running an older script undoes a later one: `create or modify page` drops another script's
-# `alter page`, and a `grant` puts back access another script revoked (script_overrides.py).
-[ -f tools/mdl-checks/script_overrides.py ] && "$PY" tools/mdl-checks/script_overrides.py --command "$command" 2>/dev/null
+# `alter page`, and a `grant` puts back access another script revoked (script_overrides.cjs).
+[ -f tools/mdl-checks/script_overrides.cjs ] && "$NODE" tools/mdl-checks/script_overrides.cjs --command "$command" 2>/dev/null
 # Restart advice: under `mxcli run --watch` every change applies by itself (logic and pages by reload,
 # schema, module and security by an in-place restart); without it, schema and security need a restart.
 _app_running=0
@@ -80,25 +65,8 @@ for _port in "${APP_PORT:-8081}" 8080; do
 done
 if [ "$_app_running" = "1" ]; then
   # Split the command like a shell (shlex, no execution; globs expanded) and read every .mdl it names.
-  _words="$(printf '%s' "$command" | "$PY" -c 'import glob, shlex, sys
-text = sys.stdin.read()
-try:
-    words = shlex.split(text)
-except ValueError:
-    words = text.split()
-# A hook runs after every terminal command, so the expansion is bounded: a pattern
-# like /*/*/*/*/* took 14 seconds and returned 120k paths on this machine, and the
-# hook has no timeout of its own on every host.
-LIMIT = 200
-for word in words:
-    matches = []
-    if any(c in word for c in "*?[") and word.count("*") <= 4:
-        for i, match in enumerate(sorted(glob.iglob(word))):
-            if i >= LIMIT:
-                matches = []          # too broad to be a list of edited scripts
-                break
-            matches.append(match)
-    print("\n".join(matches) if matches else word)' 2>/dev/null)"
+  # Split the command like a shell (no execution; globs expanded, at most 200 paths per word).
+  _words="$(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" words 2>/dev/null)"
   [ -n "$_words" ] || _words="$(printf '%s\n' $command)"
   _changed=""; _unreadable=""; _named=0
   while IFS= read -r _word; do
@@ -167,37 +135,33 @@ HOOK_WORDS
 fi
 
 # Test coverage; skipped without the checker or an .mpr.
-[ -f tools/mdl-checks/check_test_coverage.py ] || exit 0
+[ -f tools/mdl-checks/check_test_coverage.cjs ] || exit 0
 mpr="$(ls -1 *.mpr 2>/dev/null | head -1)"; [ -n "$mpr" ] || exit 0
 
 # Own modules: not System, MyFirstModule, MxTest (`mxcli test` injects it) or Marketplace (non-empty
 # Source). The same list as mdl_user_modules in tests/portable.sh, which this copy had fallen behind.
 MXCLI="./mxcli"; [ -x "$MXCLI" ] || { [ -x "./mxcli.exe" ] && MXCLI="./mxcli.exe"; }
 modules="$("$MXCLI" -p "$mpr" --json -c "SHOW MODULES" 2>/dev/null \
-  | "$PY" -c 'import json,sys
-sys.stdout.reconfigure(newline="\n")
-for row in json.load(sys.stdin):
-    if not (row.get("Source") or "").strip() and row.get("Module") not in ("System","MyFirstModule","MxTest"):
-        print(row["Module"])' 2>/dev/null)"
+  | "$NODE" "$HOOK_TOOL" modules 2>/dev/null)"
 [ -n "$modules" ] || exit 0
 
 # All modules in one call, so cross-module covers are not reported as stale.
 # shellcheck disable=SC2086
-out="$("$PY" tools/mdl-checks/check_test_coverage.py . $modules 2>&1)" || true
+out="$("$NODE" tools/mdl-checks/check_test_coverage.cjs . $modules 2>&1)" || true
 
 # The report rarely changes between two execs (a test-first session names elements it has not
 # built yet, exec after exec), so the full list is printed only when it differs from the previous
 # exec in this project and session; otherwise one line with the counts. The marker lives outside
 # the project, keyed by its path and the session.
 _state="${TMPDIR:-/tmp}/mendix-mdl-hooks"
-_session="$(printf '%s' "$input" | "$PY" -c 'import json,sys; print(json.load(sys.stdin).get("session_id") or "")' 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
-_key="$(printf '%s\n%s' "$(pwd -P)" "$_session" | "$PY" -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest()[:20])' 2>/dev/null)"
+_session="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" get session_id 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
+_key="$(printf '%s\n%s' "$(pwd -P)" "$_session" | "$NODE" "$HOOK_TOOL" sha256 20 2>/dev/null)"
 _marker="$_state/${_key:-none}.coverage"
 case "$out" in
   *FAIL*) ;;
   *) [ -z "$_key" ] || rm -f "$_marker" 2>/dev/null; exit 0 ;;
 esac
-_digest="$(printf '%s' "$out" | "$PY" -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())' 2>/dev/null)"
+_digest="$(printf '%s' "$out" | "$NODE" "$HOOK_TOOL" sha256 2>/dev/null)"
 if [ -n "$_key" ] && [ -n "$_digest" ] && [ "$(cat "$_marker" 2>/dev/null)" = "$_digest" ]; then
   _untested="$(printf '%s\n' "$out" | grep -c 'no test covers')"
   _stale="$(printf '%s\n' "$out" | grep -c 'covers: names')"

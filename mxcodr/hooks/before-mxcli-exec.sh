@@ -12,7 +12,7 @@ case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"
 
-command="$(printf '%s' "$input" | "$PY" -c 'import json,sys; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)"
+command="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" command 2>/dev/null)"
 message="$(hook_sleep_message "$command")"
 if [ -n "$message" ]; then
   echo "$message" >&2
@@ -64,8 +64,5 @@ if [ "$HOOK_STATUS" -ne 0 ]; then
 fi
 # Tell the model the check happened, so it does not run precheck.sh a second time by hand
 # (plain stdout of a PreToolUse hook reaches the transcript only, additionalContext the model).
-printf '%s\n' "$HOOK_OUT" | head -1 | "$PY" -c 'import json,sys
-line = sys.stdin.read().strip()
-if line:
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": line}}))' 2>/dev/null
+printf '%s\n' "$HOOK_OUT" | head -1 | "$NODE" "$HOOK_TOOL" pre-context 2>/dev/null
 exit 0

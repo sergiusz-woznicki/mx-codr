@@ -34,7 +34,14 @@ cp -R "$SRC"/checks/. "$APP/tools/mdl-checks/"
 cp "$SRC/VERSION" "$APP/tools/mdl-checks/VERSION"
 # The mxcli build this bundle was validated with; orient.sh compares ./mxcli against it.
 [ -f "$SRC/MXCLI_TESTED" ] && cp "$SRC/MXCLI_TESTED" "$APP/tools/mdl-checks/MXCLI_TESTED"
-checks=$(ls -1 "$SRC"/checks/*.py | wc -l | tr -d ' ')
+# The checks ran on Python until bundle 2026.10.05; an older install's copies would sit there unused.
+for old in gate_helpers check_mdl check_layout check_scope check_test_coverage view_access perf_rules \
+           index_rules script_overrides guard_harness record_install; do
+  rm -f "$APP/tools/mdl-checks/$old.py"
+done
+rm -f "$APP/tools/mdl-checks/layout_rules/"*.py "$APP/tools/mdl-checks/themes/themes.py"
+rm -rf "$APP/tools/mdl-checks/__pycache__" "$APP/tools/mdl-checks/layout_rules/__pycache__"
+checks=$(ls -1 "$SRC"/checks/*.cjs | wc -l | tr -d ' ')
 ui_done "checkers" "$checks $I_ARROW tools/mdl-checks/"
 
 # In .claude/rules/ because mxcli init regenerates CLAUDE.md.

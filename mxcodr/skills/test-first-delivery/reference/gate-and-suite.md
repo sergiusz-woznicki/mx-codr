@@ -107,12 +107,15 @@ work" is not a result; paste what the runner printed.
 ## Check it
 
 ```bash
-python3 tools/mdl-checks/check_test_coverage.py . <Module>
+node tools/mdl-checks/check_test_coverage.cjs . <Module>
 ```
 
 Lists every page and `ACT_` microflow in the module and fails on any without a
 `# covers:` line in some `tests/verify-*.test.sh`, and on any `covers:` naming an
 element that no longer exists. (In this repo the checker is
-`tests/skills/check_test_coverage.py`; `tools/mdl-checks/` is where `install.sh` puts
+`mxcodr/checks/check_test_coverage.cjs`; `tools/mdl-checks/` is where `install.sh` puts
 it in an installed project.)
+
+A test reads JSON with `field`/`fields` and the database with `oql_count`/`oql_value`;
+for arithmetic use `awk` or `node -e`. The harness runs on Node and installs no Python.
 

@@ -14,8 +14,9 @@ install.sh        copies the payload into a Mendix project; the entry, ~90 lines
 install/          the rest in order: 8 files of helpers (ui, prereqs, postgres, docker, windows,
                   mxcli, studio_pro, toolchain), then the steps (target, step_prereqs, step_app,
                   step_skills, step_hosts, step_harness, summary). Its header lists which is which
-install/hosts/    the five Python scripts step_hosts runs, one per host config it merges
-bootstrap.ps1     Windows only: gets Git Bash, Python and Node, then hands over to install.sh
+install/hosts/    the five .cjs scripts step_hosts runs, one per host config it merges;
+                  install/install_tool.cjs does the installer's other small jobs
+bootstrap.ps1     Windows only: gets Git Bash and Node, then hands over to install.sh
 VERSION           date-based version, copied to tools/mdl-checks/VERSION in the target
 MXCLI_TESTED      the one mxcli release this bundle works with ("<tag> <build-date>"): the
                   installer downloads exactly that release and offers to swap any other
@@ -23,7 +24,8 @@ MXCLI_TESTED      the one mxcli release this bundle works with ("<tag> <build-da
 rules/            mdl-skills.md (Claude, OpenCode, and Pi through its extension) and
                   mdl-skills.mdc (Cursor) — the always-loaded rule
 hooks/            host-specific prompt/PostToolUse adapters plus the Codex and Cursor gates; each
-                  runs on its own, so each carries a copy of mdl_find_python from portable.sh
+                  runs on its own, so each carries a copy of mdl_find_node from portable.sh, and
+                  hands its small jobs (read a field, split a command) to checks/hook_tool.cjs
 plugins/          mendix-mdl-harness.js (OpenCode) and mendix-mdl-harness.pi.js (Pi) -- the same
                   three jobs as the hooks, in each host's own event API
 tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), precheck.sh, orient.sh,
@@ -35,18 +37,20 @@ tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), preche
                   diagnose.sh gather facts in parallel; peek.sh looks at a page without a test;
                   portable.sh holds what differs between platforms and the environment checks
                   every script shares
-.gitattributes    forces LF on *.sh and *.py — copied only if the project has none
+.gitattributes    forces LF on *.sh, *.cjs, *.js and *.mdl — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
 skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
-lint-rules/       3 × *.star — MOD001, REU001, UI001 — run by `mxcli lint`, no Python needed
-checks/           *.py + fixtures/ — the checks Starlark cannot express, gate_helpers.py
-                  for the gate's JSON and digests; check_layout.py is the entry of the layout
-                  check and its rules are in layout_rules/ (one module per area of a page,
-                  listed at the top of check_layout.py), plus
-                  record_install.py, which writes tools/mdl-checks/INSTALL.json (version,
-                  date, sha256 per installed file) so the gate can tell a project running
-                  last week's checkers from one running these
+lint-rules/       3 × *.star — MOD001, REU001, UI001 — run by `mxcli lint`
+checks/           *.cjs + fixtures/ — the checks Starlark cannot express, all on Node:
+                  gate_helpers.cjs for the gate's JSON and digests; check_layout.cjs is the
+                  entry of the layout check and its rules are in layout_rules/ (one module
+                  per area of a page); shell_helpers.cjs and hook_tool.cjs do the small jobs
+                  of tests/*.sh and hooks/*.sh; py_compat.cjs gives the ports Python's
+                  regex, shlex, glob and json semantics; record_install.cjs writes
+                  tools/mdl-checks/INSTALL.json (version, date, sha256 per installed file)
+                  so the gate can tell a project running last week's checkers from one
+                  running these
 ```
 
 The payload is a **copy** of files that live elsewhere in this repo. This directory
@@ -56,14 +60,37 @@ is the shipping container, never the place to edit:
 |---|---|
 | `skills/<name>/SKILL.md` | `.ai-context/skills/<name>/SKILL.md` |
 | `lint-rules/*.star` | `.claude/lint-rules/*.star` |
-| `checks/*.py`, `checks/fixtures/` | `tests/skills/` |
-| `rules/`, `hooks/`, `plugins/`, `tests/`, `skills/spacing-and-layout/` | authored here; no other copy in the repo |
+| `checks/fixtures/` | `tests/skills/fixtures/` |
+| `checks/*.cjs`, `rules/`, `hooks/`, `plugins/`, `tests/`, `skills/spacing-and-layout/` | authored here; no other copy in the repo |
 
 **Finding your way in a long script.** No script is longer than about 500 lines. Where one grew
 past that it became an entry plus parts: `install.sh` + `install/`, `tests/gate.sh` +
 `tests/gate/`, `tests/lib.sh` + `tests/lib/`, `checks/check_layout.py` + `checks/layout_rules/`.
 The entry keeps the name everything calls, starts with a map of its parts, and sources or
 imports them in order; each part starts with two lines saying what it holds and who reads it.
+
+## The harness runs on Node, not Python
+
+Since bundle 2026.10.05.1 nothing in the harness runs Python: the hooks, the gate, its checks and
+the installer run on Node, which the browser tests (playwright-cli) needed anyway. One tool fewer to
+install, and on Windows the class of bug where Python wrote `\r\n` or read stdin as cp1252 is gone
+(a command with `✓` in it made the Python hook print nothing; the Codex trust reminder never showed
+because `codex_config.py` printed `added\r`).
+
+Each port prints what the Python printed. `checks/py_compat.cjs` gives the ports Python's meaning
+where JavaScript differs: regular expressions (Unicode `\w`, `\b`, `\s`, `$` before a final
+newline), shlex, glob and fnmatch, `json.dumps`, `str.split`/`strip`/`splitlines`. The Python
+originals and the inline snippets are kept verbatim in `tests/performance/fixtures/python-reference/`
+in the development repo, and the audit runs both on the same input. Before the switch they were
+compared on 30 real projects and 27,275 tool calls from session logs: guard, hook jobs (107,136
+inputs), whole hooks (3,457 runs), coverage, check_mdl (1,587), check_layout (3,916, all 23 rules
+hit), gate_helpers (2,672), shell snippets (4,086), view_access, check_scope, themes, installer —
+no difference on macOS; on Windows the only differences were Python's `\r\n` and its cp1252 reads.
+
+Node 22.5 or newer reads the Mendix version from an `.mpr` (`node:sqlite`); with an older Node that
+one detail is skipped. `$PY` is still set in `tests/portable.sh` for project tests written before
+the switch that call `"$PY"`; new tests read JSON with `field`/`oql_value` and do arithmetic with
+`awk` or `node -e`.
 
 ## Why the suite is written as one scenario per test
 
@@ -847,7 +874,7 @@ python3 -m json.tool .codex/hooks.json >/dev/null             # Codex hooks merg
 ls .pi/extensions/                                            # Pi extension (rules included)
 python3 -c 'import tomllib; tomllib.load(open(".codex/config.toml", "rb"))'
 ./mxcli lint -p InvoiceDesk.mpr | grep -E 'MOD001|REU001|UI001'  # rules load and fire
-python3 tools/mdl-checks/check_test_coverage.py . InvoiceDesk
+node tools/mdl-checks/check_test_coverage.cjs . InvoiceDesk
 ./mxcli init --sync-skills . && ls .agents/skills            # survives an mxcli sync
 ```
 
@@ -1204,7 +1231,7 @@ the done line, so the label fits an 80-column terminal.
 
 ## Windows
 
-The harness is bash and Python on every host, so on Windows it runs under **Git
+The harness is bash and Node on every host, so on Windows it runs under **Git
 Bash** or WSL2 — there is no PowerShell port, and there is not going to be one:
 the gate, the hooks and every host adapter are the same scripts on every
 platform, and a second implementation is a second thing to keep true.
@@ -1222,7 +1249,7 @@ powershell -ExecutionPolicy Bypass -File mxcodr\bootstrap.ps1 C:\Mendix\YourApp
 
 `bootstrap.ps1` is the only piece that cannot be bash: `install.sh` needs a shell
 before it can run, so getting that shell is PowerShell's job. It winget-installs
-Git for Windows, Python 3 and Node.js (skipping whatever is already there), finds
+Git for Windows and Node.js (skipping whatever is already there), finds
 a **real** Git Bash, and hands over to `bash install.sh <target> --with-deps`
 (the default since 2026.10.01.3; `--no-deps` only reports what is missing),
 which installs `playwright-cli`, its Chromium headless shell and `mxcli.exe`, then
@@ -1263,10 +1290,8 @@ The manual route, if you would rather do it yourself:
    *“Checkout as-is, commit Unix-style line endings”*, and tick *“Add a Git Bash
    Profile to Windows Terminal”*. Everything below is typed in Git Bash, not
    PowerShell or `cmd`.
-2. **Python 3** — <https://python.org/downloads>, ticking *“Add python.exe to
-   PATH”*. Not the Microsoft Store build: it leaves a `python3.exe` stub that
-   answers `command -v` and then opens the Store instead of running. (If it is
-   already installed without PATH, the harness finds it anyway — see below.)
+2. **Node.js** (LTS) — <https://nodejs.org>. If the installer has not put it on the PATH
+   of the shell you are in yet, the harness looks in `C:\Program Files\nodejs` itself.
 3. **Docker Desktop** — *optional*. Only the app's PostgreSQL ever needed a
    container, and a native PostgreSQL replaces it; `mx check` runs from Studio Pro.
    See **Local mode and Docker mode** above.
@@ -1278,10 +1303,10 @@ The manual route, if you would rather do it yourself:
 ```bash
 # confirm the machine before blaming the harness
 bash --version                   # 4.x from Git for Windows
-python --version                 # or python3, or py
+node --version
 ./mxcli.exe --version
 docker info                      # needed by mx check and --ensure-db
-bash tests/orient.sh             # exercises mxcli, Python and mktemp together
+bash tests/orient.sh             # exercises mxcli, Node and mktemp together
 ```
 
 What the bundle does about each difference:
@@ -1289,13 +1314,12 @@ What the bundle does about each difference:
 | Difference | Handled by |
 |---|---|
 | Git for Windows, with `bash.exe` on the PATH | every command in the loop is `bash tests/...`; the OpenCode plugin also probes `%ProgramFiles%\Git\bin` and `%LOCALAPPDATA%\Programs\Git\bin` before giving up |
-| Python 3 as `python`, `python3` or `py` | `tests/portable.sh` runs each candidate once before believing it, because Windows ships a `python3.exe` stub that opens the Microsoft Store and answers `command -v` |
+| Node not yet on this shell's PATH | `mdl_find_node` (portable.sh, the hooks, install.sh) also looks in `C:\Program Files\nodejs` and `%LOCALAPPDATA%\Programs\nodejs` |
 | `mxcli.exe` in the project root | detected alongside `mxcli`; `install.sh` swaps out the Linux binary `mxcli new` leaves behind and keeps it as `mxcli.linux` |
 | A PostgreSQL for the app | `mxcli run --local` is Docker-free but Postgres-only. Native PostgreSQL works; `mx check` needs no container at all |
-| LF line endings | `.gitattributes` pins `*.sh` and `*.py`. Without it one editor save turns every line of `gate.sh` into `$'\r': command not found` |
-| Python installed but invisible | winget accepts python.org's default of *not* adding python to the PATH, so a working Python 3.12 can exist that no shell can see — observed on a clean Windows 11 VM. `portable.sh`, the hooks and `install.sh` all search `%LOCALAPPDATA%\Programs\Python\Python3*` and `C:\Program Files\Python3*` before giving up |
+| LF line endings | `.gitattributes` pins `*.sh`, `*.cjs` and `*.js`. Without it one editor save turns every line of `gate.sh` into `$'\r': command not found` |
 | `bash` on the PATH is the wrong bash | `C:\Windows\System32\bash.exe` is the **WSL launcher**. `bootstrap.ps1` and the OpenCode plugin put Git's own directories first and reject anything under `System32` |
-| Python writes `\r\n` | `print()` on Windows ends every line with `\r\n`, and bash kept the `\r` on every line but the last: in a two-module app the gate asked the coverage check for module `Integration\r` and stopped on `no module named Integration`. The module list and `gate_helpers.py` write plain `\n` |
+| `\r\n` from the checks | Python's `print()` ended lines with `\r\n` on Windows and bash kept the `\r` (the gate asked for module `Integration\r`). The checks run on Node now, which writes `\n` everywhere |
 | No `pgrep` | the database check asks PowerShell whether a Mendix runtime is running before it calls an HSQLDB lock stale; it once said "rm it" beside a running app. When nothing can tell, it stays quiet |
 | No CDN mxbuild | `mxcli setup mxbuild` refuses on Windows; `mx` comes from an installed Studio Pro. The installer enumerates `C:\Program Files\Mendix\*\modeler\mx.exe` and builds at the newest version present |
 

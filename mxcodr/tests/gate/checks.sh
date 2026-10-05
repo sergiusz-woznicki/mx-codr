@@ -182,8 +182,8 @@ check_lint() {
 
 # Every page and ACT_ microflow must be named by a verify-*.test.sh `# covers:` line.
 check_coverage() {
-  [ -f tools/mdl-checks/check_test_coverage.py ] || {
-    echo "coverage: could not run -- tools/mdl-checks/check_test_coverage.py is missing" > "$WORK/coverage.summary"
+  [ -f tools/mdl-checks/check_test_coverage.cjs ] || {
+    echo "coverage: could not run -- tools/mdl-checks/check_test_coverage.cjs is missing" > "$WORK/coverage.summary"
     return 2; }
   local gate out code
   modules_or_status coverage; gate=$?
@@ -194,7 +194,7 @@ check_coverage() {
   esac
   # All modules in one call: a test may cover a page in another module.
   # shellcheck disable=SC2086
-  out="$("$PY" tools/mdl-checks/check_test_coverage.py . $USER_MODULES 2>&1)"; code=$?
+  out="$("$NODE" tools/mdl-checks/check_test_coverage.cjs . $USER_MODULES 2>&1)"; code=$?
   printf '%s\n' "$out" | grep -E '^(PASS|FAIL|ERROR) ' | sed 's/^/coverage /' > "$WORK/coverage.summary"
   printf '%s\n' "$out" | grep -E '^[[:space:]]+- ' | head -10 > "$WORK/coverage.detail"
   case "$code" in
@@ -203,17 +203,17 @@ check_coverage() {
   esac
   # The checker broke: keep its summary if it printed an ERROR line, else replace it.
   if ! grep -q '^coverage ERROR ' "$WORK/coverage.summary"; then
-    echo "coverage: could not run -- check_test_coverage.py exited $code" > "$WORK/coverage.summary"
+    echo "coverage: could not run -- check_test_coverage.cjs exited $code" > "$WORK/coverage.summary"
   fi
   printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 >> "$WORK/coverage.detail"
   return 2
 }
 
-# Runs check_mdl.py --skill naming over the described microflows and nanoflows. Caption rules are
+# Runs check_mdl.cjs --skill naming over the described microflows and nanoflows. Caption rules are
 # warnings unless MDL_CAPTIONS=error: 286 of them once landed on a session with no test green.
 check_naming() {
-  [ -f tools/mdl-checks/check_mdl.py ] || {
-    echo "naming: could not run -- tools/mdl-checks/check_mdl.py is missing" > "$WORK/naming.summary"
+  [ -f tools/mdl-checks/check_mdl.cjs ] || {
+    echo "naming: could not run -- tools/mdl-checks/check_mdl.cjs is missing" > "$WORK/naming.summary"
     return 2; }
   local gate out code
   modules_or_status naming; gate=$?
@@ -245,13 +245,13 @@ check_naming() {
   local -a baseline=()
   [ -f "$CACHE_DIR/captions-baseline.json" ] && baseline=(--captions-baseline "$CACHE_DIR/captions-baseline.json")
   mkdir -p "$CACHE_DIR" 2>/dev/null
-  out="$("$PY" tools/mdl-checks/check_mdl.py "$WORK/mdl" --skill naming --captions "$captions" \
+  out="$("$NODE" tools/mdl-checks/check_mdl.cjs "$WORK/mdl" --skill naming --captions "$captions" \
     ${index_inputs[@]+"${index_inputs[@]}"} --expect-flows "$(cat "$WORK/naming.count" 2>/dev/null || echo 0)" \
     --format "$("$MXCLI" --version 2>/dev/null | head -1)" \
     --flow-hashes "$CACHE_DIR/naming.flows.json" ${baseline[@]+"${baseline[@]}"} 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
-    echo "naming: could not run -- check_mdl.py exited $code" > "$WORK/naming.summary"
+    echo "naming: could not run -- check_mdl.cjs exited $code" > "$WORK/naming.summary"
     printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/naming.detail"
     return 2
   fi
@@ -321,13 +321,7 @@ layout_sign_out_inputs() {
   local role guest roles
   : > "$WORK/userroles.mdl"
   if ! roles="$("$MXCLI" -p "$MPR" --json -c "SHOW USER ROLES" 2>/dev/null)" \
-     || ! roles="$(printf '%s' "$roles" | "$PY" -c 'import json, sys
-sys.stdout.reconfigure(newline="\n")      # Windows: print() would end each name with \r\n
-rows = json.load(sys.stdin)
-if not isinstance(rows, list):
-    raise SystemExit(1)
-for row in rows:
-    print(row.get("Name", ""))' 2>/dev/null)"; then
+     || ! roles="$(printf '%s' "$roles" | "$NODE" "$MDL_SHELL_HELPERS" role-names 2>/dev/null)"; then
     echo "layout: could not run -- SHOW USER ROLES did not return a JSON list" > "$WORK/layout.summary"
     return 1
   fi
@@ -362,8 +356,8 @@ for row in rows:
 
 # Widget spacing, read from `describe page` (Starlark lint rules cannot see widgets).
 check_layout() {
-  [ -f tools/mdl-checks/check_layout.py ] || {
-    echo "layout: could not run -- tools/mdl-checks/check_layout.py is missing" > "$WORK/layout.summary"
+  [ -f tools/mdl-checks/check_layout.cjs ] || {
+    echo "layout: could not run -- tools/mdl-checks/check_layout.cjs is missing" > "$WORK/layout.summary"
     return 2; }
   local gate out code
   modules_or_status layout; gate=$?
@@ -394,11 +388,11 @@ check_layout() {
   # and write entities, for buttons that change a grid's rows outside its header (GRID02).
   describe_all layout-flows "$WORK/layout-flows" "MICROFLOWS NANOFLOWS" || layout_unread flows "BACK01, GRID02"
   ls "$WORK"/layout-flows/*.mdl >/dev/null 2>&1 && nav_args+=(--opened-from "$WORK/layout-flows")
-  out="$("$PY" tools/mdl-checks/check_layout.py "$WORK/pages" "${nav_args[@]}" \
+  out="$("$NODE" tools/mdl-checks/check_layout.cjs "$WORK/pages" "${nav_args[@]}" \
     --expect-pages "$(cat "$WORK/layout.count" 2>/dev/null || echo 0)" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
   if [ "$gate" = "2" ]; then
-    echo "layout: could not run -- check_layout.py exited $code" > "$WORK/layout.summary"
+    echo "layout: could not run -- check_layout.cjs exited $code" > "$WORK/layout.summary"
     printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/layout.detail"
     return 2
   fi
@@ -464,15 +458,15 @@ run_cached() {
 # Starts the model checks in the background, each through the cache.
 start_model_checks() {
   # Upgrading the gate, its config or mxcli must not replay an old pass.
-  local -a cache_inputs=(tests/gate.sh tests/gate tools/mdl-checks/gate_helpers.py tests/harness.env "meta:$MXCLI")
+  local -a cache_inputs=(tests/gate.sh tests/gate tools/mdl-checks/gate_helpers.cjs tools/mdl-checks/py_compat.cjs tests/harness.env "meta:$MXCLI")
   ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
-  ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.py ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.py tools/mdl-checks/perf_rules.py tools/mdl-checks/index_rules.py "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
-  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.py "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
-  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.py "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
-  ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.py "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
+  ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
+  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
+  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
+  ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
   echo "== mx check, lint, coverage, naming, layout, security and scope started (they need no app; running while the suite does)"
 }
 
@@ -492,18 +486,7 @@ entity_names() {
     listing="$("$MXCLI" -p "$MPR" --json -c "SHOW ENTITIES IN $module" 2>/dev/null)" || { status=1; continue; }
     # newline="\n": on Windows print() writes \r\n, every name kept its \r, and no file matched it.
     # Until 2026-10-04 that failure was swallowed, so VIEW01 and the index rules never ran there.
-    printf '%s' "$listing" | "$PY" -c 'import json, re, sys
-sys.stdout.reconfigure(newline="\n")
-rows = json.load(sys.stdin)
-if not isinstance(rows, list):
-    raise SystemExit(1)
-for row in rows:
-    name = row.get("Entity") or row.get("Qualified Name") or row.get("QualifiedName")
-    if not name:
-        continue
-    if not re.fullmatch(r"[A-Za-z_]\w*\.[A-Za-z_]\w*", name):
-        raise SystemExit(1)
-    print(name)' 2>/dev/null || status=1
+    printf '%s' "$listing" | "$NODE" "$MDL_SHELL_HELPERS" entity-names 2>/dev/null || status=1
   done
   return "$status"
 }
@@ -523,22 +506,7 @@ describe_entities_into() {
   names="$(entity_names)" || return 1
   [ -n "$names" ] || return 0
   if describe_many entity "$names" > "$dir/.all.mdl"; then
-    "$PY" -c 'import re, sys
-current, pending, out = None, [], {}
-for line in open(sys.argv[1], encoding="utf-8"):
-    head = re.match(r"\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:\S+\s+)?entity\s+([\w.]+)", line, re.I)
-    if head:
-        current = head.group(1)
-        out[current], pending = pending, []
-    if current:
-        out[current].append(line)
-        if line.strip() == "/":
-            current = None
-    else:
-        pending.append(line)   # the doc comment and position above the next entity
-for name, lines in out.items():
-    with open(sys.argv[2] + "/" + name + ".mdl", "w", encoding="utf-8") as handle:
-        handle.write("".join(lines))' "$dir/.all.mdl" "$dir" || { rm -f "$dir/.all.mdl"; return 1; }
+    "$NODE" "$MDL_SHELL_HELPERS" split-entities "$dir/.all.mdl" "$dir" || { rm -f "$dir/.all.mdl"; return 1; }
     rm -f "$dir/.all.mdl"
   else
     rm -f "$dir/.all.mdl"
@@ -554,13 +522,13 @@ for name, lines in out.items():
   return 0
 }
 
-# VIEW01 lines (view_access.py): a view entity a row-scoped role reads with no XPath constraint.
+# VIEW01 lines (view_access.cjs): a view entity a row-scoped role reads with no XPath constraint.
 # Exit 0 none, 1 findings (printed), 2 the checker could not run (its last lines in view.error).
 view_findings() {
   local out code
-  [ -f tools/mdl-checks/view_access.py ] || { echo "tools/mdl-checks/view_access.py is missing" > "$WORK/view.error"; return 2; }
+  [ -f tools/mdl-checks/view_access.cjs ] || { echo "tools/mdl-checks/view_access.cjs is missing" > "$WORK/view.error"; return 2; }
   cat "$WORK/entities/"*.mdl 2>/dev/null > "$WORK/entities.mdl"
-  out="$("$PY" tools/mdl-checks/view_access.py "$WORK/entities.mdl" \
+  out="$("$NODE" tools/mdl-checks/view_access.cjs "$WORK/entities.mdl" \
     --expect "$(ls "$WORK/entities/" 2>/dev/null | grep -c '\.mdl$')" 2>"$WORK/view.error")"; code=$?
   case "$code" in
     0) return 0 ;;
@@ -586,7 +554,7 @@ check_security() {
   fi
   views="$(view_findings)"
   if [ "$?" = "2" ]; then
-    echo "security: could not run -- view_access.py did not finish" > "$WORK/security.summary"
+    echo "security: could not run -- view_access.cjs did not finish" > "$WORK/security.summary"
     tail -3 "$WORK/view.error" 2>/dev/null > "$WORK/security.detail"
     return 2
   fi
@@ -630,8 +598,8 @@ check_security() {
 # verify test caught it.
 check_scope() {
   local gate out code total
-  [ -f tools/mdl-checks/check_scope.py ] || {
-    echo "scope: could not run -- tools/mdl-checks/check_scope.py is missing" > "$WORK/scope.summary"; return 2; }
+  [ -f tools/mdl-checks/check_scope.cjs ] || {
+    echo "scope: could not run -- tools/mdl-checks/check_scope.cjs is missing" > "$WORK/scope.summary"; return 2; }
   modules_or_status scope; gate=$?
   case "$gate" in
     0) ;;
@@ -639,14 +607,14 @@ check_scope() {
     *) return "$gate" ;;
   esac
   # shellcheck disable=SC2086
-  out="$("$PY" tools/mdl-checks/check_scope.py . $USER_MODULES 2>&1)"; code=$?
+  out="$("$NODE" tools/mdl-checks/check_scope.cjs . $USER_MODULES 2>&1)"; code=$?
   if [ "$code" = "2" ]; then
     echo "scope: could not run -- $(printf '%s\n' "$out" | tail -1)" > "$WORK/scope.summary"; return 2
   fi
   # 0 passes and 1 has findings, each under a PASS or WARN line; anything else (a traceback
   # exits 1 too) did not check the model, and counted as "findings", a pass while MDL_SCOPE=warn.
   if { [ "$code" != "0" ] && [ "$code" != "1" ]; } || ! printf '%s\n' "$out" | head -1 | grep -qE '^(PASS|WARN) '; then
-    echo "scope: could not run -- check_scope.py exited $code" > "$WORK/scope.summary"
+    echo "scope: could not run -- check_scope.cjs exited $code" > "$WORK/scope.summary"
     printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/scope.detail"
     return 2
   fi

@@ -79,7 +79,7 @@ offer_studio_pro_junction() {   # <version> <path-to-per-user-mx.exe>
   local elevated encoded
   elevated="New-Item -ItemType Directory -Force -Path 'C:\\Program Files\\Mendix' | Out-Null; "
   elevated+="New-Item -ItemType Junction -Path '$link_win' -Target '$target_win' | Out-Null"
-  encoded="$("$PY" -c 'import base64,sys; print(base64.b64encode(sys.argv[1].encode("utf-16-le")).decode())' "$elevated")"
+  encoded="$("$NODE" "$SRC/install/install_tool.cjs" powershell-encode "$elevated")"
   powershell.exe -NoProfile -Command \
     "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile','-EncodedCommand','$encoded'" \
     >> "$DEPS_LOG" 2>&1 || true

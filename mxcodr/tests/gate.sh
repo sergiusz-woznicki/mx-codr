@@ -29,7 +29,7 @@
 # How to read this file: main() at the bottom is the whole gate, step by step. The steps
 # live in tests/gate/ -- app.sh (find, boot, stop the app), checks.sh (the five model
 # checks and their cache), preflight.sh (sessions, stale model, environment) and tests.sh
-# (the suite). tools/mdl-checks/gate_helpers.py holds the Python they call.
+# (the suite). tools/mdl-checks/gate_helpers.cjs holds the Node they call.
 # No -e: a failing step must not end the gate.
 set -uo pipefail
 
@@ -45,9 +45,9 @@ for part in hints app checks preflight tests; do
   . "$HARNESS_DIR/gate/$part.sh"
 done
 
-# The gate's Python (digests, JSON, timestamps) lives in tools/mdl-checks/gate_helpers.py.
+# The gate's helpers (digests, JSON, timestamps) live in tools/mdl-checks/gate_helpers.cjs.
 gate_py() {
-  "$PY" tools/mdl-checks/gate_helpers.py "$@"
+  "$NODE" tools/mdl-checks/gate_helpers.cjs "$@"
 }
 
 # Sets ONLY, TESTS_ONLY, BOOT, RESTART, STOP and USE_CACHE; --help prints lines 2-24 and exits.
@@ -133,11 +133,11 @@ print_warnings() {
 # coverage checker answers in 0.3s; a line here says which it is. Advice only: the verdict is unchanged.
 only_coverage_note() {
   local modules out code lines
-  [ -f tools/mdl-checks/check_test_coverage.py ] || return 0
+  [ -f tools/mdl-checks/check_test_coverage.cjs ] || return 0
   modules="$(mdl_user_modules "$MPR" 2>/dev/null)" || return 0
   [ -n "$modules" ] || return 0
   # shellcheck disable=SC2086
-  out="$("$PY" tools/mdl-checks/check_test_coverage.py . $modules 2>/dev/null)"; code=$?
+  out="$("$NODE" tools/mdl-checks/check_test_coverage.cjs . $modules 2>/dev/null)"; code=$?
   lines="$(printf '%s\n' "$out" | grep -E '^(PASS|FAIL) ' | sed -E 's/^(PASS|FAIL) +//' | tr '\n' ';' | sed 's/;$//')"
   [ -n "$lines" ] || return 0
   if [ "$code" = "0" ]; then
@@ -245,7 +245,7 @@ print_blockers() {
   echo "== still blocking DONE"
   # details holds name|label for every failed or unrunnable check, in the order they printed.
   # Every finding up to BLOCKERS_SHOWN, each with its fix: a session that saw only the first one
-  # (through `| tail -16`) opened check_layout.py to learn what the other six wanted.
+  # (through `| tail -16`) opened check_layout.cjs to learn what the other six wanted.
   for entry in ${details[@]+"${details[@]}"}; do
     name="${entry%%|*}"; label="${entry#*|}"
     detail="$WORK/$name.detail"
@@ -306,8 +306,8 @@ main() {
     USER_MODULES="$(mdl_user_modules "$MPR")" || USER_MODULES_READ=0
   fi
 
-  if [ "$STOP" = "0" ] && [ ! -f tools/mdl-checks/gate_helpers.py ]; then
-    echo "tools/mdl-checks/gate_helpers.py is missing -- re-run the installer" >&2
+  if [ "$STOP" = "0" ] && [ ! -f tools/mdl-checks/gate_helpers.cjs ]; then
+    echo "tools/mdl-checks/gate_helpers.cjs is missing -- re-run the installer" >&2
     exit 2
   fi
   if [ "$STOP" = "1" ]; then

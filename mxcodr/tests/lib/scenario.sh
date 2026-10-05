@@ -194,27 +194,5 @@ _mdl_scenario_result() {
   case "$raw" in *__visual*) ;; *) printf '%s\n' "$raw"; return 0 ;; esac
   # What look() measured goes to .mxcli/visual/findings.jsonl for the gate; the test gets its own value.
   mkdir -p "$APP_DIR/.mxcli/visual" 2>/dev/null
-  printf '%s' "$raw" | "$PY" -c '
-import json, sys
-raw = sys.stdin.read().strip()
-try:
-    value = json.loads(raw)
-    if isinstance(value, str):
-        value = json.loads(value)
-except ValueError:
-    print(raw)
-    sys.exit()
-if not isinstance(value, dict) or "__visual" not in value:
-    print(raw)
-    sys.exit()
-seen = value.pop("__visual")
-try:
-    with open(sys.argv[1], "a", encoding="utf-8") as out:
-        for look in seen:
-            look["test"] = sys.argv[2]
-            out.write(json.dumps(look) + "\n")
-except OSError:
-    pass
-print(json.dumps(value))
-' "$APP_DIR/.mxcli/visual/findings.jsonl" "$(_mdl_test_name)"
+  printf '%s' "$raw" | "$NODE" "$MDL_SHELL_HELPERS" scenario-result "$APP_DIR/.mxcli/visual/findings.jsonl" "$(_mdl_test_name)"
 }

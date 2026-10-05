@@ -47,11 +47,11 @@ tests_section() {
       "$(grep -m1 '^# covers:' "$script" | sed 's/^# covers: //')"
   done
   echo "== coverage"
-  if [ -f tools/mdl-checks/check_test_coverage.py ]; then
+  if [ -f tools/mdl-checks/check_test_coverage.cjs ]; then
     # One call for all modules, as the gate and the after-exec hook do: asked one module at a
     # time, a test that covers another module's page is reported as naming something stale.
     # shellcheck disable=SC2046
-    "$PY" tools/mdl-checks/check_test_coverage.py . $(mdl_user_modules "$MPR") 2>&1 \
+    "$NODE" tools/mdl-checks/check_test_coverage.cjs . $(mdl_user_modules "$MPR") 2>&1 \
       | grep -E '^(PASS|FAIL|ERROR)' | sed 's/^/   /'
   fi
 }
