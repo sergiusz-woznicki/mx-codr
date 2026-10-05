@@ -8,7 +8,7 @@ mkdir -p "$APP/tools/mdl-checks/hooks"
 cp "$SRC"/hooks/*.sh "$APP/tools/mdl-checks/hooks/"
 chmod +x "$APP/tools/mdl-checks/hooks/"*.sh
 # Each merge adds only missing entries; unparseable JSON stops the install rather than being overwritten.
-"$PY" "$SRC/install/hosts/claude_settings.py" "$APP/.claude/settings.local.json"
+"$NODE" "$SRC/install/hosts/claude_settings.cjs" "$APP/.claude/settings.local.json"
 ui_done "Claude hooks" "4 $I_ARROW .claude/settings.local.json"
 ignore_credential_files
 
@@ -17,9 +17,9 @@ ui_begin "registering Codex hooks"
 mkdir -p "$APP/.codex"
 
 # An untrusted hook cannot ask to be trusted: add a first-turn reminder unless developer_instructions exist.
-codex_reminder="$("$PY" "$SRC/install/hosts/codex_config.py" "$APP/.codex/config.toml")"
+codex_reminder="$("$NODE" "$SRC/install/hosts/codex_config.cjs" "$APP/.codex/config.toml")"
 
-"$PY" "$SRC/install/hosts/codex_hooks.py" "$APP/.codex/hooks.json"
+"$NODE" "$SRC/install/hosts/codex_hooks.cjs" "$APP/.codex/hooks.json"
 ui_done "Codex hooks" "4 $I_ARROW .codex/hooks.json"
 
 # Cursor reads neither .claude/rules nor .ai-context: an alwaysApply .mdc rule plus three adapter hooks.
@@ -27,7 +27,7 @@ ui_begin "registering Cursor hooks"
 mkdir -p "$APP/.cursor/rules"
 cp "$SRC/rules/mdl-skills.mdc" "$APP/.cursor/rules/mdl-skills.mdc"
 
-"$PY" "$SRC/install/hosts/cursor_hooks.py" "$APP/.cursor/hooks.json"
+"$NODE" "$SRC/install/hosts/cursor_hooks.cjs" "$APP/.cursor/hooks.json"
 ui_done "Cursor hooks" "4 $I_ARROW .cursor/hooks.json, 1 rule $I_ARROW .cursor/rules/"
 
 # OpenCode: one plugin (mutable payloads, no exit codes); rules via opencode.json "instructions".
@@ -35,7 +35,7 @@ ui_begin "installing the OpenCode plugin"
 mkdir -p "$APP/.opencode/plugin"
 cp "$SRC/plugins/mendix-mdl-harness.js" "$APP/.opencode/plugin/"
 
-"$PY" "$SRC/install/hosts/opencode_config.py" "$APP/opencode.json"
+"$NODE" "$SRC/install/hosts/opencode_config.cjs" "$APP/opencode.json"
 ui_done "OpenCode plugin" "1 $I_ARROW .opencode/plugin/, rules $I_ARROW opencode.json"
 
 # Pi: one extension -- tool_call blocks a failing exec, tool_result appends the coverage report,

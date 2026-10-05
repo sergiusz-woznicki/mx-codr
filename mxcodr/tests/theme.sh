@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.." || exit 2
 PORTABLE_APP_DIR="$PWD"
 # shellcheck source=/dev/null
 . tests/portable.sh || exit 2
-HELPER=tools/mdl-checks/themes/themes.py
+HELPER=tools/mdl-checks/themes/themes.cjs
 [ -f "$HELPER" ] || { echo "tools/mdl-checks/themes/ is missing -- re-run the installer" >&2; exit 2; }
 MPR="$(ls *.mpr 2>/dev/null | head -1)"
 [ -n "$MPR" ] || { echo "no .mpr here" >&2; exit 2; }
@@ -35,22 +35,22 @@ case "${1:-}" in
     now="$(applied || true)"
     echo "The app's look (now: ${now:-atlas, the Mendix default})"
     echo
-    if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then "$PY" "$HELPER" list; else "$PY" "$HELPER" list --plain; fi
+    if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then "$NODE" "$HELPER" list; else "$NODE" "$HELPER" list --plain; fi
     echo
     echo "  bash tests/theme.sh <number|name>   switch    bash tests/theme.sh preview   see them all"
     ;;
   preview)
-    page="$("$PY" "$HELPER" preview)"
+    page="$("$NODE" "$HELPER" preview)"
     if [ "$(uname -s)" = "Darwin" ]; then open "$page"
     elif command -v cmd.exe >/dev/null 2>&1; then cmd.exe //c start "" "$(cygpath -w "$page")"
     elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$page" >/dev/null 2>&1 &
     else echo "open this in a browser: $page"; fi
     ;;
   *)
-    name="$("$PY" "$HELPER" resolve "$1")" || { echo "no theme '$1' -- bash tests/theme.sh lists them" >&2; exit 2; }
-    source="$("$PY" "$HELPER" source "$name")"
+    name="$("$NODE" "$HELPER" resolve "$1")" || { echo "no theme '$1' -- bash tests/theme.sh lists them" >&2; exit 2; }
+    source="$("$NODE" "$HELPER" source "$name")"
     # The mx-codr mark in this theme's colours: browser icons, sign-in and top bar logo.
-    "$PY" "$HELPER" logo "$name" . || echo "no logo for $name -- the icons stay as they were" >&2
+    "$NODE" "$HELPER" logo "$name" . || echo "no logo for $name -- the icons stay as they were" >&2
     if [ "$source" = "none" ]; then
       # Mendix's own Atlas: no mxcli theme at all.
       "$MXCLI" theme remove -p "$MPR" >/dev/null 2>&1 || true
@@ -61,7 +61,7 @@ case "${1:-}" in
       "$MXCLI" theme create "$name" -p "$MPR" --from "$source" --base signal >/dev/null \
         || { echo "mxcli theme create $name failed" >&2; exit 1; }
       # The frame (top bar, active menu item, outline buttons) goes into the scaffold's own partial.
-      skin="$("$PY" "$HELPER" skin "$name")" \
+      skin="$("$NODE" "$HELPER" skin "$name")" \
         && cat "$skin" >> "theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
     fi
     "$MXCLI" theme apply "$name" -p "$MPR" --variant light >/dev/null || { echo "mxcli theme apply $name failed" >&2; exit 1; }

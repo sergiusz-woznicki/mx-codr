@@ -16,19 +16,19 @@ open_in_browser() {
 # or MDL_ASSUME_YES, the first theme (atlas, Mendix's own look) is taken. Asked together with the other questions,
 # before the minutes of unattended work.
 choose_theme() {
-  local helper="$SRC/checks/themes/themes.py" reply preview opened=0
+  local helper="$SRC/checks/themes/themes.cjs" reply preview opened=0
   # The default even when nothing can be asked: Mendix's own Atlas, the app as mxcli new makes it.
   THEME="atlas"
-  [ -n "${PY:-}" ] || PY="$(mdl_find_python 2>/dev/null || true)"
-  [ -f "$helper" ] && [ -n "${PY:-}" ] || return 0
+  [ -n "${NODE:-}" ] || NODE="$(mdl_find_node 2>/dev/null || true)"
+  [ -f "$helper" ] && [ -n "${NODE:-}" ] || return 0
   if [ -n "${MDL_THEME:-}" ]; then
-    THEME="$("$PY" "$helper" resolve "$MDL_THEME" 2>/dev/null)" \
-      || ui_fail "MDL_THEME=$MDL_THEME is not one of the themes:" "$("$PY" "$helper" list --plain)"
+    THEME="$("$NODE" "$helper" resolve "$MDL_THEME" 2>/dev/null)" \
+      || ui_fail "MDL_THEME=$MDL_THEME is not one of the themes:" "$("$NODE" "$helper" list --plain)"
     return 0
   fi
-  THEME="$("$PY" "$helper" resolve "" 2>/dev/null)"
+  THEME="$("$NODE" "$helper" resolve "" 2>/dev/null)"
   if [ ! -t 0 ] || [ -n "${MDL_ASSUME_YES:-}" ]; then return 0; fi
-  preview="$("$PY" "$helper" preview)"
+  preview="$("$NODE" "$helper" preview)"
   open_in_browser "$preview" && opened=1
   printf '  How should the app look?'
   if [ "$opened" = 1 ]; then
@@ -36,12 +36,12 @@ choose_theme() {
   else
     printf '\n  %sPreview: %s%s\n\n' "$C_GREY" "$preview" "$C_RESET"
   fi
-  if [ "$UI_TTY" = 1 ]; then "$PY" "$helper" list; else "$PY" "$helper" list --plain; fi
+  if [ "$UI_TTY" = 1 ]; then "$NODE" "$helper" list; else "$NODE" "$helper" list --plain; fi
   printf '\n    %smenu · top bar · page · selected row · button. Change it later: bash tests/theme.sh%s\n' "$C_GREY" "$C_RESET"
   while :; do
     printf '\n  Theme [1]: '
     read -r reply
-    THEME="$("$PY" "$helper" resolve "$reply" 2>/dev/null)" && break
+    THEME="$("$NODE" "$helper" resolve "$reply" 2>/dev/null)" && break
     printf '  %sType a number from the list, or a theme name.%s\n' "$C_YELLOW" "$C_RESET"
   done
   printf '\n'
@@ -54,9 +54,9 @@ apply_theme() {
   [ -n "$name" ] || return 0
   mpr="$(cd "$app" && ls *.mpr 2>/dev/null | head -1)"
   [ -n "$mpr" ] || return 1
-  source="$("$PY" "$SRC/checks/themes/themes.py" source "$name" 2>/dev/null)" || return 1
+  source="$("$NODE" "$SRC/checks/themes/themes.cjs" source "$name" 2>/dev/null)" || return 1
   # The mx-codr mark in this theme's colours replaces Mendix's icons and logos (theme/web/ only).
-  "$PY" "$SRC/checks/themes/themes.py" logo "$name" "$app" >/dev/null 2>&1 || true
+  "$NODE" "$SRC/checks/themes/themes.cjs" logo "$name" "$app" >/dev/null 2>&1 || true
   # Atlas is no theme at all: take away any mxcli theme the app carries.
   if [ "$source" = "none" ]; then
     ( cd "$app" && "$mxcli" theme remove -p "$mpr" ) >/dev/null 2>&1 || true
@@ -65,7 +65,7 @@ apply_theme() {
   if [ "$source" != "builtin" ] && [ ! -d "$app/theme/mxcli-themes/$name" ]; then
     ( cd "$app" && "$mxcli" theme create "$name" -p "$mpr" --from "$source" --base signal ) >/dev/null 2>&1 || return 1
     # The frame (top bar, active menu item, outline buttons) goes into the scaffold's own partial.
-    skin="$("$PY" "$SRC/checks/themes/themes.py" skin "$name" 2>/dev/null)" \
+    skin="$("$NODE" "$SRC/checks/themes/themes.cjs" skin "$name" 2>/dev/null)" \
       && cat "$skin" >> "$app/theme/mxcli-themes/$name/files/theme/web/_mxcli-$name.scss"
   fi
   ( cd "$app" && "$mxcli" theme apply "$name" -p "$mpr" --variant light ) >/dev/null 2>&1

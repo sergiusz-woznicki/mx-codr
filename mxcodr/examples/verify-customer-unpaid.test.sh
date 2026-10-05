@@ -8,7 +8,7 @@ customer="Northwind Traders"
 expected_unpaid="$(oql "SELECT COUNT(*) AS Total FROM InvoiceDesk.Invoice AS i
   JOIN i/InvoiceDesk.Invoice_Customer/InvoiceDesk.Customer AS c
   WHERE c/Name = '$customer' AND (i/Status = 'Sent' OR i/Status = 'Overdue')" \
-  | "$PY" -c "import json,sys; rows=json.load(sys.stdin); print(rows[0]['Total'] if rows else 0)")"
+  | "$NODE" "$MDL_SHELL_HELPERS" oql-total)"
 
 result="$(scenario '
   await open_app();

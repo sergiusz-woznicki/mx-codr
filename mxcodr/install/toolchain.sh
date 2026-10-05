@@ -73,17 +73,7 @@ choose_want_mx() {
     fi
   else
     # Print the Mendix version stored in the project's .mpr (SQLite).
-    want_mx="$("$PY" - "$APP" <<'PY_WANT' 2>/dev/null || true
-import glob, os, sqlite3, sys
-mprs = glob.glob(os.path.join(sys.argv[1], "*.mpr"))
-if mprs:
-    try:
-        con = sqlite3.connect("file:%s?mode=ro" % mprs[0], uri=True)
-        print(con.execute("select * from _MetaData limit 1").fetchone()[1])
-    except Exception:
-        pass
-PY_WANT
-)"
+    want_mx="$("$NODE" "$SRC/install/install_tool.cjs" app-mx-version "$APP" 2>/dev/null || true)"
   fi
   # want_mx ends up in an eval'd command: accept only a version number.
   case "$want_mx" in

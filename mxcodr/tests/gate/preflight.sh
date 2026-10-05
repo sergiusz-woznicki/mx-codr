@@ -136,7 +136,7 @@ MSG
 
 # Seconds since <file> last changed.
 log_age() {
-  "$PY" -c 'import os, sys, time; print(int(time.time() - os.path.getmtime(sys.argv[1])))' "$1" 2>/dev/null || echo 999
+  "$NODE" "$MDL_SHELL_HELPERS" log-age "$1" 2>/dev/null || echo 999
 }
 
 # The app answers with the web client it names in index.html: after a restart that re-bundles

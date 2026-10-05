@@ -1,22 +1,19 @@
 # install/step_prereqs.sh -- part of install.sh, which sources the parts in order; never run it on its own.
 # Step 11: check and install the prerequisites. Runs as it is read.
 
-# --- 11. Step: prerequisites (Python, Node, Playwright, mxcli, MxBuild, PostgreSQL, Docker, JDK) ---
+# --- 11. Step: prerequisites (Node, Playwright, mxcli, MxBuild, PostgreSQL, Docker, JDK) ---
 # Missing tools are collected and reported in the summary.
 DEPS_LOG="${TMPDIR:-/tmp}"; DEPS_LOG="${DEPS_LOG%/}/mdl-skills-deps.log"
 : > "$DEPS_LOG" 2>/dev/null || DEPS_LOG=/dev/null
 
 ui_begin "checking prerequisites"
 
-# Python first: the hook merges need it.
-dep_need "Python 3" "mdl_find_python >/dev/null" "Python.Python.3.12" "python" "python3" || true
-[ -n "$PY" ] || PY="$(mdl_find_python || true)"
-[ -n "$PY" ] || ui_fail "This installer needs Python 3 -- it merges the host hook files." \
-                        "Re-run without --no-deps, or install it and try again." \
-                        "On Windows note that the python.org installer leaves \"Add python.exe" \
-                        "to PATH\" unticked -- an installed but invisible Python looks the same."
-
+# Node first: the hook merges, the hooks and the checks run on it.
 dep_need "Node.js" "have node" "OpenJS.NodeJS.LTS" "node" "nodejs npm" || true
+NODE="$(mdl_find_node || true)"
+[ -n "$NODE" ] || ui_fail "This installer needs Node.js -- it merges the host hook files, and the" \
+                          "hooks, playwright-cli and the plugins run on it." \
+                          "Re-run without --no-deps, or install it and try again."
 # A dry run walks the whole chain even though npm was not really installed.
 if have npm || [ -n "${MDL_DEPS_DRY_RUN:-}" ]; then
   dep_apply "playwright-cli" "have playwright-cli" "npm install -g $PLAYWRIGHT_CLI_PACKAGE" || true

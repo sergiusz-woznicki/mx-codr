@@ -4,41 +4,35 @@
 # which Cursor auto-submits (loop_limit in .cursor/hooks.json caps repeats). Exit 0.
 set -uo pipefail
 
-# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
-mdl_find_python() {
-  local candidate
-  for candidate in python3 python py; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
-    printf '%s\n' "$candidate"
+# Prints a node that runs; inlined so the hook is self-contained (same as tests/portable.sh).
+mdl_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    printf 'node\n'
     return 0
-  done
-  # The python.org installer (also via winget) does not add Python to PATH; search its install dirs too.
-  local local_app="${LOCALAPPDATA:-}"
+  fi
+  # The Node.js installer (also via winget) puts node on PATH only for shells started after it.
+  local local_app="${LOCALAPPDATA:-}" candidate
   local_app="${local_app//\\//}"
-  for candidate in \
-      "$local_app/Programs/Python"/Python3*/python.exe \
-      "$local_app/Programs/Python/Launcher/py.exe" \
-      "/c/Program Files"/Python3*/python.exe \
-      "/c/Program Files (x86)"/Python3*/python.exe; do
+  for candidate in "/c/Program Files/nodejs/node.exe" "$local_app/Programs/nodejs/node.exe"; do
     [ -x "$candidate" ] || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
     printf '%s\n' "$candidate"
     return 0
   done
   return 1
 }
-PY="$(mdl_find_python || true)"
-PY="${PY:-python3}"
+NODE="$(mdl_find_node || true)"
+NODE="${NODE:-node}"
+# hook_tool.cjs holds the small jobs (read a field, wrap a message); installed one directory up
+# from this hook, in the bundle under checks/. An absolute path: the hook may cd into the project.
+HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/hook_tool.cjs"
+[ -f "$HOOK_TOOL" ] || HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/../checks" 2>/dev/null && pwd)/hook_tool.cjs"
 
 input="$(cat)"
 nothing() { printf '{}\n'; exit 0; }
 
 # A top-level value of the event payload, or "" when absent or unparsable.
 payload_field() {
-  printf '%s' "$input" | "$PY" -c 'import json,sys
-try: print(json.load(sys.stdin).get(sys.argv[1]) or "")
-except Exception: print("")' "$1" 2>/dev/null
+  printf '%s' "$input" | "$NODE" "$HOOK_TOOL" get "$1" 2>/dev/null
 }
 
 conversation="$(payload_field conversation_id)"
@@ -58,10 +52,7 @@ repo_root="$(cat "$marker" 2>/dev/null || true)"
 [ -n "$repo_root" ] && [ -d "$repo_root" ] || nothing
 # Ignore markers from another checkout: the project must be one of this window's workspace roots.
 # Older Cursor versions send no workspace_roots; then the marker is trusted, as before.
-roots="$(printf '%s' "$input" | "$PY" -c 'import json,sys
-try: roots = json.load(sys.stdin).get("workspace_roots") or []
-except Exception: roots = []
-print("\n".join(r for r in roots if isinstance(r, str)))' 2>/dev/null)"
+roots="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" roots 2>/dev/null)"
 if [ -n "$roots" ]; then
   matched=""
   while IFS= read -r root; do
@@ -73,7 +64,7 @@ fi
 cd "$repo_root" || nothing
 
 say() {  # say "<text>" -- ask Cursor to submit this as the next message
-  printf '%s' "$1" | "$PY" -c 'import json,sys; print(json.dumps({"followup_message": sys.stdin.read().strip()}))'
+  printf '%s' "$1" | "$NODE" "$HOOK_TOOL" wrap followup_message
   exit 0
 }
 

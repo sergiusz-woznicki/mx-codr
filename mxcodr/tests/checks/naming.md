@@ -1,4 +1,4 @@
-# naming -- microflows and nanoflows (`check_mdl.py --skill naming`, skill `naming-and-captions`)
+# naming -- microflows and nanoflows (`check_mdl.cjs --skill naming`, skill `naming-and-captions`)
 
 One line per code the `naming` step can print. Every code blocks DONE unless its line
 says "warning". The finding already says what to change; this says why. Not `tests/gate/*.sh`.

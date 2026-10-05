@@ -21,7 +21,7 @@
 # Env (all optional):
 #   BASE_URL                               app address (default http://localhost:8081)
 #   APP_DIR, MPR                           project folder and .mpr (default: folder above tests/)
-#   MXCLI, PY                              mxcli and Python (default: tests/portable.sh)
+#   MXCLI, NODE                            mxcli and Node (default: tests/portable.sh)
 #   TEST_USER, TEST_PASSWORD, CREDENTIALS  sign-in (default: tests/credentials.env)
 #   MODULE                                 module for oql_count/oql_value (default: the
 #                                          test's `# covers:` module, then MDL_DEFAULT_MODULE)
@@ -42,7 +42,7 @@ BASE_URL="${BASE_URL:-http://localhost:8081}"
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 _MDL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MPR="${MPR:-$(cd "$APP_DIR" && ls -1 *.mpr | head -1)}"
-# MXCLI and PY come from portable.sh unless already set.
+# MXCLI and NODE come from portable.sh unless already set.
 PORTABLE_APP_DIR="$APP_DIR"
 . "$(dirname "${BASH_SOURCE[0]}")/portable.sh"
 

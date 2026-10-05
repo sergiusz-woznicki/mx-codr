@@ -35,58 +35,50 @@ case "$input" in *harness.env*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*s
   *auth.json*|*MENDIX_PAT*|*env*|*set*|*export*|*declare*|*marketplace-login-needed*) ;;
   *) exit 0 ;; esac
 
-# Prints the first Python that actually runs (Windows may have only a Store stub); inlined so the hook is self-contained.
-mdl_find_python() {
-  local candidate
-  for candidate in python3 python py; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
-    printf '%s\n' "$candidate"
+# Prints a node that runs; inlined so the hook is self-contained (same as tests/portable.sh).
+mdl_find_node() {
+  if command -v node >/dev/null 2>&1; then
+    printf 'node\n'
     return 0
-  done
-  # The python.org installer (also via winget) does not add Python to PATH; search its install dirs too.
-  local local_app="${LOCALAPPDATA:-}"
+  fi
+  # The Node.js installer (also via winget) puts node on PATH only for shells started after it.
+  local local_app="${LOCALAPPDATA:-}" candidate
   local_app="${local_app//\\//}"
-  for candidate in \
-      "$local_app/Programs/Python"/Python3*/python.exe \
-      "$local_app/Programs/Python/Launcher/py.exe" \
-      "/c/Program Files"/Python3*/python.exe \
-      "/c/Program Files (x86)"/Python3*/python.exe; do
+  for candidate in "/c/Program Files/nodejs/node.exe" "$local_app/Programs/nodejs/node.exe"; do
     [ -x "$candidate" ] || continue
-    "$candidate" -c 'import json,sys' >/dev/null 2>&1 || continue
     printf '%s\n' "$candidate"
     return 0
   done
   return 1
 }
-PY="$(mdl_find_python || true)"
-if [ -z "$PY" ]; then
-  # Without Python nothing below can read the call. Everything passes except a call that names
+NODE="$(mdl_find_node || true)"
+if [ -z "$NODE" ]; then
+  # Without Node nothing below can read the call. Everything passes except a call that names
   # harness.env, the file whose values the harness runs: that one is not waved through unread.
   case "$input" in
     *harness.env*)
-      echo "Blocked: this call names tests/harness.env and the guard cannot read it (no working Python found). tests/harness.env belongs to the person; ask them to make the change." >&2
+      echo "Blocked: this call names tests/harness.env and the guard cannot read it (no node found). tests/harness.env belongs to the person; ask them to make the change." >&2
       exit 2 ;;
   esac
   exit 0
 fi
 
-# The decision is checks/guard_harness.py, installed one directory up from this hook (in the
+# The decision is checks/guard_harness.cjs, installed one directory up from this hook (in the
 # bundle: beside it, under checks/). Without it nothing here can read the call: the same answer
-# as without Python.
-guard_py=""
-for candidate in "$(dirname "$0")/../guard_harness.py" "$(dirname "$0")/../checks/guard_harness.py"; do
-  [ -f "$candidate" ] && { guard_py="$candidate"; break; }
+# as without Node.
+guard_js=""
+for candidate in "$(dirname "$0")/../guard_harness.cjs" "$(dirname "$0")/../checks/guard_harness.cjs"; do
+  [ -f "$candidate" ] && { guard_js="$candidate"; break; }
 done
-if [ -z "$guard_py" ]; then
+if [ -z "$guard_js" ]; then
   case "$input" in
     *harness.env*)
-      echo "Blocked: this call names tests/harness.env and the guard cannot read it (tools/mdl-checks/guard_harness.py is missing; re-run the installer). tests/harness.env belongs to the person." >&2
+      echo "Blocked: this call names tests/harness.env and the guard cannot read it (tools/mdl-checks/guard_harness.cjs is missing; re-run the installer). tests/harness.env belongs to the person." >&2
       exit 2 ;;
   esac
   exit 0
 fi
-reason="$(printf '%s' "$input" | "$PY" "$guard_py" 2>/dev/null)"
+reason="$(printf '%s' "$input" | "$NODE" "$guard_js" 2>/dev/null)"
 [ -n "$reason" ] || exit 0
 what="${reason%%	*}"; path="${reason#*	}"
 

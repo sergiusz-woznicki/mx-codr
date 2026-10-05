@@ -113,7 +113,7 @@ fetches what is missing, and tells you plainly about anything it could not do.
 | **Your Mendix app** | Creates one with `mxcli new` if the folder has none (Mendix 11.12.1 unless you set `MX_VERSION`) |
 | **mxcli** | Downloads the one mxcli release the harness works with (`mxcodr/MXCLI_TESTED`, now v0.24.0), checksum-verified, and offers to swap any other `./mxcli`, newer ones too; a new mxcli release is adopted only after the harness reads it |
 | **Docker** | Only in Docker mode: installs Docker Desktop when missing and waits for it; with WSL off it says so at once |
-| **Python, Node, Playwright and its browser** | Installs the missing ones — the checkers and browser tests run on them |
+| **Node, Playwright and its browser** | Installs the missing ones — the hooks, the checkers and the browser tests run on them |
 | **MxBuild** | Downloads the one for your Mendix version, so `mx check` runs |
 | **PostgreSQL** | Local mode (the default): sets it up |
 | **Skills, lint rules, checkers, hooks** | Puts them where each of the five agents looks for them |
@@ -165,7 +165,7 @@ agent polishing after DONE.
 a broken `mxcli exec`, the gate, the agent trying to stop) and watch which file calls which, with
 the exact text each step puts into the agent's context. Open it in a browser.
 
-Nothing in this harness is a tool you operate. There is no Python script to invoke,
+Nothing in this harness is a tool you operate. There is no script to invoke,
 no checker to remember the arguments of, no order to run things in. After
 `install.sh`, every piece is found and used by the agent on its own:
 
@@ -178,7 +178,7 @@ no checker to remember the arguments of, no order to run things in. After
 | `check_mdl.py`, `check_test_coverage.py`, `check_layout.py` | the skills that need them name the exact command; the gate runs them too |
 | The gate | host hooks fire it, and the `test-first-delivery` skill tells the agent to |
 
-The Python checkers exist because some rules cannot be expressed as lint rules —
+The checkers (Node) exist because some rules cannot be expressed as lint rules —
 activity captions are not in the model catalog, test coverage means reading `tests/`
 off disk, and the layout rules read whole pages together with the navigation. They are
 an implementation detail of those rules, installed at `tools/mdl-checks/` so every host
@@ -205,8 +205,7 @@ and then working with your agent as usual.
 | **Mendix Studio Pro** or a cached mxbuild | `mx check` validates the model; on Windows only Studio Pro |
 | **PostgreSQL** | the app's database, and a separate `<project>_test` one |
 | **bash** | the harness is shell scripts — Git Bash on Windows |
-| **Python 3** | for the checkers the gate and the agent call; you never invoke it |
-| **Node + playwright-cli** | the browser tests |
+| **Node + playwright-cli** | the hooks, the checkers the gate calls, and the browser tests; no Python is needed |
 | **A JDK** | matching the Mendix version; Studio Pro installs one |
 | **Docker** | only if you choose Docker mode |
 
@@ -240,7 +239,7 @@ colours.
 
 ### Windows
 
-`bootstrap.ps1` asks for the project folder first, installs Git for Windows, Python and
+`bootstrap.ps1` asks for the project folder first, installs Git for Windows and
 Node with winget, then runs `install.sh`. Run it as administrator: winget
 needs it.
 
@@ -252,8 +251,8 @@ get it. With several versions installed it reports the newest. The app is create
 mxcli's first build, which hangs on Windows; the first gate run builds it.
 While the app is created the bar keeps moving and shows the elapsed time, so a silent
 build does not look like a freeze.
-The gate reads Python's `\r\n` output as plain lines, so an app with two modules gets
-its coverage checked, and it never calls a database lock stale while the app runs.
+The checks run on Node, which writes plain `\n` lines on Windows too, and the gate never calls a
+database lock stale while the app runs.
 
 ### What lands in the project, and who reads it
 
@@ -264,7 +263,7 @@ its coverage checked, and it never calls a database lock stale while the app run
 .claude/rules/               the always-loaded rule and the syntax digest (Cursor's copies in .cursor/rules/,
                              Pi gets it through its extension)
 .claude/lint-rules/          found by `mxcli lint` with nothing to register
-tools/mdl-checks/            the Python checkers the skills cite
+tools/mdl-checks/            the checkers the skills cite (Node, .cjs)
 tests/                       the harness scripts, plus tests/harness.env
 .claude/settings.local.json  the hooks (Cursor and Codex get their own; OpenCode and Pi
                              a plugin in .opencode/plugin/ and .pi/extensions/)
@@ -340,7 +339,7 @@ bash tests/diagnose.sh                # why is the app not answering
 A failing test always says why, on one line: one that stops on a silent command names its line and command.
 The precheck also covers MDL given with `mxcli -c`, and tells errors already in the model from the script's own.
 An exec whose script a step in the same command writes (an edit, a `mv`, a redirect) is refused: the precheck runs before the command and would check the old file.
-When a trial-licence runtime runs out of sessions ("Maximum number of sessions exceeded"), the gate names that as the cause of the failed sign-ins instead of the features, and says `--restart` clears them.
+When a trial-licence runtime runs out of sessions ("Maximum number of sessions exceeded"), the gate names that as the cause of the failed sign-ins instead of the features, and says `--restart` clears them. Only a refusal logged during this run counts: an old one left in the log no longer blames later runs.
 A hint under a build error follows the error's text, not only its code: CE7247 is a reserved name or an invalid URL, and each gets its own advice.
 When the app needs a Marketplace module and mxcli is not logged in, the harness stops the session with a short instruction (create a token, run `./mxcli auth login` in your own terminal) and holds every build back until you have; `MDL_MARKETPLACE_LOGIN=report` in tests/harness.env is for unattended runs, or when you would rather skip the module. Only a real exec starts the wait, never a precheck the agent runs by hand. The token itself stays out of the session.
 A blocked exec says when the command's earlier steps (an edit) did not run either; a scenario opens the browser when none is open; `# covers:` names may be separated by commas or spaces.
@@ -433,7 +432,7 @@ host. A change to what the harness says or checks is one edit.
 `mxcodr/` is a copy of files that live in the harness repo — `mxcodr/README.md` has the
 table of which file comes from where. Edit it there, not here.
 
-The long scripts are split into short parts: `install.sh` sources `install/*.sh` (whose Python is
-in `install/hosts/`), `tests/lib.sh`
-sources `tests/lib/*.sh` and `checks/check_layout.py` imports its rules from
+The long scripts are split into short parts: `install.sh` sources `install/*.sh` (whose small jobs
+are in `install/install_tool.cjs` and `install/hosts/`), `tests/lib.sh`
+sources `tests/lib/*.sh` and `checks/check_layout.cjs` requires its rules from
 `checks/layout_rules/`. The map of what is where is under "What is in here" in `mxcodr/README.md`.

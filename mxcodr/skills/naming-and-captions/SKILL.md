@@ -90,7 +90,7 @@ yet named — find the business operation, do not type the default out by hand.
 
 Escape a single quote by doubling it: `@caption 'Load the customer''s invoices'`.
 
-`check_mdl.py --skill naming` fails on a missing action `@caption` and on a
+`check_mdl.cjs --skill naming` fails on a missing action `@caption` and on a
 caption that is still the generated default. The gate runs it over every microflow
 and nanoflow in the app's own modules on every full run (the `naming:` line of its
 summary), so there is nothing to run by hand after a flow lands; the command below is
@@ -229,7 +229,7 @@ can see them; the check reads the flow back out of the `.mpr`:
 
 ```bash
 ./mxcli -p app.mpr -c "describe microflow Module.Flow" > /tmp/flow.mdl
-python3 tools/mdl-checks/check_mdl.py /tmp/flow.mdl --skill naming
+node tools/mdl-checks/check_mdl.cjs /tmp/flow.mdl --skill naming
 ```
 
 Exit 0 is clean. It reports placeholder names, type-echo names, a caption that
@@ -237,7 +237,7 @@ restates its expression or is not a question, a retrieve/create/change/commit/
 delete/call/show-page/`set` without a business-operation `@caption` or with a
 Mendix default caption, `@caption` on a loop and a loop without `@annotation`.
 Canvas geometry is not checked — mxcli draws it. (In this repo the checker is
-`tests/skills/check_mdl.py`; `tools/mdl-checks/` is where `install.sh` puts it in an
+`mxcodr/checks/check_mdl.cjs`; `tools/mdl-checks/` is where `install.sh` puts it in an
 installed project.)
 
 ## Where the activities go

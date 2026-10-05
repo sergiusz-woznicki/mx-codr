@@ -47,7 +47,6 @@ DB_HOST="${MDL_DB_HOST:-127.0.0.1:5432}"
 DB_NAME="${MDL_DB_NAME:-$(basename "$MPR" .mpr | tr '[:upper:]' '[:lower:]')}"
 DB_USER="${MDL_DB_USER:-mendix}"
 DB_PASSWORD="${MDL_DB_PASSWORD:-mendix}"
-PY="${PY:-$(mdl_find_python)}"
 
 # Fixed values, named here so they read as what they are.
 ADMIN_WAIT_SECONDS=90         # how long to wait for the admin API after starting java
@@ -119,19 +118,7 @@ build_deployment() {
 
 # --- 3. Point the built configuration at PostgreSQL ---
 point_config_at_postgres() {
-  "$PY" - "$APP_DIR" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$APP_PORT" <<'PY'
-import json, pathlib, sys
-app, host, name, user, password, port = sys.argv[1:7]
-p = pathlib.Path(app) / 'deployment' / 'model' / 'config.json'
-cfg = json.loads(p.read_text())
-cfg['Configuration'].update({
-    'DatabaseType': 'PostgreSQL', 'DatabaseHost': host,
-    'DatabaseName': name, 'DatabaseUserName': user,
-    'DatabasePassword': password,
-    'ApplicationRootUrl': 'http://localhost:%s/' % port,
-})
-p.write_text(json.dumps(cfg, indent=2))
-PY
+  "$NODE" "$MDL_SHELL_HELPERS" point-config "$APP_DIR" "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" "$APP_PORT"
 }
 
 # --- 4. Bundle the web client ---
@@ -185,23 +172,8 @@ wait_for_admin_api() {
 # --- 6. Configure and start through the admin API ---
 # BasePath/RuntimePath have no defaults; json.dumps escapes Windows backslashes.
 config_json() {
-  "$PY" - "$(cygpath -w "$DEPLOYMENT")" "$(cygpath -w "$RUNTIME/runtime")" "$APP_PORT" \
-        "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD" <<'PY'
-import json, sys
-base, runtime, port, host, name, user, password = sys.argv[1:8]
-print(json.dumps({"action": "update_configuration", "params": {
-    "BasePath": base,
-    "RuntimePath": runtime,
-    "DTAPMode": "D",
-    "DatabaseType": "PostgreSQL", "DatabaseHost": host,
-    "DatabaseName": name,
-    "DatabaseUserName": user, "DatabasePassword": password,
-    "ApplicationRootUrl": "http://localhost:%s/" % port,
-    "MicroflowConstants": {
-        "FeedbackModule.LocalStorageKey": "mxfeedback-form-data",
-        "FeedbackModule.ClientIdentifier": "Feedback Module 4.0.2"},
-}}))
-PY
+  "$NODE" "$MDL_SHELL_HELPERS" config-json "$(cygpath -w "$DEPLOYMENT")" "$(cygpath -w "$RUNTIME/runtime")" "$APP_PORT" \
+        "$DB_HOST" "$DB_NAME" "$DB_USER" "$DB_PASSWORD"
 }
 
 configure_runtime() {

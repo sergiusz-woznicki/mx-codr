@@ -19,7 +19,7 @@ for arg in "$@"; do
       printf '                   when it holds a *.mpr). Never the mx-codr folder itself\n'
       printf '  --no-app         never create a Mendix app; require one to be there already\n'
       printf '  --no-deps        only report missing prerequisites. By default the missing ones\n'
-      printf '                   (Python, Node, playwright-cli, its browser, mxcli, MxBuild) are\n'
+      printf '                   (Node, playwright-cli, its browser, mxcli, MxBuild) are\n'
       printf '                   installed with this machine'"'"'s package manager, and what is\n'
       printf '                   already there is left alone. Docker is installed when missing\n'
       printf '                   either way; the JDK is only reported.\n\n'
@@ -124,8 +124,8 @@ fi
 if [ "$IS_WINDOWS" = "1" ] && [ -z "$(studio_pro_versions)" ] && [ -z "${MDL_SKIP_STUDIO_PRO_CHECK:-}" ]; then
   wanted_mx="${MX_VERSION:-}"
   mpr_file="$(find "$APP" -maxdepth 1 -name '*.mpr' -print -quit 2>/dev/null)"
-  if [ -z "$wanted_mx" ] && [ -n "$mpr_file" ] && [ -n "${PY:-}" ]; then
-    wanted_mx="$("$PY" -c 'import sqlite3,sys; print(sqlite3.connect(sys.argv[1]).execute("select _ProductVersion from _MetaData").fetchone()[0])' "$mpr_file" 2>/dev/null || true)"
+  if [ -z "$wanted_mx" ] && [ -n "$mpr_file" ] && [ -n "${NODE:-}" ]; then
+    wanted_mx="$("$NODE" "$SRC/install/install_tool.cjs" mpr-version "$mpr_file" 2>/dev/null || true)"
   fi
   wanted_mx="${wanted_mx:-$DEFAULT_MX_VERSION}"
   ui_fail "Mendix Studio Pro is not installed. Install it first, then run the installer again." \

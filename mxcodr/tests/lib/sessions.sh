@@ -61,19 +61,7 @@ release_session() {
 _licence_refusal() {
   [ -f "$RUNTIME_LOG" ] || return 1
   tail -400 "$RUNTIME_LOG" 2>/dev/null | grep "Maximum number of sessions exceeded" | tail -1 \
-    | "$PY" -c "
-import datetime, re, sys
-line = sys.stdin.read().strip()
-if not line:
-    sys.exit(1)
-stamp = re.match(r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', line)
-if not stamp:
-    sys.exit(1)
-when = datetime.datetime.strptime(stamp.group(1), '%Y-%m-%d %H:%M:%S')
-if (datetime.datetime.now() - when).total_seconds() > 120:
-    sys.exit(1)
-print('the runtime refused a session: Maximum number of sessions exceeded (developer/trial licence caps concurrent sessions). Close leftover test browsers and developer tabs, or restart the runtime')
-"
+    | "$NODE" "$MDL_SHELL_HELPERS" licence-refusal
 }
 
 # _runtime_errors_since <YYYY-MM-DD HH:MM:SS> -- the runtime's ERROR lines logged since then, each
