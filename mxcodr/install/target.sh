@@ -23,7 +23,9 @@ for arg in "$@"; do
       printf '                   installed with this machine'"'"'s package manager, and what is\n'
       printf '                   already there is left alone. Docker is installed when missing\n'
       printf '                   either way; the JDK is only reported.\n\n'
-      printf '  MX_VERSION=%s  APP_NAME=<name>   env overrides when an app is created\n' "$DEFAULT_MX_VERSION"
+      printf '  MX_VERSION=<x.y.z>  APP_NAME=<name>   env overrides when an app is created. Without\n'
+      printf '                   MX_VERSION a Mac with several Studio Pro installs always asks which\n'
+      printf '                   (the newest without a terminal), Windows takes the newest; %s with none\n' "$DEFAULT_MX_VERSION"
       printf '  MDL_DEPS_DRY_RUN=1                    print the install commands, run none\n'
       printf '  MDL_ASSUME_YES=1                      answer the prerequisite prompts with yes\n'
       printf '  MDL_NO_UPDATE_CHECK=1                 do not look online for a newer mxcli\n'
@@ -147,6 +149,8 @@ if [ "$mpr_count" = "0" ] && [ "$CREATE_APP" = "0" ]; then
           "Point this at a Mendix project, or drop --no-app to have one created here."
 fi
 
+# A new app: its Mendix version, picked from the Studio Pro installs on a Mac (studio_pro.sh).
+[ "$mpr_count" = "0" ] && choose_mx_version
 printf '  %s%s target%s %s  %s(%s)%s\n\n' "$C_GREY" "$I_BOX" "$C_RESET" "$APP" "$C_GREY" "$(project_state "$APP")" "$C_RESET"
 # A copy of the bundle goes into the project, so it can be re-run from there.
 if [ "$SRC_REAL" != "$(cd "$APP" && pwd -P)/mxcodr" ]; then
@@ -160,4 +164,5 @@ choose_run_mode
 [ "$mpr_count" = "0" ] && choose_theme
 
 # NOTE: there are 12 ui_done steps (13 with a new app), so these totals are one short.
-if [ "$mpr_count" = "0" ]; then ui_plan 14; else ui_plan 13; fi
+# A new app adds its creation; an existing one the refresh of mxcli's own skills (step_skills.sh).
+ui_plan 14

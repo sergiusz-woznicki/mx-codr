@@ -723,7 +723,11 @@ function normpath(p) {
 
 // sys.stdout.write / print(): synchronous, \n also on Windows (Python wrote \r\n there, which
 // leaked a \r into every value a shell read back).
+// A checker that prints MDL advice sets a filter (mdl1_spelling.advice) that every write goes through.
+let outputFilter = null;
+function setOutputFilter(fn) { outputFilter = fn; }
 function write(text) {
+  if (outputFilter) text = outputFilter(text);
   const buf = Buffer.from(text, 'utf8');
   let at = 0;
   while (at < buf.length) {
@@ -739,5 +743,5 @@ function print(...items) { write(items.map(pyStr).join(' ') + '\n'); }
 module.exports = {
   WIN, strip, lstrip, rstrip, split, rsplit, splitlines, isSpace, readText, readStdin, readStdinBytes,
   pyStr, pyRepr, jsonDumps, compare, compareTuples, sorted, re, translate, Shlex, shlexSplit,
-  basename, dirname, join, exists, lexists, isdir, isfile, glob, iglob, fnmatchRegex, normpath, print, write,
+  basename, dirname, join, exists, lexists, isdir, isfile, glob, iglob, fnmatchRegex, normpath, print, write, setOutputFilter,
 };

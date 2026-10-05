@@ -5,6 +5,25 @@
 # Copies, not symlinks, so a plain clone of the app has the skills.
 SKILL_DIRS=(.claude/skills .agents/skills .ai-context/skills)
 
+# mxcli's own skills and bundled lint rules come from its binary. After ./mxcli changed (the
+# installer swaps it to MXCLI_TESTED), an existing project still held the old release's, which
+# teach the old MDL spelling (0.24 -> 0.25, 2026-10-05). `init --sync-skills` refreshes them and is
+# quiet when they are current; it leaves .claude/rules, settings.local.json and our lint rules
+# alone. A new app's `mxcli init` did this already.
+if [ -z "${created_app:-}" ] && [ -x "$APP/mxcli$EXE" ]; then
+  ui_begin "refreshing mxcli's own skills"
+  if (cd "$APP" && "./mxcli$EXE" init --sync-skills .) >> "$DEPS_LOG" 2>&1; then
+    ui_done "mxcli skills" "current for $("$APP/mxcli$EXE" --version 2>/dev/null | head -1 | sed 's/^mxcli version //')"
+  else
+    ui_done "mxcli skills" "not refreshed (./mxcli$EXE init --sync-skills . failed; see $DEPS_LOG)"
+  fi
+fi
+
+# organize-project was a harness skill until bundle 2026.10.05.6, when mxcli shipped its own under
+# the same name: the two overwrote each other on every install and sync. mxcli's stays; the copy an
+# older install left where mxcli writes none (.agents/skills, read by Codex and Pi) is ours to remove.
+rm -rf "$APP/.agents/skills/organize-project"
+
 ui_begin "installing skills"
 installed_skills=0
 for skill in "$SRC"/skills/*/; do

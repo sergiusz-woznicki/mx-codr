@@ -16,8 +16,15 @@ const { re } = py;
 const HEAD = re.compile(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?P<kind>view\s+|(?:non-)?persistent\s+)?` +
   String.raw`entity\s+(?P<name>\w+\.(?:"[^"]+"|\w+))`, 'i');
 // Names may be quoted (Orders."Order"): the heads and grants read them as the query's sources do.
-const GRANT = re.compile(String.raw`^\s*grant\s+(?P<role>[\w.]+)\s+on\s+(?P<entity>\w+\.(?:"[^"]+"|\w+))\s*\((?P<rights>[^)]*)\)` +
+// The rights may hold a member list, `(read (Number, Total), write (Total))`: one level of nested
+// brackets, so the `where` after them is read (2026-10-05: `[^)]*` stopped at the inner bracket and
+// a member-level rule with an XPath read as unconstrained).
+const GRANT = re.compile(String.raw`^\s*grant\s+(?P<role>[\w.]+)\s+on\s+(?P<entity>\w+\.(?:"[^"]+"|\w+))\s*\((?P<rights>(?:[^()]|\([^()]*\))*)\)` +
   String.raw`(?P<where>\s+where\s+')?`, 'i');
+// mxcli 0.25 (`mdl 1`) names the rights first and writes the XPath in [ ]:
+// `grant read *, write (A) on entity Shop.Order to Shop.Customer, Shop.Clerk where [ … ];`
+const GRANT_V1 = re.compile(String.raw`^\s*grant\s+(?P<rights>.+?)\s+on\s+entity\s+(?P<entity>\w+\.(?:"[^"]+"|\w+))\s+` +
+  String.raw`to\s+(?P<roles>[\w.]+(?:\s*,\s*[\w.]+)*)(?P<where>\s+where\s+\[)?`, 'i');
 const SOURCE = re.compile(String.raw`\b(?:from|join)\s+(?P<entity>\w+\.(?:"[^"]+"|\w+))`, 'i');
 
 const name = text => text.split('"').join('');
@@ -36,6 +43,18 @@ function read(lines) {
       if (inQuery) views.set(current, []);
       continue;
     }
+    const grantV1 = GRANT_V1.match(line);
+    if (grantV1) {
+      inQuery = false;
+      if (grantV1.group('rights').toLowerCase().includes('read')) {
+        for (const role of grantV1.group('roles').split(',').map(r => py.strip(r))) {
+          const key = keyOf(role, name(grantV1.group('entity')));
+          const constrained = Boolean(grantV1.group('where'));
+          rules.set(key, (rules.has(key) ? rules.get(key) : true) && constrained);
+        }
+      }
+      continue;
+    }
     const grant = GRANT.match(line);
     if (grant) {
       inQuery = false;
@@ -46,7 +65,9 @@ function read(lines) {
       }
       continue;
     }
-    if (py.strip(line) === '/') {    // the end of this entity: what follows is not its query
+    // The end of this entity: `/` under mxcli 0.24; mxcli 0.25 writes no `/`, and its view's
+    // query ends at the `);` that closes the definition. What follows is not its query.
+    if (py.strip(line) === '/' || py.strip(line) === ');') {
       inQuery = false;
       continue;
     }
@@ -115,5 +136,7 @@ function main(argv) {
   return out.length ? 1 : 0;
 }
 
+// Advice is printed in the spelling of the mxcli the harness is pinned to (mdl1_spelling.cjs).
+if (require.main === module) py.setOutputFilter(require('./mdl1_spelling.cjs').advice);
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
-module.exports = { HEAD, GRANT, SOURCE, read, findings, main };
+module.exports = { HEAD, GRANT, GRANT_V1, SOURCE, read, findings, main };

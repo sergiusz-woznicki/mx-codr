@@ -40,7 +40,7 @@ tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), preche
 .gitattributes    forces LF on *.sh, *.cjs, *.js and *.mdl — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
-skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
+skills/           5 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
 lint-rules/       3 × *.star — MOD001, REU001, UI001 — run by `mxcli lint`
 checks/           *.cjs + fixtures/ — the checks Starlark cannot express, all on Node:
                   gate_helpers.cjs for the gate's JSON and digests; check_layout.cjs is the
@@ -92,6 +92,70 @@ one detail is skipped. `$PY` is still set in `tests/portable.sh` for project tes
 the switch that call `"$PY"`; new tests read JSON with `field`/`oql_value` and do arithmetic with
 `awk` or `node -e`.
 
+## mxcli 0.25: the checks read `mdl 1`, the advice is written in it
+
+Bundle 2026.10.05.3 pins mxcli v0.25.0 (`MXCLI_TESTED`). From 0.25 `describe`, `-c` and `mxcli syntax`
+speak `mdl 1`: properties in `( )`, menu items as `menu item 'X' ( OnClick: …, Icon: … )`, `sign out`,
+grants as `grant read * on entity E to Role where [ … ]`, unnamed rows, columns and footers, no
+`@position`, `retrieve … first`. A script without a header is still read as `mdl 0`.
+
+- **Every parser reads both formats.** check_mdl reads the omitted default decision captions and
+  unnamed grid columns; check_layout passes `mdl 1` text through `layout_rules/mdl1.cjs`, which writes
+  it back in the 0.24 spelling the rules read; VIEW01, SCOPE01, script_overrides and split-entities
+  read the new grant order. On 0.24 text every output is byte-identical to before.
+- **Proof:** the same 30 models described by 0.24 and by 0.25 give the same findings, per rule and
+  document (`tools/dev/compare-formats.py` in the development repo, which runs the gate's own step
+  functions with each mxcli). The audit keeps three such pairs as fixtures and compares them.
+- **Advice in 0.25 spelling.** Every finding passes through `checks/mdl1_spelling.cjs` before it is
+  printed, so a fix the gate suggests parses under `mdl 1;` and without a header (each suggested
+  statement was checked with `mxcli check` both ways). `mdl-pitfalls.md`, the skills' examples
+  (`mxcli fmt --upgrade`), the rules and `tests/checks/` use the same spelling. mxcli 0.24 refuses
+  some of it: a project still on 0.24 is read correctly but advised in 0.25 spelling, and orient
+  says to swap its `./mxcli`.
+- **Caption baseline:** it records the mxcli version, so the move re-baselines instead of turning
+  every caption warning into an error.
+- **Fixed in 2026.10.05.4:** a member-level entity rule (`read (Number, Total) … where`) kept its
+  XPath unread: VIEW01 took it for unconstrained and SCOPE01 never counted the role as scoped (the
+  rights' pattern stopped at the inner bracket), in both formats. Now read: on the 30 projects VIEW01
+  names every source a role sees only partly, and 84 instead of 66 role/entity pairs count as
+  scoped. mxcli 0.25 describes microflows
+  about four times slower than 0.24 (1.5 s to 5.9 s for one module of InvoiceB2B); naming and layout
+  take a few seconds longer on large models.
+
+Verified on InvoiceB2B on macOS (gate DONE, 19/19 tests, after the installer swapped `./mxcli` to
+v0.25.0 with its checksum) and on the Windows demo app (same results as on 0.24: 12/12 tests,
+coverage 14/14, 4 PERF warnings, the same 38 layout failures).
+
+## Upgrading mxcli in an existing project
+
+`bash mxcodr/install.sh .` in a project swaps `./mxcli` for the release `MXCLI_TESTED` pins (it asks,
+or `MDL_ASSUME_YES=1`), checksum-verified, keeping the old binary beside it. Since 2026.10.05.5 it
+also runs `./mxcli init --sync-skills .` there, before it copies the harness's own skills: mxcli's
+skills and bundled lint rules come from its binary, and a project swapped from 0.24 to 0.25 kept the
+0.24 ones, which teach the old MDL spelling. The sync leaves `.claude/rules/`, `settings.local.json`
+and the harness's lint rules alone. A running `mxcli run --watch` still uses the old binary:
+`bash tests/gate.sh --restart`.
+
+## `organize-project` is mxcli's skill (2026.10.05.6)
+
+The harness shipped an `organize-project` skill; mxcli 0.25 ships one of the same name and nearly
+the same text, newer for 0.25 (`list impact of`, `task queue`, `mdl 1;` headers). The installer and
+`mxcli init --sync-skills` overwrote each other's copy. The harness no longer ships it:
+`module-structure` links to mxcli's in `.ai-context/skills/`, and the installer removes the copy an
+older install left in `.agents/skills/`, where mxcli writes none.
+
+## A Mac asks which Studio Pro a new app uses (2026.10.05.8)
+
+A new app on a Mac was always created at Mendix 11.12.1 (`DEFAULT_MX_VERSION`), whatever Studio
+Pro the machine had. The installer now lists the Studio Pro apps in `/Applications` and
+`~/Applications` that carry `Contents/modeler/mx` (the version comes from the app's name) and always asks
+which one to use when there are several, also under `MDL_ASSUME_YES`, which answers yes/no
+prompts and not this choice. `MX_VERSION` still decides without asking.
+
+Fixed in 2026.10.05.9: the menu read each version into `$version`, the installer's own variable
+for the bundle's version, so an install that showed the menu recorded `"version": ""` in
+`tools/mdl-checks/INSTALL.json` and the gate said "the harness installed here is ;".
+
 ## A session refusal is dated by the line it belongs to
 
 Bundle 2026.10.05.2. A trial-licence runtime logs a refused session as an exception whose stack
@@ -137,7 +201,7 @@ So the project's own instructions live where mxcli does not reach:
   own skills and an agent that follows that table never sees these.
 - **`.claude/settings.local.json`** — registers Claude's two hooks.
 - **`.codex/hooks.json`** — registers the Codex equivalents plus a `Stop` gate.
-  Codex discovers the six `.agents/skills/` copies automatically. Project hooks
+  Codex discovers the five `.agents/skills/` copies automatically. Project hooks
   require project trust and one review through `/hooks`; Codex asks again whenever
   a hook definition changes.
 - **`.opencode/plugin/mendix-mdl-harness.js` and `opencode.json`** — OpenCode has no
@@ -177,7 +241,7 @@ Claude settings and project-specific Codex hooks survive installation. The hook
 scripts live together in `tools/mdl-checks/hooks/`; separate PostToolUse adapters
 preserve the hosts' different output contracts.
 
-The six `.agents/skills/` copies are self-contained except for links to standard
+The five `.agents/skills/` copies are self-contained except for links to standard
 mxcli guidance such as `test-app` and `overview-pages`. Those links explicitly
 resolve through `.ai-context/skills/`, where `mxcli init` installs the canonical
 versions, instead of assuming Codex has duplicate sibling skills under `.agents/`.
@@ -824,10 +888,9 @@ a boot, one shot.
 
 ## Rebuilding after a source change
 
-Fifteen files here have a second copy in the repo: five skills in
-`.ai-context/skills/` and the three reference files of one of them, three lint rules in
-`.claude/lint-rules/`, and the naming and coverage checkers plus their two fixtures in
-`tests/skills/`. Both copies get edited,
+Thirteen files here have a second copy in the repo: four skills in
+`.ai-context/skills/` and the four reference files of one of them, three lint rules in
+`.claude/lint-rules/`, and the two checker fixtures in `tests/skills/fixtures/`. Both copies get edited,
 so a plain copy can go either way. One did: on 2026-09-13 four `mxcodr/` files were
 newer than their sources, and the copy block that used to be here would have rolled
 them back without a word.
@@ -908,7 +971,11 @@ the same question before its winget stage. It used to guess "the folder above th
 which was the clone itself when the repo was cloned.
 
 `--no-app` declines app creation; `--help` lists the arguments, `MX_VERSION` and
-`APP_NAME` override what gets created.
+`APP_NAME` override what gets created. Without `MX_VERSION` a Mac with several Studio Pro
+installs always asks which one the new app uses, `MDL_ASSUME_YES` included (the newest is the
+default; with no terminal the newest is taken and the installer says so); with one it takes that
+one, with none Mendix 11.12.1. Windows
+takes the newest installed.
 
 It never stops without saying why: an unexpected failure prints the file, line and command
 it stopped at.

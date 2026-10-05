@@ -340,7 +340,8 @@ layout_sign_out_inputs() {
     printf '%s %s\t' "$kind" "$target"
     "$MXCLI" -p "$MPR" --json -c "SHOW ACCESS ON $kind $target" 2>/dev/null | tr -d '\n\r'
     echo
-  done < <(grep -iE "^[[:space:]]*menu[[:space:]]+item[[:space:]]+'" "$WORK/navigation.mdl" \
+  # mxcli 0.25 writes an item's action as `OnClick: show page M.P` and may put it on its own line.
+  done < <(grep -iE "^[[:space:]]*menu[[:space:]]+item[[:space:]]+'|OnClick:" "$WORK/navigation.mdl" \
              | sed -E "s/^[[:space:]]*menu[[:space:]]+item[[:space:]]+'[^']*'//" \
              | grep -oiE "(page|microflow)[[:space:]]+[A-Za-z0-9_]+\.[A-Za-z0-9_]+" | sort -u) > "$WORK/menu-access.tsv"
   nav_args+=(--menu-access "$WORK/menu-access.tsv")

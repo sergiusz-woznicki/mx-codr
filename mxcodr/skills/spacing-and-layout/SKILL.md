@@ -18,9 +18,9 @@ images, checkboxes — Atlas puts them on one line, and that line *wraps* when t
 window narrows.
 
 ```
-actionbutton btnEdit   (Caption: 'Edit',   Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
-actionbutton btnDelete (Caption: 'Delete', Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
-actionbutton btnSend   (Caption: 'Send',   Action: ..., DesignProperties: ['Spacing': ['margin-bottom': 'S']])
+actionbutton btnEdit   (Caption: 'Edit',   Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+actionbutton btnDelete (Caption: 'Delete', Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+actionbutton btnSend   (Caption: 'Send',   Action: ..., DesignProperties: ('Spacing': ('margin-bottom': 'S')))
 ```
 
 Three measured failures, each from leaving part of that out:
@@ -78,8 +78,8 @@ layoutgrid pageGrid {
   row headerRow {
     column colTitle  (DesktopWidth: 8) { dynamictext heading (Content: 'Invoices', RenderMode: H2) }
     column colActions (DesktopWidth: 4) {
-      actionbutton btnNew   (Caption: 'New invoice',     Action: ..., DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']])
-      actionbutton btnReset (Caption: 'Reset demo data', Action: ..., DesignProperties: ['Spacing': ['margin-bottom': 'S']])
+      actionbutton btnNew   (Caption: 'New invoice',     Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+      actionbutton btnReset (Caption: 'Reset demo data', Action: ..., DesignProperties: ('Spacing': ('margin-bottom': 'S')))
     }
   }
   row gridRow { column col1 (DesktopWidth: 12) { datagrid invoiceGrid (...) { ... } } }
@@ -117,21 +117,21 @@ is a pop-up.
 ```sql
 create or modify page Module.Entity_NewEdit
 (
-  params: { $Entity: Module.Entity },
+  params: ( $Entity: Module.Entity ),
   title: 'Edit entity',
   layout: Atlas_Core.PopupLayout,
   PopupWidth: 600, PopupResizable: true
 )
 {
   layoutgrid formGrid {
-    row formRow {
-      column formCol (DesktopWidth: AutoFill) {
+    row {
+      column (DesktopWidth: AutoFill) {
         dataview dvEntity (DataSource: $Entity) {
           -- the entity's own inputs, one per line
-          footer formFooter {
-            actionbutton btnSave (Caption: 'Save', Action: SAVE_CHANGES CLOSE_PAGE, ButtonStyle: Primary,
-              DesignProperties: ['Spacing': ['margin-right': 'S']])
-            actionbutton btnCancel (Caption: 'Cancel', Action: CANCEL_CHANGES CLOSE_PAGE)
+          footer {
+            actionbutton btnSave (Caption: 'Save', Action: SAVE CHANGES CLOSE PAGE, ButtonStyle: Primary,
+              DesignProperties: ('Spacing': ('margin-right': 'S')))
+            actionbutton btnCancel (Caption: 'Cancel', Action: CANCEL CHANGES CLOSE PAGE)
           }
         }
       }
@@ -149,7 +149,7 @@ create or modify page Module.Entity_NewEdit
   (`Atlas_Core.Atlas_Default`).
 - **Opening it does not change.** The button or microflow that shows the page works the
   same for both; only the page's layout differs.
-- **Save and Cancel close it** (`CLOSE_PAGE`), and the page underneath shows the change
+- **Save and Cancel close it** (`close page`), and the page underneath shows the change
   without a reload.
 - **No `url:`** on a pop-up -- it is opened from a page, never navigated to.
 - `PopupWidth` / `PopupHeight` are optional (default 600 x 600) and case-sensitive.
@@ -164,17 +164,17 @@ ends with a **Log out** item, in every navigation profile those users reach. Wit
 it a user can only end the session by closing the browser.
 
 ```sql
-create or replace navigation Responsive
+create or modify navigation Responsive
   home page MyFirstModule.Home_Web
-  menu (
-    menu item 'Invoices' page Invoicing.Invoice_Overview icon Atlas_Core.Atlas_Filled.document;
-    menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;
-  )
+  {
+    menu item 'Invoices' ( OnClick: show page Invoicing.Invoice_Overview, Icon: Atlas_Core.Atlas_Filled.document )
+    menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )
+  }
 ;
 ```
 
-`sign_out` needs no page or microflow, and it is always the **last** item.
-`create or replace navigation` replaces the whole menu: `DESCRIBE NAVIGATION Responsive`
+`sign out` needs no page or microflow, and it is always the **last** item.
+`create or modify navigation` replaces the whole menu: `DESCRIBE NAVIGATION Responsive`
 first and keep the items already there.
 
 The gate's layout verdict fails (`NAV01`) while security is on and no menu, page or
@@ -194,15 +194,15 @@ only its own. What a role can open is page access; where it lands is its home pa
 grant view on page Sales.Order_List to Sales.Employee;
 grant view on page Sales.Cust_MyOrders to Sales.Customer;
 
-create or replace navigation Responsive
+create or modify navigation Responsive
   home page Sales.Order_List
   home page Sales.Order_List for Employee
   home page Sales.Cust_MyOrders for CustomerPortal
-  menu (
-    menu item 'Orders' page Sales.Order_List icon Atlas_Core.Atlas_Filled."shopping-cart";
-    menu item 'My orders' page Sales.Cust_MyOrders icon Atlas_Core.Atlas_Filled.document;
-    menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;
-  )
+  {
+    menu item 'Orders' ( OnClick: show page Sales.Order_List, Icon: Atlas_Core.Atlas_Filled."shopping-cart" )
+    menu item 'My orders' ( OnClick: show page Sales.Cust_MyOrders, Icon: Atlas_Core.Atlas_Filled.document )
+    menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )
+  }
 ;
 ```
 
@@ -248,9 +248,9 @@ Once users sign in, the menu also carries the Administration module's own accoun
 Nothing needs building, and nothing in the Marketplace module changes:
 
 ```sql
-    menu item 'Users' page Administration.Account_Overview icon Atlas_Core.Atlas_Filled."user-neutral-shield";
-    menu item 'My account' microflow Administration.ManageMyAccount icon Atlas_Core.Atlas_Filled.user;
-    menu item 'Log out' sign_out icon Atlas_Core.Atlas_Filled.logout;
+    menu item 'Users' ( OnClick: show page Administration.Account_Overview, Icon: Atlas_Core.Atlas_Filled."user-neutral-shield" )
+    menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount, Icon: Atlas_Core.Atlas_Filled.user )
+    menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )
 ```
 
 - **Users** (`Account_Overview`) is user management: create accounts, reset passwords,
@@ -272,13 +272,13 @@ Every `actionbutton` and `linkbutton`, on a page or in a snippet, carries an ico
 shows what it does, from `Atlas_Core.Atlas_Filled`:
 
 ```sql
-actionbutton btnSave (Caption: 'Save', Action: SAVE_CHANGES CLOSE_PAGE,
+actionbutton btnSave (Caption: 'Save', Action: save changes close page,
   Icon: 'Atlas_Core.Atlas_Filled.floppy-disk', ButtonStyle: Primary)
 ```
 
 | The button | Icon |
 |---|---|
-| Back (`close_page`) | `chevron-left` |
+| Back (`close page`) | `chevron-left` |
 | Save | `floppy-disk` |
 | Cancel, Close | `remove` |
 | Delete, Remove, Discard | `trash-can` |
@@ -325,14 +325,14 @@ the Back button (where there is one) on the left of the same row. Clicking it op
 ```sql
 /** Who is signed in, as one line for the page header. */
 create or modify non-persistent entity Shop.SignedInUser ( Label: String(200) );
-grant Shop.User on Shop.SignedInUser (read *);      -- every role that signs in
+grant read * on entity Shop.SignedInUser to Shop.User;      -- every role that signs in
 
 /** The signed-in user's e-mail, or their user name when the account has none. */
 create or modify microflow Shop.DS_SignedInUser ()
 returns Shop.SignedInUser as $SignedInUser
 begin
   @caption 'Find the signed-in account'
-  retrieve $Account from Administration.Account where [id = '[%CurrentUser%]'] limit 1;
+  retrieve $Account from Administration.Account where [id = '[%CurrentUser%]'] first;
   declare $Label String = $Account/Name;
   @caption 'Has an e-mail address?'
   if $Account/Email != empty and $Account/Email != '' then
@@ -348,8 +348,8 @@ grant execute on microflow Shop.DS_SignedInUser to Shop.User;
 
 create or modify snippet Shop.SNIPPET_CurrentUser {
   dataview dvCurrentUser (DataSource: microflow Shop.DS_SignedInUser) {
-    linkbutton lnkCurrentUser (Caption: '{1}', CaptionParams: [{1} = Label],
-      Icon: 'Atlas_Core.Atlas_Filled.user', Action: microflow Administration.ManageMyAccount)
+    linkbutton lnkCurrentUser (Caption: '{1}', CaptionParams: ({1} = Label),
+      Icon: 'Atlas_Core.Atlas_Filled.user', Action: call microflow Administration.ManageMyAccount)
   }
 }
 ```
@@ -361,20 +361,20 @@ Then every page opens with one row. The row, not the snippet, decides where the 
   layoutgrid pageGrid {
     row rowTop {
       column colTop (DesktopWidth: 12) {
-        container ctPageTop (DesignProperties: ['Flex container': 'Horizontal (row)',
-            'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center', 'Spacing': ['margin-bottom': 'M']]) {
-          actionbutton btnBack (Caption: 'Back', Action: CLOSE_PAGE, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
+        container ctPageTop (DesignProperties: ('Flex container': 'Horizontal (row)',
+            'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center', 'Spacing': ('margin-bottom': 'M'))) {
+          actionbutton btnBack (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
           snippetcall scCurrentUser (Snippet: Shop.SNIPPET_CurrentUser)
         }
-        dynamictext heading (Content: 'Order', RenderMode: H1, DesignProperties: ['Spacing': ['margin-bottom': 'M']])
+        dynamictext heading (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
       }
     }
     -- the page's other rows follow here, in the same grid
   }
 
   -- any other page: the user on the right, the same way inside the grid
-        container ctPageTop (DesignProperties: ['Flex container': 'Horizontal (row)',
-            'Align items X': 'Right', 'Align items Y': 'Center', 'Spacing': ['margin-bottom': 'M']]) {
+        container ctPageTop (DesignProperties: ('Flex container': 'Horizontal (row)',
+            'Align items X': 'Right', 'Align items Y': 'Center', 'Spacing': ('margin-bottom': 'M'))) {
           snippetcall scCurrentUser (Snippet: Shop.SNIPPET_CurrentUser)
         }
 ```
@@ -393,7 +393,7 @@ The gate fails `USER01` for every page that does not start with the snippet.
 
 ## Back, top left, on every page you navigate to
 
-A page that another page or a microflow opens (`show_page`, `show page`) starts with a
+A page that another page or a microflow opens (`show page`, `show page`) starts with a
 **Back** button, top left, above its heading. Without one, the only way back is the
 browser's own button or the menu, and a detail page reached from a list becomes a dead
 end — a Pi session built three of those. A menu page or a home page needs none, even when a
@@ -401,22 +401,22 @@ microflow shows it again after an action: the menu is its way back.
 
 ```sql
 create or modify page Sales.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atlas_Default,
-  Params: { $Order: Sales.Order }) {
+  Params: ( $Order: Sales.Order )) {
   layoutgrid pageGrid {
-    row row1 {
-      column col1 (DesktopWidth: 12) {
-        actionbutton btnBack (Caption: 'Back', Action: CLOSE_PAGE,
+    row {
+      column (DesktopWidth: 12) {
+        actionbutton btnBack (Caption: 'Back', Action: CLOSE PAGE,
           Icon: 'Atlas_Core.Atlas_Filled.chevron-left',
-          DesignProperties: ['Spacing': ['margin-bottom': 'M']])
-        dynamictext h (Content: 'Order', RenderMode: H1, DesignProperties: ['Spacing': ['margin-bottom': 'M']])
+          DesignProperties: ('Spacing': ('margin-bottom': 'M')))
+        dynamictext h (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
       }
     }
   }
 }
 ```
 
-- `CLOSE_PAGE` returns to the page the user came from, whichever that was — a list, a
-  dashboard, another detail page. Never a `show_page` back to a fixed page.
+- `close page` returns to the page the user came from, whichever that was — a list, a
+  dashboard, another detail page. Never a `show page` back to a fixed page.
 - The icon is always the left chevron, `Atlas_Core.Atlas_Filled.chevron-left`.
 - It is the page's **first** widget, so it sits top left above the heading.
 - A pop-up (`Atlas_Core.PopupLayout`) needs none: it closes with its own X.
@@ -433,9 +433,9 @@ In MDL that is a `controlbar` inside the `datagrid`, after the columns:
 ```sql
 datagrid dgOrders (DataSource: database from Sales.Order, Selection: single) {
   column colNumber (Attribute: Number, Caption: 'Number')
-  controlbar ctbOrders {
-    actionbutton btnNew (Caption: 'New order', Action: microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add')
-    actionbutton btnPaid (Caption: 'Mark paid', Action: microflow Sales.ACT_Order_MarkPaid(Order: $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark')
+  controlbar {
+    actionbutton btnNew (Caption: 'New order', Action: call microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add')
+    actionbutton btnPaid (Caption: 'Mark paid', Action: call microflow Sales.ACT_Order_MarkPaid(Order: $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark')
   }
 }
 ```
@@ -456,9 +456,9 @@ inside it:
 ```sql
 container ctCancelNotice (Class: 'alert alert-danger',
   Visible: [$currentObject/Status = Sales.OrderStatus.Cancelled],
-  DesignProperties: ['Spacing': ['margin-bottom': 'M']]) {
+  DesignProperties: ('Spacing': ('margin-bottom': 'M'))) {
   dynamictext txtCancelNotice (Content: 'This order was cancelled. Reason: {1}',
-    ContentParams: [{1} = CancelReason])
+    ContentParams: ({1} = CancelReason))
 }
 ```
 
@@ -514,8 +514,8 @@ layout: PASS  0 failure(s) over 6 page(s)
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
 `SPACE03` | error | widgets on one line disagreeing on vertical margins (misaligned), or none carrying `margin-bottom` (wraps into the row above) |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
-`NAV01` | error | project security is on, a navigation menu has no `sign_out` item, and no page or snippet has a sign-out button |
-`NAV02` | warning | the `sign_out` item is not the last item of its menu |
+`NAV01` | error | project security is on, a navigation menu has no `sign out` item, and no page or snippet has a sign-out button |
+`NAV02` | warning | the `sign out` item is not the last item of its menu |
 `GRID01` | error | a grid filter sits in a column with no `Attribute:` and has none of its own: it renders "Unable to get filter store" and filters nothing |
 `GRID02` | error | a button outside a data grid changes the rows it shows; it goes in the grid's `controlbar` |
 `NAV03` | error | project security is on, and a role's home page (`home page X for Role`) is not in the menu |
@@ -528,7 +528,7 @@ layout: PASS  0 failure(s) over 6 page(s)
 `ICON01` | error | a button (`actionbutton`, `linkbutton`) without an icon; the message suggests one from its action and caption |
 `LAYOUT01` | error | the app's pages (pop-ups, login and phone/tablet pages aside) use more than one layout |
 `USER01` | error | users sign in, and a page (pop-ups and the login page aside) does not open with `<Module>.SNIPPET_CurrentUser` on the right of its top row (first, or right after Back in the same container) |
-`BACK01` | error | a page another page or a flow opens does not start with a Back button (`close_page`, icon `chevron-left`); pop-ups, menu pages and home pages are exempt |
+`BACK01` | error | a page another page or a flow opens does not start with a Back button (`close page`, icon `chevron-left`); pop-ups, menu pages and home pages are exempt |
 `ALERT01` | warning | a box class (`alert`, `alert-*`, `card`, `well`) on a `dynamictext` or `text` |
 `EDGE01` | error | a page on an Atlas_Core layout (pop-ups and the login page aside) has a widget outside a `layoutgrid` at its top level: it touches the edge of the window |
 `VIS01` | warning | measured in the browser at the end of every test: two unrelated widgets overlap by 4 px or more |

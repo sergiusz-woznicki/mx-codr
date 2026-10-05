@@ -17,6 +17,9 @@ const DOC_GRANT = re.compile(String.raw`^\s*grant\s+(execute|view)\s+on\s+${KIND
 const DOC_REVOKE = re.compile(String.raw`^\s*revoke\s+(execute|view)\s+on\s+${KIND}\s+([\w.]+)\s+from\s+([^;]+);`, 'i');
 const ENTITY_GRANT = re.compile(String.raw`^\s*grant\s+([\w.]+)\s+on\s+([\w.]+)\s*\(`, 'i');
 const ENTITY_REVOKE = re.compile(String.raw`^\s*revoke\s+([\w.]+)\s+on\s+([\w.]+)\s*;`, 'i');
+// The same two in mxcli 0.25's `mdl 1` spelling: rights first, the entity after `on entity`.
+const ENTITY_GRANT_V1 = re.compile(String.raw`^\s*grant\s+.+?\s+on\s+entity\s+([\w.]+)\s+to\s+([\w.]+(?:\s*,\s*[\w.]+)*)`, 'i');
+const ENTITY_REVOKE_V1 = re.compile(String.raw`^\s*revoke\s+.+?\s+on\s+entity\s+([\w.]+)\s+from\s+([\w.]+(?:\s*,\s*[\w.]+)*)\s*;`, 'i');
 const CREATE_PAGE = re.compile(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(page|snippet)\s+([\w.]+)`, 'i');
 const ALTER_PAGE = re.compile(String.raw`^\s*alter\s+(page|snippet)\s+([\w.]+)`, 'i');
 
@@ -45,6 +48,16 @@ function operations(file) {
     m = DOC_REVOKE.match(line);
     if (m) {
       for (const role of roles(m.group(4))) found.push(['revoke', [`${m.group(1).toLowerCase()} on ${m.group(2).toLowerCase()} ${m.group(3)}`, role]]);
+      continue;
+    }
+    m = ENTITY_GRANT_V1.match(line);
+    if (m) {
+      for (const role of roles(m.group(2))) found.push(['grant', [`access to ${m.group(1)}`, role]]);
+      continue;
+    }
+    m = ENTITY_REVOKE_V1.match(line);
+    if (m) {
+      for (const role of roles(m.group(2))) found.push(['revoke', [`access to ${m.group(1)}`, role]]);
       continue;
     }
     m = ENTITY_GRANT.match(line);
@@ -101,8 +114,11 @@ function alreadyIn(alterPath, key, createPath) {
     if (!m) return false;        // insert, drop, replace: the page source cannot be compared
     // The value must be on that widget: `Height: 360` on another one hid a lost alter.
     const properties = widgetProperties(source, m.group('widget'));
-    for (const pair of re.split(String.raw`,\s*(?=\w+\s*=)`, m.group('many') || m.group('one'))) {
-      const eq = pair.indexOf('=');
+    // `set (A = 1, B = 2)`, or `set (A: 1, B: 2)` in mxcli 0.25's `mdl 1` spelling.
+    const settings = m.group('many') || m.group('one');
+    const sep = /^\s*\w+\s*:/.test(settings) ? ':' : '=';
+    for (const pair of re.split(sep === ':' ? String.raw`,\s*(?=\w+\s*:)` : String.raw`,\s*(?=\w+\s*=)`, settings)) {
+      const eq = pair.indexOf(sep);
       const prop = eq < 0 ? pair : pair.slice(0, eq), value = eq < 0 ? '' : pair.slice(eq + 1);
       if (!re.search(String.raw`\b${re.escape(py.strip(prop))}\s*:\s*${re.escape(py.strip(value))}`, properties, 'i')) return false;
     }

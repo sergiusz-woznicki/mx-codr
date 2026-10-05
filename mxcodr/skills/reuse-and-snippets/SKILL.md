@@ -102,12 +102,12 @@ use the shorter form.
 ```mdl
 create snippet Sales.SNIPPET_OrderHeader
 (
-  params: { $Order: Sales.Order }
+  params: ( $Order: Sales.Order )
 )
 {
   layoutgrid headerGrid {
-    row rowHeader {
-      column colHeading (desktopwidth: 12) {
+    row {
+      column (desktopwidth: 12) {
         dynamictext txtHeading (content: 'Order', rendermode: H3)
       }
     }
@@ -148,7 +148,7 @@ If the requirement is that the screens stay in step, it must be a snippet.
 
 ## The circular case
 
-When a navigation snippet references pages (`show_page`) and those pages reference
+When a navigation snippet references pages (`show page`) and those pages reference
 the snippet (`snippetcall`), neither can be created first. The placeholder pattern
 in [overview-pages](../../../.ai-context/skills/overview-pages/SKILL.md) solves it: create a placeholder
 snippet, create the pages, then fill the snippet in with

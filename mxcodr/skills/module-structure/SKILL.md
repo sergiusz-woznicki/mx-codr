@@ -10,7 +10,8 @@ Two questions come before any document is created: *is this a new module*, and
 later — a module is the unit Mendix secures, versions and (eventually) replaces.
 
 The **mechanics** — `MOVE`, the `folder:` page property, the `folder '...'`
-microflow clause — live in [organize-project](../organize-project/SKILL.md). This
+microflow clause — live in mxcli's own
+[organize-project](../../../.ai-context/skills/organize-project/SKILL.md). This
 skill is the decision, not the syntax.
 
 ## When to Use This Skill
@@ -208,13 +209,13 @@ create or modify page Shop.Admin_Home (Title: 'Administration', Layout: Atlas_Co
   -- what an administrator starts the day with, and a link to Users
 }
 grant view on page Shop.Admin_Home to Shop.Admin;
-create or replace navigation Responsive
+create or modify navigation Responsive
   home page Shop.Order_List
   home page Shop.Admin_Home for Administrator
   -- the other role homes and the menu, as before
 ;
-alter user role Administrator remove module roles (MyFirstModule.User);
-alter user role User remove module roles (MyFirstModule.User);
+alter user role Administrator drop module roles (MyFirstModule.User);
+alter user role User drop module roles (MyFirstModule.User);
 drop module MyFirstModule;
 ```
 
