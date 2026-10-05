@@ -130,7 +130,7 @@ mac_studio_pro_versions() {
 # the newest is taken and the installer says so. None: DEFAULT_MX_VERSION applies.
 # Windows keeps its own rule (the newest installed, create_app).
 choose_mx_version() {
-  local versions count newest reply i
+  local versions count newest reply i version
   [ -n "${MX_VERSION:-}" ] && return 0
   [ "$IS_WINDOWS" = "1" ] && return 0
   versions="$(mac_studio_pro_versions)"

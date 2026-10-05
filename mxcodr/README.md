@@ -152,6 +152,10 @@ Pro the machine had. The installer now lists the Studio Pro apps in `/Applicatio
 which one to use when there are several, also under `MDL_ASSUME_YES`, which answers yes/no
 prompts and not this choice. `MX_VERSION` still decides without asking.
 
+Fixed in 2026.10.05.9: the menu read each version into `$version`, the installer's own variable
+for the bundle's version, so an install that showed the menu recorded `"version": ""` in
+`tools/mdl-checks/INSTALL.json` and the gate said "the harness installed here is ;".
+
 ## A session refusal is dated by the line it belongs to
 
 Bundle 2026.10.05.2. A trial-licence runtime logs a refused session as an exception whose stack
