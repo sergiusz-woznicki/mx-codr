@@ -697,6 +697,9 @@ const tools = {
         out.set(current, pending);
         pending = [];
       }
+      // An entity also ends where the next description's `mdl 1;` header starts: mxcli 0.25
+      // writes no `/`, and the doc comment under the header belongs to the next entity.
+      if (current && !m && /^mdl\s+\d+\s*;$/.test(py.strip(line))) current = null;
       if (current) {
         out.get(current).push(line);
         if (py.strip(line) === '/') current = null;

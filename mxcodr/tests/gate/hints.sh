@@ -25,7 +25,7 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
               fi ;;
       CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
       CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;
-      CE2729) echo "   hint CE2729: a page reaches something its viewers may not use. The message names both halves -- grant the microflow to that role and the entity it returns: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant Mod.Role on Mod.Entity (read *);'. A non-persistent entity behind a data view needs the grant as much as a stored one, and every role that can open the page needs it. Skill: manage-security" ;;
+      CE2729) echo "   hint CE2729: a page reaches something its viewers may not use. The message names both halves -- grant the microflow to that role and the entity it returns: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant read * on entity Mod.Entity to Mod.Role;'. A non-persistent entity behind a data view needs the grant as much as a stored one, and every role that can open the page needs it. Skill: manage-security" ;;
       # Three sessions in a row: a page or microflow reached from a button, a menu or a page, with
       # no role. The pitfall "grant in the same script" was in the prompt each time; the name and
       # the line to paste, at the moment of the error, is what lands.

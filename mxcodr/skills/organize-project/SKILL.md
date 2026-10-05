@@ -72,11 +72,10 @@ end;
 Use the `folder` property inside the page properties:
 
 ```sql
-create page MyModule.Customer_Overview
+create page MyModule.Customer_Overview folder 'Customer'
 (
   title: 'Customer Overview',
-  layout: Atlas_Core.Atlas_Default,
-  folder: 'Customer'
+  layout: Atlas_Core.Atlas_Default
 )
 {
   -- widgets
@@ -86,10 +85,7 @@ create page MyModule.Customer_Overview
 ### Snippets
 
 ```sql
-create snippet MyModule.CustomerCard
-(
-  folder: 'Customer'
-)
+create snippet MyModule.CustomerCard folder 'Customer'
 {
   -- widgets
 }
@@ -245,7 +241,7 @@ the clause goes depends on the statement's shape:
 create import mapping CRM.IMM_Order folder 'Private/Import mappings'
   with json structure CRM.JSON_Order { create CRM.Order { Id = id } };
 
-create queue CRM.Q_Orders folder 'Private/Queues' ( Parallelism: 3 );
+create task queue CRM.Q_Orders folder 'Private/Queues' ( Parallelism: 3 );
 
 create java action CRM.JA_Sync folder 'Private/Java' () returns string
   as $$return null;$$;

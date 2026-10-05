@@ -59,7 +59,7 @@ Never run `mx check` yourself while the app is up: it re-saves the `.mpr` under 
 What neither the digest nor `./mxcli syntax` says -- this harness's own rules:
 
 ```
-DesignProperties: ['Spacing': ['margin-right': 'S', 'margin-bottom': 'S']]
+DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S'))
   -- two inline widgets side by side collide without it (layout SPACE01); never Class: or CSS for spacing
 layoutgrid pageGrid { row rowTop { column colTop (DesktopWidth: 12) { ... } } }
   -- everything on a page goes inside one layoutgrid, the Back / signed-in row too (EDGE01)
@@ -87,7 +87,7 @@ Users who sign in need no login screen of your own (two sessions lost 15-25 minu
   entity to `Administration.Account` and constrain *your* rule with XPath on that link, full
   names, the token quoted -- `CurrentUser()` and `$currentUser` pass `mxcli check` and fail the
   build (CE0161):
-  `grant Invoicing.Customer on Invoicing.Invoice (read *) where '[Invoicing.Invoice_Customer/Invoicing.Customer/Invoicing.Customer_Account = ''[%CurrentUser%]'']';`
+  `grant read * on entity Invoicing.Invoice to Invoicing.Customer where [Invoicing.Invoice_Customer/Invoicing.Customer/Invoicing.Customer_Account = '[%CurrentUser%]'];`
   The link crosses modules, so `on delete set null;` -- a PREVENT rule on it stops the runtime at
   startup with `None.get`.
 - The shape of a signed-in app -- Log out, a menu and home page per role, Users and My account,

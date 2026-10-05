@@ -56,7 +56,8 @@
 //                  its top level outside a layoutgrid: it touches the edge of the window
 //
 // Where each rule lives, in layout_rules/ next to this file (this file only reads the arguments
-// and runs them): pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
+// and runs them): mdl1.cjs rewrites an mxcli v0.25 (`mdl 1`) describe into the v0.24 spelling the
+// rules read; pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
 // GRID01, ICON01; grids.cjs GRID02; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
 // navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01.
 'use strict';
@@ -73,6 +74,7 @@ const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, rol
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
 const { pageBlocks } = require('./layout_rules/pages.cjs');
 const { check } = require('./layout_rules/spacing.cjs');
+const { toMdl0 } = require('./layout_rules/mdl1.cjs');
 
 // ---- pathlib, as far as this file uses it ----
 
@@ -249,7 +251,9 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  const [text, used] = collect(args.sources);
+  // mxcli v0.25 describes in mdl 1; the rules read the v0.24 spelling (layout_rules/mdl1.cjs).
+  const [described, used] = collect(args.sources);
+  const text = toMdl0(described);
   if (!py.strip(text)) {
     process.stderr.write(`FAIL  no MDL found in [${args.sources.map(s => strRepr(pathStr(s))).join(', ')}]\n`);
     return 1;
@@ -258,11 +262,11 @@ function main() {
   // Every input is read once; a missing optional one is empty text.
   const lines = py.splitlines(text);
   const hasNavigation = Boolean(args.navigation && exists(fsPath(args.navigation)));
-  const navigation = readOptional(args.navigation);
-  const roles = readOptional(args.user_roles);
-  const [snippets] = collect(args.sign_out_sources);
-  const [layouts] = collect(args.layouts);
-  const [flows] = collect(args.opened_from);
+  const navigation = toMdl0(readOptional(args.navigation));
+  const roles = toMdl0(readOptional(args.user_roles));
+  const snippets = toMdl0(collect(args.sign_out_sources)[0]);
+  const layouts = toMdl0(collect(args.layouts)[0]);
+  const flows = toMdl0(collect(args.opened_from)[0]);
   const ownModules = py.split(args.own_modules);
 
   let [failures, warnings, pages] = check(lines);
@@ -321,6 +325,8 @@ function main() {
   return !failures.length ? 0 : 1;
 }
 
+// Advice is printed in the spelling of the mxcli the harness is pinned to (mdl1_spelling.cjs).
+if (require.main === module) py.setOutputFilter(require('./mdl1_spelling.cjs').advice);
 if (require.main === module) process.exitCode = main();
 
 // Under the Python names: collect(sources) takes path strings and returns [text, [paths read]].

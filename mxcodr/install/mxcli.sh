@@ -44,7 +44,7 @@ mxcli_release_url() {
     *)             arch=amd64 ;;
   esac
   printf 'https://github.com/mendixlabs/mxcli/releases/download/%s/mxcli-%s-%s%s\n' \
-    "$(mxcli_compat_tag || echo v0.24.0)" "$os" "$arch" "$EXE"
+    "$(mxcli_compat_tag || echo v0.25.0)" "$os" "$arch" "$EXE"
 }
 
 # ui_fail when the sha256 differs from MXCLI_SHA256; with it unset the download is only reported.

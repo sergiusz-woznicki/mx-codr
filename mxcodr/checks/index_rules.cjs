@@ -41,7 +41,11 @@ const COMPARED_RIGHT = rx(String.raw`(?P<op><=|>=|=|<|>)\s*\"?(?P<attr>[A-Za-z_]
 const OR = rx(String.raw`\s+or\s+`, 'i');
 const SORT = rx(String.raw`sort\s+by\s+(?P<list>[\w.\"]+(?:\s+(?:asc|desc))?(?:\s*,\s*[\w.\"]+(?:\s+(?:asc|desc))?)*)`, 'i');
 const GRID = rx(String.raw`\bdatagrid\s+\w+\s*\(\s*DataSource:\s*database\s+(?:from\s+)?(?P<entity>\w+\.(?:\"[^\"]+\"|\w+))`, 'i');
-const COLUMN = rx(String.raw`^\s*column\s+\"?\w+\"?\s*\(\s*Attribute:\s*\"?(?P<attr>\w+)`, 'i');
+// mxcli v0.24 named a data grid column after its attribute (`column Status (Attribute: Status`),
+// quoting a path (`column "Invoice_Customer/Name" (...)`), which this did not read; v0.25 writes
+// no name, as Mendix stores none: `column (Attribute: Status, ...)`, a path read alike.
+const COLUMN = rx(String.raw`^\s*column\s+(?:\"?\w+\"?\s*\(\s*Attribute:\s*\"?(?P<attr>\w+)|` +
+  String.raw`\(\s*Attribute:\s*\"?(?P<bare>\w+)(?![\w/]))`, 'i');
 const FILTER = rx(String.raw`^\s*(?P<kind>dropdownfilter|datefilter|numberfilter)\b`, 'i');
 const VIEW_HEAD = rx(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?view\s+entity\s+(?P<name>[\w.]+)`, 'i');
 // `from Orders.Invoice as i`, `inner join Orders.Order_Customer/Orders."Order" as o`: the alias of an entity.
@@ -155,7 +159,7 @@ function queries(lines) {
     const source = GRID.search(line);
     if (source) { grid = plain(source.group('entity')); return; }
     const attribute = COLUMN.search(line);
-    if (attribute) { column = attribute.group('attr'); return; }
+    if (attribute) { column = attribute.group('attr') || attribute.group('bare'); return; }
     const widget = FILTER.search(line);
     if (widget && grid && column) {
       const kind = widget.group('kind').toLowerCase();

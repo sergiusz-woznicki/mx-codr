@@ -92,6 +92,37 @@ one detail is skipped. `$PY` is still set in `tests/portable.sh` for project tes
 the switch that call `"$PY"`; new tests read JSON with `field`/`oql_value` and do arithmetic with
 `awk` or `node -e`.
 
+## mxcli 0.25: the checks read `mdl 1`, the advice is written in it
+
+Bundle 2026.10.05.3 pins mxcli v0.25.0 (`MXCLI_TESTED`). From 0.25 `describe`, `-c` and `mxcli syntax`
+speak `mdl 1`: properties in `( )`, menu items as `menu item 'X' ( OnClick: …, Icon: … )`, `sign out`,
+grants as `grant read * on entity E to Role where [ … ]`, unnamed rows, columns and footers, no
+`@position`, `retrieve … first`. A script without a header is still read as `mdl 0`.
+
+- **Every parser reads both formats.** check_mdl reads the omitted default decision captions and
+  unnamed grid columns; check_layout passes `mdl 1` text through `layout_rules/mdl1.cjs`, which writes
+  it back in the 0.24 spelling the rules read; VIEW01, SCOPE01, script_overrides and split-entities
+  read the new grant order. On 0.24 text every output is byte-identical to before.
+- **Proof:** the same 30 models described by 0.24 and by 0.25 give the same findings, per rule and
+  document (`tools/dev/compare-formats.py` in the development repo, which runs the gate's own step
+  functions with each mxcli). The audit keeps three such pairs as fixtures and compares them.
+- **Advice in 0.25 spelling.** Every finding passes through `checks/mdl1_spelling.cjs` before it is
+  printed, so a fix the gate suggests parses under `mdl 1;` and without a header (each suggested
+  statement was checked with `mxcli check` both ways). `mdl-pitfalls.md`, the skills' examples
+  (`mxcli fmt --upgrade`), the rules and `tests/checks/` use the same spelling. mxcli 0.24 refuses
+  some of it: a project still on 0.24 is read correctly but advised in 0.25 spelling, and orient
+  says to swap its `./mxcli`.
+- **Caption baseline:** it records the mxcli version, so the move re-baselines instead of turning
+  every caption warning into an error.
+- **Known, unchanged:** a member-level entity rule (`read (A, B) … where`) is read as unconstrained
+  by VIEW01 and skipped by SCOPE01 -- in both formats, as before. mxcli 0.25 describes microflows
+  about four times slower than 0.24 (1.5 s to 5.9 s for one module of InvoiceB2B); naming and layout
+  take a few seconds longer on large models.
+
+Verified on InvoiceB2B on macOS (gate DONE, 19/19 tests, after the installer swapped `./mxcli` to
+v0.25.0 with its checksum) and on the Windows demo app (same results as on 0.24: 12/12 tests,
+coverage 14/14, 4 PERF warnings, the same 38 layout failures).
+
 ## A session refusal is dated by the line it belongs to
 
 Bundle 2026.10.05.2. A trial-licence runtime logs a refused session as an exception whose stack

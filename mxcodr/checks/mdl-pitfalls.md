@@ -4,17 +4,18 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 
 - **Current date and time** is the token `[%CurrentDateTime%]`: `addDays([%CurrentDateTime%], -30)`.
   `now()` and `currentDateTime()` do not exist (CE0117 at build time).
-- **A token inside `where '...'`**: MDL doubles the single quotes, and the token's `]` stays inside
-  them. Write `where '[Mod.Customer_Login = ''[%CurrentUser%]'']'`, not `''[%CurrentUser%'']`.
-  In a microflow `retrieve`, the token takes single quotes: `where [id = '[%CurrentUser%]']`.
+- **An XPath is written in `[ ]`, in a grant as in a `retrieve`**, and a token inside it takes plain
+  single quotes: `where [Mod.Customer_Login = '[%CurrentUser%]']`. (Before mxcli 0.25 a grant's XPath
+  went in `'...'` with doubled quotes; that still parses but warns MDL-DEPR030.)
 - **An XPath path alternates association and entity** and ends on the association to compare:
-  `'[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Login = ''[%CurrentUser%]'']'`. "The selected
+  `[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Login = '[%CurrentUser%]']`. "The selected
   entity Mod.X_Y no longer exists" means an association stands where an entity step belongs.
 - **A combo box for a reference** takes `Association:`, a data source and a caption, not
   `Attribute:`: `combobox cmbCustomer (Label: 'Customer', Association: Invoice_Customer,
-  DataSource: DATABASE Mod.Customer, CaptionAttribute: Name)`.
+  DataSource: database Mod.Customer, CaptionAttribute: Name)`.
 - **A data grid column across an association** binds the attribute at the end of the path:
-  `column colCustomer (Attribute: Invoice_Customer/Name)`, not the association itself.
+  `column (Attribute: Invoice_Customer/Name)`, not the association itself. A data grid column has no
+  name in Mendix: `column (...)`, addressed later as `dg column(Name)` (a name warns MDL-DEPR005).
 - **`Administration.Account.Name` does not exist**: Name is System.User's. Show `FullName`.
 - **No `commit` inside a `loop`** (lint CONV011: one database call per row). Change the objects in
   the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
@@ -27,7 +28,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   Measured at 10k rows: view 60 ms, loop 160 ms, `count()`/`sum()` after a retrieve 159 ms. Filter in the
   retrieve, not with an `if` in a loop: `retrieve $Due from Sales.Invoice where [Status != 'Paid'];`. The
   highest value (the next number) is one sorted row: `retrieve $Last from Sales.Invoice where
-  [Number != empty] sort by Sales.Invoice.Number desc limit 1;`. A role that sees only its own rows
+  [Number != empty] sort by Sales.Invoice.Number desc first;` -- `first` binds one object; since mxcli
+  0.25 `limit 1` under `mdl 1;` is a list of one. A role that sees only its own rows
   must not read the view unconstrained (gate VIEW01): constrain the grant, or revoke it and read the
   view in the page's data-source microflow, filtered to the object it was given.
 - **Index what you filter or sort on** (gate PERF07): Mendix indexes only `id`, associations and unique
@@ -40,10 +42,10 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
-  `grant Mod.Role on Mod.Entity (create, delete, read *, write *)`.
+  `grant create, delete, read *, write * on entity Mod.Entity to Mod.Role;`.
 - **A user filling in an object a microflow created needs `write`, not `create`**: the
   microflow creates it, the page edits it. Grant only the fields the page leaves editable,
-  `grant Mod.Customer on Mod.OrderLine (read *, write (Quantity, OrderLine_Product));`
+  `grant read *, write (Quantity, OrderLine_Product) on entity Mod.OrderLine to Mod.Customer;`
   -- a `create` right adds lint CONV006 and nothing the page needs.
 - **Pages and microflows need a role** the moment a menu, a button or another page reaches them
   (CE0557, CE0106): put the `grant view on page` / `grant execute on microflow` in the same
@@ -72,9 +74,10 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   `replace()` (CE0117). A path parameter that holds `/` (an order number) goes through `urlEncode`.
 - **A specialisation of `System.FileDocument` or `System.Image`** takes no `write *` (CE6592, the system
   attribute HasContents): grant `read *` and `write` on your own attributes only.
-- **A non-persistent object a page shows or a flow hands to a page** needs `grant Role on Mod.Entity
-  (create, read *, write *)`, or the client fails with "cannot create Mendix object" (CE2729 at check).
-- **Every statement in an owner script is re-runnable** (each form checked on mxcli 0.24): `create or
+- **A non-persistent object a page shows or a flow hands to a page** needs `grant create, read *,
+  write * on entity Mod.Entity to Mod.Role;`, or the client fails with "cannot create Mendix object"
+  (CE2729 at check).
+- **Every statement in an owner script is re-runnable** (each form checked on mxcli 0.25): `create or
   modify` for module, entity, view entity, enumeration, page, microflow, java action, user role and
   module role;
   `drop user role if exists`, `drop demo user if exists`, `create persistent entity if not exists`,

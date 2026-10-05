@@ -25,6 +25,8 @@ const PAGE_GRANT_RE = re.compile(String.raw`grant\s+view\s+on\s+page\s+\S+\s+to\
 // object scopes already.
 const RETRIEVE_RE = re.compile(String.raw`\bretrieve\s+\$\w+\s+from\s+([A-Za-z_]\w*\.[A-Za-z_]\w*)\b([^;]*);`, 'is');
 const ENTITY_GRANT_RE = re.compile(String.raw`grant\s+(\S+)\s+on\s+(\S+)\s*\([^)]*\)\s*where\s+'`, 'i');
+// mxcli 0.25 (`mdl 1`): `grant read * on entity Shop.Invoice to Shop.Customer, Shop.Clerk where [ … ]`.
+const ENTITY_GRANT_V1_RE = re.compile(String.raw`grant\s+([^;]*?)\s+on\s+entity\s+(\S+)\s+to\s+([^;]*?)\s+where\s+\[`, 'i');
 
 class ModelReadError extends Error {}
 
@@ -81,7 +83,13 @@ function unscopedRetrieves(text) {
 
 // Roles whose access rule on the entity carries an XPath constraint.
 function scopedRoles(text, entity) {
-  return new Set(ENTITY_GRANT_RE.findall(text).filter(([, target]) => target === entity).map(([role]) => role));
+  const roles = new Set(ENTITY_GRANT_RE.findall(text).filter(([, target]) => target === entity).map(([role]) => role));
+  // As the 0.24 reader does: a member-level right (`read (A, B)`) is not read as scoped (its
+  // `\([^)]*\)` stops at the inner bracket).
+  for (const [rights, target, named] of ENTITY_GRANT_V1_RE.findall(text)) {
+    if (target === entity && !rights.includes('(')) for (const role of named.split(',')) roles.add(py.strip(role));
+  }
+  return roles;
 }
 
 function findings(appDir, mpr, modules, read = mxcli) {
@@ -162,5 +170,7 @@ function main() {
   return found.length ? 1 : 0;
 }
 
+// Advice is printed in the spelling of the mxcli the harness is pinned to (mdl1_spelling.cjs).
+if (require.main === module) py.setOutputFilter(require('./mdl1_spelling.cjs').advice);
 if (require.main === module) process.exitCode = main();
-module.exports = { DATASOURCE_RE, PAGE_GRANT_RE, RETRIEVE_RE, ENTITY_GRANT_RE, ModelReadError, mxcli, unscopedRetrieves, scopedRoles, findings, main };
+module.exports = { DATASOURCE_RE, PAGE_GRANT_RE, RETRIEVE_RE, ENTITY_GRANT_RE, ENTITY_GRANT_V1_RE, ModelReadError, mxcli, unscopedRetrieves, scopedRoles, findings, main };

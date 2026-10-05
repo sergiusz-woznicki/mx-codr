@@ -120,16 +120,45 @@ function captionText(annotationLines) {
 
 const annotationKinds = annotations => annotations.map(([kind]) => kind);
 
+// `mdl 1;` heads every document mxcli v0.25 describes; v0.24 wrote none.
+const MDL1_HEADER = rx(String.raw`^\s*mdl\s+1\s*;\s*$`, 'i');
+const isMdl1 = lines => lines.some(line => MDL1_HEADER.match(line));
+
+// The expression of the split at lines[index]: what Mendix shows as its caption by default. An
+// `if` runs on to its `then`, over several lines when the expression does.
+function splitExpression(lines, index) {
+  const first = py.strip(lines[index]);
+  let text = py.strip(first.slice(py.split(first)[0].length));
+  if (/^(?:if|elsif)\b/i.test(first)) {
+    // v0.24 printed a long caption on one line, a line break as \n and a quote doubled.
+    for (let k = index + 1; !/\bthen$/i.test(text) && k < lines.length; k++) text += '\\n    ' + py.strip(lines[k]);
+    text = py.strip(text.replace(/\s*\bthen$/i, ''));
+  }
+  return text.split("'").join("''");
+}
+
+// v0.25 writes an `if` that is all of an `else` branch as `elsif`; v0.24 wrote the nested `if`,
+// with its caption. Under `mdl 1` an `elsif` is that decision.
+const ELSIF_RE = rx(String.raw`^\s*elsif\b`, 'i');
+
 // Caption rules for an if/case/while; the bool is false when it has no @caption.
-function decisionFindings(lines, index) {
+function decisionFindings(lines, index, mdl1 = false) {
   const line = lines[index];
   const annotations = precedingAnnotations(lines, index);
+  let text;
   if (!annotationKinds(annotations).includes('caption')) {
-    return [[finding('decision-caption',
-      `decision without @caption -- put @caption '<the question it answers?>' on the line above: ${head(py.strip(line), 70)}`,
-      index + 1)], [], false];
+    // mxcli v0.25 (`mdl 1`) leaves out a caption that is the split's own expression, as it leaves
+    // out every default; v0.24 printed it. A split always has a caption in the model, so a missing
+    // one there is that default, judged as v0.24's printed caption was.
+    if (!mdl1) {
+      return [[finding('decision-caption',
+        `decision without @caption -- put @caption '<the question it answers?>' on the line above: ${head(py.strip(line), 70)}`,
+        index + 1)], [], false];
+    }
+    text = splitExpression(lines, index);
+  } else {
+    text = captionText(annotations);
   }
-  const text = captionText(annotations);
   if (!text) return [[], [], true];
   const stripped = py.strip(line);
   const expression = py.strip(stripped.slice(py.split(stripped)[0].length));
@@ -206,12 +235,13 @@ function variableFindings(line, lineNumber) {
 // [failures, warnings] for all naming rules.
 function checkNaming(lines) {
   const failures = [], warnings = [];
+  const mdl1 = isMdl1(lines);
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
     const stripped = py.strip(line).toLowerCase();
     if (stripped.startsWith('end ') || stripped === 'end') return;
-    if (DECISION_RE.match(line)) {
-      const [found, warned, hasCaption] = decisionFindings(lines, index);
+    if (DECISION_RE.match(line) || (mdl1 && ELSIF_RE.match(line))) {
+      const [found, warned, hasCaption] = decisionFindings(lines, index, mdl1);
       failures.push(...found);
       warnings.push(...warned);
       if (!hasCaption) return;  // skips the variable-name rules for this line
@@ -582,6 +612,8 @@ function main() {
   return !failures.length ? 0 : 1;
 }
 
+// Advice is printed in the spelling of the mxcli the harness is pinned to (mdl1_spelling.cjs).
+if (require.main === module) py.setOutputFilter(require('./mdl1_spelling.cjs').advice);
 if (require.main === module) process.exitCode = main();
 
 // The names check_mdl.py defines (and imports). Dicts come back as plain objects, tuples as arrays;
