@@ -40,7 +40,7 @@ tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), preche
 .gitattributes    forces LF on *.sh, *.cjs, *.js and *.mdl — copied only if the project has none
 examples/         8 verify-*.test.sh from the demo app — NOT installed; a project's tests
                   are written by whoever builds the feature
-skills/           6 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
+skills/           5 × SKILL.md — the prose (test-first-delivery with a reference/ of four)
 lint-rules/       3 × *.star — MOD001, REU001, UI001 — run by `mxcli lint`
 checks/           *.cjs + fixtures/ — the checks Starlark cannot express, all on Node:
                   gate_helpers.cjs for the gate's JSON and digests; check_layout.cjs is the
@@ -133,9 +133,16 @@ or `MDL_ASSUME_YES=1`), checksum-verified, keeping the old binary beside it. Sin
 also runs `./mxcli init --sync-skills .` there, before it copies the harness's own skills: mxcli's
 skills and bundled lint rules come from its binary, and a project swapped from 0.24 to 0.25 kept the
 0.24 ones, which teach the old MDL spelling. The sync leaves `.claude/rules/`, `settings.local.json`
-and the harness's lint rules alone; a skill both ship (`organize-project`) ends up the harness's,
-because it is copied after the sync. A running `mxcli run --watch` still uses the old binary:
+and the harness's lint rules alone. A running `mxcli run --watch` still uses the old binary:
 `bash tests/gate.sh --restart`.
+
+## `organize-project` is mxcli's skill (2026.10.05.6)
+
+The harness shipped an `organize-project` skill; mxcli 0.25 ships one of the same name and nearly
+the same text, newer for 0.25 (`list impact of`, `task queue`, `mdl 1;` headers). The installer and
+`mxcli init --sync-skills` overwrote each other's copy. The harness no longer ships it:
+`module-structure` links to mxcli's in `.ai-context/skills/`, and the installer removes the copy an
+older install left in `.agents/skills/`, where mxcli writes none.
 
 ## A session refusal is dated by the line it belongs to
 
@@ -182,7 +189,7 @@ So the project's own instructions live where mxcli does not reach:
   own skills and an agent that follows that table never sees these.
 - **`.claude/settings.local.json`** — registers Claude's two hooks.
 - **`.codex/hooks.json`** — registers the Codex equivalents plus a `Stop` gate.
-  Codex discovers the six `.agents/skills/` copies automatically. Project hooks
+  Codex discovers the five `.agents/skills/` copies automatically. Project hooks
   require project trust and one review through `/hooks`; Codex asks again whenever
   a hook definition changes.
 - **`.opencode/plugin/mendix-mdl-harness.js` and `opencode.json`** — OpenCode has no
@@ -222,7 +229,7 @@ Claude settings and project-specific Codex hooks survive installation. The hook
 scripts live together in `tools/mdl-checks/hooks/`; separate PostToolUse adapters
 preserve the hosts' different output contracts.
 
-The six `.agents/skills/` copies are self-contained except for links to standard
+The five `.agents/skills/` copies are self-contained except for links to standard
 mxcli guidance such as `test-app` and `overview-pages`. Those links explicitly
 resolve through `.ai-context/skills/`, where `mxcli init` installs the canonical
 versions, instead of assuming Codex has duplicate sibling skills under `.agents/`.
@@ -869,10 +876,9 @@ a boot, one shot.
 
 ## Rebuilding after a source change
 
-Fifteen files here have a second copy in the repo: five skills in
-`.ai-context/skills/` and the three reference files of one of them, three lint rules in
-`.claude/lint-rules/`, and the naming and coverage checkers plus their two fixtures in
-`tests/skills/`. Both copies get edited,
+Thirteen files here have a second copy in the repo: four skills in
+`.ai-context/skills/` and the four reference files of one of them, three lint rules in
+`.claude/lint-rules/`, and the two checker fixtures in `tests/skills/fixtures/`. Both copies get edited,
 so a plain copy can go either way. One did: on 2026-09-13 four `mxcodr/` files were
 newer than their sources, and the copy block that used to be here would have rolled
 them back without a word.

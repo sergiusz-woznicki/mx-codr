@@ -100,7 +100,7 @@ what to fix. Codes in brackets are what the gate prints.
   page behind it threw. Microflow tests (`*.test.mdl`) are named, with the command that runs
   them, since the gate cannot run them next to the app.
 
-The agent learns these from six *skills* (short guides) that the installer puts in
+The agent learns these from five *skills* (short guides) that the installer puts in
 place. You don't need to read them.
 
 ## The installer sets everything up
@@ -111,7 +111,7 @@ fetches what is missing, and tells you plainly about anything it could not do.
 | | What the installer does |
 |---|---|
 | **Your Mendix app** | Creates one with `mxcli new` if the folder has none (Mendix 11.12.1 unless you set `MX_VERSION`) |
-| **mxcli** | Downloads the one mxcli release the harness works with (`mxcodr/MXCLI_TESTED`, now v0.25.0), checksum-verified, and offers to swap any other `./mxcli`, newer ones too; a new mxcli release is adopted only after the harness reads it. The checks read both the 0.24 and the 0.25 (`mdl 1`) describe format, and the fixes they suggest are written in 0.25's spelling. In an existing project it also refreshes mxcli's own skills to that release (`mxcli init --sync-skills`) |
+| **mxcli** | Downloads the one mxcli release the harness works with (`mxcodr/MXCLI_TESTED`, now v0.25.0), checksum-verified, and offers to swap any other `./mxcli`, newer ones too; a new mxcli release is adopted only after the harness reads it. The checks read both the 0.24 and the 0.25 (`mdl 1`) describe format, and the fixes they suggest are written in 0.25's spelling. In an existing project it also refreshes mxcli's own skills to that release (`mxcli init --sync-skills`); folder and `MOVE` mechanics come from mxcli's `organize-project` skill, which the harness no longer ships a copy of |
 | **Docker** | Only in Docker mode: installs Docker Desktop when missing and waits for it; with WSL off it says so at once |
 | **Node, Playwright and its browser** | Installs the missing ones — the hooks, the checkers and the browser tests run on them |
 | **MxBuild** | Downloads the one for your Mendix version, so `mx check` runs |
@@ -171,7 +171,7 @@ no checker to remember the arguments of, no order to run things in. After
 
 | What | How the agent finds it |
 |---|---|
-| The six rules, in prose | `SKILL.md` files in the three directories each host looks in |
+| The rules, in prose | `SKILL.md` files in the three directories each host looks in |
 | The always-loaded reminder | `.claude/rules/` and `.cursor/rules/`, and Pi's system prompt through its extension, on every turn |
 | The syntax sessions look up most | a digest from the project's own mxcli, with the pitfalls that cost sessions the most time on top, loaded into the session: `.claude/rules/`, `.cursor/rules/`, `opencode.json`, Pi's system prompt |
 | `MOD001`, `REU001`, `UI001` | `mxcli lint` discovers `.claude/lint-rules/*.star` by itself |

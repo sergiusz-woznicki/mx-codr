@@ -10,7 +10,8 @@ Two questions come before any document is created: *is this a new module*, and
 later — a module is the unit Mendix secures, versions and (eventually) replaces.
 
 The **mechanics** — `MOVE`, the `folder:` page property, the `folder '...'`
-microflow clause — live in [organize-project](../organize-project/SKILL.md). This
+microflow clause — live in mxcli's own
+[organize-project](../../../.ai-context/skills/organize-project/SKILL.md). This
 skill is the decision, not the syntax.
 
 ## When to Use This Skill
