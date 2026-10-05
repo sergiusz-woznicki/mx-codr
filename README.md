@@ -111,7 +111,7 @@ fetches what is missing, and tells you plainly about anything it could not do.
 | | What the installer does |
 |---|---|
 | **Your Mendix app** | Creates one with `mxcli new` if the folder has none (Mendix 11.12.1 unless you set `MX_VERSION`) |
-| **mxcli** | Downloads the one mxcli release the harness works with (`mxcodr/MXCLI_TESTED`, now v0.25.0), checksum-verified, and offers to swap any other `./mxcli`, newer ones too; a new mxcli release is adopted only after the harness reads it. The checks read both the 0.24 and the 0.25 (`mdl 1`) describe format, and the fixes they suggest are written in 0.25's spelling |
+| **mxcli** | Downloads the one mxcli release the harness works with (`mxcodr/MXCLI_TESTED`, now v0.25.0), checksum-verified, and offers to swap any other `./mxcli`, newer ones too; a new mxcli release is adopted only after the harness reads it. The checks read both the 0.24 and the 0.25 (`mdl 1`) describe format, and the fixes they suggest are written in 0.25's spelling. In an existing project it also refreshes mxcli's own skills to that release (`mxcli init --sync-skills`) |
 | **Docker** | Only in Docker mode: installs Docker Desktop when missing and waits for it; with WSL off it says so at once |
 | **Node, Playwright and its browser** | Installs the missing ones — the hooks, the checkers and the browser tests run on them |
 | **MxBuild** | Downloads the one for your Mendix version, so `mx check` runs |

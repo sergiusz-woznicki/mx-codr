@@ -160,4 +160,5 @@ choose_run_mode
 [ "$mpr_count" = "0" ] && choose_theme
 
 # NOTE: there are 12 ui_done steps (13 with a new app), so these totals are one short.
-if [ "$mpr_count" = "0" ]; then ui_plan 14; else ui_plan 13; fi
+# A new app adds its creation; an existing one the refresh of mxcli's own skills (step_skills.sh).
+ui_plan 14

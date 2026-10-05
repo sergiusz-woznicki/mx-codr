@@ -126,6 +126,17 @@ Verified on InvoiceB2B on macOS (gate DONE, 19/19 tests, after the installer swa
 v0.25.0 with its checksum) and on the Windows demo app (same results as on 0.24: 12/12 tests,
 coverage 14/14, 4 PERF warnings, the same 38 layout failures).
 
+## Upgrading mxcli in an existing project
+
+`bash mxcodr/install.sh .` in a project swaps `./mxcli` for the release `MXCLI_TESTED` pins (it asks,
+or `MDL_ASSUME_YES=1`), checksum-verified, keeping the old binary beside it. Since 2026.10.05.5 it
+also runs `./mxcli init --sync-skills .` there, before it copies the harness's own skills: mxcli's
+skills and bundled lint rules come from its binary, and a project swapped from 0.24 to 0.25 kept the
+0.24 ones, which teach the old MDL spelling. The sync leaves `.claude/rules/`, `settings.local.json`
+and the harness's lint rules alone; a skill both ship (`organize-project`) ends up the harness's,
+because it is copied after the sync. A running `mxcli run --watch` still uses the old binary:
+`bash tests/gate.sh --restart`.
+
 ## A session refusal is dated by the line it belongs to
 
 Bundle 2026.10.05.2. A trial-licence runtime logs a refused session as an exception whose stack
