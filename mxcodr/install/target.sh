@@ -24,8 +24,8 @@ for arg in "$@"; do
       printf '                   already there is left alone. Docker is installed when missing\n'
       printf '                   either way; the JDK is only reported.\n\n'
       printf '  MX_VERSION=<x.y.z>  APP_NAME=<name>   env overrides when an app is created. Without\n'
-      printf '                   MX_VERSION a Mac asks which installed Studio Pro to use (the newest\n'
-      printf '                   without a terminal), Windows takes the newest; %s with none\n' "$DEFAULT_MX_VERSION"
+      printf '                   MX_VERSION a Mac with several Studio Pro installs always asks which\n'
+      printf '                   (the newest without a terminal), Windows takes the newest; %s with none\n' "$DEFAULT_MX_VERSION"
       printf '  MDL_DEPS_DRY_RUN=1                    print the install commands, run none\n'
       printf '  MDL_ASSUME_YES=1                      answer the prerequisite prompts with yes\n'
       printf '  MDL_NO_UPDATE_CHECK=1                 do not look online for a newer mxcli\n'

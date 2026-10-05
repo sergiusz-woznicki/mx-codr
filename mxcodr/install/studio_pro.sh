@@ -125,8 +125,9 @@ mac_studio_pro_versions() {
 
 # choose_mx_version -- sets and exports MX_VERSION for a new app on macOS, so creating the app, the
 # MxBuild prerequisite and the target line all use the same version. MX_VERSION already set wins.
-# One Studio Pro installed: that one. Several: asked, the newest offered; with no terminal or
-# MDL_ASSUME_YES the newest is taken. None: MX_VERSION stays unset and DEFAULT_MX_VERSION applies.
+# One Studio Pro installed: that one. Several: always asked, the newest offered, MDL_ASSUME_YES
+# included (it answers yes/no prompts, and this is a choice the person makes); with no terminal
+# the newest is taken and the installer says so. None: DEFAULT_MX_VERSION applies.
 # Windows keeps its own rule (the newest installed, create_app).
 choose_mx_version() {
   local versions count newest reply i
@@ -136,8 +137,16 @@ choose_mx_version() {
   [ -n "$versions" ] || return 0
   count="$(printf '%s\n' "$versions" | wc -l | tr -d ' ')"
   newest="$(printf '%s\n' "$versions" | tail -1)"
-  if [ "$count" = "1" ] || [ ! -t 0 ] || [ -n "${MDL_ASSUME_YES:-}" ]; then
+  if [ "$count" = "1" ]; then
     export MX_VERSION="$newest"
+    return 0
+  fi
+  if [ ! -t 0 ]; then
+    export MX_VERSION="$newest"
+    ui_clear
+    printf '  %s%s%s Studio Pro %s for the new app, the newest of %s installed -- no terminal to ask.\n' \
+      "$C_YELLOW" "${I_WARN:-!}" "$C_RESET" "$newest" "$count"
+    printf '    MX_VERSION=<version> picks another: %s\n\n' "$(printf '%s ' $versions)"
     return 0
   fi
   ui_clear

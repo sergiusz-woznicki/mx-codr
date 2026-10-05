@@ -144,12 +144,13 @@ the same text, newer for 0.25 (`list impact of`, `task queue`, `mdl 1;` headers)
 `module-structure` links to mxcli's in `.ai-context/skills/`, and the installer removes the copy an
 older install left in `.agents/skills/`, where mxcli writes none.
 
-## A Mac asks which Studio Pro a new app uses (2026.10.05.7)
+## A Mac asks which Studio Pro a new app uses (2026.10.05.8)
 
 A new app on a Mac was always created at Mendix 11.12.1 (`DEFAULT_MX_VERSION`), whatever Studio
 Pro the machine had. The installer now lists the Studio Pro apps in `/Applications` and
-`~/Applications` that carry `Contents/modeler/mx` (the version comes from the app's name) and asks
-which one to use when there are several. `MX_VERSION` still decides without asking.
+`~/Applications` that carry `Contents/modeler/mx` (the version comes from the app's name) and always asks
+which one to use when there are several, also under `MDL_ASSUME_YES`, which answers yes/no
+prompts and not this choice. `MX_VERSION` still decides without asking.
 
 ## A session refusal is dated by the line it belongs to
 
@@ -967,8 +968,9 @@ which was the clone itself when the repo was cloned.
 
 `--no-app` declines app creation; `--help` lists the arguments, `MX_VERSION` and
 `APP_NAME` override what gets created. Without `MX_VERSION` a Mac with several Studio Pro
-installs asks which one the new app uses (the newest is the default, and is taken with no
-terminal or `MDL_ASSUME_YES`); with one it takes that one, with none Mendix 11.12.1. Windows
+installs always asks which one the new app uses, `MDL_ASSUME_YES` included (the newest is the
+default; with no terminal the newest is taken and the installer says so); with one it takes that
+one, with none Mendix 11.12.1. Windows
 takes the newest installed.
 
 It never stops without saying why: an unexpected failure prints the file, line and command
