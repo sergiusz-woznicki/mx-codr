@@ -11,6 +11,8 @@
 //     gate_helpers.cjs missing-browser <config>      the executablePath a Playwright config names, if it is missing
 //     gate_helpers.cjs duplicate-definitions <mdl>... documents these scripts create that another script
 //                                                   in the same folder creates too (SCRIPT01)
+//     gate_helpers.cjs test-first <app> <mpr> <mdl>... pages and ACT_ microflows these scripts create that
+//                                                   no tests/verify-*.test.sh covers yet (TEST01)
 //     gate_helpers.cjs watch-state <boot-log>        where a --watch boot is: ready, building, applied or
 //                                                   failed; after failed, one line per build error
 //     gate_helpers.cjs runtime-errors <runtime.log> <since>
@@ -616,6 +618,45 @@ function definitions(file) {
   return found;
 }
 
+// TEST01: test first. A page or ACT_ microflow these scripts create that the model does not have
+// yet, and that no `# covers:` line of tests/verify-*.test.sh names: one per line. The tests came
+// last in every session so far -- the skill says test first, the gate checks coverage only at the
+// end, and a session built the whole app, then wrote six tests in one go, three of which had never
+// failed (InvoiceChaseCodr, 2026-10-05). Blocking the exec here makes the test come before the page,
+// when the script that names its widgets is already written. A document that is already in the
+// model (a fix to it) passes; so does anything the model cannot be read for -- never a false block.
+function testFirst(args) {
+  const [app, mpr, ...scripts] = args;
+  const wanted = [];
+  for (const script of scripts) {
+    for (const [kind, name] of definitions(script).values()) {
+      const leaf = name.split('.').pop();
+      if (kind === 'page' || (kind === 'microflow' && leaf.startsWith('ACT_'))) wanted.push([kind, name]);
+    }
+  }
+  if (!wanted.length) return 0;
+  const coverage = require('./check_test_coverage.cjs');
+  let every, own, existing, claims;
+  try {
+    [every, own] = coverage.projectModules(app, mpr);
+    existing = new Set([...coverage.qualifiedNames(coverage.mxcliJson(app, mpr, 'SHOW PAGES')),
+      ...coverage.qualifiedNames(coverage.mxcliJson(app, mpr, 'SHOW MICROFLOWS'))]);
+    claims = coverage.covered(py.join(app, 'tests'));
+  } catch {
+    return 0;
+  }
+  const seen = new Set();
+  for (const [kind, name] of wanted) {
+    const module = name.split('.')[0];
+    // The project's own modules, or one these scripts create: never a Marketplace module.
+    if (every.has(module) && !own.includes(module)) continue;
+    if (existing.has(name) || claims.has(name) || seen.has(name)) continue;
+    seen.add(name);
+    py.print(`  - ${kind} ${name}`);
+  }
+  return 0;
+}
+
 // SCRIPT01: a document two scripts create is whatever the last one run says.
 function duplicateDefinitions(scripts) {
   const reported = new Set();
@@ -1149,6 +1190,7 @@ function main(argv) {
   if (command === 'deployment-age' && args.length === 2) return deploymentAge(...args);
   if (command === 'runtime-age' && args.length === 2) return runtimeAge(...args);
   if (command === 'duplicate-definitions') return duplicateDefinitions(args);
+  if (command === 'test-first' && args.length >= 3) return testFirst(args);
   if (command === 'runtime-errors' && args.length === 2) return runtimeErrors(...args);
   if (command === 'visual-report' && args.length) {
     let review = '';

@@ -102,7 +102,8 @@ Three names are reserved by the platform and quoting does not help:
 Keep every `mdlsource/*.mdl` re-runnable (`create or modify`, `create entity if not
 exists`): `mxcli exec` stops at the first failing statement and leaves the model half-applied;
 after a failed exec, fix the script and exec it again. Each document is **created in one script
-only** (precheck `SCRIPT01`), one `exec` per script by its own path. Never read or edit `mprcontents/`
+only** (precheck `SCRIPT01`), one `exec` per script by its own path. A new page or `ACT_`
+microflow waits for its test (precheck `TEST01`): write the test first, then exec. Never read or edit `mprcontents/`
 or the `.mpr` by hand: `DESCRIBE` and `SHOW` read the model, MDL changes it. A test that passes
 alone and fails in the suite is a test-isolation bug, fixed in `tests/lib.sh`, never by rerunning
 the suite.

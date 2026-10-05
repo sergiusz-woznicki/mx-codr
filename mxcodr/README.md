@@ -799,6 +799,15 @@ error(s) ... fix them first", and a script that adds none passes. An old error s
 against a script that touches what it names, so swapping one broken rule for another does not
 pass.
 
+It refuses a script that creates a page or an `ACT_` microflow the model does not have yet when no
+`# covers:` line of `tests/verify-*.test.sh` names it (`TEST01`, 2026.10.05.11). The skill said
+test first, but coverage was checked only at the end: in InvoiceChaseCodr the session built the
+whole app, then wrote six tests in one go, and three had never failed. Blocked at the exec, the
+test comes after the script that names the page's widgets and before the page exists, so it is
+red first by itself. A fix to a page already in the model, a `SUB_` microflow, an entity and a
+Marketplace module pass; a model that cannot be read never blocks. `MDL_TEST_FIRST=0` in
+`tests/harness.env` turns it off.
+
 It also refuses a script that creates a document another script in the same folder creates too
 (`SCRIPT01`): whichever of the two runs last decides what the page is, so re-running the earlier
 one undoes the later one without any error. In a Pi session `Order_Detail` was created in two

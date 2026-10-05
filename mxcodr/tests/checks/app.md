@@ -6,6 +6,7 @@ says "warning". The finding already says what to change; this says why. Not `tes
 | Code | Wants | Fix |
 |---|---|---|
 | `coverage` | every page and `ACT_` microflow named on a `# covers:` line of some `tests/verify-*.test.sh` | names separated by commas or spaces; a `SUB_`, an entity or an enumeration does not count |
+| `TEST01` | a test before a new page or `ACT_` microflow: the exec waits until a `# covers:` line names it | write `tests/verify-<feature>.test.sh` first, run it (red: the page is not there yet), then exec; a fix to a page already in the model passes; `MDL_TEST_FIRST=0` turns it off |
 | `SCRIPT01` | each document created in one script only | change it there or with `alter`, never a second `create or modify` in a later script |
 | `security` | `PRODUCTION` once users sign in | `alter project security level PRODUCTION;` in the first script (`MDL_REQUIRE_PRODUCTION=0` only for an app with no users) |
 | stale client bundle | a test failed on a 404 for `dist/*.js` after a `--watch` rebuild (the failure line says so) | `bash tests/gate.sh --restart --only <feature>` -- not the page, not a widget |
