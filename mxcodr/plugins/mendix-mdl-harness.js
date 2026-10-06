@@ -121,6 +121,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (readState(sessionID, "running")) return
       // Waiting for the person's Marketplace login: stay idle so they can answer.
       if (core.marketplacePending(root)) return
+    // Films recording in the background hold the browser: the gate would refuse; check next turn.
+    if (core.filmsRecording(root)) return
 
       const rounds = Number(readState(sessionID, "rounds") || 0)
       if (rounds >= core.MAX_GATE_ROUNDS) {

@@ -77,6 +77,9 @@ if [ -f tests/marketplace-login.sh ]; then
   bash tests/marketplace-login.sh before "bash tests/gate.sh" >/dev/null 2>&1
   [ $? -eq 3 ] && nothing
 fi
+# film.sh --all records in the background in the browser the gate needs: end the turn, gate later.
+film_pid="$(cat .mxcli/films/.all.pid 2>/dev/null)"
+case "$film_pid" in ''|*[!0-9]*) ;; *) kill -0 "$film_pid" 2>/dev/null && nothing ;; esac
 output="$(bash tests/gate.sh 2>&1)"
 status_code=$?
 if [ "$status_code" -eq 0 ] && printf '%s\n' "$output" | grep -Fq 'DONE — every check passed'; then

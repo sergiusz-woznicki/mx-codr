@@ -138,6 +138,16 @@ function marketplacePending(root) {
   return marketplaceWait(root, "bash tests/gate.sh") !== null
 }
 
+// True while `tests/film.sh --all` records in the background: the end-of-turn gate then stays
+// quiet (it would refuse, the browser is in use), so the turn ends instead of waiting. A Pi session
+// started --all and then polled --status for twelve minutes so as not to collide with that gate.
+function filmsRecording(root) {
+  let pid = ""
+  try { pid = readFileSync(join(root, ".mxcli", "films", ".all.pid"), "utf8").trim() } catch { return false }
+  if (!/^[0-9]+$/.test(pid)) return false
+  try { process.kill(Number(pid), 0); return true } catch (e) { return e.code === "EPERM" }
+}
+
 // `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
 function resolvePwd(root, script) {
   return script.replace(/^(\$\{PWD\}|\$PWD|\$\(pwd\))(?=\/)/, root.replace(/\\/g, "/"))
@@ -254,6 +264,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder,
 }

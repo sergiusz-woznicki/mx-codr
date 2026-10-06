@@ -50,8 +50,10 @@ number before or as you start it**, and that it records in the background. Then:
   start it again and film the tests it lists one by one;
 - `bash tests/film.sh --stop` ends it early.
 
-While it records, do not run the gate or a test: they share the browser, and the gate refuses
-until the recording is done.
+**Do not wait for it.** Tell the person the estimate and end your turn: no `sleep`, no loop over
+`--status`. The end-of-turn gate stays quiet while it records (it would refuse: the browser is in
+use) and runs at the end of a later turn. While it records, do not run the gate or a test
+yourself either.
 
 ## Rules
 
