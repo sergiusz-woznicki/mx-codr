@@ -12,7 +12,8 @@
 //      parameter of its enumeration type;
 //   2. the text: its name appears in no other document's source or strings (a comment, an OQL
 //      query, a caption), nor in javasource/ (proxies aside), javascriptsource/, theme/,
-//      themesource/ or tests/ -- Java, JavaScript and tests can call a document by its name;
+//      themesource/ or tests/*.test.* -- Java, JavaScript and tests can call a document by its
+//      name (a test's `# covers:` line is not a use: it only declares what the test covers);
 //   3. Mendix: the gate drops them all on a scratch copy and mx check must still report 0 errors
 //      (tests/gate/checks.sh, check_unused). This file does proofs 1 and 2.
 //
@@ -43,6 +44,12 @@ const TEXT_DIRS = ['javasource', 'javascriptsource', 'theme', 'themesource', 'te
 const SKIP_DIRS = new Set(['proxies', 'node_modules', '.git']);
 const TEXT_FILE = /\.(java|js|mjs|cjs|ts|tsx|jsx|html?|s?css|json|xml|sh|mdl|md|txt|py|ya?ml)$/i;
 const MAX_FILE = 2 * 1024 * 1024;
+// A test's `# covers:` line (and the `#` lines under it holding only more names) declares what the
+// test covers; the coverage check makes every page and ACT_ flow appear on one. It is not a use:
+// counted as one, no page or ACT_ flow could ever be reported. What the test does with it counts.
+// The same lines check_test_coverage.cjs reads (its QUALIFIED_LIST).
+const QUALIFIED_LIST = String.raw`[\w.]+\.\w+(?:(?:[ \t]*,[ \t]*|[ \t]+)[\w.]+\.\w+)*[ \t]*,?`;
+const COVERS_LINES = new RegExp(String.raw`^[ \t]*#[ \t]*covers[ \t]*:.*(?:\n[ \t]*#[ \t]*` + QUALIFIED_LIST + String.raw`[ \t]*$)*`, 'gim');
 
 class ModelReadError extends Error {}
 
@@ -114,7 +121,9 @@ function textFiles(appDir) {
       if (rel.split(path.sep)[0] === 'tests' && !/\.test\./.test(e.name)) continue;
       try {
         if (fs.statSync(path.join(appDir, rel)).size > MAX_FILE) continue;
-        files.push([rel.split(path.sep).join('/'), fs.readFileSync(path.join(appDir, rel), 'utf8')]);
+        let text = fs.readFileSync(path.join(appDir, rel), 'utf8');
+        if (rel.split(path.sep)[0] === 'tests') text = text.replace(COVERS_LINES, '');
+        files.push([rel.split(path.sep).join('/'), text]);
       } catch { /* unreadable: skip */ }
     }
   };

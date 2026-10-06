@@ -690,7 +690,8 @@ suite refreshes the app's own at the same time): no reference in mxcli's catalog
 -- calls, pages, data sources, navigation, settings, scheduled events, published services -- and
 no attribute or parameter of the enumeration's type); the short name in no other document's MDL
 source or strings (a comment, an OQL query) and in no file under `javasource/` (proxies aside),
-`javascriptsource/`, `theme/`, `themesource/` or `tests/`; then every one of them is dropped on
+`javascriptsource/`, `theme/`, `themesource/` or a `tests/*.test.*` file -- not on a `# covers:`
+line, which every page and `ACT_` flow is on (coverage), so it declares, not uses; then every one of them is dropped on
 the copy and mx check must still report 0 errors -- else nothing is reported. The finding lists
 the `drop` statements. `mdlsource/` is not a proof: it holds the scripts that created them. A
 document kept on purpose goes in `MDL_KEEP_UNUSED=Mod.Doc,...` in `tests/harness.env`, set by the

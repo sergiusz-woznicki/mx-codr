@@ -673,7 +673,7 @@ check_scope() {
 # modules that nothing uses -- 67 were left behind over 34 apps (data source flows replaced by
 # XPath, probes, a reset flow no button called). Three proofs, all on a copy of the project:
 # check_unused.cjs finds no reference in the catalog and the name in no other document, Java,
-# JavaScript, theme or test file; then every one of them is dropped on the copy and mx check must
+# JavaScript, theme or test file (a test's `# covers:` line declares, it does not use); then every one of them is dropped on the copy and mx check must
 # still report 0 errors. A document Mendix still needs is never reported. MDL_KEEP_UNUSED in
 # tests/harness.env (Mod.Doc,Mod.Other) keeps one on purpose.
 check_unused() {
@@ -723,7 +723,8 @@ check_unused() {
     echo "   Fix: drop them in one script -- the gate dropped them on a copy and mx check still reported 0 errors:"
     sed 's/^/     /' "$WORK/unused.drop.mdl"
     echo "   Dropping one can leave what only it called unused: run the gate again after."
-    echo "   Its source in mdlsource/ goes too, or a re-run brings it back."
+    echo "   Its source in mdlsource/ goes too, or a re-run brings it back; and its name on a # covers: line"
+    echo "   of tests/verify-*.test.sh (a covers: line is no use -- coverage fails on a name not in the model)."
     echo "   Kept on purpose (an API for later, a page opened by URL)? The person adds it to tests/harness.env:"
     echo "     MDL_KEEP_UNUSED=$(sed -n 's/^drop [a-z ]* \([^ ;]*\);$/\1/p' "$WORK/unused.drop.mdl" | head -1)"
   } > "$WORK/unused.detail"
