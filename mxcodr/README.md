@@ -553,6 +553,19 @@ index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both st
 naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
 entities and seed flows are left out: an index does not help them, or they run once.
 
+`EVENT01`-`04` and `ERR01` (`checks/event_rules.cjs`, naming step, with the entities and pages it
+already describes) read entity event handlers and error handlers. Two block DONE: a commit handler
+that commits the object it was called for with events (it runs itself until the app crashes), and
+a before handler without `raise error` that can return false (the save is skipped in silence). Three
+warn: `without events` on an entity whose commit handler then does not run, Save changes on an
+entity a before-commit handler refuses with an error (the user sees "An error has occurred"), and
+an error handler with no log, raise, message or return (`on error continue` is mxcli's CONV014).
+Neither mx check nor the lint rules see any of them. Over 34 local projects they found nothing: six
+handlers in all, each a correct `before commit ... raise error`; one first draft of EVENT02 flagged a
+handler returning a variable that is only ever `true`, so a returned variable counts only when it
+can be anything else. They guard against the failures, not a measured backlog. A bare `commit $X;`
+runs the handlers in MDL as in Studio Pro.
+
 PERF07 and PERF08 also read the queries inside view entities: `i.DueDate < ...` in a view's OQL
 wants an index like a retrieve's XPath does. Pi kept a `(DueDate)` index two views filter on, and
 PERF08 called it unused. A query that compares an association with `=` gets no PERF07: Mendix
