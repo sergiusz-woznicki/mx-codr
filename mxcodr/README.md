@@ -29,12 +29,13 @@ hooks/            host-specific prompt/PostToolUse adapters plus the Codex and C
 plugins/          mendix-mdl-harness.js (OpenCode) and mendix-mdl-harness.pi.js (Pi) -- the same
                   three jobs as the hooks, in each host's own event API
 tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), precheck.sh, orient.sh,
-                  diagnose.sh, peek.sh, theme.sh, lib.sh + lib/ (timeout, sessions, scenario, results),
+                  diagnose.sh, peek.sh, film.sh, theme.sh, lib.sh + lib/ (timeout, sessions, scenario, results),
                   portable.sh, scenario-helpers.js, run-app.sh (Windows), run-docker.sh (Docker
                   mode) — the harness, upgraded in place on every install.
                   gate.sh is the done gate: tests, mx check, lint, coverage, naming, layout and
                   security, then warnings (rendered pages, server errors). precheck.sh is what the hooks run before an exec; orient.sh and
                   diagnose.sh gather facts in parallel; peek.sh looks at a page without a test;
+                  film.sh records a video of a test's run;
                   portable.sh holds what differs between platforms and the environment checks
                   every script shares
 .gitattributes    forces LF on *.sh, *.cjs, *.js and *.mdl — copied only if the project has none
@@ -61,7 +62,7 @@ is the shipping container, never the place to edit:
 | `skills/<name>/SKILL.md` | `.ai-context/skills/<name>/SKILL.md` |
 | `lint-rules/*.star` | `.claude/lint-rules/*.star` |
 | `checks/fixtures/` | `tests/skills/fixtures/` |
-| `checks/*.cjs`, `rules/`, `hooks/`, `plugins/`, `tests/`, `skills/spacing-and-layout/` | authored here; no other copy in the repo |
+| `checks/*.cjs`, `rules/`, `hooks/`, `plugins/`, `tests/`, `skills/spacing-and-layout/`, `skills/film-tests/` | authored here; no other copy in the repo |
 
 **Finding your way in a long script.** No script is longer than about 500 lines. Where one grew
 past that it became an entry plus parts: `install.sh` + `install/`, `tests/gate.sh` +
@@ -327,6 +328,17 @@ Each boot empties `.mxcli/gate-boot.log` and keeps the one before it as
 visible text and console errors. It writes no test file, claims no coverage and records no
 red-first run -- the scratch `verify-zz-*.test.sh` two sessions wrote for this left a
 "went green without ever being red" record behind every time.
+
+### A video of a test's run
+
+`bash tests/film.sh --list` prints every browser test: its name, the user it signs in as, what it
+covers and the journey from its header. `bash tests/film.sh <name>...` (or `--all`) records the
+shared browser while each test runs, unchanged and at its own speed, through playwright-cli's
+`video-start`/`video-stop`; each film opens with a card naming the test (`video-chapter`). Films
+go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there; `--all` also joins them into
+`all.mp4`. A failing test keeps its film. It refuses while a gate or a test holds the browser, and
+when no app (or another project's app) answers. The skill `film-tests` lists the tests first, so
+the person can say which ones to film.
 
 A peek at the page a user already lands on (their home page) no longer fails as "clicked menu …
 but nothing happened": for a look that means "already there". Signed in as a user with no

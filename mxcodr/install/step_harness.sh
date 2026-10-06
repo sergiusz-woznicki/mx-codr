@@ -10,7 +10,7 @@ for source_file in "$SRC"/tests/*; do
   name="$(basename "$source_file")"
   target="$APP/tests/$name"
   case "$name" in
-    theme.sh|gate.sh|orient.sh|diagnose.sh|precheck.sh|peek.sh|lib.sh|portable.sh|scenario-helpers.js|run-docker.sh|run-app.sh|marketplace-login.sh|CHECKS.md|checks|gate|lib) ;;
+    theme.sh|gate.sh|film.sh|orient.sh|diagnose.sh|precheck.sh|peek.sh|lib.sh|portable.sh|scenario-helpers.js|run-docker.sh|run-app.sh|marketplace-login.sh|CHECKS.md|checks|gate|lib) ;;
     *) if [ -e "$target" ]; then continue; fi ;;
   esac
   if [ -d "$source_file" ]; then
