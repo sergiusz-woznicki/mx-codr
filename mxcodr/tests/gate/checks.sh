@@ -1,25 +1,37 @@
 # tests/gate/checks.sh -- the model checks that need no app (mx check, lint, coverage, naming,
-# layout, security, scope), and their cache.
+# layout, security, scope, unused), and their cache.
 # Sourced by tests/gate.sh; defines functions only. Entry points: start_model_checks, collect_model_checks.
 
 # Each check runs in a background subshell, so it reports through files: check_<name> writes
 # $WORK/<name>.summary and .detail and returns 0 pass / 1 problems / 2 could not run;
 # run_cached adds .status and .secs; collect reads them after `wait`.
 
-# mx_check_copy -- mx check on a fresh copy of the project; sets out. False when the copy failed.
+# mx_check_copy [<dir> [<label>]] -- mx check on a fresh copy of the project in <dir> ($WORK/mxcheck);
+# sets out. False when the copy failed (the reason in $WORK/<label>.summary, label mx).
 # mx check runs on a copy: it rewrites the .mpr and would trigger --watch rebuilds.
 # The copy needs widgets/ and theme*/ as well; `cp -Rc` clones on APFS, else plain cp -R.
 mx_check_copy() {
-  local item scratch="$WORK/mxcheck"
+  local scratch="${1:-$WORK/mxcheck}" label="${2:-mx}"
+  project_copy "$scratch" "$label" || return 1
+  mx_check_in "$scratch"
+}
+
+# project_copy <dir> <label> -- a fresh copy of the project's model, widgets, theme and Java in <dir>.
+project_copy() {
+  local item scratch="$1"
   rm -rf "$scratch"; mkdir -p "$scratch"
   for item in "$MPR" mprcontents widgets theme themesource javasource; do
     [ -e "$item" ] || continue
     cp -Rc "$item" "$scratch/" 2>/dev/null || cp -R "$item" "$scratch/" 2>/dev/null || {
-      echo "mx check: could not run -- could not copy $item to a scratch directory" > "$WORK/mx.summary"; return 1; }
+      echo "$2: could not run -- could not copy $item to a scratch directory" > "$WORK/$2.summary"; return 1; }
   done
+}
+
+# mx_check_in <dir> -- mx check on the copy in <dir>; sets out.
+mx_check_in() {
   # Without `mx update-widgets` (2.9s of a 5.2s check, measured); the one error that
   # step prevents, CE0463, buys the slow run. Same rule as tests/precheck.sh.
-  local -a mx_args=(docker check -p "$scratch/$MPR")
+  local -a mx_args=(docker check -p "$1/$MPR")
   [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
   out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
   if printf '%s\n' "$out" | grep -q 'CE0463'; then
@@ -493,7 +505,8 @@ start_model_checks() {
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_VISUAL=${MDL_VISUAL:-}" "env:MDL_WIDGET_NAMES=${MDL_WIDGET_NAMES:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
-  echo "== mx check, lint, coverage, naming, layout, security and scope started (they need no app; running while the suite does)"
+  ( run_cached unused   check_unused   "${cache_inputs[@]}" tools/mdl-checks/check_unused.cjs javasource javascriptsource meta:theme meta:themesource tests "env:MDL_KEEP_UNUSED=${MDL_KEEP_UNUSED:-}" ) &
+  echo "== mx check, lint, coverage, naming, layout, security, scope and unused started (they need no app; running while the suite does)"
 }
 
 # An app with sign-in is only as safe as its security level: at PROTOTYPE Mendix checks page and
@@ -656,6 +669,67 @@ check_scope() {
   return 0
 }
 
+# UNUSED01: a microflow, nanoflow, page, snippet, enumeration or Java action of the project's own
+# modules that nothing uses -- 67 were left behind over 34 apps (data source flows replaced by
+# XPath, probes, a reset flow no button called). Three proofs, all on a copy of the project:
+# check_unused.cjs finds no reference in the catalog and the name in no other document, Java,
+# JavaScript, theme or test file; then every one of them is dropped on the copy and mx check must
+# still report 0 errors. A document Mendix still needs is never reported. MDL_KEEP_UNUSED in
+# tests/harness.env (Mod.Doc,Mod.Other) keeps one on purpose.
+check_unused() {
+  local gate out found code scratch="$WORK/unusedcheck" count errors
+  [ -f tools/mdl-checks/check_unused.cjs ] || {
+    echo "unused: could not run -- tools/mdl-checks/check_unused.cjs is missing" > "$WORK/unused.summary"; return 2; }
+  modules_or_status unused; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" unused || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/check_unused.cjs . $USER_MODULES --mpr "$scratch/$MPR" \
+    ${MDL_KEEP_UNUSED:+--keep "$MDL_KEEP_UNUSED"} 2>&1)"; code=$?
+  case "$code" in
+    0) echo "unused: no unused document" > "$WORK/unused.summary"; return 0 ;;
+    1) printf '%s\n' "$found" | head -1 | grep -q '^FAIL ' || code=2 ;;
+  esac
+  if [ "$code" != "1" ]; then
+    echo "unused: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/unused.summary"
+    return 2
+  fi
+  count="$(printf '%s\n' "$found" | grep -c '^  - \[UNUSED01\]')"
+  printf '%s\n' "$found" | sed -n 's/^drop: //p' > "$WORK/unused.drop.mdl"
+  # The third proof: Mendix itself, with every one of them gone.
+  if ! "$MXCLI" exec "$WORK/unused.drop.mdl" -p "$scratch/$MPR" > "$WORK/unused.exec" 2>&1; then
+    echo "unused: $count document(s) look unused, but dropping them on a copy failed -- left alone" > "$WORK/unused.summary"
+    tail -2 "$WORK/unused.exec" | sed 's/^/   /' > "$WORK/unused.warnings"
+    return 0
+  fi
+  mx_check_in "$scratch"   # sets out
+  errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"
+  if [ "$errors" != "0" ]; then
+    # Not proven: Mendix needs one of them, or the model had errors before (mx check says which).
+    if [ -n "$errors" ]; then
+      echo "unused: $count document(s) look unused, but mx check without them reports $errors error(s) -- left alone" > "$WORK/unused.summary"
+    else
+      echo "unused: $count document(s) look unused, but mx check without them printed no error count -- left alone" > "$WORK/unused.summary"
+    fi
+    return 0
+  fi
+  echo "unused: $count document(s) nothing uses (UNUSED01) -- no reference in the model, the name in no other document, Java, JavaScript, theme or test file, and mx check passes without them" > "$WORK/unused.summary"
+  {
+    printf '%s\n' "$found" | grep '^  - \[UNUSED01\]' | sed 's/^  /   /'
+    echo "   Fix: drop them in one script -- the gate dropped them on a copy and mx check still reported 0 errors:"
+    sed 's/^/     /' "$WORK/unused.drop.mdl"
+    echo "   Dropping one can leave what only it called unused: run the gate again after."
+    echo "   Its source in mdlsource/ goes too, or a re-run brings it back."
+    echo "   Kept on purpose (an API for later, a page opened by URL)? The person adds it to tests/harness.env:"
+    echo "     MDL_KEEP_UNUSED=$(sed -n 's/^drop [a-z ]* \([^ ;]*\);$/\1/p' "$WORK/unused.drop.mdl" | head -1)"
+  } > "$WORK/unused.detail"
+  return 1
+}
+
 # Reads one background check's files into summary, failures or cannot_run, and details.
 collect() {
   local name="$1" label="$2" status line
@@ -698,4 +772,5 @@ collect_model_checks() {
   collect layout "layout"
   collect security "security"
   collect scope "scope"
+  collect unused "unused"
 }

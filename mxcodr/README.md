@@ -683,12 +683,28 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+`UNUSED01` (`checks/check_unused.cjs`, step `unused`, blocks DONE): a microflow, nanoflow, page,
+snippet, enumeration or Java action of the app's own modules that nothing uses. Three proofs must
+agree, all on a copy of the project (the catalog is written beside the .mpr it reads, and the
+suite refreshes the app's own at the same time): no reference in mxcli's catalog (`CATALOG.REFS`
+-- calls, pages, data sources, navigation, settings, scheduled events, published services -- and
+no attribute or parameter of the enumeration's type); the short name in no other document's MDL
+source or strings (a comment, an OQL query) and in no file under `javasource/` (proxies aside),
+`javascriptsource/`, `theme/`, `themesource/` or `tests/`; then every one of them is dropped on
+the copy and mx check must still report 0 errors -- else nothing is reported. The finding lists
+the `drop` statements. `mdlsource/` is not a proof: it holds the scripts that created them. A
+document kept on purpose goes in `MDL_KEEP_UNUSED=Mod.Doc,...` in `tests/harness.env`, set by the
+person (the guard blocks a model setting it). Over 34 local apps 67 were left; InvoiceB2B had 15
+(13 `DS_` flows its DS01 fix replaced, a seed-reset flow, an enumeration), and dropping all 15 on a
+copy passed mx check; a page still shown by a button, offered as a candidate, failed it with 2
+errors and was not reported. The step takes 7 s when it has candidates, mostly the copy's mx check.
+
 So the rules are 8 kB and name one skill to read first; the others are named by the finding
 that needs them, and the per-prompt reminder says the same. What each check code wants and its
 fix is written down once -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it per
 session) for what `HOME01` or `--only` required -- and a red verdict points at it. Since bundle
 2026.10.04.9 that is one file per gate step, `tests/checks/layout.md`, `lint.md`, `naming.md` and
-`app.md` (mx check, coverage, security, scope, the suite, visual and runtime), each under 4,500
+`app.md` (mx check, coverage, security, scope, unused, the suite, visual and runtime), each under 4,500
 characters, with `tests/CHECKS.md` as the index of which file holds which code. The one page had
 reached its 9,300-character budget, and a red verdict now names only the files of the steps that
 failed, so a session reads 1.3 to 3.7k characters instead of 9.3k.

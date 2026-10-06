@@ -1,6 +1,6 @@
 # coverage, precheck, the suite and the runtime
 
-One line per code the `mx`, `coverage`, `security`, `scope`, `tests`, `visual` and the precheck step can print. Every code blocks DONE unless its line
+One line per code the `mx`, `coverage`, `security`, `scope`, `unused`, `tests`, `visual` and the precheck step can print. Every code blocks DONE unless its line
 says "warning". The finding already says what to change; this says why. Not `tests/gate/*.sh`.
 
 | Code | Wants | Fix |
@@ -13,6 +13,7 @@ says "warning". The finding already says what to change; this says why. Not `tes
 | Studio Pro has this project open | nothing edits the model through mxcli while Studio Pro holds it: what it saves next replaces what mxcli wrote (warning, gate and after each exec) | close Studio Pro without saving, or make the change in Studio Pro |
 | `VIEW01` | a view a role reads with no XPath while it sees only its own rows of its data | constrain the rule, or revoke it and read the view in a data-source microflow |
 | `SCOPE01` | a page's data source microflow ties its retrieve to the user when the page's role reads that entity through an XPath-scoped rule (warning) | microflows ignore entity access: constrain its retrieve (`... = '[%CurrentUser%]'` or `= $SignedInCustomer`); `MDL_SCOPE=error` blocks |
+| `UNUSED01` | no microflow, nanoflow, page, snippet, enumeration or Java action nothing uses: no reference, its name nowhere else, mx check passes without it | the `drop` lines given, and its source in `mdlsource/`; kept on purpose: the person sets `MDL_KEEP_UNUSED=Mod.Doc` |
 | `RUNTIME01` | no `ERROR` in the server log while the suite ran (warning) | the log line names the microflow or page; `MDL_RUNTIME_ERRORS=error` makes it block |
 | `VIS01` `VIS02` `VIS03` `VIS04` | no overlapping widgets, sideways scroll, cut-off text, or chart bigger than the screen, on the page a test ends on (warning) | usually a box class on inline text or a negative margin; a chart needs a height that fits; `MDL_VISUAL=error` makes them block |
 | `LOOK01` `LOOK02` | screenshots reviewed with `MDL_VISUAL_REVIEW=agent` (warning) | read each PNG in `.mxcli/visual/review.md`, write `verdicts.json` |

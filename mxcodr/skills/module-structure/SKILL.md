@@ -228,6 +228,25 @@ never on `MyFirstModule.Home_Web` or an Administration page.
 The gate fails `MODULE01` while `MyFirstModule` is still there, listing what still uses it,
 and `HOME01` when the administrators' role opens anywhere but the app's own module.
 
+## Nothing left behind
+
+A document nothing uses still costs: a reader takes it for live code, and a re-run of an old
+script edits it instead of the one the app uses. When a data source flow gives way to a
+`database` source (DS01), a probe has answered, or a page was replaced, drop the old one in the
+same script, and its `create` in `mdlsource/` too:
+
+```sql
+drop microflow Shop.DS_Customers;
+drop enumeration Shop.ENUM_OldStatus;
+```
+
+The gate fails `UNUSED01` on a microflow, nanoflow, page, snippet, enumeration or Java action of
+the app's own modules only when three proofs agree: no reference in the model (calls, pages,
+navigation, settings, scheduled events, published services), its name in no other document, Java,
+JavaScript, theme or test file, and mx check still passing with all of them dropped on a copy.
+Kept on purpose (an API for later, a page opened only by URL)? The person lists it in
+`tests/harness.env`: `MDL_KEEP_UNUSED=Shop.DS_Customers,Shop.Old_Page`.
+
 ## Check it
 
 ```bash
@@ -246,6 +265,7 @@ cycles and cross-module coupling that no single rule catches.
 - [ ] The domain model, roles and access rules went in first, in one script; pages and microflows after
 - [ ] No document sits at module root
 - [ ] `MyFirstModule` is gone, and the administrators open on a page of the app's own module
+- [ ] No document is left that nothing uses (UNUSED01); its script in `mdlsource/` is gone too
 - [ ] No folder is named after a document type
 - [ ] Shared documents live in `_Shared/`, not duplicated
 - [ ] A consumable module exposes `UseMe/` and hides `Private/`

@@ -400,7 +400,7 @@ function tokenRead(command) {
 
 const SWITCHES = ['MDL_REQUIRE_PRODUCTION', 'MDL_ALLOW_GREEN_FIRST', 'MDL_VISUAL', 'MDL_VISUAL_REVIEW',
   'MDL_RUNTIME_ERRORS', 'MDL_PRECHECK', 'MDL_GATE_CACHE', 'MDL_HARNESS_EDITS', 'MDL_CAPTIONS',
-  'MDL_SCOPE', 'MDL_MARKETPLACE_LOGIN'];
+  'MDL_SCOPE', 'MDL_MARKETPLACE_LOGIN', 'MDL_WIDGET_NAMES', 'MDL_KEEP_UNUSED'];
 let hit = null;
 if (tool === 'bash') {
   const command = String(args.command || '');

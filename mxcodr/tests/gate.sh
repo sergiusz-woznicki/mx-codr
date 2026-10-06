@@ -10,20 +10,18 @@
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
 #
-# Eight verdicts: the browser suite (tests/verify-*.test.sh) and seven model checks that need no
-# app -- mx check, lint, coverage, naming, layout, security, scope. Every step runs even if another
-# fails; a passing model check is replayed while its inputs are unchanged.
+# Nine verdicts: the suite (tests/verify-*.test.sh) and eight model checks that need no app -- mx check,
+# lint, coverage, naming, layout, security, scope, unused. Each runs; a pass replays while its inputs hold.
 #   DONE — every check passed               exit 0 (--only/--tests-only print PASSED, never DONE)
 #   NOT DONE — failed: <checks>             exit 1
 #   NOT DONE — could not run: <checks>      exit 2
-# Exit 2 also means the gate stopped early: no .mpr, bad argument, no app answering,
-# a boot that failed, or the runtime refusing sessions. Visual findings are warnings.
+# Exit 2 also: stopped early (no .mpr, bad argument, no app, a failed boot, sessions refused).
 # Env: BASE_URL (else 8081 then 8080), APP_PORT (8081), SCRIPT_TIMEOUT (90s),
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
-#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE|MDL_WIDGET_NAMES=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
-#      set in tests/harness.env.
+#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE|MDL_WIDGET_NAMES=warn|error, MDL_CLOSE_BROWSER=1,
+#      MDL_KEEP_UNUSED=Mod.Doc,... -- MDL_* may also be set in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # How to read this file: main() at the bottom is the whole gate, step by step. The steps
@@ -195,7 +193,7 @@ print_verdict_and_exit() {
   echo
   echo "== gate"
   for line in "${summary[@]}"; do echo "   $line"; done
-  for name in tests mx lint coverage naming layout security scope visual; do
+  for name in tests mx lint coverage naming layout security scope unused visual; do
     [ -f "$WORK/$name.secs" ] && timing="$timing $name $(cat "$WORK/$name.secs")s,"
   done
   echo "   timing:${timing} wall $((SECONDS - GATE_START))s"
