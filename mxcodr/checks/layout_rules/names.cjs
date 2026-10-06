@@ -32,6 +32,10 @@ const TYPE_ECHO = { layoutgrid: /Grid$/, tabcontainer: /^Tabs?|Tabs?$/, snippetc
 const DOCUMENT = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(page|snippet)\s+([\w.]+)/i;
 const WIDGET = /^\s*([a-z]+)\s+([A-Za-z_]\w*)\s*([({].*)?$/;
 
+// A code in place of a word: K1, A0 (one capital and a number), Kpi3, Box2 (a generic word and a
+// number). InvoiceB2B renamed k1Value to AdminHome_K1ValueText: the pattern held, the name still
+// said nothing. A number inside a real word stays (Top10CustomersGrid).
+const CODE = /(?:^|[a-z0-9])[A-Z]\d|(?:^|[a-z])(?:Kpi|Box|Item|Row|Col|Tile|Card|Value|Label|Tab|Field)\d/;
 const pascal = text => (String(text).match(/[A-Za-z0-9]+/g) || []).map(w => w[0].toUpperCase() + w.slice(1)).join('');
 const plural = word => (/s$/.test(word) ? word : /[^aeiou]y$/.test(word) ? word.slice(0, -1) + 'ies' : word + 's');
 
@@ -144,16 +148,23 @@ function nameFindings(lines) {
       uses.get(w.name).push([doc.name, w.line]);
       const word = TYPE_WORD[w.type];
       const rest = w.name.startsWith(`${key}_`) ? w.name.slice(key.length + 1) : null;
-      const fits = rest !== null && rest.endsWith(word) && rest.length > word.length && /^[A-Z][A-Za-z0-9]*$/.test(rest) && !/\d$/.test(rest.slice(0, -word.length));
+      const what = rest !== null && rest.endsWith(word) ? rest.slice(0, -word.length) : '';
+      const fits = what !== '' && /^[A-Z][A-Za-z0-9]*$/.test(what) && !/\d$/.test(what) && !CODE.test(what);
       if (fits) continue;
-      const words = businessWords(w.type, w.name, w.props);
+      // Already <Page>_..._<Type> but with a code in it: the words are what is missing, not the form.
+      const coded = what !== '' && /^[A-Z][A-Za-z0-9]*$/.test(what);
+      let words = coded ? '' : businessWords(w.type, w.name, w.props);
+      // A suggestion must itself pass: no leading digit, no code left over from the old name.
+      if (!/^[A-Z]/.test(words) || CODE.test(words) || /\d$/.test(words)) words = '';
       let name = words ? suggestion(key, w.type, words) : '';
       if (name && ((name !== w.name && taken.has(name)) || proposed.get(name) > 1)) name = '';
-      const tests = ` Rename it in the tests too: a test that finds \`.mx-name-${w.name}\` stops finding it.`;
+      const tests = ` Rename it wherever a test names it too: \`.mx-name-${w.name}\` and the name passed to landed(), row_action(), fill(), menu().` +
+        (['datagrid', 'listview', 'gallery'].includes(w.type) ? ` Its selection variable is renamed with it: a button that passes \`$${w.name}\` must pass the new name.` : '');
       findings.push({
         check: 'NAME02', line: w.line, document: doc.name,
-        message: `${doc.name}: ${w.type} '${w.name}' does not read <Page>_<What><Type>, so the name says nothing about where it is or what it does -- ` +
-          (name ? `name it '${name}'.` : `name it '${key}_<what it shows>${word}', after what it shows (e.g. '${key}_Overdue${word}').`) + tests,
+        message: `${doc.name}: ${w.type} '${w.name}' ` + (coded ? 'has a code where the words for what it shows belong -- ' :
+          'does not read <Page>_<What><Type>, so the name says nothing about where it is or what it does -- ') +
+          (name ? `name it '${name}'.` : `name it '${key}_<what it shows>${word}', in business words for what it shows -- not a code like K1 or Kpi3 (e.g. '${key}_OverdueInvoices${word}').`) + tests,
       });
     }
   }

@@ -1258,7 +1258,10 @@ named a dozen places, and 17% were Studio Pro defaults like `container3`. The pa
 name, no module or underscore; a snippet's name plus `Snippet`; the module in front only when two
 modules share a page name) makes a name unique; the type word at the end is plain English. NAME02
 prints the name to use, from the widget's attribute, caption or data source; where nothing says
-what it shows (a KPI tile) it asks for the word. On InvoiceB2B it named 364 of 389 widgets itself.
+what it shows (a KPI tile) it asks for the word, and a code where words belong (`K1`, `Kpi3`, `Box2`)
+fails too: InvoiceB2B first renamed `k1Value` to `AdminHome_K1ValueText`, which kept the form and said
+nothing (16 such names). A number inside a word stays (`Top10CustomersGrid`); a suggestion never
+starts with a digit. For a grid the finding adds that its selection variable (`$dg...`) is renamed too. On InvoiceB2B it named 364 of 389 widgets itself.
 Like the microflow captions they warn until the first DONE (one line with the count and five
 examples), then a page new or changed since the last DONE needs them (`names-baseline.json`);
 `MDL_WIDGET_NAMES=error` makes all block, `0` turns them off. Renaming a widget breaks a test that
