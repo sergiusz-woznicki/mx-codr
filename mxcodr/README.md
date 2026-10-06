@@ -351,8 +351,16 @@ mp4 (drawn by a playwright-cli browser of its own, `-s=mxcodr-film-slide`); with
 is only the .webm and no mp4, and the filmed browser shows the page at the end of it. Films
 go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there. A failing test keeps its
 film. It refuses while a gate, a test or another film holds the browser, and when no app (or
-another project's app) answers. One test per run: `--all` was removed after a whole suite, slowed,
-took 11 minutes and outlived the app's licensed run time halfway through. The skill `film-tests` lists the tests first, so
+another project's app) answers.
+
+`bash tests/film.sh --all` films every test in the background: it prints an estimate (about 40 s
+a test at the default pace) and returns at once; `--status` shows how far it is, `--stop` ends it,
+and the log is `.mxcli/films/all.log`. It runs in a session of its own (`perl POSIX::setsid`, else
+`nohup`), so it outlives an agent's tool call. After every test it checks the app still answers
+and stops if not, naming the tests it did not film: in the B2B session a foreground `--all` ran 11
+minutes and outlived the app's unlicensed run time halfway through. With ffmpeg the films are
+joined into `all.mp4`. While it records the gate refuses (`preflight_films`), since both would
+drive the one browser. The skill `film-tests` lists the tests first, so
 the person can say which ones to film.
 
 A peek at the page a user already lands on (their home page) no longer fails as "clicked menu …

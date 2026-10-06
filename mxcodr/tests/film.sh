@@ -4,9 +4,11 @@
 #   bash tests/film.sh --list                 # every test: what it walks through, who signs in
 #   bash tests/film.sh mastermind             # tests/verify-mastermind.test.sh -> .mxcli/films/mastermind.mp4
 #   bash tests/film.sh --pace 1500 orders     # slower: ms the pointer waits around each action (default 1000, 0 = test speed)
+#   bash tests/film.sh --all                  # every test, in the background (minutes): one film each, plus all.mp4
+#   bash tests/film.sh --status | --stop      # how far --all is / stop it
 #
-# One test per film, one film per run: a whole suite, slowed to be watched, took 11 minutes and
-# outlived the app's licensed run time halfway through.
+# --all returns at once and records in the background: a whole suite, slowed to be watched, takes
+# about 40 s a test (17 tests, 11 minutes), and stops early if the app stops answering.
 #
 # The test runs unchanged in the browser the tests share, slowed for the eye: before each click,
 # fill or pick the pointer goes to the element, and a pause follows (lib/scenario.sh,
@@ -217,12 +219,96 @@ film() {
   return "$status"
 }
 
+# The background run of --all: its pid, its log.
+ALL_PID="$FILMS/.all.pid"
+ALL_LOG="$FILMS/all.log"
+all_running() {
+  local pid
+  pid="$(cat "$ALL_PID" 2>/dev/null)"
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null
+}
+
+# This process and the ones that started it (an agent's `bash -c "... tests/film.sh"` names it too).
+ancestors() {
+  local pid=$$
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+    echo "$pid"
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+}
+
+# One browser for every test, the gate and every film: never record over a run that uses it.
+browser_free() {
+  local mine
+  mine="$(ancestors)"
+  if all_running || pgrep -f 'tests/gate\.sh|tests/film\.sh|mxcli playwright verify|verify-[A-Za-z0-9_-]*\.test\.sh' 2>/dev/null \
+       | grep -vxF "$mine" | grep -q .; then
+    echo "film: a gate, a test or another film is running and holds the shared browser -- film when it is done" >&2
+    exit 2
+  fi
+}
+
+# This project's app answers; exits 2 with what to do when it does not.
+app_ready() {
+  APP_PORT="${APP_PORT:-8081}"
+  BASE_URL="${BASE_URL:-http://localhost:$APP_PORT}"
+  if ! answers "$BASE_URL"; then
+    echo "film: no app answers at $BASE_URL -- start it first: bash tests/gate.sh --boot-if-needed" >&2
+    exit 2
+  fi
+  local port other
+  port="${BASE_URL##*:}"; port="${port%%/*}"
+  other="$(foreign_runtime "$port")"
+  if [ -n "$other" ]; then
+    echo "film: $BASE_URL is another project's app ($other) -- stop it, or set APP_PORT in tests/harness.env" >&2
+    exit 2
+  fi
+}
+
+# The browser for filming: open, the pointer added, closed again on exit so the gate gets a clean one.
+prepare_browser() {
+  local cursor_file="$FILMS/.cursor.js"
+  playwright-cli open >/dev/null 2>&1 || true
+  trap 'playwright-cli close >/dev/null 2>&1; [ -n "${ALL_RUN:-}" ] && rm -f "$ALL_PID"' EXIT
+  mkdir -p "$FILMS"
+  cursor_script > "$cursor_file"
+  playwright-cli run-code --filename "$cursor_file" >/dev/null 2>&1 || echo "film: no mouse pointer on the films (playwright-cli could not add it)" >&2
+  rm -f "$cursor_file"
+}
+
+# The tests with a browser, one name per line.
+filmable() {
+  local script
+  for script in tests/verify-*.test.sh; do
+    [ -f "$script" ] && films_something "$script" && name_of "$script" && echo
+  done
+}
+
 case "${1:-}" in
   ''|-h|--help)
     sed -n '2,/^$/p' "$SELF" | sed 's/^# \{0,1\}//'
     exit 0 ;;
   --list)
     list_tests
+    exit 0 ;;
+  --status)
+    if all_running; then echo "recording in the background (pid $(cat "$ALL_PID"))"
+    elif [ -f "$ALL_LOG" ]; then echo "not running; the last run:"
+    else echo "no film --all has run here"; exit 0; fi
+    grep -E '^(filming|PASS|FAIL|skip|stopped|done|all)' "$ALL_LOG" 2>/dev/null | tail -25
+    exit 0 ;;
+  --stop)
+    if all_running; then
+      pid="$(cat "$ALL_PID")"
+      pkill -TERM -P "$pid" 2>/dev/null; kill -TERM "$pid" 2>/dev/null
+      sleep 1
+      playwright-cli video-stop >/dev/null 2>&1; playwright-cli close >/dev/null 2>&1
+      rm -f "$ALL_PID"
+      echo "stopped the background recording; the films made so far are in $FILMS/"
+    else
+      echo "nothing is recording in the background"
+    fi
     exit 0 ;;
 esac
 
@@ -233,8 +319,66 @@ if [ "${1:-}" = "--pace" ]; then
   esac
   PACE="$2"; shift 2
 fi
+
+# --all: every test with a browser, recorded in the background; this call returns at once.
+if [ "${1:-}" = "--all" ] && [ "$#" -eq 1 ]; then
+  browser_free
+  app_ready
+  count="$(filmable | grep -c .)"
+  [ "$count" -gt 0 ] || { echo "film: no test with a browser to film" >&2; exit 2; }
+  # Measured on InvoiceB2B at --pace 1000: 17 tests in 11 minutes, about 40 s each.
+  minutes=$(( (count * (15 + 25 * PACE / 1000) + 59) / 60 ))
+  mkdir -p "$FILMS"
+  # Its own session, so it outlives the call that started it (an agent's tool call ends; this goes on).
+  if command -v perl >/dev/null 2>&1; then
+    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' bash "$SELF" --pace "$PACE" --all-run > "$ALL_LOG" 2>&1 < /dev/null &
+  else
+    nohup bash "$SELF" --pace "$PACE" --all-run > "$ALL_LOG" 2>&1 < /dev/null &
+  fi
+  echo "$!" > "$ALL_PID"
+  echo "Filming $count tests in the background: about $minutes minutes."
+  echo "  progress: bash tests/film.sh --status      log: $ALL_LOG"
+  echo "  stop:     bash tests/film.sh --stop"
+  echo "Do not run the gate or a test until it is done: they share the browser (the gate refuses meanwhile)."
+  exit 0
+fi
+
+# --all-run: the background half of --all. Stops when the app stops answering.
+if [ "${1:-}" = "--all-run" ]; then
+  ALL_RUN=1
+  echo "$$" > "$ALL_PID"
+  app_ready
+  prepare_browser
+  names=()
+  while IFS= read -r one; do [ -n "$one" ] && names+=("$one"); done < <(filmable)
+  for script in tests/verify-*.test.sh; do
+    [ -f "$script" ] && ! films_something "$script" && echo "skip  $(name_of "$script") (no browser in this test)"
+  done
+  passed=0 failed=0 made=()
+  for i in "${!names[@]}"; do
+    one="${names[$i]}"
+    echo "filming $((i + 1))/${#names[@]} $one"
+    if film "$one"; then passed=$((passed + 1)); else failed=$((failed + 1)); fi
+    [ -s "$FILMS/$one.mp4" ] && made+=("$FILMS/$one.mp4")
+    if ! answers "$BASE_URL"; then
+      echo "stopped: the app stopped answering after $one (a Mendix app without a licence stops after its maximum run time)."
+      echo "         not filmed: ${names[*]:$((i + 1))}"
+      echo "         start it again (bash tests/gate.sh --boot-if-needed) and film those one by one."
+      break
+    fi
+  done
+  if [ "${#made[@]}" -gt 1 ] && command -v ffmpeg >/dev/null 2>&1; then
+    list="$FILMS/.all.txt"
+    for file in "${made[@]}"; do printf "file '%s'\n" "$(basename "$file")"; done > "$list"
+    ffmpeg -v error -y -f concat -safe 0 -i "$list" -c copy "$FILMS/all.mp4" && echo "all   -> $FILMS/all.mp4"
+    rm -f "$list"
+  fi
+  echo "done: $passed passed, $failed failed"
+  exit 0
+fi
+
 if [ "$#" -ne 1 ] || [ "${1#-}" != "$1" ]; then
-  echo "film: name one test (bash tests/film.sh --list shows them); one film per run" >&2
+  echo "film: name one test, or --all to film every test in the background (bash tests/film.sh --list shows them)" >&2
   exit 2
 fi
 name="${1#verify-}"; name="${name%.test.sh}"
@@ -243,31 +387,7 @@ if [ ! -f "tests/verify-$name.test.sh" ]; then
   exit 2
 fi
 films_something "tests/verify-$name.test.sh" || { echo "film: $name opens no browser -- nothing to film" >&2; exit 2; }
-
-# One browser for every test, the gate and every film: never record over a run that uses it.
-if pgrep -f 'tests/gate\.sh|tests/film\.sh|mxcli playwright verify|verify-[A-Za-z0-9_-]*\.test\.sh' 2>/dev/null | grep -qvx "$$"; then
-  echo "film: a gate, a test or another film is running and holds the shared browser -- film when it is done" >&2
-  exit 2
-fi
-APP_PORT="${APP_PORT:-8081}"
-BASE_URL="${BASE_URL:-http://localhost:$APP_PORT}"
-if ! answers "$BASE_URL"; then
-  echo "film: no app answers at $BASE_URL -- start it first: bash tests/gate.sh --boot-if-needed" >&2
-  exit 2
-fi
-port="${BASE_URL##*:}"; port="${port%%/*}"
-other="$(foreign_runtime "$port")"
-if [ -n "$other" ]; then
-  echo "film: $BASE_URL is another project's app ($other) -- stop it, or set APP_PORT in tests/harness.env" >&2
-  exit 2
-fi
-playwright-cli open >/dev/null 2>&1 || true
-# The pointer's script lives in the browser: close it when done, so the gate gets a clean one.
-trap 'playwright-cli close >/dev/null 2>&1' EXIT
-cursor_file="$FILMS/.cursor.js"
-mkdir -p "$FILMS"
-cursor_script > "$cursor_file"
-playwright-cli run-code --filename "$cursor_file" >/dev/null 2>&1 || echo "film: no mouse pointer on the films (playwright-cli could not add it)" >&2
-rm -f "$cursor_file"
-
+browser_free
+app_ready
+prepare_browser
 film "$name"

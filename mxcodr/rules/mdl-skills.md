@@ -14,7 +14,7 @@ Facts about this app come from one call, not from exploring by hand:
 bash tests/orient.sh                            # structure, security, navigation, tests + covers, coverage, lint, app state
 bash tests/diagnose.sh <Entity> <user>          # row counts, sessions, access rules, associations, runtime errors
 bash tests/peek.sh '<menu item>' [widget]       # a page's visible text and console errors -- writes no test
-bash tests/film.sh --list | <name>                # a video of one test's run (skill film-tests)
+bash tests/film.sh --list | <name> | --all        # a video of a test's run; --all in the background (skill film-tests)
 ```
 
 To look at a page, use `tests/peek.sh` -- never a throwaway script or `verify-zz-*` test of

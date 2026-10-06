@@ -109,7 +109,8 @@ place. You don't need to read them.
 **Watch a test run.** Ask the agent to show or film a test. A sixth skill, `film-tests`, lists every
 browser test with what it walks through, then records the one you pick as a video with the test's
 name and its steps on it (`.mxcli/films/`). By hand: `bash tests/film.sh --list`, then
-`bash tests/film.sh <name>`.
+`bash tests/film.sh <name>`, or `bash tests/film.sh --all` to film every test in the background
+(it says how long it will take; `--status` shows progress).
 
 ## The installer sets everything up
 
