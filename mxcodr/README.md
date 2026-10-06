@@ -334,7 +334,10 @@ red-first run -- the scratch `verify-zz-*.test.sh` two sessions wrote for this l
 `bash tests/film.sh --list` prints every browser test: its name, the user it signs in as, what it
 covers and the journey from its header. `bash tests/film.sh <name>...` (or `--all`) records the
 shared browser while each test runs, unchanged and at its own speed, through playwright-cli's
-`video-start`/`video-stop`; each film opens with a card naming the test (`video-chapter`). Films
+`video-start`/`video-stop`; each film opens with a card naming the test (`video-chapter`), and a mouse pointer moves to each
+click. Headless Chromium draws no pointer, so film.sh adds an arrow to the page that follows the
+test's mouse; playwright-cli's own (`video-show-actions`) comes with a label per action that prints
+what is typed, the test password included. The browser is closed afterwards. Films
 go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there; `--all` also joins them into
 `all.mp4`. A failing test keeps its film. It refuses while a gate or a test holds the browser, and
 when no app (or another project's app) answers. The skill `film-tests` lists the tests first, so

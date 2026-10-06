@@ -7,12 +7,14 @@
 #   bash tests/film.sh --all                  # every test with a browser, plus .mxcli/films/all.mp4
 #
 # The test runs unchanged, at its own speed, in the browser the tests share; playwright-cli records
-# that browser and opens the film with a card naming the test. With ffmpeg there is an .mp4 next to
-# each .webm. A failing test keeps its film. Nothing is filmed while a gate or a test holds the
-# browser, and the app has to be up (bash tests/gate.sh --boot-if-needed).
+# that browser and opens the film with a card naming the test; a mouse pointer moves to each click.
+# With ffmpeg there is an .mp4 next to each .webm. A failing test keeps its film. Nothing is filmed
+# while a gate or a test holds the browser, and the app has to be up (bash tests/gate.sh
+# --boot-if-needed).
 # Inputs: APP_PORT / BASE_URL as for the tests; TEST_USER as each test sets it.
 
 set -uo pipefail
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")/.." || exit 1
 APP_DIR="$(pwd)"
 # portable.sh reads tests/harness.env (APP_PORT) as data; app.sh knows whose app answers a port.
@@ -50,6 +52,35 @@ viewport() {
   printf '%s' "${out:-1280x800}"
 }
 
+# A mouse pointer for the film: headless Chromium draws none. An arrow in the page follows the
+# mouse the test moves (every click moves it). playwright-cli's own pointer (video-show-actions)
+# comes only with a label naming each action -- `Fill "<the test password>"` among them -- so it
+# is not used. The script stays in the browser until it closes; film.sh closes it at the end.
+cursor_script() {
+  cat <<'JS'
+async page => {
+  const draw = () => {
+    const add = () => {
+      if (document.getElementById('mxcodr-film-cursor')) return;
+      const c = document.createElement('div');
+      c.id = 'mxcodr-film-cursor';
+      c.innerHTML = '<svg width="26" height="36" viewBox="0 0 22 30"><path d="M1 1 L1 24 L7 18 L11 28 L15 26 L11 17 L19 17 Z" fill="#111" stroke="#fff" stroke-width="1.5"/></svg>';
+      c.style.cssText = 'position:fixed;left:-40px;top:-40px;pointer-events:none;z-index:2147483647;' +
+        'transition:left 120ms linear,top 120ms linear,transform 80ms';
+      document.documentElement.appendChild(c);
+      const move = e => { c.style.left = e.clientX + 'px'; c.style.top = e.clientY + 'px'; };
+      addEventListener('mousemove', move, true);
+      addEventListener('mousedown', e => { move(e); c.style.transform = 'scale(0.8)'; }, true);
+      addEventListener('mouseup', () => { c.style.transform = ''; }, true);
+    };
+    if (document.documentElement) add(); else addEventListener('DOMContentLoaded', add);
+  };
+  await page.context().addInitScript(`(${draw})()`);
+  await page.evaluate(`(${draw})()`);
+}
+JS
+}
+
 # film <name> -- record one test; prints the film and the verdict, returns the test's status.
 film() {
   local name="$1" script="tests/verify-$1.test.sh" status out size
@@ -84,7 +115,7 @@ film() {
 
 case "${1:-}" in
   ''|-h|--help)
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,14p' "$SELF" | sed 's/^# \{0,1\}//'
     exit 0 ;;
   --list)
     list_tests
@@ -130,6 +161,13 @@ if [ -n "$other" ]; then
   exit 2
 fi
 playwright-cli open >/dev/null 2>&1 || true
+# The pointer's script lives in the browser: close it when done, so the gate gets a clean one.
+trap 'playwright-cli close >/dev/null 2>&1' EXIT
+cursor_file="$FILMS/.cursor.js"
+mkdir -p "$FILMS"
+cursor_script > "$cursor_file"
+playwright-cli run-code --filename "$cursor_file" >/dev/null 2>&1 || echo "film: no mouse pointer on the films (playwright-cli could not add it)" >&2
+rm -f "$cursor_file"
 
 failed=0
 made=()
