@@ -37,7 +37,8 @@ const TABLES = {
 };
 
 // Where a name in plain text can call a document: Java (Core.microflowCall("Mod.Flow")),
-// JavaScript actions, the theme (login.html calls a nanoflow), and the tests.
+// JavaScript actions, the theme (login.html calls a nanoflow), and the project's tests -- under
+// tests/ only *.test.* files: the harness's own scripts and docs there name example documents.
 const TEXT_DIRS = ['javasource', 'javascriptsource', 'theme', 'themesource', 'tests'];
 const SKIP_DIRS = new Set(['proxies', 'node_modules', '.git']);
 const TEXT_FILE = /\.(java|js|mjs|cjs|ts|tsx|jsx|html?|s?css|json|xml|sh|mdl|md|txt|py|ya?ml)$/i;
@@ -110,6 +111,7 @@ function textFiles(appDir) {
       const rel = path.join(dir, e.name);
       if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(rel); continue; }
       if (!e.isFile() || !TEXT_FILE.test(e.name)) continue;
+      if (rel.split(path.sep)[0] === 'tests' && !/\.test\./.test(e.name)) continue;
       try {
         if (fs.statSync(path.join(appDir, rel)).size > MAX_FILE) continue;
         files.push([rel.split(path.sep).join('/'), fs.readFileSync(path.join(appDir, rel), 'utf8')]);
