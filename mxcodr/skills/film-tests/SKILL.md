@@ -5,8 +5,9 @@ description: "Record a video of a browser test's run -- one test, several, or al
 
 # Film a test
 
-`tests/film.sh` records the browser while a test runs, unchanged and at its own speed. Each film
-opens with a card naming the test.
+`tests/film.sh` records the browser while a test runs, unchanged but slowed so it can be followed:
+the pointer goes to each element before it is used, and a pause follows. Each film opens with a
+card naming the test.
 
 ## Steps
 
@@ -24,6 +25,7 @@ opens with a card naming the test.
    ```bash
    bash tests/film.sh <name> [<name>...]    # e.g. bash tests/film.sh orders toasts
    bash tests/film.sh --all                 # every test with a browser, plus all.mp4
+   bash tests/film.sh --pace 1500 orders    # slower still (ms per action; default 1000, 0 = test speed)
    ```
 
 4. **Give the paths** it prints: `.mxcli/films/<name>.mp4` (and `.webm`), `.mxcli/films/all.mp4`

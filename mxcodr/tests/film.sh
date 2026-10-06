@@ -5,9 +5,11 @@
 #   bash tests/film.sh mastermind             # tests/verify-mastermind.test.sh -> .mxcli/films/mastermind.webm
 #   bash tests/film.sh orders toasts          # several, one film each
 #   bash tests/film.sh --all                  # every test with a browser, plus .mxcli/films/all.mp4
+#   bash tests/film.sh --pace 1500 orders     # slower: ms the pointer waits around each action (default 1000, 0 = test speed)
 #
-# The test runs unchanged, at its own speed, in the browser the tests share; playwright-cli records
-# that browser and opens the film with a card naming the test; a mouse pointer moves to each click.
+# The test runs unchanged in the browser the tests share, slowed for the eye: before each click,
+# fill or pick the pointer goes to the element, and a pause follows (lib/scenario.sh,
+# MDL_FILM_PACE_MS). playwright-cli records that browser and opens the film with a card naming the test.
 # With ffmpeg there is an .mp4 next to each .webm. A failing test keeps its film. Nothing is filmed
 # while a gate or a test holds the browser, and the app has to be up (bash tests/gate.sh
 # --boot-if-needed).
@@ -91,7 +93,8 @@ film() {
     || { echo "film: playwright-cli could not start recording" >&2; return 2; }
   playwright-cli video-chapter "$name" --duration 2000 >/dev/null 2>&1
   sleep 2
-  out="$(BASE_URL="$BASE_URL" bash "$script" 2>&1)"; status=$?
+  # Slowed, a test takes longer than the gate's limit allows: give it ten times as long.
+  out="$(BASE_URL="$BASE_URL" MDL_FILM_PACE_MS="$PACE" SCRIPT_TIMEOUT=900 bash "$script" 2>&1)"; status=$?
   sleep 1
   playwright-cli video-stop >/dev/null 2>&1
   if [ ! -s "$FILMS/$name.webm" ]; then
@@ -115,12 +118,21 @@ film() {
 
 case "${1:-}" in
   ''|-h|--help)
-    sed -n '2,14p' "$SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,/^$/p' "$SELF" | sed 's/^# \{0,1\}//'
     exit 0 ;;
   --list)
     list_tests
     exit 0 ;;
 esac
+
+PACE=1000
+if [ "${1:-}" = "--pace" ]; then
+  case "${2:-}" in
+    ''|*[!0-9]*) echo "film: --pace takes milliseconds, e.g. --pace 1500 (0 = the test's own speed)" >&2; exit 2 ;;
+  esac
+  PACE="$2"; shift 2
+fi
+[ "$#" -gt 0 ] || { echo "film: name a test, or --all (bash tests/film.sh --list shows them)" >&2; exit 2; }
 
 # Which tests: names given, or every one with a browser.
 names=()
