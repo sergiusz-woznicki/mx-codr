@@ -1,6 +1,20 @@
 # tests/gate/preflight.sh -- checks run right before the tests: sessions, a stale model, the environment.
 # Sourced by tests/gate.sh; defines functions only.
 
+# film.sh --all records in the background, in the browser the tests use: a gate run now would
+# drive that browser too and spoil both. Exit 2 while it runs; a stale pid file is ignored.
+preflight_films() {
+  local pid
+  pid="$(cat "$APP_DIR/.mxcli/films/.all.pid" 2>/dev/null)"
+  case "$pid" in ''|*[!0-9]*) return 0 ;; esac
+  kill -0 "$pid" 2>/dev/null || return 0
+  cat >&2 <<MSG
+film.sh --all is recording the tests in the background (pid $pid) in the browser the gate uses.
+Wait for it (bash tests/film.sh --status), or stop it (bash tests/film.sh --stop), then run this again.
+MSG
+  exit 2
+}
+
 # Warnings before the tests; preflight_session stops the gate (exit 2) on a trial-licence session
 # refusal in the runtime log within the last two minutes, preflight_debugger on a debugger left on.
 preflight_session() {

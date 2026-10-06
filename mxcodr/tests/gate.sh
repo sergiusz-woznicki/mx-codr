@@ -317,6 +317,7 @@ main() {
     exit 0
   fi
 
+  preflight_films
   # 1. The model checks need no app: start them now, they run while the suite does.
   if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     start_model_checks

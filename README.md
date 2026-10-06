@@ -88,7 +88,10 @@ what to fix. Codes in brackets are what the gate prints.
 - A Back button top left on every page opened from another page (`BACK01`), and on the right
   of the same top row, under the language selector, who is signed in: a user icon and e-mail
   that opens My account (`USER01`).
-- An icon on every button (`ICON01`); Atlas spacing, no custom CSS (`SPACE01`-`03`).
+- An icon on every button (`ICON01`); Atlas spacing, no custom CSS (`SPACE01`-`03`); a button or
+  text never touches a grid, list or card above or below it, a grid header's buttons included (`SPACE04`).
+- A long text (over 500 characters, or unlimited) is edited in a text area, not a one-line
+  text box (`TEXT01`); a field named like prose (Description, Notes, Reason ...) gets a hint (`TEXT02`, a warning).
 - Everything on a page inside a layout grid, so nothing touches the edge of the window (`EDGE01`).
 - A heading on every page (`HEAD01`, a warning).
 - Pages checked as they render: after every test the gate measures the page for widgets
@@ -102,6 +105,12 @@ what to fix. Codes in brackets are what the gate prints.
 
 The agent learns these from five *skills* (short guides) that the installer puts in
 place. You don't need to read them.
+
+**Watch a test run.** Ask the agent to show or film a test. A sixth skill, `film-tests`, lists every
+browser test with what it walks through, then records the one you pick as a video with the test's
+name and its steps on it (`.mxcli/films/`). By hand: `bash tests/film.sh --list`, then
+`bash tests/film.sh <name>`, or `bash tests/film.sh --all` to film every test in the background
+(it says how long it will take; `--status` shows progress).
 
 ## The installer sets everything up
 

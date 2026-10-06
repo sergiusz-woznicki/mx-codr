@@ -29,12 +29,13 @@ hooks/            host-specific prompt/PostToolUse adapters plus the Codex and C
 plugins/          mendix-mdl-harness.js (OpenCode) and mendix-mdl-harness.pi.js (Pi) -- the same
                   three jobs as the hooks, in each host's own event API
 tests/            gate.sh + gate/ (app, checks, hints, preflight, tests), precheck.sh, orient.sh,
-                  diagnose.sh, peek.sh, theme.sh, lib.sh + lib/ (timeout, sessions, scenario, results),
+                  diagnose.sh, peek.sh, film.sh, theme.sh, lib.sh + lib/ (timeout, sessions, scenario, results),
                   portable.sh, scenario-helpers.js, run-app.sh (Windows), run-docker.sh (Docker
                   mode) — the harness, upgraded in place on every install.
                   gate.sh is the done gate: tests, mx check, lint, coverage, naming, layout and
                   security, then warnings (rendered pages, server errors). precheck.sh is what the hooks run before an exec; orient.sh and
                   diagnose.sh gather facts in parallel; peek.sh looks at a page without a test;
+                  film.sh records a video of a test's run;
                   portable.sh holds what differs between platforms and the environment checks
                   every script shares
 .gitattributes    forces LF on *.sh, *.cjs, *.js and *.mdl — copied only if the project has none
@@ -61,7 +62,7 @@ is the shipping container, never the place to edit:
 | `skills/<name>/SKILL.md` | `.ai-context/skills/<name>/SKILL.md` |
 | `lint-rules/*.star` | `.claude/lint-rules/*.star` |
 | `checks/fixtures/` | `tests/skills/fixtures/` |
-| `checks/*.cjs`, `rules/`, `hooks/`, `plugins/`, `tests/`, `skills/spacing-and-layout/` | authored here; no other copy in the repo |
+| `checks/*.cjs`, `rules/`, `hooks/`, `plugins/`, `tests/`, `skills/spacing-and-layout/`, `skills/film-tests/` | authored here; no other copy in the repo |
 
 **Finding your way in a long script.** No script is longer than about 500 lines. Where one grew
 past that it became an entry plus parts: `install.sh` + `install/`, `tests/gate.sh` +
@@ -327,6 +328,40 @@ Each boot empties `.mxcli/gate-boot.log` and keeps the one before it as
 visible text and console errors. It writes no test file, claims no coverage and records no
 red-first run -- the scratch `verify-zz-*.test.sh` two sessions wrote for this left a
 "went green without ever being red" record behind every time.
+
+### A video of a test's run
+
+`bash tests/film.sh --list` prints every browser test: its name, the user it signs in as, what it
+covers and the journey from its header. `bash tests/film.sh <name>` records the
+shared browser while that one test runs, unchanged but slowed for the eye, through playwright-cli's
+`video-start`/`video-stop`; each film opens with a card naming the test (`video-chapter`), and a mouse pointer moves to each
+click. Headless Chromium draws no pointer, so film.sh adds an arrow to the page that follows the
+test's mouse; playwright-cli's own (`video-show-actions`) comes with a label per action that prints
+what is typed, the test password included. The browser is closed afterwards.
+Slowed: before each click, fill or pick the pointer travels to the element, and a pause follows
+(`--pace <ms>`, default 1000; `--pace 0` is the test's own speed). `lib/scenario.sh` does it when
+`MDL_FILM_PACE_MS` is set, by wrapping the actions on playwright-cli's Locator and Page; every
+other scenario sets the pace to 0, so a gate run after a film runs at full speed.
+
+Each film has one page listing the test's steps in English, as the paced wrappers noted them: the
+verb and the label of what was used (`Type in "Quantity"`, `Click "Save order"`), never what was
+typed. A repeated step or pair of steps is one line (`(4 times)`); past 15 lines the page has two
+columns, and past 30 the rest is counted, so it is always one page. With ffmpeg the page opens the
+mp4 (drawn by a playwright-cli browser of its own, `-s=mxcodr-film-slide`); without ffmpeg there
+is only the .webm and no mp4, and the filmed browser shows the page at the end of it. Films
+go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there. A failing test keeps its
+film. It refuses while a gate, a test or another film holds the browser, and when no app (or
+another project's app) answers.
+
+`bash tests/film.sh --all` films every test in the background: it prints an estimate (about 40 s
+a test at the default pace) and returns at once; `--status` shows how far it is, `--stop` ends it,
+and the log is `.mxcli/films/all.log`. It runs in a session of its own (`perl POSIX::setsid`, else
+`nohup`), so it outlives an agent's tool call. After every test it checks the app still answers
+and stops if not, naming the tests it did not film: in the B2B session a foreground `--all` ran 11
+minutes and outlived the app's unlicensed run time halfway through. With ffmpeg the films are
+joined into `all.mp4`. While it records the gate refuses (`preflight_films`), since both would
+drive the one browser. The skill `film-tests` lists the tests first, so
+the person can say which ones to film.
 
 A peek at the page a user already lands on (their home page) no longer fails as "clicked menu …
 but nothing happened": for a look that means "already there". Signed in as a user with no
@@ -1168,6 +1203,7 @@ project's own layouts:
 `SPACE01` | error | a widget sharing a line with the next and no `margin-right`; a heading with content under it and no `margin-bottom` |
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
 `SPACE03` | error | widgets on one line disagreeing on vertical margins, or none carrying `margin-bottom` |
+`SPACE04` | error | a button or text right on top of, or right under, a box (data grid, list, gallery, group box, tab container, a card or coloured container) with no margin between them; a button in a grid's `controlbar` without `margin-bottom` |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
 `GRID01` | error | a grid filter in a column with no `Attribute:` (and none of its own) — it renders "Unable to get filter store" |
 `GRID02` | error | a button outside a data grid changes the rows it shows (creates its entity, uses its selection, or calls a flow that writes it, three calls deep); it goes in the grid's header, `controlbar` inside the datagrid |
@@ -1184,6 +1220,8 @@ project's own layouts:
 `LAYOUT01` | error | the app's pages use more than one layout (pop-ups, the login page and phone/tablet layouts aside), so the menu changes between pages |
 `USER01` | error | users sign in, and a page (pop-ups and the login page aside) does not open with `<Module>.SNIPPET_CurrentUser` on the right of its top row, after Back if there is one: the user icon and e-mail, top right, the same place on every page |
 `BACK01` | error | a page another page or a flow opens (`show_page`) does not start with a Back button: `close_page`, icon `chevron-left`, top left. Pop-ups, menu pages and home pages are exempt |
+`TEXT01` | error | a `textbox` edits a String longer than 500 characters or unlimited; the message gives the `textarea` that replaces it |
+`TEXT02` | warning | a `textbox` edits an attribute named like prose (`Description`, `Notes`, `Comment`, `Reason` ...) of 100 characters or more |
 
 `GRID01` came from the same session: a customer grid showed its date column as formatted
 `Content` and dropped the column's `Attribute`, and its date filter rendered a red "Unable to
@@ -1197,6 +1235,19 @@ OpenCode and Pi plugins, because the gate waits for the runtime itself; two sess
 anyway. And the OQL helpers (`oql_count`, `oql_value`, `await_row`, `diagnose.sh`) quote the entity
 name: `FROM OrderDesk.Order` does not parse, so a test on an entity named `Order` failed and
 `diagnose.sh` printed a false 0 rows. A Pi session found and fixed that one in its own copy.
+
+`SPACE04` came from a screenshot: "Generate invoice" in a grid's `controlbar`, where `GRID02`
+puts it, sat on the grid's header row. Atlas gives buttons, text, grids, lists and cards no
+vertical margin, so one stacked on the other touches. Plain containers, headings (`SPACE01`) and
+a list whose items already end in a margin are left alone. Over 37 local projects it found
+17 in 9 apps: 10 buttons on a grid's first row, 5 lines of text on or under a grid,
+2 buttons under a grid.
+
+`TEXT01` and `TEXT02` read the entities (`describe entity`) for the length of the text each
+textbox edits. InvoiceB2B had four 2000-character fields (internal notes, an approval reason)
+in one-line textboxes: the text scrolled sideways and its line breaks were lost on screen. The
+length decides, so it blocks; a name alone is a hint, since `Summary String(100)` may be one
+line on purpose. mxcli reads a bare `String` as unlimited.
 
 `NAV03` and `NAV04` came from a Pi session that needed an employee menu and a customer
 menu, found that MDL menu items take no roles, and built two layouts of link buttons

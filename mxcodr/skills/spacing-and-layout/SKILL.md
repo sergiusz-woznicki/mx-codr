@@ -266,6 +266,19 @@ Nothing needs building, and nothing in the Marketplace module changes:
 The gate fails `ACCOUNT01` (no Users item), `ACCOUNT02` (no My account item) and `ACCOUNT03`
 (a role without `Administration.User`, or nobody with `Administration.Administrator`).
 
+## A long text gets a text area
+
+A `textbox` is one line: a note typed into it scrolls sideways and its line breaks are lost.
+An attribute longer than 500 characters, or unlimited (a bare `String` is unlimited), is
+edited in a `textarea`:
+
+```sql
+textarea txtNotes (Label: 'Notes', Attribute: Notes)
+```
+
+The gate fails `TEXT01` for a textbox on such an attribute and warns (`TEXT02`) when the
+attribute's name says prose -- Description, Notes, Comment, Reason -- at 100 characters or more.
+
 ## Every button has an icon
 
 Every `actionbutton` and `linkbutton`, on a page or in a snippet, carries an icon that
@@ -432,13 +445,19 @@ In MDL that is a `controlbar` inside the `datagrid`, after the columns:
 
 ```sql
 datagrid dgOrders (DataSource: database from Sales.Order, Selection: single) {
-  column colNumber (Attribute: Number, Caption: 'Number')
+  column (Attribute: Number, Caption: 'Number')
   controlbar {
-    actionbutton btnNew (Caption: 'New order', Action: call microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add')
-    actionbutton btnPaid (Caption: 'Mark paid', Action: call microflow Sales.ACT_Order_MarkPaid(Order: $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark')
+    actionbutton btnNew (Caption: 'New order', Action: call microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add',
+      DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+    actionbutton btnPaid (Caption: 'Mark paid', Action: call microflow Sales.ACT_Order_MarkPaid(Order = $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark',
+      DesignProperties: ('Spacing': ('margin-bottom': 'S')))
   }
 }
 ```
+
+Each button in the header keeps `margin-bottom`: Atlas gives neither the button nor the grid a
+vertical margin, so without it the button sits on the grid's first row (`SPACE04`). The same
+goes for a button or a line of text right above or under a grid, a list or a card.
 
 The header is not row-scoped: pass the grid's selection (`$dgOrders`) or a page parameter.
 `$currentObject` and an enclosing data view's name do not resolve there (mx check: CE0117).
@@ -513,6 +532,7 @@ layout: PASS  0 failure(s) over 6 page(s)
 `SPACE01` | error | a widget sharing a line with the next and no `margin-right`; or a heading with content under it and no `margin-bottom` |
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
 `SPACE03` | error | widgets on one line disagreeing on vertical margins (misaligned), or none carrying `margin-bottom` (wraps into the row above) |
+`SPACE04` | error | a button or text right on top of, or right under, a box (data grid, list, gallery, group box, tab container, a card or coloured container) with no margin between them; a button in a grid's `controlbar` without `margin-bottom` |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
 `NAV01` | error | project security is on, a navigation menu has no `sign out` item, and no page or snippet has a sign-out button |
 `NAV02` | warning | the `sign out` item is not the last item of its menu |
@@ -531,6 +551,8 @@ layout: PASS  0 failure(s) over 6 page(s)
 `BACK01` | error | a page another page or a flow opens does not start with a Back button (`close page`, icon `chevron-left`); pop-ups, menu pages and home pages are exempt |
 `ALERT01` | warning | a box class (`alert`, `alert-*`, `card`, `well`) on a `dynamictext` or `text` |
 `EDGE01` | error | a page on an Atlas_Core layout (pop-ups and the login page aside) has a widget outside a `layoutgrid` at its top level: it touches the edge of the window |
+`TEXT01` | error | a `textbox` edits a String over 500 characters or unlimited: use a `textarea` |
+`TEXT02` | warning | a `textbox` edits an attribute named like prose (Description, Notes, Reason ...) of 100 characters or more |
 `VIS01` | warning | measured in the browser at the end of every test: two unrelated widgets overlap by 4 px or more |
 `VIS02` | warning | measured: the page scrolls sideways |
 `VIS03` | warning | measured: a widget cuts its text off |

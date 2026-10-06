@@ -55,6 +55,7 @@ _mdl_scenario_js() {
   printf 'async () => {\n'
   _mdl_js_settings
   _mdl_js_helpers
+  _mdl_js_film_pace
   # verify shows only the last stderr line, so the catch adds url and user to the error.
   printf '  try {\n'
   # The body runs as its own function so its `return` comes back here: then the page it ended
@@ -88,6 +89,58 @@ _mdl_js_settings() {
     pairs+=("${name#SV_}" "${!name}")
   done
   printf '  const vars = JSON.parse(%s);\n' "$(mdl_json_string "$(mdl_json_object ${pairs[@]+"${pairs[@]}"})")"
+}
+
+# MDL_FILM_PACE_MS (tests/film.sh): before each click, fill, key press or pick the pointer goes to
+# the element, and the action is followed by a pause, so a film can be followed by eye. The pace
+# lives on the Locator and Page prototypes in playwright-cli's process, which outlive this run, so
+# every scenario sets it -- 0 outside a film, and the wrappers then call straight through.
+_mdl_js_film_pace() {
+  printf '  const FILM_PACE = %s;\n' "$(mdl_json_number "${MDL_FILM_PACE_MS:-0}" 0)"
+  cat <<'PACE'
+  const pageProto = Object.getPrototypeOf(page);
+  for (const proto of [Object.getPrototypeOf(page.locator('body')), pageProto]) {
+    proto.__mdlFilmPace = FILM_PACE;
+    if (proto.__mdlFilmPaced) continue;
+    proto.__mdlFilmPaced = true;
+    const onPage = proto === pageProto;
+    for (const name of ['click', 'dblclick', 'tap', 'fill', 'type', 'pressSequentially', 'press',
+                        'selectOption', 'check', 'uncheck', 'setChecked']) {
+      const original = proto[name];
+      if (typeof original !== 'function') continue;
+      proto[name] = async function (...args) {
+        const ms = proto.__mdlFilmPace;
+        if (!ms) return original.apply(this, args);
+        const pg = onPage ? this : this.page();
+        // The film's step list: the verb and the element's label -- never a typed value.
+        const target = onPage ? pg.locator(args[0]).first() : this;
+        // Its own name first; an unnamed control (a combo box's empty input) takes its field's label.
+        const label = await target.evaluate(el => {
+          const t = v => String(v || '').replace(/\s+/g, ' ').trim();
+          const byId = id => t(id && document.getElementById(id) && document.getElementById(id).innerText);
+          const field = el.closest('.form-group, .mx-formgroup');
+          const fieldLabel = field && field.querySelector('label') ? t(field.querySelector('label').innerText) : '';
+          return (t(el.getAttribute('aria-label')) || byId(el.getAttribute('aria-labelledby')) ||
+            (el.labels && el.labels[0] ? t(el.labels[0].innerText) : '') || t(el.getAttribute('placeholder')) ||
+            t(el.innerText) || t(el.getAttribute('title')) || fieldLabel).slice(0, 60);
+        }, null, {timeout: 1000}).catch(() => '');
+        const key = onPage ? args[1] : args[0];
+        const verb = {click: 'Click', dblclick: 'Double-click', tap: 'Tap', fill: 'Type in', type: 'Type in',
+          pressSequentially: 'Type in', press: `Press ${key}${label ? ' in' : ''}`, selectOption: 'Choose',
+          check: 'Tick', uncheck: 'Untick', setChecked: 'Set'}[name];
+        const steps = (pageProto.__mdlFilmSteps = pageProto.__mdlFilmSteps || []);
+        const step = label ? `${verb} "${label}"` : verb;
+        if (steps[steps.length - 1] !== step) steps.push(step);
+        // The pointer travels to what is about to be used, then the action, then a pause.
+        await (onPage ? this.hover(args[0], {timeout: 1500}) : this.hover({timeout: 1500})).catch(() => {});
+        await pg.waitForTimeout(Math.round(ms / 2));
+        const result = await original.apply(this, args);
+        await pg.waitForTimeout(ms);
+        return result;
+      };
+    }
+  }
+PACE
 }
 
 # Where look() saves screenshots; empty unless MDL_VISUAL_REVIEW=agent.

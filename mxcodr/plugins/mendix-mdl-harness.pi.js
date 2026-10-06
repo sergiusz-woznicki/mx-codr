@@ -131,6 +131,8 @@ export default function mendixMdlHarness(pi) {
     if (!root) return
     // Waiting for the person's Marketplace login: let the turn end so they can answer.
     if (core.marketplacePending(root)) return
+    // Films recording in the background hold the browser: the gate would refuse; check next turn.
+    if (core.filmsRecording(root)) return
     if (rounds >= core.MAX_GATE_ROUNDS) {
       gateRequired = false
       return

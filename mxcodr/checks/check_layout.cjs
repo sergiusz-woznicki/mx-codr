@@ -4,9 +4,10 @@
 // Input: `describe page` dumps (.mdl files or directories), normally from tests/gate.sh;
 // optionally `DESCRIBE NAVIGATION` output (--navigation), snippet dumps (--sign-out-sources),
 // `describe layout` dumps of the project's own layouts (--layouts) and microflow/nanoflow dumps
-// whose `show page` also opens pages (--opened-from).
+// whose `show page` also opens pages (--opened-from), and `describe entity` dumps of the project's
+// own entities (--entities), for the length of the text a textbox edits.
 // Usage: check_layout.cjs <file.mdl|dir> ... [--navigation nav.mdl] [--sign-out-sources dir]
-//                         [--layouts dir] [--opened-from dir] [--users-sign-in] [--json]
+//                         [--layouts dir] [--opened-from dir] [--entities dir] [--users-sign-in] [--json]
 // --json keys: verdict, pages, sources, failures, warnings.
 // Exit: 0 no errors (warnings allowed), 1 errors or no MDL found, 2 bad arguments.
 //
@@ -16,6 +17,9 @@
 //   SPACE01  FAIL  inline sibling (not last) without margin-right, or H1-H3 heading with a sibling below and no margin-bottom
 //   SPACE02  FAIL  margin/padding value other than None, S, M, L (mxcli check accepts it; mx check fails with CE6083)
 //   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
+//   SPACE04  FAIL  a button or text right on top of, or right under, a box (data grid, list, gallery,
+//                  group box, tab container, a card or a coloured container) with no margin between
+//                  them; a button in a grid's controlbar without margin-bottom
 //   HEAD01   WARN  page with no H1-H3 text, no header widget and no header/title/masthead snippet
 //   NAV01    FAIL  users sign in (--users-sign-in), but a navigation menu has no sign_out item
 //                  and no page or snippet has a sign-out button
@@ -54,12 +58,18 @@
 //                  as an inline <span>, so its padding and border overlap the widgets around it
 //   EDGE01   FAIL  a page on an Atlas_Core layout (pop-ups and the login page aside) has a widget at
 //                  its top level outside a layoutgrid: it touches the edge of the window
+//   TEXT01   FAIL  (--entities) a textbox edits a String longer than 500 characters or unlimited:
+//                  a one-line box for a long text; the message gives the textarea that replaces it
+//   TEXT02   WARN  (--entities) a textbox edits an attribute named like prose (Description, Notes,
+//                  Comment, Reason ...) of 100 characters or more, or of unknown length
 //
 // Where each rule lives, in layout_rules/ next to this file (this file only reads the arguments
 // and runs them): mdl1.cjs rewrites an mxcli v0.25 (`mdl 1`) describe into the v0.24 spelling the
 // rules read; pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
 // GRID01, ICON01; grids.cjs GRID02; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
-// navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01.
+// navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01;
+// inputs.cjs TEXT01-02; vertical.cjs SPACE04. --port-parity runs only the rules check_layout.py
+// had (SPACE04 is newer), for the test that compares the two.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -69,6 +79,8 @@ const { USER_ROLE_RE, userRoles, accountFindings, adminHomeFindings, templateMod
 const { buttonIconFindings } = require('./layout_rules/controls.cjs');
 const { edgeFindings } = require('./layout_rules/edges.cjs');
 const { headerButtonFindings } = require('./layout_rules/grids.cjs');
+const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
+const { verticalFindings } = require('./layout_rules/vertical.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
@@ -155,7 +167,8 @@ const PROG = 'check_layout.py';
 const USAGE = `usage: ${PROG} [-h] [--navigation NAVIGATION] [--sign-out-sources SIGN_OUT_SOURCES] [--layouts LAYOUTS]
                        [--admin-module] [--user-roles USER_ROLES] [--menu-access MENU_ACCESS]
                        [--guest-role GUEST_ROLE] [--own-modules OWN_MODULES] [--template-module]
-                       [--opened-from OPENED_FROM] [--users-sign-in] [--expect-pages EXPECT_PAGES] [--json]
+                       [--opened-from OPENED_FROM] [--entities ENTITIES] [--users-sign-in]
+                       [--expect-pages EXPECT_PAGES] [--port-parity] [--json]
                        sources [sources ...]
 `;
 const OPTIONS = {
@@ -169,8 +182,10 @@ const OPTIONS = {
   '--own-modules': { dest: 'own_modules', kind: 'str' },
   '--template-module': { dest: 'template_module', kind: 'flag' },
   '--opened-from': { dest: 'opened_from', kind: 'append' },
+  '--entities': { dest: 'entities', kind: 'append' },
   '--users-sign-in': { dest: 'users_sign_in', kind: 'flag' },
   '--expect-pages': { dest: 'expect_pages', kind: 'int' },
+  '--port-parity': { dest: 'port_parity', kind: 'flag' },
   '--json': { dest: 'json', kind: 'flag' },
   '--help': { dest: 'help', kind: 'help' },
   '-h': { dest: 'help', kind: 'help' },
@@ -201,8 +216,8 @@ function optionOf(arg) {
 function parseArgs(argv) {
   const args = {
     sources: [], navigation: null, sign_out_sources: [], layouts: [], admin_module: false, user_roles: null,
-    menu_access: null, guest_role: '', own_modules: '', template_module: false, opened_from: [],
-    users_sign_in: false, expect_pages: 0, json: false,
+    menu_access: null, guest_role: '', own_modules: '', template_module: false, opened_from: [], entities: [],
+    users_sign_in: false, expect_pages: 0, port_parity: false, json: false,
   };
   const unknown = [];
   let positionalRuns = 0, inRun = false;
@@ -267,9 +282,11 @@ function main() {
   const snippets = toMdl0(collect(args.sign_out_sources)[0]);
   const layouts = toMdl0(collect(args.layouts)[0]);
   const flows = toMdl0(collect(args.opened_from)[0]);
+  const entityText = collect(args.entities)[0];
   const ownModules = py.split(args.own_modules);
 
   let [failures, warnings, pages] = check(lines);
+  if (!args.port_parity) failures = failures.concat(verticalFindings(lines));
   // Input was described and nothing in it was recognised: a describe format these rules do not
   // read. Every rule would find nothing, and that would be a PASS for a check that saw nothing.
   const unread = [];
@@ -279,6 +296,9 @@ function main() {
   }
   if (py.strip(roles) && !py.splitlines(roles).some(line => USER_ROLE_RE.match(line))) {
     unread.push('the user roles were described and none was recognised');
+  }
+  if (py.strip(entityText) && !Object.keys(stringLengths(entityText)).length) {
+    unread.push('the entities were described and none was recognised');
   }
   if (unread.length) {
     py.print('could not run -- ' + unread.join('; ') + ": this mxcli's describe format is not one check_layout.py reads");
@@ -308,6 +328,11 @@ function main() {
   failures = failures.concat(headerButtonFindings(lines, flows));
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
   if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
+  if (args.entities.length) {
+    const [textFailures, textWarnings] = textInputFindings(lines.concat(py.splitlines(snippets)), entityText);
+    failures = failures.concat(textFailures);
+    warnings = warnings.concat(textWarnings);
+  }
   const report = {
     verdict: !failures.length ? 'PASS' : 'FAIL',
     pages,
