@@ -28,6 +28,10 @@ card naming the test.
    bash tests/film.sh --pace 1500 orders    # slower still (ms per action; default 1000, 0 = test speed)
    ```
 
+Each film has one page listing what the test did, step by step, in English (labels only, never
+typed values). ffmpeg is optional: with it the page opens an `.mp4`; without it there is only the
+`.webm`, with the page at its end. On a Mac `brew install ffmpeg` adds it, if the person wants mp4s.
+
 4. **Give the paths** it prints: `.mxcli/films/<name>.mp4` (and `.webm`), `.mxcli/films/all.mp4`
    for `--all`. A failing test keeps its film, which shows where it stopped -- say that it failed.
 

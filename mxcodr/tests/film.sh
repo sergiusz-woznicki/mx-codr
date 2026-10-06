@@ -83,6 +83,94 @@ async page => {
 JS
 }
 
+# The steps the scenario took, one per line, as lib/scenario.sh noted them while paced
+# (`Click "New order"`, `Type in "Quantity"` -- labels only, never what was typed).
+read_steps() {
+  playwright-cli run-code "async page => JSON.stringify(Object.getPrototypeOf(page).__mdlFilmSteps || [])" 2>/dev/null \
+    | "$NODE" -e '
+      let text = ""; process.stdin.on("data", d => text += d).on("end", () => {
+        const at = text.indexOf("### Result");
+        if (at < 0) return;
+        const line = text.slice(at).split("\n")[1] || "";
+        try {
+          const steps = JSON.parse(JSON.parse(line));
+          if (Array.isArray(steps)) for (const step of steps) console.log(String(step));
+        } catch (e) {}
+      });'
+}
+
+# slide <name> <steps file> <png> -- one page: the test's name and its numbered steps, in two
+# columns past 15, at most 30 (the rest counted below), drawn by a browser of its own.
+slide() {
+  local code="$FILMS/.slide.js"
+  # playwright-cli refuses file: URLs, so the page is set as content in a run-code script.
+  local target="$3"
+  case "$target" in show:*) ;; *) target="$PWD/$target" ;; esac
+  "$NODE" - "$1" "$2" "$target" > "$code" <<'JS' || return 1
+const fs = require('fs');
+const [name, file, target] = process.argv.slice(2);
+// A run of the same step, or the same pair of steps, is one line: `Click "Advance status",
+// Click "Dismiss" (4 times)`.
+const raw = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean);
+const all = [];
+for (let i = 0; i < raw.length;) {
+  let done = false;
+  for (const k of [1, 2]) {
+    let n = 1;
+    while (raw.slice(i + n * k, i + (n + 1) * k).join('\u0000') === raw.slice(i, i + k).join('\u0000')) n++;
+    if (n > 1) { all.push(`${raw.slice(i, i + k).join(', ')} (${n} times)`); i += n * k; done = true; break; }
+  }
+  if (!done) { all.push(raw[i]); i++; }
+}
+const MAX = 30;
+const steps = all.slice(0, MAX);
+const more = all.length > MAX ? `<p class="more">... and ${all.length - MAX} more steps</p>` : '';
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const two = steps.length > 15;
+const size = two ? 22 : steps.length > 12 ? 24 : 26;
+const html = (`<!doctype html><meta charset="utf-8"><style>
+html,body{margin:0;width:100%;min-height:100%;background:#1f2933;color:#f5f7fa;font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+main{padding:56px 80px}h1{margin:0 0 6px;font-size:40px}p{margin:0 0 28px;color:#9aa5b1;font-size:20px}
+ol{margin:0;padding-left:44px;font-size:${size}px;line-height:1.5;column-count:${two ? 2 : 1};column-gap:60px}
+li{break-inside:avoid}li::marker{color:#9aa5b1}.more{margin-top:18px}</style>
+<main><h1>${esc(name)}</h1><p>What this test does, step by step</p><ol>${steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>${more}</main>`);
+// show:<ms> -- on the page being filmed, for that long (no ffmpeg); else a 1280x800 picture.
+process.stdout.write(target.startsWith('show:')
+  ? `async page => { await page.setContent(${JSON.stringify(html)}); await page.waitForTimeout(${Number(target.slice(5)) || 6000}); }\n`
+  : `async page => {
+  await page.setViewportSize({width: 1280, height: 800});
+  await page.setContent(${JSON.stringify(html)});
+  await page.screenshot({path: ${JSON.stringify(target)}});
+}\n`);
+JS
+  if [ "${3#show:}" != "$3" ]; then
+    playwright-cli run-code --filename "$code" >/dev/null 2>&1
+    rm -f "$code"
+    return 0
+  fi
+  playwright-cli -s=mxcodr-film-slide open >/dev/null 2>&1 || return 1
+  playwright-cli -s=mxcodr-film-slide run-code --filename "$code" >/dev/null 2>&1
+  playwright-cli -s=mxcodr-film-slide close >/dev/null 2>&1
+  rm -f "$code"
+  [ -s "$3" ]
+}
+
+# prepend_slide <name> -- put the step page in front of <name>.mp4, on screen long enough to read.
+prepend_slide() {
+  local name="$1" steps="$FILMS/.$1.steps" png="$FILMS/.$1.png" count seconds
+  read_steps > "$steps"
+  count="$(grep -c . "$steps")"
+  if [ "$count" = "0" ] || ! slide "$name" "$steps" "$png"; then rm -f "$steps" "$png"; return 0; fi
+  [ "$count" -gt 30 ] && count=30
+  seconds=$(( 3 + count / 2 ))
+  ffmpeg -v error -y -loop 1 -t "$seconds" -i "$png" -c:v libx264 -pix_fmt yuv420p -r 25 \
+    -vf 'scale=1280:800:force_original_aspect_ratio=decrease,pad=1280:800:(ow-iw)/2:(oh-ih)/2' "$FILMS/.$name.slide.mp4" \
+    && printf "file '.%s.slide.mp4'\nfile '%s.mp4'\n" "$name" "$name" > "$FILMS/.$name.list" \
+    && ffmpeg -v error -y -f concat -safe 0 -i "$FILMS/.$name.list" -c copy -movflags +faststart "$FILMS/.$name.joined.mp4" \
+    && mv "$FILMS/.$name.joined.mp4" "$FILMS/$name.mp4"
+  rm -f "$steps" "$png" "$FILMS/.$name.slide.mp4" "$FILMS/.$name.list" "$FILMS/.$name.joined.mp4"
+}
+
 # film <name> -- record one test; prints the film and the verdict, returns the test's status.
 film() {
   local name="$1" script="tests/verify-$1.test.sh" status out size
@@ -92,10 +180,20 @@ film() {
   playwright-cli video-start "$FILMS/$name.webm" --size "$size" >/dev/null 2>&1 \
     || { echo "film: playwright-cli could not start recording" >&2; return 2; }
   playwright-cli video-chapter "$name" --duration 2000 >/dev/null 2>&1
+  playwright-cli run-code "async page => { Object.getPrototypeOf(page).__mdlFilmSteps = []; }" >/dev/null 2>&1
   sleep 2
   # Slowed, a test takes longer than the gate's limit allows: give it ten times as long.
   out="$(BASE_URL="$BASE_URL" MDL_FILM_PACE_MS="$PACE" SCRIPT_TIMEOUT=900 bash "$script" 2>&1)"; status=$?
   sleep 1
+  # No ffmpeg to put the step page in front: the browser shows it at the end of the recording.
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    local steps="$FILMS/.$name.steps" count
+    read_steps > "$steps"
+    count="$(grep -c . "$steps")"
+    [ "$count" -gt 30 ] && count=30
+    [ "$count" != "0" ] && slide "$name" "$steps" "show:$(( (3 + count / 2) * 1000 ))"
+    rm -f "$steps"
+  fi
   playwright-cli video-stop >/dev/null 2>&1
   if [ ! -s "$FILMS/$name.webm" ]; then
     echo "film: $name ran, but no film was written" >&2
@@ -106,6 +204,8 @@ film() {
     ffmpeg -v error -y -i "$FILMS/$name.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart -r 25 \
       -vf 'scale=1280:800:force_original_aspect_ratio=decrease,pad=1280:800:(ow-iw)/2:(oh-ih)/2:white' "$FILMS/$name.mp4" \
       || rm -f "$FILMS/$name.mp4"
+    # The step page goes first; a test run at --pace 0 notes no steps and gets none.
+    [ -s "$FILMS/$name.mp4" ] && prepend_slide "$name"
   fi
   if [ "$status" = "0" ]; then
     echo "PASS  $name -> $FILMS/$name.$( [ -s "$FILMS/$name.mp4" ] && echo mp4 || echo webm)"

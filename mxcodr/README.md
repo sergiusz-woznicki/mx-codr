@@ -341,7 +341,14 @@ what is typed, the test password included. The browser is closed afterwards.
 Slowed: before each click, fill or pick the pointer travels to the element, and a pause follows
 (`--pace <ms>`, default 1000; `--pace 0` is the test's own speed). `lib/scenario.sh` does it when
 `MDL_FILM_PACE_MS` is set, by wrapping the actions on playwright-cli's Locator and Page; every
-other scenario sets the pace to 0, so a gate run after a film runs at full speed. Films
+other scenario sets the pace to 0, so a gate run after a film runs at full speed.
+
+Each film has one page listing the test's steps in English, as the paced wrappers noted them: the
+verb and the label of what was used (`Type in "Quantity"`, `Click "Save order"`), never what was
+typed. A repeated step or pair of steps is one line (`(4 times)`); past 15 lines the page has two
+columns, and past 30 the rest is counted, so it is always one page. With ffmpeg the page opens the
+mp4 (drawn by a playwright-cli browser of its own, `-s=mxcodr-film-slide`); without ffmpeg there
+is only the .webm, no mp4 and no all.mp4, and the filmed browser shows the page at the end of it. Films
 go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there; `--all` also joins them into
 `all.mp4`. A failing test keeps its film. It refuses while a gate or a test holds the browser, and
 when no app (or another project's app) answers. The skill `film-tests` lists the tests first, so
