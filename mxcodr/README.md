@@ -1184,6 +1184,8 @@ project's own layouts:
 `LAYOUT01` | error | the app's pages use more than one layout (pop-ups, the login page and phone/tablet layouts aside), so the menu changes between pages |
 `USER01` | error | users sign in, and a page (pop-ups and the login page aside) does not open with `<Module>.SNIPPET_CurrentUser` on the right of its top row, after Back if there is one: the user icon and e-mail, top right, the same place on every page |
 `BACK01` | error | a page another page or a flow opens (`show_page`) does not start with a Back button: `close_page`, icon `chevron-left`, top left. Pop-ups, menu pages and home pages are exempt |
+`TEXT01` | error | a `textbox` edits a String longer than 500 characters or unlimited; the message gives the `textarea` that replaces it |
+`TEXT02` | warning | a `textbox` edits an attribute named like prose (`Description`, `Notes`, `Comment`, `Reason` ...) of 100 characters or more |
 
 `GRID01` came from the same session: a customer grid showed its date column as formatted
 `Content` and dropped the column's `Attribute`, and its date filter rendered a red "Unable to
@@ -1197,6 +1199,12 @@ OpenCode and Pi plugins, because the gate waits for the runtime itself; two sess
 anyway. And the OQL helpers (`oql_count`, `oql_value`, `await_row`, `diagnose.sh`) quote the entity
 name: `FROM OrderDesk.Order` does not parse, so a test on an entity named `Order` failed and
 `diagnose.sh` printed a false 0 rows. A Pi session found and fixed that one in its own copy.
+
+`TEXT01` and `TEXT02` read the entities (`describe entity`) for the length of the text each
+textbox edits. InvoiceB2B had four 2000-character fields (internal notes, an approval reason)
+in one-line textboxes: the text scrolled sideways and its line breaks were lost on screen. The
+length decides, so it blocks; a name alone is a hint, since `Summary String(100)` may be one
+line on purpose. mxcli reads a bare `String` as unlimited.
 
 `NAV03` and `NAV04` came from a Pi session that needed an employee menu and a customer
 menu, found that MDL menu items take no roles, and built two layouts of link buttons

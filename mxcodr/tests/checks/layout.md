@@ -27,3 +27,5 @@ says "warning". The finding already says what to change; this says why. Not `tes
 | `GRID01` | a column with a filter keeps its `Attribute` | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`; without it: "Unable to get filter store" |
 | `GRID02` | a button changing a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter |
 | `ALERT01` | an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
+| `TEXT01` | a textarea for a String over 500 characters or unlimited: a textbox is one line and drops the line breaks | `alter page <Page> { replace txtNotes with { textarea txtNotes (Label: 'Notes', Attribute: Notes) } };` |
+| `TEXT02` | warning: a textbox on an attribute named like prose (Description, Notes, Comment, Reason ...) of 100 characters or more | the same textarea if people write more than a line there; otherwise leave it |

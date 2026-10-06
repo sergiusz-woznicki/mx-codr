@@ -389,6 +389,9 @@ check_layout() {
   # and write entities, for buttons that change a grid's rows outside its header (GRID02).
   describe_all layout-flows "$WORK/layout-flows" "MICROFLOWS NANOFLOWS" || layout_unread flows "BACK01, GRID02"
   ls "$WORK"/layout-flows/*.mdl >/dev/null 2>&1 && nav_args+=(--opened-from "$WORK/layout-flows")
+  # The entities say how long the text a textbox edits may be (TEXT01, TEXT02).
+  describe_entities_into "$WORK/layout-entities" || layout_unread entities "TEXT01, TEXT02"
+  ls "$WORK"/layout-entities/*.mdl >/dev/null 2>&1 && nav_args+=(--entities "$WORK/layout-entities")
   out="$("$NODE" tools/mdl-checks/check_layout.cjs "$WORK/pages" "${nav_args[@]}" \
     --expect-pages "$(cat "$WORK/layout.count" 2>/dev/null || echo 0)" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
@@ -408,6 +411,9 @@ check_layout() {
   elif [ -n "$look" ] && [ "${MDL_VISUAL:-warn}" != "0" ]; then
     printf '%s\n' "$look" > "$WORK/layout.warnings"
   fi
+  # A textbox whose attribute's name says it holds prose (TEXT02) is a hint, shown with the warnings.
+  printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[TEXT02\]' | sed -E 's/^[[:space:]]+! /   - /' >> "$WORK/layout.warnings"
+  [ -s "$WORK/layout.warnings" ] || rm -f "$WORK/layout.warnings"
   [ -s "$WORK/layout.unread" ] && cat "$WORK/layout.unread" >> "$WORK/layout.warnings"
   return "$gate"
 }

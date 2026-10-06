@@ -266,6 +266,19 @@ Nothing needs building, and nothing in the Marketplace module changes:
 The gate fails `ACCOUNT01` (no Users item), `ACCOUNT02` (no My account item) and `ACCOUNT03`
 (a role without `Administration.User`, or nobody with `Administration.Administrator`).
 
+## A long text gets a text area
+
+A `textbox` is one line: a note typed into it scrolls sideways and its line breaks are lost.
+An attribute longer than 500 characters, or unlimited (a bare `String` is unlimited), is
+edited in a `textarea`:
+
+```sql
+textarea txtNotes (Label: 'Notes', Attribute: Notes)
+```
+
+The gate fails `TEXT01` for a textbox on such an attribute and warns (`TEXT02`) when the
+attribute's name says prose -- Description, Notes, Comment, Reason -- at 100 characters or more.
+
 ## Every button has an icon
 
 Every `actionbutton` and `linkbutton`, on a page or in a snippet, carries an icon that
