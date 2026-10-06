@@ -1168,6 +1168,7 @@ project's own layouts:
 `SPACE01` | error | a widget sharing a line with the next and no `margin-right`; a heading with content under it and no `margin-bottom` |
 `SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
 `SPACE03` | error | widgets on one line disagreeing on vertical margins, or none carrying `margin-bottom` |
+`SPACE04` | error | a button or text right on top of, or right under, a box (data grid, list, gallery, group box, tab container, a card or coloured container) with no margin between them; a button in a grid's `controlbar` without `margin-bottom` |
 `HEAD01` | warning | the page renders no heading and calls no header snippet |
 `GRID01` | error | a grid filter in a column with no `Attribute:` (and none of its own) — it renders "Unable to get filter store" |
 `GRID02` | error | a button outside a data grid changes the rows it shows (creates its entity, uses its selection, or calls a flow that writes it, three calls deep); it goes in the grid's header, `controlbar` inside the datagrid |
@@ -1199,6 +1200,13 @@ OpenCode and Pi plugins, because the gate waits for the runtime itself; two sess
 anyway. And the OQL helpers (`oql_count`, `oql_value`, `await_row`, `diagnose.sh`) quote the entity
 name: `FROM OrderDesk.Order` does not parse, so a test on an entity named `Order` failed and
 `diagnose.sh` printed a false 0 rows. A Pi session found and fixed that one in its own copy.
+
+`SPACE04` came from a screenshot: "Generate invoice" in a grid's `controlbar`, where `GRID02`
+puts it, sat on the grid's header row. Atlas gives buttons, text, grids, lists and cards no
+vertical margin, so one stacked on the other touches. Plain containers, headings (`SPACE01`) and
+a list whose items already end in a margin are left alone. Over 37 local projects it found
+17 in 9 apps: 10 buttons on a grid's first row, 5 lines of text on or under a grid,
+2 buttons under a grid.
 
 `TEXT01` and `TEXT02` read the entities (`describe entity`) for the length of the text each
 textbox edits. InvoiceB2B had four 2000-character fields (internal notes, an approval reason)

@@ -17,6 +17,9 @@
 //   SPACE01  FAIL  inline sibling (not last) without margin-right, or H1-H3 heading with a sibling below and no margin-bottom
 //   SPACE02  FAIL  margin/padding value other than None, S, M, L (mxcli check accepts it; mx check fails with CE6083)
 //   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
+//   SPACE04  FAIL  a button or text right on top of, or right under, a box (data grid, list, gallery,
+//                  group box, tab container, a card or a coloured container) with no margin between
+//                  them; a button in a grid's controlbar without margin-bottom
 //   HEAD01   WARN  page with no H1-H3 text, no header widget and no header/title/masthead snippet
 //   NAV01    FAIL  users sign in (--users-sign-in), but a navigation menu has no sign_out item
 //                  and no page or snippet has a sign-out button
@@ -65,7 +68,8 @@
 // rules read; pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
 // GRID01, ICON01; grids.cjs GRID02; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
 // navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01;
-// inputs.cjs TEXT01-02.
+// inputs.cjs TEXT01-02; vertical.cjs SPACE04. --port-parity runs only the rules check_layout.py
+// had (SPACE04 is newer), for the test that compares the two.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -76,6 +80,7 @@ const { buttonIconFindings } = require('./layout_rules/controls.cjs');
 const { edgeFindings } = require('./layout_rules/edges.cjs');
 const { headerButtonFindings } = require('./layout_rules/grids.cjs');
 const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
+const { verticalFindings } = require('./layout_rules/vertical.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
@@ -163,7 +168,7 @@ const USAGE = `usage: ${PROG} [-h] [--navigation NAVIGATION] [--sign-out-sources
                        [--admin-module] [--user-roles USER_ROLES] [--menu-access MENU_ACCESS]
                        [--guest-role GUEST_ROLE] [--own-modules OWN_MODULES] [--template-module]
                        [--opened-from OPENED_FROM] [--entities ENTITIES] [--users-sign-in]
-                       [--expect-pages EXPECT_PAGES] [--json]
+                       [--expect-pages EXPECT_PAGES] [--port-parity] [--json]
                        sources [sources ...]
 `;
 const OPTIONS = {
@@ -180,6 +185,7 @@ const OPTIONS = {
   '--entities': { dest: 'entities', kind: 'append' },
   '--users-sign-in': { dest: 'users_sign_in', kind: 'flag' },
   '--expect-pages': { dest: 'expect_pages', kind: 'int' },
+  '--port-parity': { dest: 'port_parity', kind: 'flag' },
   '--json': { dest: 'json', kind: 'flag' },
   '--help': { dest: 'help', kind: 'help' },
   '-h': { dest: 'help', kind: 'help' },
@@ -211,7 +217,7 @@ function parseArgs(argv) {
   const args = {
     sources: [], navigation: null, sign_out_sources: [], layouts: [], admin_module: false, user_roles: null,
     menu_access: null, guest_role: '', own_modules: '', template_module: false, opened_from: [], entities: [],
-    users_sign_in: false, expect_pages: 0, json: false,
+    users_sign_in: false, expect_pages: 0, port_parity: false, json: false,
   };
   const unknown = [];
   let positionalRuns = 0, inRun = false;
@@ -280,6 +286,7 @@ function main() {
   const ownModules = py.split(args.own_modules);
 
   let [failures, warnings, pages] = check(lines);
+  if (!args.port_parity) failures = failures.concat(verticalFindings(lines));
   // Input was described and nothing in it was recognised: a describe format these rules do not
   // read. Every rule would find nothing, and that would be a PASS for a check that saw nothing.
   const unread = [];
