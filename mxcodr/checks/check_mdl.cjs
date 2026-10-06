@@ -25,6 +25,12 @@
 //   PERF07                       WARN  with --entities: a query (retrieve, page source, grid filter)
 //                                      no index serves (index_rules.cjs)
 //   PERF08                       WARN  with --entities: an index no query in the model needs
+//   EVENT01 EVENT02              FAIL  with --entities: a commit handler that commits its own object with
+//                                      events (a loop); a before handler without raise error that can
+//                                      return false (a silent skip) (event_rules.cjs)
+//   EVENT03 EVENT04 ERR01        WARN  with --entities: without events skipping a commit handler; Save
+//                                      changes on an entity a before-commit handler refuses with an error;
+//                                      an error handler that nobody would notice
 // --captions warn turns the caption rules (CAPTION_RULES) into warnings: the gate passes it by
 // default, since 286 of them landed at once on a session with no test green yet.
 'use strict';
@@ -34,6 +40,7 @@ const path = require('path');
 const py = require('./py_compat.cjs');
 const { perfFindings, rx } = require('./perf_rules.cjs');
 const { entityHeads, indexFindings, redundantFindings } = require('./index_rules.cjs');
+const { eventFindings } = require('./event_rules.cjs');
 
 // Any `@word rest`; group 1 is the word (caption, annotation, position).
 const ANNOTATION_RE = rx(String.raw`^\s*@(\w+)\s*(.*)$`);
@@ -533,6 +540,10 @@ function main() {
     }
     const perf = warnings.filter(w => w.check.startsWith('PERF'));
     warnings = [...perf, ...indexes, ...warnings.filter(w => !w.check.startsWith('PERF'))];
+    // Event handlers and error handlers: the loop and the silent skip fail, the rest warn.
+    for (const [code, message, line] of eventFindings(lines, entityText, pageText)) {
+      (code === 'EVENT01' || code === 'EVENT02' ? failures : warnings).push(finding(code, message, line));
+    }
   }
   const hashes = flowHashes(lines);
   // Documents were described and not one head was recognised: a describe format these rules do

@@ -40,6 +40,11 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
+- **An event handler never commits its own object with events** (gate EVENT01: it runs itself until
+  the app crashes): `commit $Order without events;`, or, before commit, only change it. A before
+  handler that can return false needs `raise error`, or the save is skipped in silence (EVENT02):
+  `alter entity Shop.Order add event handler on before commit call Shop.BCO_Order($currentObject) raise error;`.
+  A bare `commit $X;` runs the handlers; `without events` skips them (EVENT03 warns).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
   `grant create, delete, read *, write * on entity Mod.Entity to Mod.Role;`.

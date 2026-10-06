@@ -238,7 +238,7 @@ check_naming() {
   if ! describe_entities_into "$WORK/naming-entities" || ! describe_all naming-pages "$WORK/naming-pages" "PAGES"; then
     # The index rules are warnings: without their input they are left out, and the gate says so.
     index_inputs=()
-    echo "   - naming: the entities or pages could not be read, so the index rules (PERF07, PERF08) did not run" > "$WORK/naming.unread"
+    echo "   - naming: the entities or pages could not be read, so the index and event-handler rules (PERF07, PERF08, EVENT01-04, ERR01) did not run" > "$WORK/naming.unread"
   fi
   # Captions: a backlog of warnings until the first DONE; from then on a microflow that is new or
   # changed since the last DONE needs them (the hashes each DONE keeps, tests/gate.sh).
@@ -260,15 +260,16 @@ check_naming() {
   total="$(printf '%s\n' "$out" | grep -cE '^\s+- ')"
   printf '%s\n' "$out" | grep -E '^\s+- ' | head -10 > "$WORK/naming.detail"
   [ "$total" -gt 10 ] && echo "  ... 10 of $total shown -- the rest are the same kinds; fix them script by script" >> "$WORK/naming.detail"
-  # Every performance warning is listed: each names a different table or loop, and Pi, shown 8 of
-  # 12 PERF07 lines, hunted the cache and the dumps for the other four. The rest stay capped at 8.
+  # Every performance and event-handler warning is listed: each names a different table, loop or
+  # handler, and Pi, shown 8 of 12 PERF07 lines, hunted the cache and the dumps for the other four.
+  # The caption warnings stay capped at 8.
   local perf_lines other_total
-  perf_lines="$(printf '%s\n' "$out" | grep -E '^\s+! \[PERF' | sed -E 's/^[[:space:]]+! /   - /')"
-  other_total="$(printf '%s\n' "$out" | grep -E '^\s+! ' | grep -cv '\[PERF')"
+  perf_lines="$(printf '%s\n' "$out" | grep -E '^\s+! \[(PERF|EVENT|ERR)' | sed -E 's/^[[:space:]]+! /   - /')"
+  other_total="$(printf '%s\n' "$out" | grep -E '^\s+! ' | grep -cvE '\[(PERF|EVENT|ERR)')"
   if [ -n "$perf_lines" ] || [ "$other_total" -gt 0 ] || [ -s "$WORK/naming.unread" ]; then
     { cat "$WORK/naming.unread" 2>/dev/null
       [ -n "$perf_lines" ] && printf '%s\n' "$perf_lines"
-      printf '%s\n' "$out" | grep -E '^\s+! ' | grep -v '\[PERF' | head -8 | sed -E 's/^[[:space:]]+! /   - /'
+      printf '%s\n' "$out" | grep -E '^\s+! ' | grep -vE '\[(PERF|EVENT|ERR)' | head -8 | sed -E 's/^[[:space:]]+! /   - /'
       [ "$other_total" -gt 8 ] && echo "   ... 8 of $other_total naming warnings shown (MDL_CAPTIONS=error makes caption rules block)"
     } > "$WORK/naming.warnings"
   fi
