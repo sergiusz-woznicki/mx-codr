@@ -332,8 +332,8 @@ red-first run -- the scratch `verify-zz-*.test.sh` two sessions wrote for this l
 ### A video of a test's run
 
 `bash tests/film.sh --list` prints every browser test: its name, the user it signs in as, what it
-covers and the journey from its header. `bash tests/film.sh <name>...` (or `--all`) records the
-shared browser while each test runs, unchanged but slowed for the eye, through playwright-cli's
+covers and the journey from its header. `bash tests/film.sh <name>` records the
+shared browser while that one test runs, unchanged but slowed for the eye, through playwright-cli's
 `video-start`/`video-stop`; each film opens with a card naming the test (`video-chapter`), and a mouse pointer moves to each
 click. Headless Chromium draws no pointer, so film.sh adds an arrow to the page that follows the
 test's mouse; playwright-cli's own (`video-show-actions`) comes with a label per action that prints
@@ -348,10 +348,11 @@ verb and the label of what was used (`Type in "Quantity"`, `Click "Save order"`)
 typed. A repeated step or pair of steps is one line (`(4 times)`); past 15 lines the page has two
 columns, and past 30 the rest is counted, so it is always one page. With ffmpeg the page opens the
 mp4 (drawn by a playwright-cli browser of its own, `-s=mxcodr-film-slide`); without ffmpeg there
-is only the .webm, no mp4 and no all.mp4, and the filmed browser shows the page at the end of it. Films
-go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there; `--all` also joins them into
-`all.mp4`. A failing test keeps its film. It refuses while a gate or a test holds the browser, and
-when no app (or another project's app) answers. The skill `film-tests` lists the tests first, so
+is only the .webm and no mp4, and the filmed browser shows the page at the end of it. Films
+go to `.mxcli/films/<name>.webm`, plus an `.mp4` when ffmpeg is there. A failing test keeps its
+film. It refuses while a gate, a test or another film holds the browser, and when no app (or
+another project's app) answers. One test per run: `--all` was removed after a whole suite, slowed,
+took 11 minutes and outlived the app's licensed run time halfway through. The skill `film-tests` lists the tests first, so
 the person can say which ones to film.
 
 A peek at the page a user already lands on (their home page) no longer fails as "clicked menu …

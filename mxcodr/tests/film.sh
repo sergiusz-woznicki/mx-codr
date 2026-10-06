@@ -2,10 +2,11 @@
 # tests/film.sh -- a video of a browser test's run, with the test's name on it.
 #
 #   bash tests/film.sh --list                 # every test: what it walks through, who signs in
-#   bash tests/film.sh mastermind             # tests/verify-mastermind.test.sh -> .mxcli/films/mastermind.webm
-#   bash tests/film.sh orders toasts          # several, one film each
-#   bash tests/film.sh --all                  # every test with a browser, plus .mxcli/films/all.mp4
+#   bash tests/film.sh mastermind             # tests/verify-mastermind.test.sh -> .mxcli/films/mastermind.mp4
 #   bash tests/film.sh --pace 1500 orders     # slower: ms the pointer waits around each action (default 1000, 0 = test speed)
+#
+# One test per film, one film per run: a whole suite, slowed to be watched, took 11 minutes and
+# outlived the app's licensed run time halfway through.
 #
 # The test runs unchanged in the browser the tests share, slowed for the eye: before each click,
 # fill or pick the pointer goes to the element, and a pause follows (lib/scenario.sh,
@@ -200,7 +201,7 @@ film() {
     return 2
   fi
   if command -v ffmpeg >/dev/null 2>&1; then
-    # One frame size for every film, so --all can join them.
+    # One frame size for every film, whatever size the page had.
     ffmpeg -v error -y -i "$FILMS/$name.webm" -c:v libx264 -pix_fmt yuv420p -movflags +faststart -r 25 \
       -vf 'scale=1280:800:force_original_aspect_ratio=decrease,pad=1280:800:(ow-iw)/2:(oh-ih)/2:white' "$FILMS/$name.mp4" \
       || rm -f "$FILMS/$name.mp4"
@@ -232,32 +233,20 @@ if [ "${1:-}" = "--pace" ]; then
   esac
   PACE="$2"; shift 2
 fi
-[ "$#" -gt 0 ] || { echo "film: name a test, or --all (bash tests/film.sh --list shows them)" >&2; exit 2; }
-
-# Which tests: names given, or every one with a browser.
-names=()
-if [ "$1" = "--all" ]; then
-  for script in tests/verify-*.test.sh; do
-    [ -f "$script" ] || continue
-    if films_something "$script"; then names+=("$(name_of "$script")")
-    else echo "skip  $(name_of "$script") (no browser in this test)"; fi
-  done
-else
-  for name in "$@"; do
-    name="${name#verify-}"; name="${name%.test.sh}"
-    if [ ! -f "tests/verify-$name.test.sh" ]; then
-      echo "film: no test named '$name'. The tests here: $(for s in tests/verify-*.test.sh; do printf '%s ' "$(name_of "$s")"; done)" >&2
-      exit 2
-    fi
-    films_something "tests/verify-$name.test.sh" || { echo "film: $name opens no browser -- nothing to film" >&2; exit 2; }
-    names+=("$name")
-  done
+if [ "$#" -ne 1 ] || [ "${1#-}" != "$1" ]; then
+  echo "film: name one test (bash tests/film.sh --list shows them); one film per run" >&2
+  exit 2
 fi
-[ "${#names[@]}" -gt 0 ] || { echo "film: no test with a browser to film" >&2; exit 2; }
+name="${1#verify-}"; name="${name%.test.sh}"
+if [ ! -f "tests/verify-$name.test.sh" ]; then
+  echo "film: no test named '$name'. The tests here: $(for s in tests/verify-*.test.sh; do printf '%s ' "$(name_of "$s")"; done)" >&2
+  exit 2
+fi
+films_something "tests/verify-$name.test.sh" || { echo "film: $name opens no browser -- nothing to film" >&2; exit 2; }
 
-# One browser for every test and the gate: never record over a run that is using it.
-if pgrep -f 'tests/gate\.sh|mxcli playwright verify|verify-[A-Za-z0-9_-]*\.test\.sh' 2>/dev/null | grep -qvx "$$"; then
-  echo "film: a gate or a test is running and holds the shared browser -- film when it is done" >&2
+# One browser for every test, the gate and every film: never record over a run that uses it.
+if pgrep -f 'tests/gate\.sh|tests/film\.sh|mxcli playwright verify|verify-[A-Za-z0-9_-]*\.test\.sh' 2>/dev/null | grep -qvx "$$"; then
+  echo "film: a gate, a test or another film is running and holds the shared browser -- film when it is done" >&2
   exit 2
 fi
 APP_PORT="${APP_PORT:-8081}"
@@ -281,17 +270,4 @@ cursor_script > "$cursor_file"
 playwright-cli run-code --filename "$cursor_file" >/dev/null 2>&1 || echo "film: no mouse pointer on the films (playwright-cli could not add it)" >&2
 rm -f "$cursor_file"
 
-failed=0
-made=()
-for name in "${names[@]}"; do
-  film "$name" || failed=1
-  [ -s "$FILMS/$name.mp4" ] && made+=("$FILMS/$name.mp4")
-done
-# --all: one film of everything, in order, when ffmpeg can join them.
-if [ "$1" = "--all" ] && [ "${#made[@]}" -gt 1 ] && command -v ffmpeg >/dev/null 2>&1; then
-  list="$FILMS/.all.txt"
-  for file in "${made[@]}"; do printf "file '%s'\n" "$(basename "$file")"; done > "$list"
-  ffmpeg -v error -y -f concat -safe 0 -i "$list" -c copy "$FILMS/all.mp4" && echo "all   -> $FILMS/all.mp4"
-  rm -f "$list"
-fi
-exit "$failed"
+film "$name"

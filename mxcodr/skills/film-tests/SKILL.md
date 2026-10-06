@@ -1,6 +1,6 @@
 ---
 name: film-tests
-description: "Record a video of a browser test's run -- one test, several, or all of them -- with the test's name on the film, and list every test first so the person can choose. Use when someone asks to see, film, record or show a test, a journey, or how the app works."
+description: "Record a video of one browser test's run, with the test's name and its steps on the film, and list every test first so the person can choose. Use when someone asks to see, film, record or show a test, a journey, or how the app works."
 ---
 
 # Film a test
@@ -19,12 +19,13 @@ card naming the test.
 
    Each entry gives the test's name, the user it signs in as, what it covers and the journey in
    its own words. A test with no browser (API or OQL only) says "nothing to film".
-2. **Ask which ones**, unless the request already names them: one, several, or all.
+2. **Ask which one**, unless the request already names it. One test per film and per run: a
+   whole suite, slowed to be watched, takes over ten minutes. For several, film them one after
+   another, one call each.
 3. **Record:**
 
    ```bash
-   bash tests/film.sh <name> [<name>...]    # e.g. bash tests/film.sh orders toasts
-   bash tests/film.sh --all                 # every test with a browser, plus all.mp4
+   bash tests/film.sh <name>                # e.g. bash tests/film.sh orders
    bash tests/film.sh --pace 1500 orders    # slower still (ms per action; default 1000, 0 = test speed)
    ```
 
@@ -32,8 +33,9 @@ Each film has one page listing what the test did, step by step, in English (labe
 typed values). ffmpeg is optional: with it the page opens an `.mp4`; without it there is only the
 `.webm`, with the page at its end. On a Mac `brew install ffmpeg` adds it, if the person wants mp4s.
 
-4. **Give the paths** it prints: `.mxcli/films/<name>.mp4` (and `.webm`), `.mxcli/films/all.mp4`
-   for `--all`. A failing test keeps its film, which shows where it stopped -- say that it failed.
+4. **Give the path** it prints: `.mxcli/films/<name>.mp4` (and `.webm`). A failing test keeps its
+   film, which shows where it stopped -- say that it failed. Do not pipe film.sh through `tail`:
+   it prints one line at the end, and a piped run shows nothing while it records.
 
 ## Rules
 

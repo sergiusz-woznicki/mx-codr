@@ -107,9 +107,9 @@ The agent learns these from five *skills* (short guides) that the installer puts
 place. You don't need to read them.
 
 **Watch a test run.** Ask the agent to show or film a test. A sixth skill, `film-tests`, lists every
-browser test with what it walks through, then records the ones you pick as videos with the test's
-name on them (`.mxcli/films/`). By hand: `bash tests/film.sh --list`, `bash tests/film.sh <name>`,
-`bash tests/film.sh --all`.
+browser test with what it walks through, then records the one you pick as a video with the test's
+name and its steps on it (`.mxcli/films/`). By hand: `bash tests/film.sh --list`, then
+`bash tests/film.sh <name>`.
 
 ## The installer sets everything up
 
