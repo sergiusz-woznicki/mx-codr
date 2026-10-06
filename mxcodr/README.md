@@ -1249,6 +1249,21 @@ anyway. And the OQL helpers (`oql_count`, `oql_value`, `await_row`, `diagnose.sh
 name: `FROM OrderDesk.Order` does not parse, so a test on an entity named `Order` failed and
 `diagnose.sh` printed a false 0 rows. A Pi session found and fixed that one in its own copy.
 
+`NAME01` and `NAME02` (`layout_rules/names.cjs`, `--names`) hold widget names to one app-wide
+scheme, `<Page>_<What><Type>`: `OrderDetail_GenerateInvoiceButton`, `OrderDetail_InvoicesGrid`,
+`CurrentUserSnippet_AccountButton`. Mendix keeps a widget name unique on its page only; over 34
+local apps a third of 3,684 widgets shared their name with a widget on another page (`heading` on
+18 pages of InvoiceB2B, `ctPageTop` on 17), so a test's `.mx-name-...`, a failure or a log line
+named a dozen places, and 17% were Studio Pro defaults like `container3`. The page part (the page's
+name, no module or underscore; a snippet's name plus `Snippet`; the module in front only when two
+modules share a page name) makes a name unique; the type word at the end is plain English. NAME02
+prints the name to use, from the widget's attribute, caption or data source; where nothing says
+what it shows (a KPI tile) it asks for the word. On InvoiceB2B it named 364 of 389 widgets itself.
+Like the microflow captions they warn until the first DONE (one line with the count and five
+examples), then a page new or changed since the last DONE needs them (`names-baseline.json`);
+`MDL_WIDGET_NAMES=error` makes all block, `0` turns them off. Renaming a widget breaks a test that
+finds the old name, and the finding says so.
+
 `SPACE04` came from a screenshot: "Generate invoice" in a grid's `controlbar`, where `GRID02`
 puts it, sat on the grid's header row. Atlas gives buttons, text, grids, lists and cards no
 vertical margin, so one stacked on the other touches. Plain containers, headings (`SPACE01`) and

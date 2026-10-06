@@ -89,6 +89,7 @@ what to fix. Codes in brackets are what the gate prints.
 - A Back button top left on every page opened from another page (`BACK01`), and on the right
   of the same top row, under the language selector, who is signed in: a user icon and e-mail
   that opens My account (`USER01`).
+- Every widget named `<Page>_<What><Type>`, unique in the app (`OrderDetail_GenerateInvoiceButton`, `NAME01`-`02`; warnings until the first DONE).
 - An icon on every button (`ICON01`); Atlas spacing, no custom CSS (`SPACE01`-`03`); a button or
   text never touches a grid, list or card above or below it, a grid header's buttons included (`SPACE04`).
 - A long text (over 500 characters, or unlimited) is edited in a text area, not a one-line

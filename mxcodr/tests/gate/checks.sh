@@ -393,6 +393,14 @@ check_layout() {
   # The entities say how long the text a textbox edits may be (TEXT01, TEXT02).
   describe_entities_into "$WORK/layout-entities" || layout_unread entities "TEXT01, TEXT02"
   ls "$WORK"/layout-entities/*.mdl >/dev/null 2>&1 && nav_args+=(--entities "$WORK/layout-entities")
+  # Widget names (NAME01/02): warnings until the first DONE, then a new or changed page needs them.
+  case "${MDL_WIDGET_NAMES:-warn}" in
+    0|off) ;;
+    error) nav_args+=(--names error --page-hashes "$CACHE_DIR/layout.pages.json") ;;
+    *) nav_args+=(--names warn --page-hashes "$CACHE_DIR/layout.pages.json")
+       [ -f "$CACHE_DIR/names-baseline.json" ] && nav_args+=(--names-baseline "$CACHE_DIR/names-baseline.json") ;;
+  esac
+  mkdir -p "$CACHE_DIR" 2>/dev/null
   out="$("$NODE" tools/mdl-checks/check_layout.cjs "$WORK/pages" "${nav_args[@]}" \
     --expect-pages "$(cat "$WORK/layout.count" 2>/dev/null || echo 0)" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
@@ -414,6 +422,15 @@ check_layout() {
   fi
   # A textbox whose attribute's name says it holds prose (TEXT02) is a hint, shown with the warnings.
   printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[TEXT02\]' | sed -E 's/^[[:space:]]+! /   - /' >> "$WORK/layout.warnings"
+  # Widget names: one line with the count and five examples, not hundreds (an app built before the
+  # rule has a name to change on nearly every widget).
+  local names_total
+  names_total="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]+! \[NAME0[12]\]')"
+  if [ "$names_total" -gt 0 ]; then
+    { echo "   - [NAME01/NAME02] $names_total widget names do not read <Page>_<What><Type> (skill naming-and-captions, 'Widget names'); a page new or changed after the next DONE needs them. The first five:"
+      printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[NAME02\]' | head -5 | sed -E 's/^[[:space:]]+! /     /'
+    } >> "$WORK/layout.warnings"
+  fi
   [ -s "$WORK/layout.warnings" ] || rm -f "$WORK/layout.warnings"
   [ -s "$WORK/layout.unread" ] && cat "$WORK/layout.unread" >> "$WORK/layout.warnings"
   return "$gate"
@@ -472,7 +489,7 @@ start_model_checks() {
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs ) &
   ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
-  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
+  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_VISUAL=${MDL_VISUAL:-}" "env:MDL_WIDGET_NAMES=${MDL_WIDGET_NAMES:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
   echo "== mx check, lint, coverage, naming, layout, security and scope started (they need no app; running while the suite does)"

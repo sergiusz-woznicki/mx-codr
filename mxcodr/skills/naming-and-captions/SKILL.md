@@ -1,6 +1,6 @@
 ---
 name: naming-and-captions
-description: "Business-readable variable names and captions in microflows — name what a value means rather than restating its type, caption every decision with the question it answers, and caption every retrieve, create, change, commit, delete, call and show-page with a short business operation (never the Mendix default). Use when writing or changing any microflow, nanoflow or rule."
+description: "Business-readable variable names and captions in microflows — name what a value means rather than restating its type, caption every decision with the question it answers, and caption every retrieve, create, change, commit, delete, call and show-page with a short business operation (never the Mendix default); and name every widget on a page <Page>_<What><Type>, unique in the app. Use when writing or changing any microflow, nanoflow, rule or page."
 ---
 
 # Naming and captions
@@ -20,6 +20,7 @@ Use it when:
 - Adding a decision (`if`, `case`) to a flow
 - Adding a retrieve, create, change, commit or call activity
 - Reviewing a flow that is hard to follow
+- Naming the widgets of a page or snippet (section "Widget names")
 
 ## Variable names
 
@@ -56,6 +57,49 @@ the flow, but when there are two, `$OriginalOrder` and `$ReplacementOrder` beat
 Where the standard `Entity_List` shape *is* the whole meaning — a plain
 "everything of this type" data source — the flow name already says so
 (`DS_Invoice_GetAll`), so the variable still does not need to repeat it.
+
+## Widget names
+
+Mendix keeps a widget name unique on its page only, so `heading`, `btnBack` and `ctPageTop`
+end up on every page, and `k1Value` says nothing. A test's `.mx-name-...`, a failure and a log
+line then point at a dozen places. **Name every widget `<Page>_<What><Type>`:**
+
+- **Page**: the page's name without module and underscore -- `Order_Detail` is `OrderDetail`.
+  In a snippet: its name without `SNIPPET_`, plus `Snippet` -- `CurrentUserSnippet`.
+  The page part makes the name unique in the app.
+- **What**: whole business words -- the attribute, the action, what it shows.
+- **Type**: one word at the end.
+
+| Widget | Type word | Widget | Type word |
+|---|---|---|---|
+| actionbutton | `Button` | datagrid | `Grid` |
+| linkbutton | `Link` | listview, gallery | `List` |
+| textbox, textarea | `Input` | dataview | `Form` |
+| combobox | `Picker` | container, groupbox | `Box` |
+| datepicker | `Date` | layoutgrid | `Layout` |
+| checkbox, radiobuttons | `Choice` | snippetcall | `Snippet` |
+| dynamictext, text | `Text` | grid filter | `Filter` |
+| image | `Image` | tabcontainer / tab page | `Tabs` / `Tab` |
+
+```sql
+create page Shop.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atlas_Default, Params: ( $Order: Shop.Order )) {
+  layoutgrid OrderDetail_PageLayout {
+    row { column (DesktopWidth: 12) {
+      dataview OrderDetail_OrderForm (DataSource: $Order) {
+        dynamictext OrderDetail_TitleText (Content: 'Order {1}', ContentParams: ({1} = Number), RenderMode: H2)
+        combobox OrderDetail_PriorityPicker (Label: 'Priority', Attribute: Priority)
+        actionbutton OrderDetail_GenerateInvoiceButton (Caption: 'Generate invoice', Action: close page)
+      }
+    } }
+  }
+};
+```
+
+A tile, a value or a section heading is named after what it shows: `Dashboard_OverdueKpiBox`,
+`Dashboard_OverdueValueText` -- never `ctKpi3`, `k3Value`, a number at the end or Studio Pro's
+`textBox1`. The gate's layout step reports a repeated name (NAME01) and a name off the pattern
+(NAME02, with the name to use): warnings while the app is built; after a DONE a page you add or
+change needs them. Renaming a widget breaks a test that finds `.mx-name-<old>`: rename both.
 
 ## Activity captions
 
@@ -256,6 +300,7 @@ everything or nothing, and prefer nothing.
 ## Validation checklist
 
 - [ ] No variable named `$Int1`, `$List2`, `$tmp` or similar
+- [ ] Every widget named `<Page>_<What><Type>` (`OrderDetail_GenerateInvoiceButton`)
 - [ ] No variable name that only restates its own type (`$Invoice_List`)
 - [ ] Every `if` and `while` caption is a question — not the expression Mendix fills in by default
 - [ ] Every retrieve, create, change, commit, delete, call, show-page and `set` has a business-operation `@caption` — none read as Retrieve/Change/Commit/Call/Show page + type

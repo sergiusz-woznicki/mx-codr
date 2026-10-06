@@ -22,7 +22,7 @@
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
-#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
+#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE|MDL_WIDGET_NAMES=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
 #      set in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
@@ -180,6 +180,14 @@ captions_after_done() {
   return 0
 }
 
+# Widget names likewise: each full DONE keeps a hash of every page and snippet; from then on a new
+# or changed one needs <Page>_<What><Type> names (check_layout --names, NAME02).
+names_after_done() {
+  [ -f "$CACHE_DIR/layout.pages.json" ] || return 0
+  cp "$CACHE_DIR/layout.pages.json" "$CACHE_DIR/names-baseline.json" 2>/dev/null
+  return 0
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -217,6 +225,7 @@ print_verdict_and_exit() {
   echo "   DONE — every check passed"
   done_repeat_note
   captions_after_done
+  names_after_done
   if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
     echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
   fi

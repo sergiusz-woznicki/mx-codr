@@ -24,9 +24,11 @@ says "warning". The finding already says what to change; this says why. Not `tes
 | `SPACE01` | a margin under a heading that has content right below it | `DesignProperties: ('Spacing': ('margin-bottom': 'S'))` on the heading |
 | `SPACE02` | only Atlas spacing values | sides `margin-`/`padding-` `top|right|bottom|left`, values `None S M L`; never a `Class:` or CSS for spacing |
 | `SPACE03` | the same vertical spacing on widgets that share a line | give them the same `margin-top`/`margin-bottom` |
-| `SPACE04` | a gap between a button or text and the grid, list or card above or below it; a grid header's buttons off its first row | `'margin-bottom': 'S'` on the one above (or `'margin-top': 'S'` on the one below); every button in a `controlbar` gets `'margin-bottom': 'S'` |
+| `SPACE04` | a gap between a button or text and a grid, list or card above or below it | `'margin-bottom': 'S'` on the upper one; each `controlbar` button too |
 | `GRID01` | a column with a filter keeps its `Attribute` | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`; without it: "Unable to get filter store" |
 | `GRID02` | a button changing a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter |
 | `ALERT01` | an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
-| `TEXT01` | a textarea for a String over 500 characters or unlimited: a textbox is one line and drops the line breaks | `alter page <Page> { replace txtNotes with { textarea txtNotes (Label: 'Notes', Attribute: Notes) } };` |
-| `TEXT02` | warning: a textbox on an attribute named like prose (Description, Notes, Comment, Reason ...) of 100 characters or more | the same textarea if people write more than a line there; otherwise leave it |
+| `NAME01` | warning: a widget name on one page only | its own `<Page>_<What><Type>` name |
+| `NAME02` | `<Page>_<What><Type>`: `OrderDetail_GenerateInvoiceButton` (skill `naming-and-captions`) | the name it prints; warns until the first DONE, then blocks a new or changed page. Rename `.mx-name-...` in tests too |
+| `TEXT01` | a textarea for a String over 500 or unlimited | `replace txtX with { textarea txtX (...) }` |
+| `TEXT02` | warning: a textbox on a prose-named attribute (Notes, Reason) of 100+ | a textarea if people write more than a line |

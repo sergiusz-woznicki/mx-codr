@@ -17,6 +17,9 @@
 //   SPACE01  FAIL  inline sibling (not last) without margin-right, or H1-H3 heading with a sibling below and no margin-bottom
 //   SPACE02  FAIL  margin/padding value other than None, S, M, L (mxcli check accepts it; mx check fails with CE6083)
 //   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
+//   NAME01   WARN  (--names) a widget name used on more than one page or snippet
+//   NAME02   WARN  (--names) a widget name that does not read <Page>_<What><Type>; FAIL with
+//                  --names error, and for a page new or changed since --names-baseline
 //   SPACE04  FAIL  a button or text right on top of, or right under, a box (data grid, list, gallery,
 //                  group box, tab container, a card or a coloured container) with no margin between
 //                  them; a button in a grid's controlbar without margin-bottom
@@ -68,7 +71,7 @@
 // rules read; pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
 // GRID01, ICON01; grids.cjs GRID02; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
 // navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01;
-// inputs.cjs TEXT01-02; vertical.cjs SPACE04. --port-parity runs only the rules check_layout.py
+// inputs.cjs TEXT01-02; vertical.cjs SPACE04; names.cjs NAME01-02. --port-parity runs only the rules check_layout.py
 // had (SPACE04 is newer), for the test that compares the two.
 'use strict';
 const fs = require('fs');
@@ -81,6 +84,7 @@ const { edgeFindings } = require('./layout_rules/edges.cjs');
 const { headerButtonFindings } = require('./layout_rules/grids.cjs');
 const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
 const { verticalFindings } = require('./layout_rules/vertical.cjs');
+const { nameFindings, documentHashes } = require('./layout_rules/names.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
@@ -168,7 +172,8 @@ const USAGE = `usage: ${PROG} [-h] [--navigation NAVIGATION] [--sign-out-sources
                        [--admin-module] [--user-roles USER_ROLES] [--menu-access MENU_ACCESS]
                        [--guest-role GUEST_ROLE] [--own-modules OWN_MODULES] [--template-module]
                        [--opened-from OPENED_FROM] [--entities ENTITIES] [--users-sign-in]
-                       [--expect-pages EXPECT_PAGES] [--port-parity] [--json]
+                       [--expect-pages EXPECT_PAGES] [--names {warn,error}]
+                       [--page-hashes PAGE_HASHES] [--names-baseline NAMES_BASELINE] [--port-parity] [--json]
                        sources [sources ...]
 `;
 const OPTIONS = {
@@ -186,6 +191,9 @@ const OPTIONS = {
   '--users-sign-in': { dest: 'users_sign_in', kind: 'flag' },
   '--expect-pages': { dest: 'expect_pages', kind: 'int' },
   '--port-parity': { dest: 'port_parity', kind: 'flag' },
+  '--names': { dest: 'names', kind: 'str' },
+  '--page-hashes': { dest: 'page_hashes', kind: 'path' },
+  '--names-baseline': { dest: 'names_baseline', kind: 'path' },
   '--json': { dest: 'json', kind: 'flag' },
   '--help': { dest: 'help', kind: 'help' },
   '-h': { dest: 'help', kind: 'help' },
@@ -217,7 +225,7 @@ function parseArgs(argv) {
   const args = {
     sources: [], navigation: null, sign_out_sources: [], layouts: [], admin_module: false, user_roles: null,
     menu_access: null, guest_role: '', own_modules: '', template_module: false, opened_from: [], entities: [],
-    users_sign_in: false, expect_pages: 0, port_parity: false, json: false,
+    users_sign_in: false, expect_pages: 0, port_parity: false, names: '', page_hashes: null, names_baseline: null, json: false,
   };
   const unknown = [];
   let positionalRuns = 0, inRun = false;
@@ -328,6 +336,22 @@ function main() {
   failures = failures.concat(headerButtonFindings(lines, flows));
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
   if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
+  // Widget names: warnings while the app is built; a page new or changed since the last DONE
+  // (the hashes the gate kept then) needs them, and --names error makes every one block.
+  if (args.names === 'warn' || args.names === 'error') {
+    const all = lines.concat(py.splitlines(snippets));
+    const hashes = documentHashes(all);
+    if (args.page_hashes) fs.writeFileSync(fsPath(args.page_hashes), JSON.stringify(hashes));
+    let baseline = null;
+    if (args.names_baseline && exists(fsPath(args.names_baseline))) {
+      try { baseline = JSON.parse(fs.readFileSync(fsPath(args.names_baseline), 'utf8')); } catch { baseline = null; }
+    }
+    for (const f of nameFindings(all)) {
+      const fresh = baseline && f.check === 'NAME02' && baseline[f.document] !== hashes[f.document];
+      const finding = { check: f.check, line: f.line, message: f.message + (fresh ? ` -- ${f.document} is new or changed since the last DONE, so its names are required now` : '') };
+      (args.names === 'error' || fresh ? failures : warnings).push(finding);
+    }
+  }
   if (args.entities.length) {
     const [textFailures, textWarnings] = textInputFindings(lines.concat(py.splitlines(snippets)), entityText);
     failures = failures.concat(textFailures);
