@@ -424,10 +424,11 @@ check_layout() {
   printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[TEXT02\]' | sed -E 's/^[[:space:]]+! /   - /' >> "$WORK/layout.warnings"
   # Widget names: one line with the count and five examples, not hundreds (an app built before the
   # rule has a name to change on nearly every widget).
-  local names_total
-  names_total="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]+! \[NAME0[12]\]')"
-  if [ "$names_total" -gt 0 ]; then
-    { echo "   - [NAME01/NAME02] $names_total widget names do not read <Page>_<What><Type> (skill naming-and-captions, 'Widget names'); a page new or changed after the next DONE needs them. The first five:"
+  local names_total names_repeated
+  names_total="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]+! \[NAME02\]')"
+  names_repeated="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]+! \[NAME01\]')"
+  if [ "$names_total" -gt 0 ] || [ "$names_repeated" -gt 0 ]; then
+    { echo "   - [NAME01/NAME02] $names_total widget name(s) do not read <Page>_<What><Type>, $names_repeated name(s) are used on more than one page (skill naming-and-captions, 'Widget names'); a page new or changed after the next DONE needs them. The first five:"
       printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[NAME02\]' | head -5 | sed -E 's/^[[:space:]]+! /     /'
     } >> "$WORK/layout.warnings"
   fi
