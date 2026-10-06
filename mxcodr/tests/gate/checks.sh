@@ -489,7 +489,7 @@ start_model_checks() {
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs tools/mdl-checks/event_rules.cjs tools/mdl-checks/datasource_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_VISUAL=${MDL_VISUAL:-}" "env:MDL_WIDGET_NAMES=${MDL_WIDGET_NAMES:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &

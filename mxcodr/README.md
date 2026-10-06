@@ -553,6 +553,18 @@ index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both st
 naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
 entities and seed flows are left out: an index does not help them, or they run once.
 
+`DS01` (`checks/datasource_rules.cjs`, naming step, blocks DONE): a data grid, list view or gallery
+whose microflow or nanoflow source only retrieves its rows -- a database retrieve with an XPath and a
+sort, or association steps from a parameter, an optional `sort()`, a `return` -- must take a
+`database` source. The database then pages, sorts and filters (Data Grid 2's column filters run on
+the server), and the entity's access rules apply; a flow's list goes to the client whole and is
+paged there. The finding prints the source: the flow's XPath with each parameter replaced by what
+the widget passes (`'[%CurrentObject%]'` for the enclosing object), an association step as
+`[Assoc = $Param]` on the row entity mxcli's `-- Context:` line names, `sort()` as `sort by`.
+Loops, calls, aggregates, `first` and joined lists are left alone. Over 34 local apps 67 of 171
+list widgets took their rows from a flow; InvoiceB2B had 13, all bare retrieves. Its suggestions,
+applied to a copy (Order_Detail, Customer_Home), passed mx check with 0 errors.
+
 `EVENT01`-`04` and `ERR01` (`checks/event_rules.cjs`, naming step, with the entities and pages it
 already describes) read entity event handlers and error handlers. Two block DONE: a commit handler
 that commits the object it was called for with events (it runs itself until the app crashes), and

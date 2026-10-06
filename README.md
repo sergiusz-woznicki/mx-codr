@@ -67,6 +67,7 @@ what to fix. Codes in brackets are what the gate prints.
 - A role that sees only its own rows does not read a view of everyone's totals (`VIEW01`), also when its rule limits it to some fields.
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
+- Lists (data grids, list views, galleries) take their rows from the database with an XPath, not from a microflow or nanoflow that only retrieves them, so the database pages, sorts and filters (`DS01`).
 - Entity event handlers that loop (commit their own object with events, `EVENT01`) or skip a save in silence (no `raise error`, `EVENT02`); warnings for `without events` skipping a handler, a handler's error behind a Save button, and swallowed errors (`EVENT03`-`04`, `ERR01`).
 
 **Structure**

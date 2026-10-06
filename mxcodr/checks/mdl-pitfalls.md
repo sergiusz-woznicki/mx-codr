@@ -40,6 +40,10 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
+- **A list takes its rows from the database, not from a flow that only retrieves them** (gate DS01):
+  `datagrid OrderDetail_LinesGrid (DataSource: database Shop.OrderLine where [Shop.OrderLine_Order = $Order])`;
+  inside a data view the enclosing object is `'[%CurrentObject%]'`. The database pages, sorts and
+  filters; a flow's list goes to the client whole. Keep a flow only for what an XPath cannot say.
 - **An event handler never commits its own object with events** (gate EVENT01: it runs itself until
   the app crashes): `commit $Order without events;`, or, before commit, only change it. A before
   handler that can return false needs `raise error`, or the save is skipped in silence (EVENT02):
