@@ -66,6 +66,8 @@ dbsnap_take() {
   if [ -n "$session" ] && [ "$(cat "$DBSNAP_DIR/restored.session" 2>/dev/null)" = "$session" ]; then
     return 0
   fi
+  # A new app's database appears with its first boot: nothing to keep yet, the next run takes it.
+  [ "$(dbsnap_sql "SELECT 1 FROM pg_database WHERE datname='$DBSNAP_DB'")" = "1" ] || return 0
   mkdir -p "$DBSNAP_DIR" || return 0
   if dbsnap_pg pg_dump -Fc -f "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DB" 2>"$DBSNAP_DIR/take.err"; then
     mv "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DIR/pending.dump"
