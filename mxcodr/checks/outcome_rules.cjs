@@ -44,9 +44,12 @@ const literals = text => [...(text || '').matchAll(/'((?:[^']|'')*)'/g)].map(m =
 const words = text => (text.replace(/\{\d+\}/g, ' ').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
 const variables = text => [...(text || '').replace(/'(?:[^']|'')*'/g, "''").matchAll(/\$(\w+)/g)].map(m => m[1]);
 
+// A statement without the @position(...) and @caption '...' in front of it.
+const withoutAnnotations = statement => statement.replace(/^(?:@\w+(?:\([^)]*\)|\s+'(?:[^']|'')*')\s*)+/, '');
+
 // The parts of a message statement that carry its text: [template, ...arguments], or null.
 function messageParts(statement) {
-  const s = statement.replace(/^(?:@\w+(?:\([^)]*\)|\s+'(?:[^']|'')*')\s*)+/, '');
+  const s = withoutAnnotations(statement);
   let m;
   if ((m = /^show\s+message\s+([\s\S]*?)\s+type\s+\w+([\s\S]*)$/i.exec(s))) {
     const objects = /objects\s*\[([\s\S]*)\]/i.exec(m[2]);
@@ -223,7 +226,7 @@ function outcomes(documents, modules) {
         const fromParam = variables(parts.join(' ')).some(v => params.has(v));
         const pieces = textOf(parts.join(' + '), assigned);
         if (!fromParam || literals(parts.join(' ')).some(p => words(p).length > 1)) {
-          add(flow.name, /^show/i.test(s.replace(/^(?:@\S+\s+)*/, '')) ? 'message' : 'validation', pieces);
+          add(flow.name, /^validation\s+feedback/i.test(withoutAnnotations(s)) ? 'validation' : 'message', pieces);
         }
         continue;
       }
