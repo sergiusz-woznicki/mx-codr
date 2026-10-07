@@ -28,6 +28,7 @@ HOOK_TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)/hook_too
 
 # shellcheck source=remind-skills-lib.sh
 . "$(dirname "$0")/remind-skills-lib.sh"
+mdl_mark_session
 mdl_reminder '.cursor/rules/mdl-skills.mdc' \
   'read `test-first-delivery` (`.ai-context/skills/<name>/SKILL.md`)' \
   '(a hook runs `tests/precheck.sh` for you -- mx check on a copy; do not call it by hand)' \

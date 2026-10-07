@@ -141,6 +141,14 @@ function queries(lines) {
       for (const sortedBy of SORT.finditer(tail)) {
         sort = sort.concat(sortedBy.group('list').split(',').map(item => plain(py.split(py.strip(item))[0]).split('.').pop()));
       }
+      // A combo box lists its options in caption order: `CaptionAttribute: Name` on a database
+      // source sorts on Name. PERF08 called a picker's (Name) index unused (B2B, 2026-10-07).
+      if (pattern === SOURCE && !sort.length) {
+        const head = text.lastIndexOf('(', match.start());
+        const widget = /\b(combobox|referenceselector|referencesetselector|inputreferencesetselector)\s+[\w"]+\s*$/i.exec(text.slice(Math.max(0, head - 120), head));
+        const caption = /CaptionAttribute:\s*"?(\w+)"?/i.exec(text.slice(match.end(), match.end() + 400).split(/\)\s*(?:\{|$)/m)[0]);
+        if (widget && caption) sort = [caption[1]];
+      }
       const alone = branches.length <= 1;
       for (const [equal, ranged] of (branches.length ? branches : [[[], []]])) {
         // A sort belongs to the query as a whole; with `or` no single index gives the order.
@@ -151,13 +159,20 @@ function queries(lines) {
   }
   // A data grid's column filter is a query too: a drop-down filter compares with `=`, a date or
   // number filter with a range. A text filter is `contains()`, which an index does not help.
-  let grid = null, column = null, offset = 0;
+  let grid = null, column = null, offset = 0, gridOpen = false;
   py.splitlines(text).forEach((line, i) => {
     const number = i + 1;
     const at = offset;
     offset = offset + line.length + 1;
     const source = GRID.search(line);
-    if (source) { grid = plain(source.group('entity')); return; }
+    if (source) { grid = plain(source.group('entity')); gridOpen = false; return; }
+    // mxcli 0.25 puts a grid's properties on their own lines: `datagrid X (`, then `DataSource: ...`.
+    if (/^\s*datagrid\s+\S+\s*\(\s*$/i.test(line)) { gridOpen = true; grid = null; return; }
+    if (gridOpen) {
+      const own = /^\s*DataSource:\s*database\s+(?:from\s+)?(\w+\.(?:"[^"]+"|\w+))/i.exec(line);
+      if (own) { grid = plain(own[1]); gridOpen = false; return; }
+      if (/^\s*\)/.test(line)) gridOpen = false;
+    }
     const attribute = COLUMN.search(line);
     if (attribute) { column = attribute.group('attr') || attribute.group('bare'); return; }
     const widget = FILTER.search(line);

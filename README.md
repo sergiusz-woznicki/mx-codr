@@ -67,6 +67,11 @@ what to fix. Codes in brackets are what the gate prints.
 - A role that sees only its own rows does not read a view of everyone's totals (`VIEW01`), also when its rule limits it to some fields.
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
+- Lists (data grids, list views, galleries) take their rows from the database with an XPath, not from a microflow or nanoflow that only retrieves them, so the database pages, sorts and filters (`DS01`).
+- Every document sits in its business folder's `UI` (pages), `FNC` (microflows, nanoflows) or `ENV` (everything else) subfolder (`FOLDER01`); the gate prints the moves.
+- An old script run again cannot undo later changes to its pages and flows (`STALE01`): the exec is refused and names what it would overwrite.
+- Every testable path has a test: every message the app can show (`OUTCOME01`), every workflow task outcome, decided in a test that signs in as both people (`WF02`), every role-scoped entity read as that role (`ISO01`), every role (`ROLE01`), every published service (`SVC01`). Paths come from the model, so this holds for any app; paths older than the install are warnings, new ones block. A workflow task anyone can decide blocks (`WF01`).
+- No microflow, nanoflow, page, snippet, enumeration or Java action is left that nothing uses (`UNUSED01`): no reference in the model, the name nowhere else, and Mendix still builds without it.
 - Entity event handlers that loop (commit their own object with events, `EVENT01`) or skip a save in silence (no `raise error`, `EVENT02`); warnings for `without events` skipping a handler, a handler's error behind a Save button, and swallowed errors (`EVENT03`-`04`, `ERR01`).
 
 **Structure**
@@ -89,6 +94,7 @@ what to fix. Codes in brackets are what the gate prints.
 - A Back button top left on every page opened from another page (`BACK01`), and on the right
   of the same top row, under the language selector, who is signed in: a user icon and e-mail
   that opens My account (`USER01`).
+- Every widget named `<Page>_<What><Type>`, unique in the app (`OrderDetail_GenerateInvoiceButton`, `NAME01`-`02`; warnings until the first DONE).
 - An icon on every button (`ICON01`); Atlas spacing, no custom CSS (`SPACE01`-`03`); a button or
   text never touches a grid, list or card above or below it, a grid header's buttons included (`SPACE04`).
 - A long text (over 500 characters, or unlimited) is edited in a text area, not a one-line
@@ -137,7 +143,7 @@ if you use one — is listed at the end with the command to run.
 ```
  you ask ─▶ agent writes a test ─▶ test fails (red) ─▶ agent builds it in MDL
                                                               │
-      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout · scope ◀── test passes
+      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout · scope · paths · folders · unused ◀── test passes
 ```
 
 You never run the checks yourself. The agent runs the gate, and the hooks make sure
@@ -373,6 +379,10 @@ The environment still wins, so any of it can be overridden for one run.
 | `MDL_VISUAL_REVIEW` | `agent`: a model that reads images also judges a screenshot of each page |
 | `MDL_CAPTIONS` | the caption rules of the naming check: warnings by default, `error` blocks DONE |
 | `MDL_SCOPE` | `SCOPE01`, a page's data source microflow that ignores its role's row scope: a warning by default, `error` blocks DONE |
+| `MDL_UNTESTED` | paths deliberately left without a test (a document, `Module.Workflow/Task`, `Module.Entity\|Module.Role`, `role:<UserRole>`), so the `paths` step passes them |
+| `MDL_DB_RESET` | `session`: the database is snapshotted at the start of each agent session and rolled back after its first DONE, so test data does not pile up (local PostgreSQL) |
+| `MDL_PATHS` | `error`: the paths older than the install block DONE too, not only new ones |
+| `MDL_KEEP_UNUSED` | documents kept on purpose though nothing uses them yet (`Mod.Doc,Mod.Other`), so `UNUSED01` passes them |
 | `MDL_CLOSE_BROWSER` | `1`: close the test browser after each suite and on `--stop` (off: `--only` reuses it) |
 | `MDL_ALLOW_GREEN_FIRST` | tests that are green by nature, so the gate does not warn that they never failed |
 | `MDL_REQUIRE_PRODUCTION` | `0` for an app that deliberately has no users at all |

@@ -66,23 +66,33 @@ process it serves:
 ```
 InvoiceDesk/
 ├── _Setup/          startup, demo data, configuration, test support (data reset)
+│   ├── FNC/
+│   └── ENV/
 ├── Invoicing/       raise and correct an invoice
+│   ├── UI/          Invoice_Overview, Invoice_Edit
+│   ├── FNC/         ACT_Invoice_Save, SUB_Invoice_Number
+│   └── ENV/         ENUM_InvoiceStatus, PaymentTermsDays, JSON_Invoice
 ├── Chasing/         remind, escalate, write off
 ├── CustomerAdmin/   maintain customers
-└── _Shared/         used by more than one process
+└── _Shared/         used by more than one process (UI/, FNC/, ENV/ again)
 ```
 
 The rules:
 
-- **Every document lives in a folder.** Nothing at module root. A module root
-  full of documents is the state a module decays into, and it decays quickly.
-  "Document" here means pages, microflows, nanoflows and snippets — the things
-  that carry a process. Entities have no folders (the domain model is one canvas),
-  and enumerations, constants and Java actions are not checked.
-- **Folder names are processes, never document types.** `Microflows/`, `Pages/`,
-  `Snippets/`, `Logic/`, `UI/` are banned: the `ACT_`, `SUB_`, `DS_`, `VAL_`
-  prefixes and the document icon already say the type. A type folder splits one
-  process across four places for no gain.
+- **Every document lives in a folder.** Nothing at module root, enumerations and
+  constants included. A module root full of documents is the state a module decays
+  into, and it decays quickly. Entities have no folders (the domain model is one canvas).
+- **Each process folder holds three kind folders, and only these:** `UI` for pages and
+  snippets, `FNC` for microflows and nanoflows, `ENV` for everything else --
+  enumerations, constants, Java and JavaScript actions, JSON structures, mappings,
+  REST and OData services, workflows, scheduled events. A process with thirty
+  documents of every kind in one list is unreadable; three short lists are not. The
+  gate fails `FOLDER01` for a document anywhere else and prints the `move` for it.
+  Create in place: `create or modify microflow Invoicing.ACT_X () ... folder 'Invoicing/FNC'`,
+  pages with `folder: 'Invoicing/UI'`; documents with no folder clause are moved after.
+- **Process folders are named for the business, never for a document type.**
+  `Microflows/`, `Pages/`, `Snippets/`, `Logic/` are banned, and `UI`, `FNC`, `ENV`
+  appear only as the last folder: `Invoicing/UI`, never `UI/Invoicing`.
 - **`_Setup` and `_Shared` carry an underscore** so the two non-process folders sort
   to the top and read as different in kind.
 - **A document used by two processes moves to `_Shared/`** — it is never copied.
@@ -186,7 +196,7 @@ access and nothing else.
 1. Name it for the domain, UpperCamelCase, no `Module` suffix: `Invoicing`, not
    `InvoiceModule`.
 2. Create the process folders **before** the first document — `_Setup`, `_Shared`,
-   and one per process you already know about.
+   and one per process you already know about, each with its `UI`, `FNC` and `ENV`.
 3. Create one module role per level of access, and map each to a single user role.
 4. Put the entities the module owns in its own domain model; reach into another
    module's entities only through that module's microflows.
@@ -228,6 +238,25 @@ never on `MyFirstModule.Home_Web` or an Administration page.
 The gate fails `MODULE01` while `MyFirstModule` is still there, listing what still uses it,
 and `HOME01` when the administrators' role opens anywhere but the app's own module.
 
+## Nothing left behind
+
+A document nothing uses still costs: a reader takes it for live code, and a re-run of an old
+script edits it instead of the one the app uses. When a data source flow gives way to a
+`database` source (DS01), a probe has answered, or a page was replaced, drop the old one in the
+same script, and its `create` in `mdlsource/` too:
+
+```sql
+drop microflow Shop.DS_Customers;
+drop enumeration Shop.ENUM_OldStatus;
+```
+
+The gate fails `UNUSED01` on a microflow, nanoflow, page, snippet, enumeration or Java action of
+the app's own modules only when three proofs agree: no reference in the model (calls, pages,
+navigation, settings, scheduled events, published services), its name in no other document, Java,
+JavaScript, theme or test file (a `# covers:` line does not count: drop the name there too), and mx check still passing with all of them dropped on a copy.
+Kept on purpose (an API for later, a page opened only by URL)? The person lists it in
+`tests/harness.env`: `MDL_KEEP_UNUSED=Shop.DS_Customers,Shop.Old_Page`.
+
 ## Check it
 
 ```bash
@@ -246,7 +275,8 @@ cycles and cross-module coupling that no single rule catches.
 - [ ] The domain model, roles and access rules went in first, in one script; pages and microflows after
 - [ ] No document sits at module root
 - [ ] `MyFirstModule` is gone, and the administrators open on a page of the app's own module
-- [ ] No folder is named after a document type
+- [ ] No document is left that nothing uses (UNUSED01); its script in `mdlsource/` is gone too
+- [ ] Every document in `<process>/UI`, `/FNC` or `/ENV` (FOLDER01); no folder named after a document type
 - [ ] Shared documents live in `_Shared/`, not duplicated
 - [ ] A consumable module exposes `UseMe/` and hides `Private/`
 - [ ] No cyclic dependency between modules (`graph-report`, ARCH001)

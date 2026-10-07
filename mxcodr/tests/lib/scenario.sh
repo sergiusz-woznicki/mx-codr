@@ -75,6 +75,17 @@ _mdl_js_settings() {
   printf '  const BASE = MDL_CFG.BASE;\n'
   printf '  const USER = MDL_CFG.USER;\n'
   printf '  const PASSWORD = MDL_CFG.PASSWORD;\n'
+  # sign_in_as('<user>'): every TEST_PASSWORD_<user>= of tests/credentials.env, read as data.
+  local cred_pairs=() cred_line cred_user cred_pw
+  if [ -f "${CREDENTIALS:-}" ]; then
+    while IFS= read -r cred_line; do
+      case "$cred_line" in TEST_PASSWORD_*=*) ;; *) continue ;; esac
+      cred_user="${cred_line%%=*}"; cred_user="${cred_user#TEST_PASSWORD_}"
+      cred_pw="${cred_line#*=}"; cred_pw="${cred_pw%\"}"; cred_pw="${cred_pw#\"}"
+      [ -n "$cred_user" ] && cred_pairs+=("$cred_user" "$cred_pw")
+    done < "$CREDENTIALS"
+  fi
+  printf '  const PASSWORDS = JSON.parse(%s);\n' "$(mdl_json_string "$(mdl_json_object ${cred_pairs[@]+"${cred_pairs[@]}"})")"
   printf '  const ACTION_TIMEOUT = %s;\n' "$(mdl_json_number "${ACTION_TIMEOUT_MS:-8000}" 8000)"
   printf '  const RELEASE = %s;\n' "$_MDL_RELEASE"
   printf '  const REUSE = %s;\n' "$_MDL_REUSE"

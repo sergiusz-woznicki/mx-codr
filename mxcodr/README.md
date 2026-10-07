@@ -553,6 +553,18 @@ index and 0.01 ms with one, one status 9.7 ms and 2.0 ms; at 10,000 rows both st
 naming step now also describes the entities and pages for it. Booleans, `!=`, `contains()`, view
 entities and seed flows are left out: an index does not help them, or they run once.
 
+`DS01` (`checks/datasource_rules.cjs`, naming step, blocks DONE): a data grid, list view or gallery
+whose microflow or nanoflow source only retrieves its rows -- a database retrieve with an XPath and a
+sort, or association steps from a parameter, an optional `sort()`, a `return` -- must take a
+`database` source. The database then pages, sorts and filters (Data Grid 2's column filters run on
+the server), and the entity's access rules apply; a flow's list goes to the client whole and is
+paged there. The finding prints the source: the flow's XPath with each parameter replaced by what
+the widget passes (`'[%CurrentObject%]'` for the enclosing object), an association step as
+`[Assoc = $Param]` on the row entity mxcli's `-- Context:` line names, `sort()` as `sort by`.
+Loops, calls, aggregates, `first` and joined lists are left alone. Over 34 local apps 67 of 171
+list widgets took their rows from a flow; InvoiceB2B had 13, all bare retrieves. Its suggestions,
+applied to a copy (Order_Detail, Customer_Home), passed mx check with 0 errors.
+
 `EVENT01`-`04` and `ERR01` (`checks/event_rules.cjs`, naming step, with the entities and pages it
 already describes) read entity event handlers and error handlers. Two block DONE: a commit handler
 that commits the object it was called for with events (it runs itself until the app crashes), and
@@ -671,12 +683,103 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+`FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
+app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,
+nanoflows) or `/ENV` (everything else: enumerations, constants, Java and JavaScript actions, JSON
+structures, mappings, REST and OData services, workflows, scheduled events); what the module shares
+goes in `_Shared/<kind>`, and a business folder may nest (`Orders/Approval/UI`). Read from
+`CATALOG.OBJECTS` on a copy, as `unused` does; a published OData service's folder from DESCRIBE, since
+mxcli 0.25's catalog records none for it. The finding prints a `move` per document; a root document
+gets the business folder its name uses (`ENUM_OrderStatus` -> `Orders/ENV`), else `_Shared`. MOD001 now
+takes a final `UI`, `FNC` or `ENV`. On a copy of InvoiceB2B: 209 documents outside, the 209 moves in one
+exec (26 s), then FOLDER01 and MOD001 clean and mx check 0 errors.
+
+Bundle 2026.10.07.13: each suite run starts by clearing what the previous one left -- playwright-cli's
+page snapshots, console logs and downloads at the top of `.playwright-cli/`, and the
+`verify-*-failure.png` screenshots -- so a failure keeps its screenshot until the next run. InvoiceB2B
+held 618 snapshots, 420 logs, 180 invoice PDFs (7.7 MB) and 26 screenshots. The installer adds
+`/.playwright-cli/` to `.gitignore`.
+
+`STALE01` (`tests/precheck.sh`, bundle 2026.10.07.10): a script run again does not write over what
+changed in its documents since it last ran. On InvoiceB2B a re-exec of `11_navigation.mdl` rebuilt
+`Admin_Home` and put back twelve widget names a later rename had replaced; the gate caught it only
+afterwards (NAME02). The after-exec hook keeps each applied script in `.mxcli/applied/` (the guard
+keeps sessions out of it); before the next exec of the same script, `mxcli diff` of that copy names
+the documents the model changed since, `mxcli diff` of the script the ones it would write, and a
+document in both refuses the exec with its name and the fix (a new script that alters only what it
+changes, or the documents DESCRIBEd into the script first). Without a copy, the version in git's HEAD
+stands in; a script never run is not checked. On a copy of B2B it refused `02e_turn3_approval.mdl`
+(three pages renamed since) and passed `57_indexes.mdl`; the precheck takes about 5 s longer then.
+
+`MDL_DB_RESET=session` (`tests/db-snapshot.sh`, bundle 2026.10.07.7): browser tests commit on every
+click -- Mendix has no transaction around a whole session the way UnitTesting rolls back one microflow
+-- so the data each session's tests created stayed, and on InvoiceB2B the suite spent a seeded
+customer's credit until the approval tests were refused. With the switch on, the first gate, orient
+or film run of an agent session takes a `pg_dump` of the dev database while the app runs (0.5 s for
+30 MB), and the session's first full DONE rolls it back: `pg_restore` into a database beside it, stop
+the app, swap the two by renaming, boot (about 30 s; the B2B gate went from 92 to 118 s once). The
+same session takes no second snapshot; the next one does. The session is the id the hooks write to
+`.mxcli/session.id` (Claude Code and Codex from the prompt hook's `session_id`, Cursor at session
+start, Pi per session, OpenCode per tool call). Local PostgreSQL only, not in Docker mode. A step that
+fails leaves the database as it was and boots the app; the previous data stays as
+`<db>_before_restore`, the last three dumps in `.mxcli/db-snapshot/`. Measured on B2B: 1796 orders,
+1798 after a test, 1796 after DONE, the app up on it. Bundle 2026.10.07.8: a reinstall keeps every
+key of `tests/harness.env` it does not write itself; it used to write the file from scratch and drop
+the person's own switches.
+
+Bundle 2026.10.07.6, three fixes from the B2B session: a `scenario '...'` body that an apostrophe
+cut short while the file still parses (`// the customer's order`) is named with its line before the
+suite runs, where the runner said only "returned nothing"; the installer gitignores the
+`verify-*-failure.png` screenshots `mxcli playwright verify` writes beside the .mpr; PERF08 counts a
+combo box's `CaptionAttribute` as a sort on that attribute (it called a product picker's (Name)
+index unused) and reads a data grid whose `DataSource:` sits on its own line (mxcli 0.25), so its
+column filters are queries of that grid's entity.
+
+Step `paths` (`checks/check_paths.cjs`, `checks/outcome_rules.cjs`): every testable path of the model
+needs a test that walks it. The paths come from the model, never from an app's names, so the rule
+holds for any app: `OUTCOME01` every message a user can be shown -- `show message`, `validation
+feedback`, an attribute's `error message`, and text handed to a flow that shows it or stores it for a
+page (found by what the flow does: its String parameter reaches a message, or a stored attribute when
+three or more flows hand it their text; a seed flow saving a name is one caller) -- asserted by four
+words in a row outside a comment line, placeholders splitting the text; `WF01` a flow that completes a
+workflow user task without reading the task's target users (anyone allowed to run it decides);
+`WF02` every user-task outcome chosen in a test, and a test of the task signing in as two users;
+`ISO01` each role reading an entity through an XPath constraint has a test signed in as such a user
+that reads it; `ROLE01` every demo user's role signs in somewhere; `SVC01` every published REST and
+OData service is called. A test signs in as a demo user when its text names that user. The installer
+writes `.mxcli/gate-cache/paths-baseline.json` once, from the model as it is: paths unchanged since
+are warnings (the backlog; `MDL_PATHS=error` blocks them too, and `.mxcli/paths.txt` lists every
+finding after each gate), new or changed ones block; a new app gets an empty baseline, so
+everything blocks. WF01 blocks whatever its age. The guard keeps the baseline and `MDL_UNTESTED`
+(the person's list of paths left untested on purpose) out of a session's reach. Measured over 34
+local apps: 227 messages, 213 matchable, 158 asserted by no test (InvoiceB2B: 46 of 55); the
+approval of InvoiceB2B let any Employee decide a manager's task (WF01). `scenario-helpers.js` gained
+`sign_in_as('<user>')` for journeys of several people, and `await_message` now matches only text that
+appeared after the last click, fill or key press: before, any text already on the page satisfied it.
+
+`UNUSED01` (`checks/check_unused.cjs`, step `unused`, blocks DONE): a microflow, nanoflow, page,
+snippet, enumeration or Java action of the app's own modules that nothing uses. Three proofs must
+agree, all on a copy of the project (the catalog is written beside the .mpr it reads, and the
+suite refreshes the app's own at the same time): no reference in mxcli's catalog (`CATALOG.REFS`
+-- calls, pages, data sources, navigation, settings, scheduled events, published services -- and
+no attribute or parameter of the enumeration's type); the short name in no other document's MDL
+source or strings (a comment, an OQL query) and in no file under `javasource/` (proxies aside),
+`javascriptsource/`, `theme/`, `themesource/` or a `tests/*.test.*` file -- not on a `# covers:`
+line, which every page and `ACT_` flow is on (coverage), so it declares, not uses; then every one of them is dropped on
+the copy and mx check must still report 0 errors -- else nothing is reported. The finding lists
+the `drop` statements. `mdlsource/` is not a proof: it holds the scripts that created them. A
+document kept on purpose goes in `MDL_KEEP_UNUSED=Mod.Doc,...` in `tests/harness.env`, set by the
+person (the guard blocks a model setting it). Over 34 local apps 67 were left; InvoiceB2B had 15
+(13 `DS_` flows its DS01 fix replaced, a seed-reset flow, an enumeration), and dropping all 15 on a
+copy passed mx check; a page still shown by a button, offered as a candidate, failed it with 2
+errors and was not reported. The step takes 7 s when it has candidates, mostly the copy's mx check.
+
 So the rules are 8 kB and name one skill to read first; the others are named by the finding
 that needs them, and the per-prompt reminder says the same. What each check code wants and its
 fix is written down once -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it per
 session) for what `HOME01` or `--only` required -- and a red verdict points at it. Since bundle
 2026.10.04.9 that is one file per gate step, `tests/checks/layout.md`, `lint.md`, `naming.md` and
-`app.md` (mx check, coverage, security, scope, the suite, visual and runtime), each under 4,500
+`paths.md`, `app.md` (mx check, coverage, security, scope, unused, the suite, visual and runtime), each under 4,500
 characters, with `tests/CHECKS.md` as the index of which file holds which code. The one page had
 reached its 9,300-character budget, and a red verdict now names only the files of the steps that
 failed, so a session reads 1.3 to 3.7k characters instead of 9.3k.
@@ -1248,6 +1351,24 @@ OpenCode and Pi plugins, because the gate waits for the runtime itself; two sess
 anyway. And the OQL helpers (`oql_count`, `oql_value`, `await_row`, `diagnose.sh`) quote the entity
 name: `FROM OrderDesk.Order` does not parse, so a test on an entity named `Order` failed and
 `diagnose.sh` printed a false 0 rows. A Pi session found and fixed that one in its own copy.
+
+`NAME01` and `NAME02` (`layout_rules/names.cjs`, `--names`) hold widget names to one app-wide
+scheme, `<Page>_<What><Type>`: `OrderDetail_GenerateInvoiceButton`, `OrderDetail_InvoicesGrid`,
+`CurrentUserSnippet_AccountButton`. Mendix keeps a widget name unique on its page only; over 34
+local apps a third of 3,684 widgets shared their name with a widget on another page (`heading` on
+18 pages of InvoiceB2B, `ctPageTop` on 17), so a test's `.mx-name-...`, a failure or a log line
+named a dozen places, and 17% were Studio Pro defaults like `container3`. The page part (the page's
+name, no module or underscore; a snippet's name plus `Snippet`; the module in front only when two
+modules share a page name) makes a name unique; the type word at the end is plain English. NAME02
+prints the name to use, from the widget's attribute, caption or data source; where nothing says
+what it shows (a KPI tile) it asks for the word, and a code where words belong (`K1`, `Kpi3`, `Box2`)
+fails too: InvoiceB2B first renamed `k1Value` to `AdminHome_K1ValueText`, which kept the form and said
+nothing (16 such names). A number inside a word stays (`Top10CustomersGrid`); a suggestion never
+starts with a digit. For a grid the finding adds that its selection variable (`$dg...`) is renamed too. On InvoiceB2B it named 364 of 389 widgets itself.
+Like the microflow captions they warn until the first DONE (one line with the count and five
+examples), then a page new or changed since the last DONE needs them (`names-baseline.json`);
+`MDL_WIDGET_NAMES=error` makes all block, `0` turns them off. Renaming a widget breaks a test that
+finds the old name, and the finding says so.
 
 `SPACE04` came from a screenshot: "Generate invoice" in a grid's `controlbar`, where `GRID02`
 puts it, sat on the grid's header row. Atlas gives buttons, text, grids, lists and cards no

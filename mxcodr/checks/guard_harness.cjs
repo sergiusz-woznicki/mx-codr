@@ -207,11 +207,13 @@ const args = (data.tool_input && typeof data.tool_input === 'object') ? data.too
 const root = process.cwd().replace(/\\/g, '/').replace(/\/+$/, '');
 const ENV = 'tests/harness.env';
 const DIRS = ['tools/mdl-checks/', 'tests/gate/', 'tests/lib/', '.claude/lint-rules/', '.pi/extensions/',
-  '.opencode/plugin/'];
+  '.opencode/plugin/', '.mxcli/applied/'];
 const FILES = new Set(['.claude/settings.local.json', '.codex/hooks.json', '.cursor/hooks.json', 'tests/gate.sh',
   'tests/lib.sh', 'tests/precheck.sh', 'tests/portable.sh', 'tests/orient.sh',
   'tests/diagnose.sh', 'tests/peek.sh', 'tests/run-app.sh', 'tests/run-docker.sh',
-  'tests/scenario-helpers.js', 'tests/marketplace-login.sh', '.mxcli/marketplace-login-needed']);
+  'tests/scenario-helpers.js', 'tests/marketplace-login.sh', '.mxcli/marketplace-login-needed',
+  // Which paths are old enough to be warnings: the installer's record, not the session's.
+  '.mxcli/gate-cache/paths-baseline.json']);
 try {
   const recorded = JSON.parse(fs.readFileSync('tools/mdl-checks/INSTALL.json', 'utf8')).files || {};
   for (const f of Object.keys(recorded)) {
@@ -400,7 +402,7 @@ function tokenRead(command) {
 
 const SWITCHES = ['MDL_REQUIRE_PRODUCTION', 'MDL_ALLOW_GREEN_FIRST', 'MDL_VISUAL', 'MDL_VISUAL_REVIEW',
   'MDL_RUNTIME_ERRORS', 'MDL_PRECHECK', 'MDL_GATE_CACHE', 'MDL_HARNESS_EDITS', 'MDL_CAPTIONS',
-  'MDL_SCOPE', 'MDL_MARKETPLACE_LOGIN'];
+  'MDL_SCOPE', 'MDL_MARKETPLACE_LOGIN', 'MDL_WIDGET_NAMES', 'MDL_KEEP_UNUSED', 'MDL_UNTESTED', 'MDL_PATHS', 'MDL_DB_RESET'];
 let hit = null;
 if (tool === 'bash') {
   const command = String(args.command || '');
@@ -412,6 +414,8 @@ if (tool === 'bash') {
       new RegExp('(^|[\\s;&|(])(export\\s+)?(' + SWITCHES.join('|') + ')=').test(command)) {
     hit = ['switch', ''];
   }
+  // Rewriting the paths baseline would turn every untested path into an old one, a warning.
+  if (!hit && /--write-baseline\b/.test(command)) hit = ['harness', '.mxcli/gate-cache/paths-baseline.json'];
   if (!hit) {
     const secret = tokenRead(command);
     if (secret) hit = ['token', secret];

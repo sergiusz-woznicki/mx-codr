@@ -72,6 +72,25 @@ export_test_module() {
 }
 
 # Runs the suite (or the --only matches) in this shell, appending to the arrays directly.
+# What the previous run left beside the project: playwright-cli's page snapshots (.yml), console logs
+# and downloads in .playwright-cli/, and the verify-*-failure.png screenshots `mxcli playwright verify`
+# writes. On InvoiceB2B: 618 snapshots, 420 logs and 180 invoice PDFs (7.7 MB) and 26 screenshots,
+# none of them ignored by git. Cleared before each run, so what is there is the last run's: a failure
+# keeps its screenshot until the next run. Only files at the top of .playwright-cli/; its folders and
+# .playwright/ (the browser's config) stay.
+clear_test_artefacts() {
+  local f
+  if [ -d .playwright-cli ] && [ ! -L .playwright-cli ]; then
+    for f in .playwright-cli/*; do
+      [ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
+    done
+  fi
+  for f in verify-*-failure.png; do
+    [ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
+  done
+  return 0
+}
+
 step_tests() {
   local -a targets
   local out status environment started=$SECONDS
@@ -79,6 +98,7 @@ step_tests() {
   # look() appends to findings.jsonl in every scenario; this run's pages only. The screenshots
   # go too; review.md and verdicts.json stay, a verdict is keyed on a screenshot's bytes.
   rm -f .mxcli/visual/findings.jsonl .mxcli/visual/*.png 2>/dev/null
+  clear_test_artefacts
   echo "== tests: ${targets[*]}"
   # From here on, what the runtime logs as an error happened during the suite (step_runtime_errors).
   date '+%Y-%m-%d %H:%M:%S' > "$WORK/tests.started"
@@ -110,11 +130,18 @@ step_tests() {
 # lib.sh's traps exist, and the runner showed only "FAIL verify-admin (55ms)" with no reason: an
 # apostrophe in a JS comment ("the module's overview") had closed the single-quoted scenario '...'.
 syntax_notes() {
-  local target script err hint
+  local target script err hint cut
   for target in "$@"; do
     for script in "$target" "$target"verify-*.test.sh; do
       case "$script" in *.test.sh) ;; *) continue ;; esac
       [ -f "$script" ] || continue
+      # An apostrophe can cut a scenario body short and leave the file parseable: the runner then
+      # says only "returned nothing" (three times in one B2B session, 2026-10-07).
+      cut="$("$NODE" "$MDL_SHELL_HELPERS" scenario-quotes "$script" 2>/dev/null | head -1)"
+      if [ -n "$cut" ]; then
+        echo "   FAIL $(basename "$script" .test.sh): line ${cut%%:*}: an apostrophe ends the scenario '...' body there (${cut#*: }) -- write ’, or reword the comment or string"
+        continue
+      fi
       err="$(bash -n "$script" 2>&1)" && continue
       err="$(printf '%s\n' "$err" | head -1 | sed 's/^[^:]*: //')"
       hint=""

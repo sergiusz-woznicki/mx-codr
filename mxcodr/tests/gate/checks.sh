@@ -1,25 +1,37 @@
 # tests/gate/checks.sh -- the model checks that need no app (mx check, lint, coverage, naming,
-# layout, security, scope), and their cache.
+# layout, security, scope, paths, folders, unused), and their cache.
 # Sourced by tests/gate.sh; defines functions only. Entry points: start_model_checks, collect_model_checks.
 
 # Each check runs in a background subshell, so it reports through files: check_<name> writes
 # $WORK/<name>.summary and .detail and returns 0 pass / 1 problems / 2 could not run;
 # run_cached adds .status and .secs; collect reads them after `wait`.
 
-# mx_check_copy -- mx check on a fresh copy of the project; sets out. False when the copy failed.
+# mx_check_copy [<dir> [<label>]] -- mx check on a fresh copy of the project in <dir> ($WORK/mxcheck);
+# sets out. False when the copy failed (the reason in $WORK/<label>.summary, label mx).
 # mx check runs on a copy: it rewrites the .mpr and would trigger --watch rebuilds.
 # The copy needs widgets/ and theme*/ as well; `cp -Rc` clones on APFS, else plain cp -R.
 mx_check_copy() {
-  local item scratch="$WORK/mxcheck"
+  local scratch="${1:-$WORK/mxcheck}" label="${2:-mx}"
+  project_copy "$scratch" "$label" || return 1
+  mx_check_in "$scratch"
+}
+
+# project_copy <dir> <label> -- a fresh copy of the project's model, widgets, theme and Java in <dir>.
+project_copy() {
+  local item scratch="$1"
   rm -rf "$scratch"; mkdir -p "$scratch"
   for item in "$MPR" mprcontents widgets theme themesource javasource; do
     [ -e "$item" ] || continue
     cp -Rc "$item" "$scratch/" 2>/dev/null || cp -R "$item" "$scratch/" 2>/dev/null || {
-      echo "mx check: could not run -- could not copy $item to a scratch directory" > "$WORK/mx.summary"; return 1; }
+      echo "$2: could not run -- could not copy $item to a scratch directory" > "$WORK/$2.summary"; return 1; }
   done
+}
+
+# mx_check_in <dir> -- mx check on the copy in <dir>; sets out.
+mx_check_in() {
   # Without `mx update-widgets` (2.9s of a 5.2s check, measured); the one error that
   # step prevents, CE0463, buys the slow run. Same rule as tests/precheck.sh.
-  local -a mx_args=(docker check -p "$scratch/$MPR")
+  local -a mx_args=(docker check -p "$1/$MPR")
   [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
   out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
   if printf '%s\n' "$out" | grep -q 'CE0463'; then
@@ -393,6 +405,14 @@ check_layout() {
   # The entities say how long the text a textbox edits may be (TEXT01, TEXT02).
   describe_entities_into "$WORK/layout-entities" || layout_unread entities "TEXT01, TEXT02"
   ls "$WORK"/layout-entities/*.mdl >/dev/null 2>&1 && nav_args+=(--entities "$WORK/layout-entities")
+  # Widget names (NAME01/02): warnings until the first DONE, then a new or changed page needs them.
+  case "${MDL_WIDGET_NAMES:-warn}" in
+    0|off) ;;
+    error) nav_args+=(--names error --page-hashes "$CACHE_DIR/layout.pages.json") ;;
+    *) nav_args+=(--names warn --page-hashes "$CACHE_DIR/layout.pages.json")
+       [ -f "$CACHE_DIR/names-baseline.json" ] && nav_args+=(--names-baseline "$CACHE_DIR/names-baseline.json") ;;
+  esac
+  mkdir -p "$CACHE_DIR" 2>/dev/null
   out="$("$NODE" tools/mdl-checks/check_layout.cjs "$WORK/pages" "${nav_args[@]}" \
     --expect-pages "$(cat "$WORK/layout.count" 2>/dev/null || echo 0)" 2>&1)"; code=$?
   checker_verdict "$code" "$out"; gate=$?
@@ -414,6 +434,16 @@ check_layout() {
   fi
   # A textbox whose attribute's name says it holds prose (TEXT02) is a hint, shown with the warnings.
   printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[TEXT02\]' | sed -E 's/^[[:space:]]+! /   - /' >> "$WORK/layout.warnings"
+  # Widget names: one line with the count and five examples, not hundreds (an app built before the
+  # rule has a name to change on nearly every widget).
+  local names_total names_repeated
+  names_total="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]+! \[NAME02\]')"
+  names_repeated="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]+! \[NAME01\]')"
+  if [ "$names_total" -gt 0 ] || [ "$names_repeated" -gt 0 ]; then
+    { echo "   - [NAME01/NAME02] $names_total widget name(s) do not read <Page>_<What><Type>, $names_repeated name(s) are used on more than one page (skill naming-and-captions, 'Widget names'); a page new or changed after the next DONE needs them. The first five:"
+      printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[NAME02\]' | head -5 | sed -E 's/^[[:space:]]+! /     /'
+    } >> "$WORK/layout.warnings"
+  fi
   [ -s "$WORK/layout.warnings" ] || rm -f "$WORK/layout.warnings"
   [ -s "$WORK/layout.unread" ] && cat "$WORK/layout.unread" >> "$WORK/layout.warnings"
   return "$gate"
@@ -471,11 +501,14 @@ start_model_checks() {
       meta:widgets meta:theme meta:themesource meta:javasource ) &
   ( run_cached lint     check_lint     "${cache_inputs[@]}" .claude/lint-rules ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
-  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "env:MDL_VISUAL=${MDL_VISUAL:-}" ) &
+  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs tools/mdl-checks/event_rules.cjs tools/mdl-checks/datasource_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
+  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_VISUAL=${MDL_VISUAL:-}" "env:MDL_WIDGET_NAMES=${MDL_WIDGET_NAMES:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
-  echo "== mx check, lint, coverage, naming, layout, security and scope started (they need no app; running while the suite does)"
+  ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests "$CACHE_DIR/paths-baseline.json" "env:MDL_UNTESTED=${MDL_UNTESTED:-}" "env:MDL_PATHS=${MDL_PATHS:-}" ) &
+  ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs ) &
+  ( run_cached unused   check_unused   "${cache_inputs[@]}" tools/mdl-checks/check_unused.cjs javasource javascriptsource meta:theme meta:themesource tests "env:MDL_KEEP_UNUSED=${MDL_KEEP_UNUSED:-}" ) &
+  echo "== mx check, lint, coverage, naming, layout, security, scope, paths, folders and unused started (they need no app; running while the suite does)"
 }
 
 # An app with sign-in is only as safe as its security level: at PROTOTYPE Mendix checks page and
@@ -638,6 +671,142 @@ check_scope() {
   return 0
 }
 
+# UNUSED01: a microflow, nanoflow, page, snippet, enumeration or Java action of the project's own
+# modules that nothing uses -- 67 were left behind over 34 apps (data source flows replaced by
+# XPath, probes, a reset flow no button called). Three proofs, all on a copy of the project:
+# check_unused.cjs finds no reference in the catalog and the name in no other document, Java,
+# JavaScript, theme or test file (a test's `# covers:` line declares, it does not use); then every one of them is dropped on the copy and mx check must
+# still report 0 errors. A document Mendix still needs is never reported. MDL_KEEP_UNUSED in
+# tests/harness.env (Mod.Doc,Mod.Other) keeps one on purpose.
+check_unused() {
+  local gate out found code scratch="$WORK/unusedcheck" count errors
+  [ -f tools/mdl-checks/check_unused.cjs ] || {
+    echo "unused: could not run -- tools/mdl-checks/check_unused.cjs is missing" > "$WORK/unused.summary"; return 2; }
+  modules_or_status unused; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" unused || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/check_unused.cjs . $USER_MODULES --mpr "$scratch/$MPR" \
+    ${MDL_KEEP_UNUSED:+--keep "$MDL_KEEP_UNUSED"} 2>&1)"; code=$?
+  case "$code" in
+    0) echo "unused: no unused document" > "$WORK/unused.summary"; return 0 ;;
+    1) printf '%s\n' "$found" | head -1 | grep -q '^FAIL ' || code=2 ;;
+  esac
+  if [ "$code" != "1" ]; then
+    echo "unused: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/unused.summary"
+    return 2
+  fi
+  count="$(printf '%s\n' "$found" | grep -c '^  - \[UNUSED01\]')"
+  printf '%s\n' "$found" | sed -n 's/^drop: //p' > "$WORK/unused.drop.mdl"
+  # The third proof: Mendix itself, with every one of them gone.
+  if ! "$MXCLI" exec "$WORK/unused.drop.mdl" -p "$scratch/$MPR" > "$WORK/unused.exec" 2>&1; then
+    echo "unused: $count document(s) look unused, but dropping them on a copy failed -- left alone" > "$WORK/unused.summary"
+    tail -2 "$WORK/unused.exec" | sed 's/^/   /' > "$WORK/unused.warnings"
+    return 0
+  fi
+  mx_check_in "$scratch"   # sets out
+  errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"
+  if [ "$errors" != "0" ]; then
+    # Not proven: Mendix needs one of them, or the model had errors before (mx check says which).
+    if [ -n "$errors" ]; then
+      echo "unused: $count document(s) look unused, but mx check without them reports $errors error(s) -- left alone" > "$WORK/unused.summary"
+    else
+      echo "unused: $count document(s) look unused, but mx check without them printed no error count -- left alone" > "$WORK/unused.summary"
+    fi
+    return 0
+  fi
+  echo "unused: $count document(s) nothing uses (UNUSED01) -- no reference in the model, the name in no other document, Java, JavaScript, theme or test file, and mx check passes without them" > "$WORK/unused.summary"
+  {
+    printf '%s\n' "$found" | grep '^  - \[UNUSED01\]' | sed 's/^  /   /'
+    echo "   Fix: drop them in one script -- the gate dropped them on a copy and mx check still reported 0 errors:"
+    sed 's/^/     /' "$WORK/unused.drop.mdl"
+    echo "   Dropping one can leave what only it called unused: run the gate again after."
+    echo "   Its source in mdlsource/ goes too, or a re-run brings it back; and its name on a # covers: line"
+    echo "   of tests/verify-*.test.sh (a covers: line is no use -- coverage fails on a name not in the model)."
+    echo "   Kept on purpose (an API for later, a page opened by URL)? The person adds it to tests/harness.env:"
+    echo "     MDL_KEEP_UNUSED=$(sed -n 's/^drop [a-z ]* \([^ ;]*\);$/\1/p' "$WORK/unused.drop.mdl" | head -1)"
+  } > "$WORK/unused.detail"
+  return 1
+}
+
+# The testable paths of the model (check_paths.cjs): every message a user can be shown, every
+# workflow user task and its outcomes, every role-scoped entity, every demo user's role and every
+# published service needs a test that walks it -- read from the model, so it holds for any app.
+# Paths that existed when the harness was installed (.mxcli/gate-cache/paths-baseline.json, written
+# by the installer) and have not changed since are warnings; new or changed ones block. WF01 (a
+# workflow task anyone can decide) always blocks. MDL_UNTESTED in tests/harness.env: the person's
+# list of paths deliberately left without a test.
+check_paths() {
+  local gate found code scratch="$WORK/pathscheck" total
+  [ -f tools/mdl-checks/check_paths.cjs ] || {
+    echo "paths: could not run -- tools/mdl-checks/check_paths.cjs is missing" > "$WORK/paths.summary"; return 2; }
+  modules_or_status paths; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" paths || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/check_paths.cjs . $USER_MODULES --mpr "$scratch/$MPR" \
+    --baseline "$CACHE_DIR/paths-baseline.json" ${MDL_UNTESTED:+--untested "$MDL_UNTESTED"} \
+    $([ "${MDL_PATHS:-}" = "error" ] && echo --all-fail) 2>&1)"; code=$?
+  if ! printf '%s\n' "$found" | head -1 | grep -qE '^(PASS|FAIL) '; then
+    echo "paths: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/paths.summary"
+    return 2
+  fi
+  echo "paths: $(printf '%s\n' "$found" | head -1)" > "$WORK/paths.summary"
+  # Every finding, old ones too, where a session can read them all without running the checker.
+  mkdir -p .mxcli 2>/dev/null && printf '%s\n' "$found" > .mxcli/paths.txt 2>/dev/null
+  total="$(printf '%s\n' "$found" | grep -c '^  ~ ')"
+  if [ "$total" -gt 0 ]; then
+    printf '%s\n' "$found" | grep '^  ~ ' | head -6 | sed -E 's/^  ~ /   - /' > "$WORK/paths.warnings"
+    [ "$total" -gt 6 ] && echo "   ... 6 of $total older paths without a test shown; all of them: .mxcli/paths.txt" >> "$WORK/paths.warnings"
+  fi
+  [ "$code" = "0" ] && return 0
+  {
+    printf '%s\n' "$found" | grep '^  - ' | sed 's/^  /   /'
+    echo "   A path is walked when a test (not a comment in it) asserts what the user meets there. Read"
+    echo "   tests/checks/paths.md and reference/paths.md of the test-first-delivery skill. Every finding: .mxcli/paths.txt"
+  } > "$WORK/paths.detail"
+  return 1
+}
+
+# FOLDER01 (check_folders.cjs): every document of the app's own modules in <business folder>/UI
+# (pages, snippets), /FNC (microflows, nanoflows) or /ENV (everything else). The finding lists the
+# `move` statements; one script with all of them applies it. Read from a copy's catalog, as unused does.
+check_folders() {
+  local gate found code scratch="$WORK/folderscheck"
+  [ -f tools/mdl-checks/check_folders.cjs ] || {
+    echo "folders: could not run -- tools/mdl-checks/check_folders.cjs is missing" > "$WORK/folders.summary"; return 2; }
+  modules_or_status folders; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" folders || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/check_folders.cjs . $USER_MODULES --mpr "$scratch/$MPR" 2>&1)"; code=$?
+  if ! printf '%s\n' "$found" | head -1 | grep -qE '^(PASS|FAIL) '; then
+    echo "folders: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/folders.summary"
+    return 2
+  fi
+  echo "folders: $(printf '%s\n' "$found" | head -1)" > "$WORK/folders.summary"
+  [ "$code" = "0" ] && return 0
+  {
+    printf '%s\n' "$found" | grep '^  - \[FOLDER01\]' | sed 's/^  /   /'
+    echo "   Fix: every move below in ONE new script (mdl 1;) and one exec -- a move changes no behaviour:"
+    printf '%s\n' "$found" | sed -n 's/^move: /     /p'
+    echo "   New documents go straight into place: create ... folder 'Orders/FNC' (or 'Orders/UI')."
+  } > "$WORK/folders.detail"
+  return 1
+}
+
 # Reads one background check's files into summary, failures or cannot_run, and details.
 collect() {
   local name="$1" label="$2" status line
@@ -680,4 +849,7 @@ collect_model_checks() {
   collect layout "layout"
   collect security "security"
   collect scope "scope"
+  collect paths "paths"
+  collect folders "folders"
+  collect unused "unused"
 }

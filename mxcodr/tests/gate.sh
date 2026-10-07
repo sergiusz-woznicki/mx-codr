@@ -10,20 +10,18 @@
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
 #
-# Eight verdicts: the browser suite (tests/verify-*.test.sh) and seven model checks that need no
-# app -- mx check, lint, coverage, naming, layout, security, scope. Every step runs even if another
-# fails; a passing model check is replayed while its inputs are unchanged.
+# Eleven verdicts: the suite (tests/verify-*.test.sh) and ten model checks that need no app -- mx check,
+# lint, coverage, naming, layout, security, scope, paths, folders, unused. Each runs; a pass replays while its inputs hold.
 #   DONE — every check passed               exit 0 (--only/--tests-only print PASSED, never DONE)
 #   NOT DONE — failed: <checks>             exit 1
 #   NOT DONE — could not run: <checks>      exit 2
-# Exit 2 also means the gate stopped early: no .mpr, bad argument, no app answering,
-# a boot that failed, or the runtime refusing sessions. Visual findings are warnings.
+# Exit 2 also: stopped early (no .mpr, bad argument, no app, a failed boot, sessions refused).
 # Env: BASE_URL (else 8081 then 8080), APP_PORT (8081), SCRIPT_TIMEOUT (90s),
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
-#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE=warn|error, MDL_CLOSE_BROWSER=1 -- MDL_* may also be
-#      set in tests/harness.env.
+#      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE|MDL_WIDGET_NAMES=warn|error, MDL_CLOSE_BROWSER=1,
+#      MDL_KEEP_UNUSED, MDL_UNTESTED, MDL_PATHS=error, MDL_DB_RESET=session -- also in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # How to read this file: main() at the bottom is the whole gate, step by step. The steps
@@ -44,6 +42,8 @@ for part in hints app checks preflight tests; do
   fi
   . "$HARNESS_DIR/gate/$part.sh"
 done
+# MDL_DB_RESET=session: dbsnap_take before the tests, dbsnap_restore after the first DONE.
+[ -f "$HARNESS_DIR/db-snapshot.sh" ] && . "$HARNESS_DIR/db-snapshot.sh"
 
 # The gate's helpers (digests, JSON, timestamps) live in tools/mdl-checks/gate_helpers.cjs.
 gate_py() {
@@ -180,6 +180,14 @@ captions_after_done() {
   return 0
 }
 
+# Widget names likewise: each full DONE keeps a hash of every page and snippet; from then on a new
+# or changed one needs <Page>_<What><Type> names (check_layout --names, NAME02).
+names_after_done() {
+  [ -f "$CACHE_DIR/layout.pages.json" ] || return 0
+  cp "$CACHE_DIR/layout.pages.json" "$CACHE_DIR/names-baseline.json" 2>/dev/null
+  return 0
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -187,7 +195,7 @@ print_verdict_and_exit() {
   echo
   echo "== gate"
   for line in "${summary[@]}"; do echo "   $line"; done
-  for name in tests mx lint coverage naming layout security scope visual; do
+  for name in tests mx lint coverage naming layout security scope paths folders unused visual; do
     [ -f "$WORK/$name.secs" ] && timing="$timing $name $(cat "$WORK/$name.secs")s,"
   done
   echo "   timing:${timing} wall $((SECONDS - GATE_START))s"
@@ -217,6 +225,8 @@ print_verdict_and_exit() {
   echo "   DONE — every check passed"
   done_repeat_note
   captions_after_done
+  names_after_done
+  declare -F dbsnap_restore >/dev/null && dbsnap_restore
   if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
     echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
   fi
@@ -238,7 +248,7 @@ print_blockers() {
   # One file per step (tests/checks/), so a session reads the codes of what failed, not all of them.
   local guides="" guide failed
   for failed in ${failures[@]+"${failures[@]}"} ${cannot_run[@]+"${cannot_run[@]}"}; do
-    case "$failed" in layout|lint|naming) guide="tests/checks/$failed.md" ;; *) guide="tests/checks/app.md" ;; esac
+    case "$failed" in layout|lint|naming|paths) guide="tests/checks/$failed.md" ;; folders) guide="tests/checks/lint.md" ;; *) guide="tests/checks/app.md" ;; esac
     case " $guides " in *" $guide "*) ;; *) guides="${guides:+$guides }$guide" ;; esac
   done
   echo "   what each code wants and its fix: ${guides:-tests/CHECKS.md} -- not the gate's source"
@@ -318,6 +328,7 @@ main() {
   fi
 
   preflight_films
+  declare -F dbsnap_take >/dev/null && dbsnap_take
   # 1. The model checks need no app: start them now, they run while the suite does.
   if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     start_model_checks

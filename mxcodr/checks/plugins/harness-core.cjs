@@ -10,7 +10,7 @@
  */
 
 const { spawnSync } = require("node:child_process")
-const { existsSync, readFileSync } = require("node:fs")
+const { existsSync, readFileSync, writeFileSync, mkdirSync } = require("node:fs")
 const { join } = require("node:path")
 
 const MAX_GATE_ROUNDS = 3
@@ -141,6 +141,19 @@ function marketplacePending(root) {
 // True while `tests/film.sh --all` records in the background: the end-of-turn gate then stays
 // quiet (it would refuse, the browser is in use), so the turn ends instead of waiting. A Pi session
 // started --all and then polled --status for twelve minutes so as not to collide with that gate.
+// The agent session's id into .mxcli/session.id (tests/db-snapshot.sh: one database snapshot per
+// session, rolled back after its first DONE). Written only when it changed.
+function markSession(root, id) {
+  const safe = String(id || "").replace(/[^A-Za-z0-9._-]/g, "")
+  if (!root || !safe) return
+  try {
+    const file = join(root, ".mxcli", "session.id")
+    if (existsSync(file) && readFileSync(file, "utf8") === safe) return
+    mkdirSync(join(root, ".mxcli"), { recursive: true })
+    writeFileSync(file, safe)
+  } catch { /* not ours to fail on */ }
+}
+
 function filmsRecording(root) {
   let pid = ""
   try { pid = readFileSync(join(root, ".mxcli", "films", ".all.pid"), "utf8").trim() } catch { return false }
@@ -264,6 +277,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder,
 }

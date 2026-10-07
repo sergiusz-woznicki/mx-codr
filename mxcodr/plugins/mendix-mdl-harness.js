@@ -93,6 +93,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
     // tool output.
     "tool.execute.before": async (input, output) => {
       if (!installed) return
+      // OpenCode's session id, for tests/db-snapshot.sh (one database snapshot per session).
+      core.markSession(root, input.sessionID)
       const reason = core.blockReason(root, input.tool, output.args)
       if (reason) throw new Error(reason)
     },

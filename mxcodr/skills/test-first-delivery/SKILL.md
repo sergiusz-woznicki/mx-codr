@@ -129,6 +129,11 @@ an empty grid and on a page rendering an error. Assert text and the data behind 
 that has to reload the page (`reopen_app()`, a menu round trip) to see what it just saved has
 found a bug: fix the app (`commit ... refresh`), not the test.
 
+**Every path, not the happy one.** Each rule: the allowed case AND the refused one. Each message
+the app shows: four words of it asserted. A journey of several people: one test, `sign_in_as` each,
+assert what each sees. Assert the object the test made, never a count of all rows. The gate's
+`paths` step blocks DONE until each path has a test ([reference/paths.md](reference/paths.md)).
+
 **Touching an untested feature means writing its test first.** That is how coverage
 grows without a big-bang backfill.
 
@@ -139,15 +144,17 @@ grows without a big-bang backfill.
 | Wanting a step of the loop in prose, with its worked example | [reference/loop.md](reference/loop.md) |
 | Writing the scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
 | Hitting sign-in failures, "Maximum number of sessions", startup or idempotence regressions, planning subagents, or wanting facts about the app in one call | [reference/facts.md](reference/facts.md) |
+| Listing a feature's paths, or reading a `paths` finding | [reference/paths.md](reference/paths.md) |
 | Debugging a suite that fails but `--only` passes, reading the gate's verdict, the coverage checker, red-first records and mutation testing | [reference/gate-and-suite.md](reference/gate-and-suite.md) |
 
 ## Validation checklist
 
 - [ ] An acceptance criterion was stated before any code
 - [ ] The test existed and **failed** before the implementation — for the right reason — and the failure was quoted
-- [ ] Exact-count assertions run right after `verify-000-reset`
+- [ ] Green on the app's clean seed: each test makes the data it needs ([facts](reference/facts.md))
 - [ ] A test that changes seeded data uses a row no other test reads
 - [ ] The test is one `scenario` call, not a chain of browser calls
+- [ ] Allowed and refused paths tested; every message asserted; each user of a journey signs in
 - [ ] The test declares a `# covers:` header naming real model elements
 - [ ] `bash tests/gate.sh` ends in `DONE — every check passed`
 - [ ] The result was reported as command output, not as a claim

@@ -4,6 +4,7 @@
 # tests/precheck.sh itself.
 # shellcheck source=remind-skills-lib.sh
 . "$(dirname "$0")/remind-skills-lib.sh"
+mdl_mark_session
 mdl_reminder '.claude/rules/mdl-skills.md' \
   'load `$test-first-delivery`' \
   'then `bash tests/precheck.sh <script>.mdl` (mx check on a copy: what a build or a half-applied script would hit)'

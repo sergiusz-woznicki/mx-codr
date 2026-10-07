@@ -9,7 +9,8 @@
 //   fill('widget', value)              type into a text box/area, then tab out
 //   pick_combo('widget', 'option')     choose a combo box option
 //   row_action('grid', 'text', 'btn')  click a button in the first grid row containing text
-//   await_message(/regex/[, ms])       wait for an app message; returns the page text
+//   await_message(/regex/[, ms])       wait for an app message the last action brought; returns it
+//   sign_in_as('user')                 sign out and in as another demo user (TEST_PASSWORD_<user>)
 //   dismiss_dialog()                   click OK on an open dialog
 //   page_text()                        all visible page text
 //   look('label')                      measure the page as it renders now (VIS01-04); lib.sh
@@ -26,12 +27,12 @@
   // '/' redirects to login.html, and the redirect finishes after goto returns --
   // so wait for whichever of the two arrives rather than deciding immediately,
   // or the form is never seen and .mx-page never comes.
-  const sign_in_if_asked = async () => {
+  const sign_in_if_asked = async (who = USER, secret = PASSWORD) => {
     await page.waitForSelector(LOGIN_FIELD + ', .mx-page', {timeout: 20000});
     if (!(await page.locator(LOGIN_FIELD).count())) return;
-    if (!PASSWORD) throw new Error('app shows a login page but there is no password for TEST_USER='
-      + USER + ' -- set TEST_USER to a user with a TEST_PASSWORD_<user>= line in tests/credentials.env,'
-      + ' or add one for this user');
+    if (!secret) throw new Error((who === USER ? 'app shows a login page but there is no password for TEST_USER='
+      : 'app shows a login page but there is no password for ') + who + ' -- set TEST_USER to a user with a'
+      + ' TEST_PASSWORD_<user>= line in tests/credentials.env, or add one for this user');
     // Login-page selectors only. `.alert` and `.mx-validation-message` also occur on
     // ordinary pages, and a race that matched those would report a refused sign-in
     // for an app that had loaded perfectly well.
@@ -43,8 +44,8 @@
     // submitted again a moment later is accepted. Wrong credentials fail both
     // times and are reported as before.
     for (let attempt = 1; attempt <= 2; attempt++) {
-      await page.fill(LOGIN_FIELD, USER);
-      await page.fill('#passwordInput, input[name=password]', PASSWORD);
+      await page.fill(LOGIN_FIELD, who);
+      await page.fill('#passwordInput, input[name=password]', secret);
       await page.click('#loginButton, button[type=submit], form button');
       // Race the app against the login page's own error: a refused sign-in is on
       // screen in about a second, and waiting out the 20s timeout for .mx-page turns
@@ -61,7 +62,7 @@
     if (landed === 'error' && /login/.test(page.url())) {
       const said = await page.locator(LOGIN_ERROR).first().innerText()
         .then(t => t.replace(/\s+/g, ' ').trim()).catch(() => '');
-      throw new Error('sign-in as ' + USER + ' was refused: ' + (said || 'the login page reported an error')
+      throw new Error('sign-in as ' + who + ' was refused: ' + (said || 'the login page reported an error')
         + ' (credentials come from tests/credentials.env)');
     }
     await page.waitForSelector('.mx-page', {timeout: 20000});
@@ -103,6 +104,16 @@
     return __goto(url, options);
   };
   const reopen_app = async () => { __journey_started = false; await open_app(); };
+  // sign_in_as('demo_manager') -- the next user of a journey several people take part in: the one
+  // who decides what the first one asked for. Signs the current user out, in as this one (password
+  // from TEST_PASSWORD_<user> in tests/credentials.env), and waits for the app.
+  const sign_in_as = async (who) => {
+    if (!PASSWORDS[who]) throw new Error('sign_in_as(' + JSON.stringify(who) + '): no TEST_PASSWORD_' + who
+      + '= line in tests/credentials.env -- add one for this demo user');
+    await sign_out();
+    await sign_in_if_asked(who, PASSWORDS[who]);
+    await page.waitForSelector('.mx-page', {timeout: 20000});
+  };
 
   const open_app = async () => {
     await page.goto(BASE + '/');
@@ -127,27 +138,72 @@
     await page.waitForSelector('.mx-page', {timeout: 20000});
     __journey_started = true;
   };
-  // await_message(/reminder sent/i) -- wait for the text the app shows in reply to
-  // an action, wherever it puts it: a dialog, an alert bar, or a rendered message
-  // on the page. Returns the visible text so the test can assert on it. This
-  // replaces `waitForTimeout(1500)` followed by page_text(): it returns as soon as
-  // the message is there (~200ms) instead of after a fixed pause, and it fails
-  // saying what WAS on screen when the message never came, rather than handing the
-  // test an unrelated page to assert against.
-  // The pattern must match the MESSAGE and nothing the page showed before the
-  // action: a button captioned "Unpaid" satisfies /unpaid/ instantly, and the
-  // test then reads a page on which the message has not appeared yet. Include a
-  // word or a number that only the message carries: /has \d+ unpaid invoice/i.
+  // await_message(/reminder sent/i) -- wait for the text the app shows in reply to the last action
+  // (click, fill, key press), wherever it puts it: a dialog, an alert bar, a toast, a rendered message.
+  // Only text that appeared or changed after that action counts: matching the whole page let a
+  // button captioned "Unpaid", or the message of an earlier step still on screen, pass for the reply,
+  // and a test then asserted a message that never came. Returns the new text, so the test can
+  // assert more of it. Before the journey's first action the whole page counts. Call it right after
+  // the action that causes the message: a click in between (dismissing toasts, closing a dialog) is
+  // the last action then, and may close the very message -- a race a slow run (a film) loses.
+  // Every click, fill or key press starts a new reply. The wrappers live on Playwright's prototypes,
+  // which outlive one scenario: installed once, the watcher re-armed in each new document.
+  for (const proto of [Object.getPrototypeOf(page.locator('body')), Object.getPrototypeOf(page)]) {
+    if (proto.__mdlWatched) continue;
+    proto.__mdlWatched = true;
+    const onPage = proto === Object.getPrototypeOf(page);
+    for (const name of ['click', 'dblclick', 'tap', 'fill', 'press', 'type', 'pressSequentially', 'selectOption', 'check', 'uncheck']) {
+      const original = proto[name];
+      if (typeof original !== 'function') continue;
+      proto[name] = async function (...args) {
+        const pg = onPage ? this : this.page();
+        // Named in await_message's failure: a dismiss clicked after the real action is the "last action".
+        pg.__mdlLastAction = name + ' ' + (onPage ? String(args[0]) : String(this));
+        // Through the page's own helper, so a closed page or a navigation never fails the action.
+        await pg.evaluate(() => {
+          window.__mdlAdded = [];
+          if (window.__mdlObserver) return;
+          window.__mdlObserver = new MutationObserver(list => {
+            for (const m of list) {
+              if (m.type === 'characterData') { window.__mdlAdded.push(m.target); continue; }
+              for (const n of m.addedNodes) window.__mdlAdded.push(n);
+            }
+          });
+          window.__mdlObserver.observe(document.body, {childList: true, subtree: true, characterData: true});
+        }).catch(() => {});
+        return original.apply(this, args);
+      };
+    }
+  }
+  const __mdl_new_text = () => page.evaluate(() => {
+    if (!window.__mdlObserver) return null;   // no action yet in this document: all of it is new
+    const seen = new Set(), out = [];
+    for (const n of window.__mdlAdded || []) {
+      const el = n.nodeType === 1 ? n : n.parentElement;
+      if (!el || seen.has(el) || !el.isConnected) continue;
+      seen.add(el);
+      const style = window.getComputedStyle(el);
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      out.push(el.innerText || el.textContent || '');
+    }
+    return out.join('\n');
+  }).catch(() => null);
   const await_message = async (pattern, timeout) => {
     const deadline = Date.now() + (timeout || ACTION_TIMEOUT);
-    let text = '';
+    let text = '', fresh = null;
     for (;;) {
       text = await page.locator('body').innerText().catch(() => '');
-      if (pattern.test(text)) return text.replace(/\s+/g, ' ').trim();
+      fresh = await __mdl_new_text();
+      const candidate = fresh === null ? text : fresh;
+      if (pattern.test(candidate)) return candidate.replace(/\s+/g, ' ').trim();
       if (Date.now() > deadline) {
+        const stale = fresh !== null && pattern.test(text);
         throw new Error('no message matching ' + pattern + ' appeared within '
-          + (timeout || ACTION_TIMEOUT) + 'ms; the page says: '
-          + text.replace(/\s+/g, ' ').trim().slice(0, 300));
+          + (timeout || ACTION_TIMEOUT) + 'ms after the last action'
+          + (page.__mdlLastAction ? ' (' + page.__mdlLastAction.slice(0, 120) + ')' : '')
+          + (stale ? ' -- the page matches it, but that text was there BEFORE the action: it is not the reply.'
+            + ' Match words only the reply carries, or check the action really ran' : '')
+          + '; the page says: ' + text.replace(/\s+/g, ' ').trim().slice(0, 300));
       }
       await page.waitForTimeout(100);
     }

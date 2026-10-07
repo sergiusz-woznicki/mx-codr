@@ -74,6 +74,7 @@ export default function mendixMdlHarness(pi) {
     }
   }
   pi.on("before_agent_start", (event, ctx) => {
+    markSession(ctx)
     const root = harnessRoot(ctx)
     if (!root) return
     if (rulesText === null) rulesText = readOr(join(root, ".claude", "rules", "mdl-skills.md"), "")
@@ -92,10 +93,20 @@ export default function mendixMdlHarness(pi) {
     }
   })
 
-  pi.on("session_start", () => {
+  // One id per Pi session (this process, or the session Pi branched or switched to): tests/db-snapshot.sh
+  // takes one database snapshot per session and rolls it back after its first DONE.
+  let sessionMarked = false
+  const markSession = (ctx) => {
+    const root = harnessRoot(ctx)
+    if (root && !sessionMarked) core.markSession(root, `pi-${Date.now()}-${process.pid}`)
+    sessionMarked = true
+  }
+  pi.on("session_start", (event, ctx) => {
     gateRequired = false
     rounds = 0
     running = false
+    sessionMarked = false
+    markSession(ctx)
   })
 
   // The guard, the sleep block and tests/precheck.sh (mx check on a scratch copy of the model):

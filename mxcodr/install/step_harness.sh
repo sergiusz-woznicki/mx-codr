@@ -10,7 +10,7 @@ for source_file in "$SRC"/tests/*; do
   name="$(basename "$source_file")"
   target="$APP/tests/$name"
   case "$name" in
-    theme.sh|gate.sh|film.sh|orient.sh|diagnose.sh|precheck.sh|peek.sh|lib.sh|portable.sh|scenario-helpers.js|run-docker.sh|run-app.sh|marketplace-login.sh|CHECKS.md|checks|gate|lib) ;;
+    theme.sh|gate.sh|film.sh|db-snapshot.sh|mdl-applied.sh|orient.sh|diagnose.sh|precheck.sh|peek.sh|lib.sh|portable.sh|scenario-helpers.js|run-docker.sh|run-app.sh|marketplace-login.sh|CHECKS.md|checks|gate|lib) ;;
     *) if [ -e "$target" ]; then continue; fi ;;
   esac
   if [ -d "$source_file" ]; then
@@ -47,6 +47,20 @@ ui_done "test harness" "$suite_written $I_ARROW tests/  (verify-*.test.sh left a
 # second. Same function orient.sh calls; best effort -- a missing or old mxcli skips it.
 if [ -x "$APP/mxcli$EXE" ] && [ -f "$APP/tests/portable.sh" ]; then
   ( cd "$APP" && MXCLI="./mxcli$EXE" && . tests/portable.sh && mdl_syntax_digest ) >/dev/null 2>&1 || true
+fi
+
+# The paths baseline (check_paths.cjs): the model as it is now, so the paths it already has without a
+# test are warnings to clear and every path added from here on needs its test before DONE. Written
+# once, from a copy of the model (the catalog is written beside the .mpr); never overwritten, since
+# a later install would make everything built in between old. A new app gets an empty one.
+if [ -x "$APP/mxcli$EXE" ] && [ -f "$APP/tests/portable.sh" ] && [ ! -f "$APP/.mxcli/gate-cache/paths-baseline.json" ]; then
+  ( cd "$APP" && MXCLI="./mxcli$EXE" && . tests/portable.sh && mdl_find_mpr 2>/dev/null \
+    && modules="$(mdl_user_modules "$MPR")" && copy="$(mdl_tmpdir mdl-baseline)" \
+    && cp -R "$MPR" "$copy"/ && { [ ! -d mprcontents ] || cp -R mprcontents "$copy"/; } \
+    && { [ -z "$modules" ] && { mkdir -p .mxcli/gate-cache && echo '{}' > .mxcli/gate-cache/paths-baseline.json; } \
+         || "$NODE" tools/mdl-checks/check_paths.cjs . $modules --mpr "$copy/$MPR" \
+              --write-baseline .mxcli/gate-cache/paths-baseline.json; }
+    rm -rf "$copy" ) >/dev/null 2>&1 || true
 fi
 
 # --- 16. Step: record the install, then check the environment ---

@@ -41,6 +41,17 @@ case "$command" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 _verdict="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" exec-verdict 2>/dev/null)"
 [ -n "$_verdict" ] && printf '%s\n' "$_verdict"
 case "$_verdict" in "exec: FAILED"*) exit 0 ;; esac
+# What each script wrote, for STALE01 next time it runs (tests/precheck.sh, tests/mdl-applied.sh).
+if [ -f tests/mdl-applied.sh ]; then
+  . tests/mdl-applied.sh
+  _applied=()
+  while IFS= read -r _word; do
+    case "$_word" in *.mdl) _applied+=("$_word") ;; esac
+  done <<HOOK_APPLIED
+$(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" words 2>/dev/null)
+HOOK_APPLIED
+  mdl_applied_record ${_applied[@]+"${_applied[@]}"}
+fi
 # Studio Pro with this project open saves its own copy of a document over what the exec wrote
 # (it dropped 12 indexes on 2026-10-04). The same process pattern as mdl_studio_pro_open in
 # tests/portable.sh, which also covers Windows; a test keeps the two patterns identical.

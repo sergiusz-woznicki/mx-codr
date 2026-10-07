@@ -113,6 +113,37 @@ if [ -n "$fingerprint" ] && [ -f "$cache_dir/$fingerprint" ]; then
   echo "precheck: 0 errors -- same scripts and model already passed at $(cat "$cache_dir/$fingerprint") (cached, no second mx check)"
   exit 0
 fi
+# STALE01: re-running a script undoes what changed in its documents since it last ran. `create or
+# modify page` rebuilds the whole page from the script, so an `alter page` another script made later
+# is gone -- on InvoiceB2B a re-exec of 11_navigation.mdl put back twelve widget names a rename had
+# replaced (2026-10-07). What the script wrote last time is its copy in .mxcli/applied/ (the after-exec
+# hook keeps it), else the version git has; `mxcli diff` of that copy names the documents the model
+# has changed since, and `mxcli diff` of the script the ones it would write. A document in both is
+# overwritten with a version that misses those changes. A script never run before is not checked.
+stale_units() {   # stale_units <script> -- the documents a diff would write, one "Kind: Module.Name" a line
+  "$MXCLI" diff "$1" -p "$MPR" --format struct 2>/dev/null \
+    | grep -E '^[A-Z][A-Za-z ]*: [A-Za-z_][A-Za-z0-9_]*\.[^[:space:]]+$' | sort -u
+}
+if [ -f tests/mdl-applied.sh ] && [ "${MDL_STALE_CHECK:-1}" != "0" ]; then
+  . tests/mdl-applied.sh
+  for script in "$@"; do
+    reference="$(mdl_applied_reference "$script")" || continue
+    since="$(stale_units "$reference")"
+    [ -n "$since" ] && overwritten="$(comm -12 <(printf '%s\n' "$since") <(stale_units "$script"))" || overwritten=""
+    case "$reference" in *.git) rm -f "$reference" ;; esac
+    [ -n "$overwritten" ] || continue
+    echo "precheck: STALE01 -- $script would undo later changes (the real model is untouched):"
+    echo "  these documents changed in the model after $script last ran, and it would write its own"
+    echo "  older version of them over those changes:"
+    printf '%s\n' "$overwritten" | sed 's/^/    /'
+    echo "  Put the change in a new script that alters only what it changes (alter page ... { ... },"
+    echo "  create or modify for what is new), or first bring $script up to the model: DESCRIBE each"
+    echo "  document above (./mxcli -p $MPR -c \"describe page Module.Name\") and replace its part of the"
+    echo "  script with it. Never restore an old script to undo a test edit -- alter it back."
+    exit 1
+  done
+fi
+
 scratch="$(mdl_tmpdir mdl-precheck)" || { echo "precheck: could not run -- no scratch directory"; exit 0; }
 trap 'rm -rf "$scratch"' EXIT
 
