@@ -72,6 +72,25 @@ export_test_module() {
 }
 
 # Runs the suite (or the --only matches) in this shell, appending to the arrays directly.
+# What the previous run left beside the project: playwright-cli's page snapshots (.yml), console logs
+# and downloads in .playwright-cli/, and the verify-*-failure.png screenshots `mxcli playwright verify`
+# writes. On InvoiceB2B: 618 snapshots, 420 logs and 180 invoice PDFs (7.7 MB) and 26 screenshots,
+# none of them ignored by git. Cleared before each run, so what is there is the last run's: a failure
+# keeps its screenshot until the next run. Only files at the top of .playwright-cli/; its folders and
+# .playwright/ (the browser's config) stay.
+clear_test_artefacts() {
+  local f
+  if [ -d .playwright-cli ] && [ ! -L .playwright-cli ]; then
+    for f in .playwright-cli/*; do
+      [ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
+    done
+  fi
+  for f in verify-*-failure.png; do
+    [ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
+  done
+  return 0
+}
+
 step_tests() {
   local -a targets
   local out status environment started=$SECONDS
@@ -79,6 +98,7 @@ step_tests() {
   # look() appends to findings.jsonl in every scenario; this run's pages only. The screenshots
   # go too; review.md and verdicts.json stay, a verdict is keyed on a screenshot's bytes.
   rm -f .mxcli/visual/findings.jsonl .mxcli/visual/*.png 2>/dev/null
+  clear_test_artefacts
   echo "== tests: ${targets[*]}"
   # From here on, what the runtime logs as an error happened during the suite (step_runtime_errors).
   date '+%Y-%m-%d %H:%M:%S' > "$WORK/tests.started"

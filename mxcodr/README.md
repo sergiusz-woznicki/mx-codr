@@ -683,6 +683,12 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+Bundle 2026.10.07.13: each suite run starts by clearing what the previous one left -- playwright-cli's
+page snapshots, console logs and downloads at the top of `.playwright-cli/`, and the
+`verify-*-failure.png` screenshots -- so a failure keeps its screenshot until the next run. InvoiceB2B
+held 618 snapshots, 420 logs, 180 invoice PDFs (7.7 MB) and 26 screenshots. The installer adds
+`/.playwright-cli/` to `.gitignore`.
+
 `STALE01` (`tests/precheck.sh`, bundle 2026.10.07.10): a script run again does not write over what
 changed in its documents since it last ran. On InvoiceB2B a re-exec of `11_navigation.mdl` rebuilt
 `Admin_Home` and put back twelve widget names a later rename had replaced; the gate caught it only
