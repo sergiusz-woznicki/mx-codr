@@ -49,6 +49,20 @@ if [ -x "$APP/mxcli$EXE" ] && [ -f "$APP/tests/portable.sh" ]; then
   ( cd "$APP" && MXCLI="./mxcli$EXE" && . tests/portable.sh && mdl_syntax_digest ) >/dev/null 2>&1 || true
 fi
 
+# The paths baseline (check_paths.cjs): the model as it is now, so the paths it already has without a
+# test are warnings to clear and every path added from here on needs its test before DONE. Written
+# once, from a copy of the model (the catalog is written beside the .mpr); never overwritten, since
+# a later install would make everything built in between old. A new app gets an empty one.
+if [ -x "$APP/mxcli$EXE" ] && [ -f "$APP/tests/portable.sh" ] && [ ! -f "$APP/.mxcli/gate-cache/paths-baseline.json" ]; then
+  ( cd "$APP" && MXCLI="./mxcli$EXE" && . tests/portable.sh && mdl_find_mpr 2>/dev/null \
+    && modules="$(mdl_user_modules "$MPR")" && copy="$(mdl_tmpdir mdl-baseline)" \
+    && cp -R "$MPR" "$copy"/ && { [ ! -d mprcontents ] || cp -R mprcontents "$copy"/; } \
+    && { [ -z "$modules" ] && { mkdir -p .mxcli/gate-cache && echo '{}' > .mxcli/gate-cache/paths-baseline.json; } \
+         || "$NODE" tools/mdl-checks/check_paths.cjs . $modules --mpr "$copy/$MPR" \
+              --write-baseline .mxcli/gate-cache/paths-baseline.json; }
+    rm -rf "$copy" ) >/dev/null 2>&1 || true
+fi
+
 # --- 16. Step: record the install, then check the environment ---
 # INSTALL.json lets the gate detect stale or locally edited harness files.
 ui_begin "recording the install"

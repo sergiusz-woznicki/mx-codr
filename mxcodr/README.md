@@ -683,6 +683,28 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+Step `paths` (`checks/check_paths.cjs`, `checks/outcome_rules.cjs`): every testable path of the model
+needs a test that walks it. The paths come from the model, never from an app's names, so the rule
+holds for any app: `OUTCOME01` every message a user can be shown -- `show message`, `validation
+feedback`, an attribute's `error message`, and text handed to a flow that shows it or stores it for a
+page (found by what the flow does: its String parameter reaches a message, or a stored attribute when
+three or more flows hand it their text; a seed flow saving a name is one caller) -- asserted by four
+words in a row outside a comment line, placeholders splitting the text; `WF01` a flow that completes a
+workflow user task without reading the task's target users (anyone allowed to run it decides);
+`WF02` every user-task outcome chosen in a test, and a test of the task signing in as two users;
+`ISO01` each role reading an entity through an XPath constraint has a test signed in as such a user
+that reads it; `ROLE01` every demo user's role signs in somewhere; `SVC01` every published REST and
+OData service is called. A test signs in as a demo user when its text names that user. The installer
+writes `.mxcli/gate-cache/paths-baseline.json` once, from the model as it is: paths unchanged since
+are warnings (the backlog; `MDL_PATHS=error` blocks them too, and `.mxcli/paths.txt` lists every
+finding after each gate), new or changed ones block; a new app gets an empty baseline, so
+everything blocks. WF01 blocks whatever its age. The guard keeps the baseline and `MDL_UNTESTED`
+(the person's list of paths left untested on purpose) out of a session's reach. Measured over 34
+local apps: 227 messages, 213 matchable, 158 asserted by no test (InvoiceB2B: 46 of 55); the
+approval of InvoiceB2B let any Employee decide a manager's task (WF01). `scenario-helpers.js` gained
+`sign_in_as('<user>')` for journeys of several people, and `await_message` now matches only text that
+appeared after the last click, fill or key press: before, any text already on the page satisfied it.
+
 `UNUSED01` (`checks/check_unused.cjs`, step `unused`, blocks DONE): a microflow, nanoflow, page,
 snippet, enumeration or Java action of the app's own modules that nothing uses. Three proofs must
 agree, all on a copy of the project (the catalog is written beside the .mpr it reads, and the
@@ -705,7 +727,7 @@ that needs them, and the per-prompt reminder says the same. What each check code
 fix is written down once -- sessions had grepped `tests/gate/*.sh` (90 to 228 kB of it per
 session) for what `HOME01` or `--only` required -- and a red verdict points at it. Since bundle
 2026.10.04.9 that is one file per gate step, `tests/checks/layout.md`, `lint.md`, `naming.md` and
-`app.md` (mx check, coverage, security, scope, unused, the suite, visual and runtime), each under 4,500
+`paths.md`, `app.md` (mx check, coverage, security, scope, unused, the suite, visual and runtime), each under 4,500
 characters, with `tests/CHECKS.md` as the index of which file holds which code. The one page had
 reached its 9,300-character budget, and a red verdict now names only the files of the steps that
 failed, so a session reads 1.3 to 3.7k characters instead of 9.3k.

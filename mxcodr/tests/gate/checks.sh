@@ -1,5 +1,5 @@
 # tests/gate/checks.sh -- the model checks that need no app (mx check, lint, coverage, naming,
-# layout, security, scope, unused), and their cache.
+# layout, security, scope, paths, unused), and their cache.
 # Sourced by tests/gate.sh; defines functions only. Entry points: start_model_checks, collect_model_checks.
 
 # Each check runs in a background subshell, so it reports through files: check_<name> writes
@@ -505,8 +505,9 @@ start_model_checks() {
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_VISUAL=${MDL_VISUAL:-}" "env:MDL_WIDGET_NAMES=${MDL_WIDGET_NAMES:-}" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
+  ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests "$CACHE_DIR/paths-baseline.json" "env:MDL_UNTESTED=${MDL_UNTESTED:-}" "env:MDL_PATHS=${MDL_PATHS:-}" ) &
   ( run_cached unused   check_unused   "${cache_inputs[@]}" tools/mdl-checks/check_unused.cjs javasource javascriptsource meta:theme meta:themesource tests "env:MDL_KEEP_UNUSED=${MDL_KEEP_UNUSED:-}" ) &
-  echo "== mx check, lint, coverage, naming, layout, security, scope and unused started (they need no app; running while the suite does)"
+  echo "== mx check, lint, coverage, naming, layout, security, scope, paths and unused started (they need no app; running while the suite does)"
 }
 
 # An app with sign-in is only as safe as its security level: at PROTOTYPE Mendix checks page and
@@ -731,6 +732,49 @@ check_unused() {
   return 1
 }
 
+# The testable paths of the model (check_paths.cjs): every message a user can be shown, every
+# workflow user task and its outcomes, every role-scoped entity, every demo user's role and every
+# published service needs a test that walks it -- read from the model, so it holds for any app.
+# Paths that existed when the harness was installed (.mxcli/gate-cache/paths-baseline.json, written
+# by the installer) and have not changed since are warnings; new or changed ones block. WF01 (a
+# workflow task anyone can decide) always blocks. MDL_UNTESTED in tests/harness.env: the person's
+# list of paths deliberately left without a test.
+check_paths() {
+  local gate found code scratch="$WORK/pathscheck" total
+  [ -f tools/mdl-checks/check_paths.cjs ] || {
+    echo "paths: could not run -- tools/mdl-checks/check_paths.cjs is missing" > "$WORK/paths.summary"; return 2; }
+  modules_or_status paths; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" paths || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/check_paths.cjs . $USER_MODULES --mpr "$scratch/$MPR" \
+    --baseline "$CACHE_DIR/paths-baseline.json" ${MDL_UNTESTED:+--untested "$MDL_UNTESTED"} \
+    $([ "${MDL_PATHS:-}" = "error" ] && echo --all-fail) 2>&1)"; code=$?
+  if ! printf '%s\n' "$found" | head -1 | grep -qE '^(PASS|FAIL) '; then
+    echo "paths: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/paths.summary"
+    return 2
+  fi
+  echo "paths: $(printf '%s\n' "$found" | head -1)" > "$WORK/paths.summary"
+  # Every finding, old ones too, where a session can read them all without running the checker.
+  mkdir -p .mxcli 2>/dev/null && printf '%s\n' "$found" > .mxcli/paths.txt 2>/dev/null
+  total="$(printf '%s\n' "$found" | grep -c '^  ~ ')"
+  if [ "$total" -gt 0 ]; then
+    printf '%s\n' "$found" | grep '^  ~ ' | head -6 | sed -E 's/^  ~ /   - /' > "$WORK/paths.warnings"
+    [ "$total" -gt 6 ] && echo "   ... 6 of $total older paths without a test shown; all of them: .mxcli/paths.txt" >> "$WORK/paths.warnings"
+  fi
+  [ "$code" = "0" ] && return 0
+  {
+    printf '%s\n' "$found" | grep '^  - ' | sed 's/^  /   /'
+    echo "   A path is walked when a test (not a comment in it) asserts what the user meets there. Read"
+    echo "   tests/checks/paths.md and reference/paths.md of the test-first-delivery skill. Every finding: .mxcli/paths.txt"
+  } > "$WORK/paths.detail"
+  return 1
+}
+
 # Reads one background check's files into summary, failures or cannot_run, and details.
 collect() {
   local name="$1" label="$2" status line
@@ -773,5 +817,6 @@ collect_model_checks() {
   collect layout "layout"
   collect security "security"
   collect scope "scope"
+  collect paths "paths"
   collect unused "unused"
 }

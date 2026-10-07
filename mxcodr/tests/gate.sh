@@ -10,8 +10,8 @@
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
 #
-# Nine verdicts: the suite (tests/verify-*.test.sh) and eight model checks that need no app -- mx check,
-# lint, coverage, naming, layout, security, scope, unused. Each runs; a pass replays while its inputs hold.
+# Ten verdicts: the suite (tests/verify-*.test.sh) and nine model checks that need no app -- mx check,
+# lint, coverage, naming, layout, security, scope, paths, unused. Each runs; a pass replays while its inputs hold.
 #   DONE — every check passed               exit 0 (--only/--tests-only print PASSED, never DONE)
 #   NOT DONE — failed: <checks>             exit 1
 #   NOT DONE — could not run: <checks>      exit 2
@@ -21,7 +21,7 @@
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
 #      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE|MDL_WIDGET_NAMES=warn|error, MDL_CLOSE_BROWSER=1,
-#      MDL_KEEP_UNUSED=Mod.Doc,... -- MDL_* may also be set in tests/harness.env.
+#      MDL_KEEP_UNUSED=Mod.Doc,..., MDL_UNTESTED=Key,..., MDL_PATHS=error -- also in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # How to read this file: main() at the bottom is the whole gate, step by step. The steps
@@ -193,7 +193,7 @@ print_verdict_and_exit() {
   echo
   echo "== gate"
   for line in "${summary[@]}"; do echo "   $line"; done
-  for name in tests mx lint coverage naming layout security scope unused visual; do
+  for name in tests mx lint coverage naming layout security scope paths unused visual; do
     [ -f "$WORK/$name.secs" ] && timing="$timing $name $(cat "$WORK/$name.secs")s,"
   done
   echo "   timing:${timing} wall $((SECONDS - GATE_START))s"
@@ -245,7 +245,7 @@ print_blockers() {
   # One file per step (tests/checks/), so a session reads the codes of what failed, not all of them.
   local guides="" guide failed
   for failed in ${failures[@]+"${failures[@]}"} ${cannot_run[@]+"${cannot_run[@]}"}; do
-    case "$failed" in layout|lint|naming) guide="tests/checks/$failed.md" ;; *) guide="tests/checks/app.md" ;; esac
+    case "$failed" in layout|lint|naming|paths) guide="tests/checks/$failed.md" ;; *) guide="tests/checks/app.md" ;; esac
     case " $guides " in *" $guide "*) ;; *) guides="${guides:+$guides }$guide" ;; esac
   done
   echo "   what each code wants and its fix: ${guides:-tests/CHECKS.md} -- not the gate's source"

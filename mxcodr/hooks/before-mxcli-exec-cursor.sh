@@ -8,7 +8,7 @@
 
 input="$(cat)"
 allow() { printf '{"permission":"allow"}\n'; exit 0; }
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) allow ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*paths-baseline*|*write-baseline*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) allow ;; esac
 
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"

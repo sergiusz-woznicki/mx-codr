@@ -63,6 +63,10 @@ Rules that keep it that way:
   `lib.sh`, and `open_app` signs the old session out first. Sign out — do not just
   clear cookies: the server-side session survives that and the next sign-in hits the
   runtime's session cap, reported in the browser as a bare "Sign in failed".
+- **Several people in one journey: `sign_in_as('demo_manager')`.** It signs the current user out
+  and the next one in (password from `TEST_PASSWORD_<user>=` in `tests/credentials.env`). An
+  approval is three steps in ONE test: the employee asks, `sign_in_as` the manager who decides,
+  `sign_in_as` the employee again and assert what they now see. Never fill the login form by hand.
 
 
 ## Three habits that quietly cost time or hide a failure
@@ -70,9 +74,10 @@ Rules that keep it that way:
 - **Never `page.waitForTimeout(1500)` to wait for a message.** `const text = await
   await_message(/reminder sent/i)` returns the moment the text is on screen and, when
   it never comes, fails saying what the page showed instead. A fixed pause is either
-  too long every time or too short on a slow run. Match the *message*, not a word
-  the page already shows — a button captioned "Unpaid" satisfies `/unpaid/i` before
-  the message exists; `/has \d+ unpaid invoice/i` does not.
+  too long every time or too short on a slow run. It matches only text that appeared
+  after the last click, fill or key press: a button captioned "Unpaid", or an earlier
+  step's message still on screen, is not the reply. Quote four words of the message or
+  more -- the `paths` step counts a message as tested from four words in a row.
 - **Booleans come back as `true`/`false`.** `field "$result" ok` prints JSON:
   `[ "$(field "$result" ok)" = "true" ]`. Read several keys in one call with
   `fields "$result" a b c` (one line each, in order).
