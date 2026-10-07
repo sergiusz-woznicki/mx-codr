@@ -37,9 +37,16 @@ SKIP_MODULES = [
     "MyFirstModule",
 ]
 
+# The kind folder at the end of a business folder (FOLDER01, the gate's folders step): Orders/UI holds
+# the pages, Orders/FNC the flows, Orders/ENV the rest. Exactly these names, and only as the last segment.
+KIND_FOLDERS = ["UI", "FNC", "ENV"]
+
 def is_type_folder(folder):
-    """True when any segment of the path names a document type."""
-    for segment in folder.split("/"):
+    """True when a segment of the path names a document type (a final UI, FNC or ENV does not)."""
+    segments = folder.split("/")
+    for i, segment in enumerate(segments):
+        if i == len(segments) - 1 and segment.strip() in KIND_FOLDERS:
+            continue
         if segment.strip().lower() in TYPE_FOLDER_NAMES:
             return True
     return False

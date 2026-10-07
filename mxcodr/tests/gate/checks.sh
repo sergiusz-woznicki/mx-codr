@@ -1,5 +1,5 @@
 # tests/gate/checks.sh -- the model checks that need no app (mx check, lint, coverage, naming,
-# layout, security, scope, paths, unused), and their cache.
+# layout, security, scope, paths, folders, unused), and their cache.
 # Sourced by tests/gate.sh; defines functions only. Entry points: start_model_checks, collect_model_checks.
 
 # Each check runs in a background subshell, so it reports through files: check_<name> writes
@@ -506,8 +506,9 @@ start_model_checks() {
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
   ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests "$CACHE_DIR/paths-baseline.json" "env:MDL_UNTESTED=${MDL_UNTESTED:-}" "env:MDL_PATHS=${MDL_PATHS:-}" ) &
+  ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs ) &
   ( run_cached unused   check_unused   "${cache_inputs[@]}" tools/mdl-checks/check_unused.cjs javasource javascriptsource meta:theme meta:themesource tests "env:MDL_KEEP_UNUSED=${MDL_KEEP_UNUSED:-}" ) &
-  echo "== mx check, lint, coverage, naming, layout, security, scope, paths and unused started (they need no app; running while the suite does)"
+  echo "== mx check, lint, coverage, naming, layout, security, scope, paths, folders and unused started (they need no app; running while the suite does)"
 }
 
 # An app with sign-in is only as safe as its security level: at PROTOTYPE Mendix checks page and
@@ -775,6 +776,37 @@ check_paths() {
   return 1
 }
 
+# FOLDER01 (check_folders.cjs): every document of the app's own modules in <business folder>/UI
+# (pages, snippets), /FNC (microflows, nanoflows) or /ENV (everything else). The finding lists the
+# `move` statements; one script with all of them applies it. Read from a copy's catalog, as unused does.
+check_folders() {
+  local gate found code scratch="$WORK/folderscheck"
+  [ -f tools/mdl-checks/check_folders.cjs ] || {
+    echo "folders: could not run -- tools/mdl-checks/check_folders.cjs is missing" > "$WORK/folders.summary"; return 2; }
+  modules_or_status folders; gate=$?
+  case "$gate" in
+    0) ;;
+    3) return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" folders || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/check_folders.cjs . $USER_MODULES --mpr "$scratch/$MPR" 2>&1)"; code=$?
+  if ! printf '%s\n' "$found" | head -1 | grep -qE '^(PASS|FAIL) '; then
+    echo "folders: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/folders.summary"
+    return 2
+  fi
+  echo "folders: $(printf '%s\n' "$found" | head -1)" > "$WORK/folders.summary"
+  [ "$code" = "0" ] && return 0
+  {
+    printf '%s\n' "$found" | grep '^  - \[FOLDER01\]' | sed 's/^  /   /'
+    echo "   Fix: every move below in ONE new script (mdl 1;) and one exec -- a move changes no behaviour:"
+    printf '%s\n' "$found" | sed -n 's/^move: /     /p'
+    echo "   New documents go straight into place: create ... folder 'Orders/FNC' (or 'Orders/UI')."
+  } > "$WORK/folders.detail"
+  return 1
+}
+
 # Reads one background check's files into summary, failures or cannot_run, and details.
 collect() {
   local name="$1" label="$2" status line
@@ -818,5 +850,6 @@ collect_model_checks() {
   collect security "security"
   collect scope "scope"
   collect paths "paths"
+  collect folders "folders"
   collect unused "unused"
 }

@@ -68,6 +68,7 @@ what to fix. Codes in brackets are what the gate prints.
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
 - Lists (data grids, list views, galleries) take their rows from the database with an XPath, not from a microflow or nanoflow that only retrieves them, so the database pages, sorts and filters (`DS01`).
+- Every document sits in its business folder's `UI` (pages), `FNC` (microflows, nanoflows) or `ENV` (everything else) subfolder (`FOLDER01`); the gate prints the moves.
 - An old script run again cannot undo later changes to its pages and flows (`STALE01`): the exec is refused and names what it would overwrite.
 - Every testable path has a test: every message the app can show (`OUTCOME01`), every workflow task outcome, decided in a test that signs in as both people (`WF02`), every role-scoped entity read as that role (`ISO01`), every role (`ROLE01`), every published service (`SVC01`). Paths come from the model, so this holds for any app; paths older than the install are warnings, new ones block. A workflow task anyone can decide blocks (`WF01`).
 - No microflow, nanoflow, page, snippet, enumeration or Java action is left that nothing uses (`UNUSED01`): no reference in the model, the name nowhere else, and Mendix still builds without it.
@@ -142,7 +143,7 @@ if you use one — is listed at the end with the command to run.
 ```
  you ask ─▶ agent writes a test ─▶ test fails (red) ─▶ agent builds it in MDL
                                                               │
-      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout · scope · paths · unused ◀── test passes
+      DONE ◀── gate: tests · mx check · lint · coverage · naming · layout · scope · paths · folders · unused ◀── test passes
 ```
 
 You never run the checks yourself. The agent runs the gate, and the hooks make sure

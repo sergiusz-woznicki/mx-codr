@@ -683,6 +683,17 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+`FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
+app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,
+nanoflows) or `/ENV` (everything else: enumerations, constants, Java and JavaScript actions, JSON
+structures, mappings, REST and OData services, workflows, scheduled events); what the module shares
+goes in `_Shared/<kind>`, and a business folder may nest (`Orders/Approval/UI`). Read from
+`CATALOG.OBJECTS` on a copy, as `unused` does; a published OData service's folder from DESCRIBE, since
+mxcli 0.25's catalog records none for it. The finding prints a `move` per document; a root document
+gets the business folder its name uses (`ENUM_OrderStatus` -> `Orders/ENV`), else `_Shared`. MOD001 now
+takes a final `UI`, `FNC` or `ENV`. On a copy of InvoiceB2B: 209 documents outside, the 209 moves in one
+exec (26 s), then FOLDER01 and MOD001 clean and mx check 0 errors.
+
 Bundle 2026.10.07.13: each suite run starts by clearing what the previous one left -- playwright-cli's
 page snapshots, console logs and downloads at the top of `.playwright-cli/`, and the
 `verify-*-failure.png` screenshots -- so a failure keeps its screenshot until the next run. InvoiceB2B

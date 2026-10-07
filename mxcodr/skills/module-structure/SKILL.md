@@ -66,23 +66,33 @@ process it serves:
 ```
 InvoiceDesk/
 ├── _Setup/          startup, demo data, configuration, test support (data reset)
+│   ├── FNC/
+│   └── ENV/
 ├── Invoicing/       raise and correct an invoice
+│   ├── UI/          Invoice_Overview, Invoice_Edit
+│   ├── FNC/         ACT_Invoice_Save, SUB_Invoice_Number
+│   └── ENV/         ENUM_InvoiceStatus, PaymentTermsDays, JSON_Invoice
 ├── Chasing/         remind, escalate, write off
 ├── CustomerAdmin/   maintain customers
-└── _Shared/         used by more than one process
+└── _Shared/         used by more than one process (UI/, FNC/, ENV/ again)
 ```
 
 The rules:
 
-- **Every document lives in a folder.** Nothing at module root. A module root
-  full of documents is the state a module decays into, and it decays quickly.
-  "Document" here means pages, microflows, nanoflows and snippets — the things
-  that carry a process. Entities have no folders (the domain model is one canvas),
-  and enumerations, constants and Java actions are not checked.
-- **Folder names are processes, never document types.** `Microflows/`, `Pages/`,
-  `Snippets/`, `Logic/`, `UI/` are banned: the `ACT_`, `SUB_`, `DS_`, `VAL_`
-  prefixes and the document icon already say the type. A type folder splits one
-  process across four places for no gain.
+- **Every document lives in a folder.** Nothing at module root, enumerations and
+  constants included. A module root full of documents is the state a module decays
+  into, and it decays quickly. Entities have no folders (the domain model is one canvas).
+- **Each process folder holds three kind folders, and only these:** `UI` for pages and
+  snippets, `FNC` for microflows and nanoflows, `ENV` for everything else --
+  enumerations, constants, Java and JavaScript actions, JSON structures, mappings,
+  REST and OData services, workflows, scheduled events. A process with thirty
+  documents of every kind in one list is unreadable; three short lists are not. The
+  gate fails `FOLDER01` for a document anywhere else and prints the `move` for it.
+  Create in place: `create or modify microflow Invoicing.ACT_X () ... folder 'Invoicing/FNC'`,
+  pages with `folder: 'Invoicing/UI'`; documents with no folder clause are moved after.
+- **Process folders are named for the business, never for a document type.**
+  `Microflows/`, `Pages/`, `Snippets/`, `Logic/` are banned, and `UI`, `FNC`, `ENV`
+  appear only as the last folder: `Invoicing/UI`, never `UI/Invoicing`.
 - **`_Setup` and `_Shared` carry an underscore** so the two non-process folders sort
   to the top and read as different in kind.
 - **A document used by two processes moves to `_Shared/`** — it is never copied.
@@ -186,7 +196,7 @@ access and nothing else.
 1. Name it for the domain, UpperCamelCase, no `Module` suffix: `Invoicing`, not
    `InvoiceModule`.
 2. Create the process folders **before** the first document — `_Setup`, `_Shared`,
-   and one per process you already know about.
+   and one per process you already know about, each with its `UI`, `FNC` and `ENV`.
 3. Create one module role per level of access, and map each to a single user role.
 4. Put the entities the module owns in its own domain model; reach into another
    module's entities only through that module's microflows.
@@ -266,7 +276,7 @@ cycles and cross-module coupling that no single rule catches.
 - [ ] No document sits at module root
 - [ ] `MyFirstModule` is gone, and the administrators open on a page of the app's own module
 - [ ] No document is left that nothing uses (UNUSED01); its script in `mdlsource/` is gone too
-- [ ] No folder is named after a document type
+- [ ] Every document in `<process>/UI`, `/FNC` or `/ENV` (FOLDER01); no folder named after a document type
 - [ ] Shared documents live in `_Shared/`, not duplicated
 - [ ] A consumable module exposes `UseMe/` and hides `Private/`
 - [ ] No cyclic dependency between modules (`graph-report`, ARCH001)
