@@ -127,7 +127,10 @@ dbsnap_restore() {
   # last three snapshots stay in .mxcli/db-snapshot/ for a rollback by hand.
   mv "$DBSNAP_DIR/pending.dump" "$DBSNAP_DIR/restored-$(date '+%Y%m%d-%H%M%S').dump"
   ls -1t "$DBSNAP_DIR"/restored-*.dump 2>/dev/null | tail -n +4 | while IFS= read -r f; do rm -f "$f"; done
-  sed -n 's/^session=//p' "$DBSNAP_DIR/pending.info" > "$DBSNAP_DIR/restored.session" 2>/dev/null
+  # The session that just had its rollback: the one running now. A snapshot left pending by an earlier
+  # session that never reached DONE is still the one restored, but the session it was taken in is
+  # not this one -- recording that one made the next gate here take a second snapshot (B2B, 2026-10-07).
+  dbsnap_session > "$DBSNAP_DIR/restored.session" 2>/dev/null
   rm -f "$DBSNAP_DIR/pending.info"
   echo "   the data is back to ${taken:-the snapshot}, and the app runs on it; what the tests created is gone"
   echo "   (the previous data is kept as the database ${old})"
