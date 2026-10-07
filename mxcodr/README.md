@@ -683,6 +683,14 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+Bundle 2026.10.07.6, three fixes from the B2B session: a `scenario '...'` body that an apostrophe
+cut short while the file still parses (`// the customer's order`) is named with its line before the
+suite runs, where the runner said only "returned nothing"; the installer gitignores the
+`verify-*-failure.png` screenshots `mxcli playwright verify` writes beside the .mpr; PERF08 counts a
+combo box's `CaptionAttribute` as a sort on that attribute (it called a product picker's (Name)
+index unused) and reads a data grid whose `DataSource:` sits on its own line (mxcli 0.25), so its
+column filters are queries of that grid's entity.
+
 Step `paths` (`checks/check_paths.cjs`, `checks/outcome_rules.cjs`): every testable path of the model
 needs a test that walks it. The paths come from the model, never from an app's names, so the rule
 holds for any app: `OUTCOME01` every message a user can be shown -- `show message`, `validation

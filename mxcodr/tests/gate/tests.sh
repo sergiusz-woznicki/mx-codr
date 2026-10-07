@@ -110,11 +110,18 @@ step_tests() {
 # lib.sh's traps exist, and the runner showed only "FAIL verify-admin (55ms)" with no reason: an
 # apostrophe in a JS comment ("the module's overview") had closed the single-quoted scenario '...'.
 syntax_notes() {
-  local target script err hint
+  local target script err hint cut
   for target in "$@"; do
     for script in "$target" "$target"verify-*.test.sh; do
       case "$script" in *.test.sh) ;; *) continue ;; esac
       [ -f "$script" ] || continue
+      # An apostrophe can cut a scenario body short and leave the file parseable: the runner then
+      # says only "returned nothing" (three times in one B2B session, 2026-10-07).
+      cut="$("$NODE" "$MDL_SHELL_HELPERS" scenario-quotes "$script" 2>/dev/null | head -1)"
+      if [ -n "$cut" ]; then
+        echo "   FAIL $(basename "$script" .test.sh): line ${cut%%:*}: an apostrophe ends the scenario '...' body there (${cut#*: }) -- write ’, or reword the comment or string"
+        continue
+      fi
       err="$(bash -n "$script" 2>&1)" && continue
       err="$(printf '%s\n' "$err" | head -1 | sed 's/^[^:]*: //')"
       hint=""

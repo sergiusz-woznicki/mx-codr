@@ -101,12 +101,14 @@ ensure_postgres_role() {
 }
 
 # ignore_credential_files -- gitignore tests/harness.env and credentials.env; make them owner-only.
+# Also the screenshots `mxcli playwright verify` writes beside the .mpr when a test fails
+# (verify-<name>-failure.png): a B2B repository had them committed, and every red run dirtied it.
 ignore_credential_files() {
   local entry
   [ -f "$APP/tests/credentials.env" ] && chmod 600 "$APP/tests/credentials.env" 2>/dev/null || true
   [ -f "$APP/tests/harness.env" ] && chmod 600 "$APP/tests/harness.env" 2>/dev/null || true
   [ -d "$APP/.git" ] || [ -f "$APP/.gitignore" ] || return 0
-  for entry in "tests/harness.env" "tests/credentials.env"; do
+  for entry in "tests/harness.env" "tests/credentials.env" "/verify-*-failure.png"; do
     grep -qxF "$entry" "$APP/.gitignore" 2>/dev/null && continue
     printf '%s\n' "$entry" >> "$APP/.gitignore"
   done

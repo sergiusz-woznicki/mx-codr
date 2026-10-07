@@ -741,6 +741,26 @@ const tools = {
     ])]])));
   },
   // examples/verify-customer-unpaid.test.sh: the Total of the first row, 0 when none.
+  // tests/gate/tests.sh syntax_notes: `scenario '...'` bodies an apostrophe cut short. Bash ends the
+  // single-quoted body at the first ' -- `// the customer's order` in a comment -- and the rest of
+  // the JS runs as shell words; the file can still parse, and the scenario then "returns nothing".
+  // Prints `<line>: <the text around it>` for a closing quote followed straight by a letter.
+  'scenario-quotes'(file) {
+    let text;
+    try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
+    const re = /\bscenario\s+'/g;
+    let m;
+    while ((m = re.exec(text))) {
+      const close = text.indexOf("'", m.index + m[0].length);
+      if (close < 0) break;
+      if (/[A-Za-z0-9_]/.test(text[close + 1] || '')) {
+        const line = text.slice(0, close).split('\n').length;
+        const from = text.lastIndexOf('\n', close) + 1;
+        print(`${line}: ${text.slice(from, text.indexOf('\n', close) < 0 ? undefined : text.indexOf('\n', close)).trim().slice(0, 120)}`);
+      }
+      re.lastIndex = close + 1;
+    }
+  },
   'oql-total'() {
     const rows = loadStdin();
     print(truthy(rows) ? item(item(rows, 0), 'Total') : 0n);
