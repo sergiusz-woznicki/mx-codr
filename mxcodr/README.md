@@ -683,6 +683,20 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+`MDL_DB_RESET=session` (`tests/db-snapshot.sh`, bundle 2026.10.07.7): browser tests commit on every
+click -- Mendix has no transaction around a whole session the way UnitTesting rolls back one microflow
+-- so the data each session's tests created stayed, and on InvoiceB2B the suite spent a seeded
+customer's credit until the approval tests were refused. With the switch on, the first gate, orient
+or film run of an agent session takes a `pg_dump` of the dev database while the app runs (0.5 s for
+30 MB), and the session's first full DONE rolls it back: `pg_restore` into a database beside it, stop
+the app, swap the two by renaming, boot (about 30 s; the B2B gate went from 92 to 118 s once). The
+same session takes no second snapshot; the next one does. The session is the id the hooks write to
+`.mxcli/session.id` (Claude Code and Codex from the prompt hook's `session_id`, Cursor at session
+start, Pi per session, OpenCode per tool call). Local PostgreSQL only, not in Docker mode. A step that
+fails leaves the database as it was and boots the app; the previous data stays as
+`<db>_before_restore`, the last three dumps in `.mxcli/db-snapshot/`. Measured on B2B: 1796 orders,
+1798 after a test, 1796 after DONE, the app up on it.
+
 Bundle 2026.10.07.6, three fixes from the B2B session: a `scenario '...'` body that an apostrophe
 cut short while the file still parses (`// the customer's order`) is named with its line before the
 suite runs, where the runner said only "returned nothing"; the installer gitignores the

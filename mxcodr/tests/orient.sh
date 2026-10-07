@@ -11,6 +11,8 @@ cd "$APP_DIR"
 . "$HARNESS_DIR/portable.sh"
 mdl_find_mpr || exit 2
 APP_PORT="${APP_PORT:-8081}"
+# MDL_DB_RESET=session: the session's database snapshot, before anything it does writes data.
+[ -f "$HARNESS_DIR/db-snapshot.sh" ] && bash "$HARNESS_DIR/db-snapshot.sh" take
 WORK="$(mdl_tmpdir mdl-orient)"
 trap 'rm -rf "$WORK"' EXIT
 

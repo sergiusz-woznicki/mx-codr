@@ -94,3 +94,12 @@ The harness covers its own share and names the rest:
 If tests fail on sign-in anyway: close the app's browser tabs, or restart the runtime,
 which clears every session at once.
 
+
+## Data the tests leave behind
+
+Every click commits: a browser test's data stays in the database. With `MDL_DB_RESET=session` in
+`tests/harness.env` (the person's switch) the gate rolls the database back to the start of the
+session after its first DONE (`bash tests/db-snapshot.sh status` says what is pending). Everything
+written since goes back with it, so data the app itself needs belongs in its after-startup seed
+microflow, never in a one-off `exec` or a test. A test still makes its own rows and asserts on them:
+within a session the data piles up run after run.

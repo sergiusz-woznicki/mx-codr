@@ -21,7 +21,7 @@
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL|MDL_RUNTIME_ERRORS=warn|error|0,
 #      MDL_VISUAL_REVIEW=agent, MDL_CAPTIONS|MDL_SCOPE|MDL_WIDGET_NAMES=warn|error, MDL_CLOSE_BROWSER=1,
-#      MDL_KEEP_UNUSED=Mod.Doc,..., MDL_UNTESTED=Key,..., MDL_PATHS=error -- also in tests/harness.env.
+#      MDL_KEEP_UNUSED, MDL_UNTESTED, MDL_PATHS=error, MDL_DB_RESET=session -- also in tests/harness.env.
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
 # How to read this file: main() at the bottom is the whole gate, step by step. The steps
@@ -42,6 +42,8 @@ for part in hints app checks preflight tests; do
   fi
   . "$HARNESS_DIR/gate/$part.sh"
 done
+# MDL_DB_RESET=session: dbsnap_take before the tests, dbsnap_restore after the first DONE.
+[ -f "$HARNESS_DIR/db-snapshot.sh" ] && . "$HARNESS_DIR/db-snapshot.sh"
 
 # The gate's helpers (digests, JSON, timestamps) live in tools/mdl-checks/gate_helpers.cjs.
 gate_py() {
@@ -224,6 +226,7 @@ print_verdict_and_exit() {
   done_repeat_note
   captions_after_done
   names_after_done
+  declare -F dbsnap_restore >/dev/null && dbsnap_restore
   if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
     echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
   fi
@@ -325,6 +328,7 @@ main() {
   fi
 
   preflight_films
+  declare -F dbsnap_take >/dev/null && dbsnap_take
   # 1. The model checks need no app: start them now, they run while the suite does.
   if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     start_model_checks

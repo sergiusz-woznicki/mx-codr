@@ -378,6 +378,7 @@ The environment still wins, so any of it can be overridden for one run.
 | `MDL_CAPTIONS` | the caption rules of the naming check: warnings by default, `error` blocks DONE |
 | `MDL_SCOPE` | `SCOPE01`, a page's data source microflow that ignores its role's row scope: a warning by default, `error` blocks DONE |
 | `MDL_UNTESTED` | paths deliberately left without a test (a document, `Module.Workflow/Task`, `Module.Entity\|Module.Role`, `role:<UserRole>`), so the `paths` step passes them |
+| `MDL_DB_RESET` | `session`: the database is snapshotted at the start of each agent session and rolled back after its first DONE, so test data does not pile up (local PostgreSQL) |
 | `MDL_PATHS` | `error`: the paths older than the install block DONE too, not only new ones |
 | `MDL_KEEP_UNUSED` | documents kept on purpose though nothing uses them yet (`Mod.Doc,Mod.Other`), so `UNUSED01` passes them |
 | `MDL_CLOSE_BROWSER` | `1`: close the test browser after each suite and on `--stop` (off: `--only` reuses it) |

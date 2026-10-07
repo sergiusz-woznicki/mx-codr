@@ -324,6 +324,7 @@ fi
 if [ "${1:-}" = "--all" ] && [ "$#" -eq 1 ]; then
   browser_free
   app_ready
+  [ -f tests/db-snapshot.sh ] && bash tests/db-snapshot.sh take
   count="$(filmable | grep -c .)"
   [ "$count" -gt 0 ] || { echo "film: no test with a browser to film" >&2; exit 2; }
   # Measured on InvoiceB2B at --pace 1000: 17 tests in 11 minutes, about 40 s each.
@@ -389,5 +390,7 @@ fi
 films_something "tests/verify-$name.test.sh" || { echo "film: $name opens no browser -- nothing to film" >&2; exit 2; }
 browser_free
 app_ready
+# MDL_DB_RESET=session: a film runs a test, so the session's snapshot comes first.
+[ -f tests/db-snapshot.sh ] && bash tests/db-snapshot.sh take
 prepare_browser
 film "$name"
