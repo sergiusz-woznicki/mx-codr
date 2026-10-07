@@ -503,7 +503,7 @@ start_model_checks() {
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs ) &
   ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs tools/mdl-checks/event_rules.cjs tools/mdl-checks/datasource_rules.cjs "$CACHE_DIR/captions-baseline.json" "env:MDL_CAPTIONS=${MDL_CAPTIONS:-}" ) &
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_VISUAL=${MDL_VISUAL:-}" "env:MDL_WIDGET_NAMES=${MDL_WIDGET_NAMES:-}" ) &
-  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
+  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/check_unused.cjs "env:MDL_REQUIRE_PRODUCTION=${MDL_REQUIRE_PRODUCTION:-}" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "env:MDL_SCOPE=${MDL_SCOPE:-}" ) &
   ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests "$CACHE_DIR/paths-baseline.json" "env:MDL_UNTESTED=${MDL_UNTESTED:-}" "env:MDL_PATHS=${MDL_PATHS:-}" ) &
   ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs ) &
@@ -578,7 +578,58 @@ view_findings() {
   return 2
 }
 
+# The security step: the level (security_level) and Mendix's own security best practices
+# (security_rules.cjs: CRED01, ANON01, STRICT01, FILTER01, SQL01 block; EXTENDS01, ADMIN01, XSS01,
+# WRITE01, PWD01 are warnings). Either one failing fails the step; the summary has a line of each.
 check_security() {
+  local level_status rules_status
+  : > "$WORK/security.detail"
+  security_level; level_status=$?
+  mv "$WORK/security.summary" "$WORK/security.level" 2>/dev/null
+  security_rules; rules_status=$?
+  cat "$WORK/security.level" "$WORK/security.summary" > "$WORK/security.both" 2>/dev/null
+  mv "$WORK/security.both" "$WORK/security.summary"
+  rm -f "$WORK/security.level"
+  [ "$level_status" = "1" ] || [ "$rules_status" = "1" ] && return 1
+  [ "$level_status" = "2" ] || [ "$rules_status" = "2" ] && return 2
+  return 0
+}
+
+security_rules() {
+  local gate found code total scratch="$WORK/securitycheck"
+  : > "$WORK/security.summary"
+  [ -f tools/mdl-checks/security_rules.cjs ] || {
+    echo "security rules: could not run -- tools/mdl-checks/security_rules.cjs is missing" > "$WORK/security.summary"; return 2; }
+  modules_or_status security; gate=$?
+  case "$gate" in
+    0) ;;
+    3) : > "$WORK/security.summary"; return 0 ;;
+    *) return "$gate" ;;
+  esac
+  project_copy "$scratch" security || return 2
+  # shellcheck disable=SC2086
+  found="$("$NODE" tools/mdl-checks/security_rules.cjs . $USER_MODULES --mpr "$scratch/$MPR" 2>&1)"; code=$?
+  if ! printf '%s\n' "$found" | head -1 | grep -qE '^(PASS|FAIL) '; then
+    echo "security rules: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/security.summary"
+    return 2
+  fi
+  echo "security rules: $(printf '%s\n' "$found" | head -1)" > "$WORK/security.summary"
+  # Every finding where a session can read them all without running the checker, as paths does.
+  mkdir -p .mxcli 2>/dev/null && printf '%s\n' "$found" > .mxcli/security.txt 2>/dev/null
+  total="$(printf '%s\n' "$found" | grep -c '^  ~ ')"
+  if [ "$total" -gt 0 ]; then
+    printf '%s\n' "$found" | grep '^  ~ ' | head -8 | sed -E 's/^  ~ /   - /' > "$WORK/security.warnings"
+    [ "$total" -gt 8 ] && echo "   ... 8 of $total security warnings shown; all of them: .mxcli/security.txt" >> "$WORK/security.warnings"
+  fi
+  [ "$code" = "0" ] && return 0
+  {
+    printf '%s\n' "$found" | grep '^  - ' | sed 's/^  /   /'
+    echo "   Why each one matters and its fix: tests/checks/security.md. Every finding: .mxcli/security.txt"
+  } >> "$WORK/security.detail"
+  return 1
+}
+
+security_level() {
   local level rules entity views
   [ "${MDL_REQUIRE_PRODUCTION:-1}" = "0" ] && { echo "security: not checked (MDL_REQUIRE_PRODUCTION=0)" > "$WORK/security.summary"; return 0; }
   level="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | sed -n 's/^Security Level:[[:space:]]*//p' | head -1)"
@@ -588,7 +639,6 @@ check_security() {
   fi
   # A model that could not be read, or a checker that crashed, is not "no VIEW01": it used to
   # read as "level Production", and that pass was then cached.
-  : > "$WORK/security.detail"
   if ! describe_entities; then
     echo "security: could not run -- the project's entities could not be listed or described" > "$WORK/security.summary"
     return 2
@@ -596,7 +646,7 @@ check_security() {
   views="$(view_findings)"
   if [ "$?" = "2" ]; then
     echo "security: could not run -- view_access.cjs did not finish" > "$WORK/security.summary"
-    tail -3 "$WORK/view.error" 2>/dev/null > "$WORK/security.detail"
+    tail -3 "$WORK/view.error" 2>/dev/null >> "$WORK/security.detail"
     return 2
   fi
   if [ -n "$views" ]; then

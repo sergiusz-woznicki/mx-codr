@@ -683,6 +683,20 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+Security best practices (`checks/security_rules.cjs`, step `security`, bundle 2026.10.08.4), from
+Mendix's own "Best Practices for App Security", read from a copy's catalog and `show project security`.
+Blocking: a constant named for a secret with a default value (`CRED01`), the guest role creating or
+writing a persistent entity (`ANON01`), strict mode off (`STRICT01`), a page that shows a role its own
+rows through `[%CurrentUser%]` while the role's access rule reads every row and no page of it lists them
+all (`FILTER01`), a query built by joining text and a variable (`SQL01`). Warnings: an entity that
+specialises `System.User` or `Administration.Account` (`EXTENDS01`), an HTML Element in innerHTML mode
+showing an attribute a user types (`XSS01`), a role that may write attributes only flows set and none
+of its pages edits (`WRITE01`), and two for the person, since mxcli cannot change them: the admin still
+`MxAdmin` (`ADMIN01`) and a password policy without a symbol, digit or mixed case (`PWD01`). Codes and
+fixes: `tests/checks/security.md`. Measured on 32 local apps: STRICT01 on 15, CRED01 on 3 (B2B's
+`MockApiPassword` and `WarehouseDbPassword`), EXTENDS01 on 2, WRITE01 on 19 (computed totals and
+statuses); ANON01, FILTER01, SQL01 and XSS01 on none, FILTER01 and XSS01 proven on a copy given one.
+
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,
 nanoflows) or `/ENV` (everything else: enumerations, constants, Java and JavaScript actions, JSON
