@@ -151,7 +151,7 @@ grows without a big-bang backfill.
 
 - [ ] An acceptance criterion was stated before any code
 - [ ] The test existed and **failed** before the implementation — for the right reason — and the failure was quoted
-- [ ] Exact-count assertions run right after `verify-000-reset`
+- [ ] Green on the app's clean seed: each test makes the data it needs ([facts](reference/facts.md))
 - [ ] A test that changes seeded data uses a row no other test reads
 - [ ] The test is one `scenario` call, not a chain of browser calls
 - [ ] Allowed and refused paths tested; every message asserted; each user of a journey signs in

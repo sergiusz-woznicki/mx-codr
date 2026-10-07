@@ -103,3 +103,13 @@ session after its first DONE (`bash tests/db-snapshot.sh status` says what is pe
 written since goes back with it, so data the app itself needs belongs in its after-startup seed
 microflow, never in a one-off `exec` or a test. A test still makes its own rows and asserts on them:
 within a session the data piles up run after run.
+
+**The suite passes on the app's clean seed.** Drop the database, boot, and every test is green
+again -- or it was only passing on leftovers. So:
+- a test that needs a state (an order numbered past 9999, a cancelled order, an overdue invoice)
+  creates it itself, through the app, at its start; it never checks that the state is "already
+  there" and fails when it is not;
+- what the app itself needs (a reference table, an external table it reads, a fixed record) the app
+  creates in its after-startup microflow, idempotently -- never a `.sql` file or a `psql` insert run
+  by hand: a new database, a colleague's machine or a CI run will not have it;
+- a fixture repaired by hand to make a red test green is the bug, not the fix.
