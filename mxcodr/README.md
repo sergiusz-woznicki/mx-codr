@@ -683,6 +683,17 @@ its worked example are in `reference/loop.md`, beside `scenario.md`, `facts.md` 
 `gate-and-suite.md`, and are read only when that step is the one in hand (it was 12 kB, half of
 it the loop told twice).
 
+`STALE01` (`tests/precheck.sh`, bundle 2026.10.07.10): a script run again does not write over what
+changed in its documents since it last ran. On InvoiceB2B a re-exec of `11_navigation.mdl` rebuilt
+`Admin_Home` and put back twelve widget names a later rename had replaced; the gate caught it only
+afterwards (NAME02). The after-exec hook keeps each applied script in `.mxcli/applied/` (the guard
+keeps sessions out of it); before the next exec of the same script, `mxcli diff` of that copy names
+the documents the model changed since, `mxcli diff` of the script the ones it would write, and a
+document in both refuses the exec with its name and the fix (a new script that alters only what it
+changes, or the documents DESCRIBEd into the script first). Without a copy, the version in git's HEAD
+stands in; a script never run is not checked. On a copy of B2B it refused `02e_turn3_approval.mdl`
+(three pages renamed since) and passed `57_indexes.mdl`; the precheck takes about 5 s longer then.
+
 `MDL_DB_RESET=session` (`tests/db-snapshot.sh`, bundle 2026.10.07.7): browser tests commit on every
 click -- Mendix has no transaction around a whole session the way UnitTesting rolls back one microflow
 -- so the data each session's tests created stayed, and on InvoiceB2B the suite spent a seeded

@@ -207,7 +207,7 @@ const args = (data.tool_input && typeof data.tool_input === 'object') ? data.too
 const root = process.cwd().replace(/\\/g, '/').replace(/\/+$/, '');
 const ENV = 'tests/harness.env';
 const DIRS = ['tools/mdl-checks/', 'tests/gate/', 'tests/lib/', '.claude/lint-rules/', '.pi/extensions/',
-  '.opencode/plugin/'];
+  '.opencode/plugin/', '.mxcli/applied/'];
 const FILES = new Set(['.claude/settings.local.json', '.codex/hooks.json', '.cursor/hooks.json', 'tests/gate.sh',
   'tests/lib.sh', 'tests/precheck.sh', 'tests/portable.sh', 'tests/orient.sh',
   'tests/diagnose.sh', 'tests/peek.sh', 'tests/run-app.sh', 'tests/run-docker.sh',

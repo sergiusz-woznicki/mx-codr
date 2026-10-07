@@ -68,6 +68,7 @@ what to fix. Codes in brackets are what the gate prints.
 - Only the full gate says DONE. Running one test says PASSED.
 - A microflow debugger left on stops the gate before the tests: a breakpoint would hang them.
 - Lists (data grids, list views, galleries) take their rows from the database with an XPath, not from a microflow or nanoflow that only retrieves them, so the database pages, sorts and filters (`DS01`).
+- An old script run again cannot undo later changes to its pages and flows (`STALE01`): the exec is refused and names what it would overwrite.
 - Every testable path has a test: every message the app can show (`OUTCOME01`), every workflow task outcome, decided in a test that signs in as both people (`WF02`), every role-scoped entity read as that role (`ISO01`), every role (`ROLE01`), every published service (`SVC01`). Paths come from the model, so this holds for any app; paths older than the install are warnings, new ones block. A workflow task anyone can decide blocks (`WF01`).
 - No microflow, nanoflow, page, snippet, enumeration or Java action is left that nothing uses (`UNUSED01`): no reference in the model, the name nowhere else, and Mendix still builds without it.
 - Entity event handlers that loop (commit their own object with events, `EVENT01`) or skip a save in silence (no `raise error`, `EVENT02`); warnings for `without events` skipping a handler, a handler's error behind a Save button, and swallowed errors (`EVENT03`-`04`, `ERR01`).

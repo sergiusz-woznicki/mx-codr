@@ -29,7 +29,7 @@
 # DeepSeek run's `cat > /tmp/mdlprobe/x.mdl <<EOF` was blocked as a read on the first day.
 
 input="$(cat)"
-case "$input" in *harness.env*|*paths-baseline*|*write-baseline*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;;
+case "$input" in *harness.env*|*paths-baseline*|*mxcli/applied*|*write-baseline*|*tests/*|*tests\\\\*|*mdl-checks*|*lint-rules*|*settings.local.json*|*hooks.json*|*extensions*|*plugin*) ;;
   *find\ *|*grep\ *|*egrep\ *|*fgrep\ *|*rg\ *|*ag\ *|*fd\ *|*mdfind*|*locate\ *|*/System/*|*/Applications/*|*/Library/*|*/usr/*|*/opt/*|*/private/*|*/tmp/*|*~/*|*\$HOME*|*/Users/*|*/home/*) ;;
   # The Mendix token: auth.json, $MENDIX_PAT, or a dump of the environment that holds it.
   *auth.json*|*MENDIX_PAT*|*env*|*set*|*export*|*declare*|*marketplace-login-needed*) ;;
