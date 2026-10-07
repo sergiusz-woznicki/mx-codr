@@ -34,7 +34,10 @@ const crypto = require('crypto');
 const { mxcli, ModelReadError } = require('./check_unused.cjs');
 const rules = require('./outcome_rules.cjs');
 
-const hash = text => crypto.createHash('sha1').update(String(text || '')).digest('hex').slice(0, 12);
+// A document's version, without its folder: a move (FOLDER01) changes where it is, not what it does,
+// and once counted every moved flow as changed -- seven old paths turned into blocking ones (B2B, 2026-10-08).
+const withoutFolder = text => String(text || '').replace(/\bfolder\s*:?\s*'(?:[^']|'')*'\s*,?/gi, '');
+const hash = text => crypto.createHash('sha1').update(withoutFolder(text)).digest('hex').slice(0, 12);
 const short = name => String(name).split('.').pop();
 
 // Everything the rules read, from mxcli's catalog and security listings.

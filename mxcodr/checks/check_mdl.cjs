@@ -352,7 +352,9 @@ function flowBlocks(lines) {
 function flowHashes(lines) {
   const hashes = new Map();
   for (const [name, start, end] of flowBlocks(lines)) {
-    const text = lines.slice(start - 1, end).filter(l => !LAYOUT_ONLY.match(l)).join('\n');
+    // Its folder does not count either: a move (FOLDER01) changes where a flow is, not what it does.
+    const text = lines.slice(start - 1, end).filter(l => !LAYOUT_ONLY.match(l)).join('\n')
+      .replace(/\bfolder\s*:?\s*'(?:[^']|'')*'\s*,?/gi, '');
     hashes.set(name, crypto.createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16));
   }
   return hashes;

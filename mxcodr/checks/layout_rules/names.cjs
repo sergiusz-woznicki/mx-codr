@@ -115,7 +115,11 @@ function documentsOf(lines) {
 // {document: hash} of every page and snippet: a changed page is one whose text changed.
 function documentHashes(lines) {
   const out = {};
-  for (const doc of documentsOf(lines)) out[doc.name] = crypto.createHash('sha256').update(doc.lines.join('\n'), 'utf8').digest('hex').slice(0, 16);
+  // Without its folder: a move (FOLDER01) is not a change to the page.
+  for (const doc of documentsOf(lines)) {
+    const text = doc.lines.join('\n').replace(/\bfolder\s*:?\s*'(?:[^']|'')*'\s*,?/gi, '');
+    out[doc.name] = crypto.createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16);
+  }
   return out;
 }
 
