@@ -128,6 +128,11 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
     MDL_DB_PASSWORD="${login#*:}"
   fi
   mkdir -p "$APP/tests"
+  # The person's own switches (MDL_DB_RESET, MDL_UNTESTED, MDL_PATHS, ...) survive a reinstall: every
+  # KEY=value line of the old file whose key this one does not write is kept. Until 2026-10-07 a
+  # reinstall wrote the file from scratch, and a B2B's MDL_DB_RESET=session was gone after it.
+  local previous=""
+  [ -f "$APP/tests/harness.env" ] && previous="$(cat "$APP/tests/harness.env" 2>/dev/null)"
   {
     printf '# Written by install.sh -- how this project is built and run.\n'
     printf '# Read by tests/portable.sh as DATA -- KEY=value, one layer of quotes, no\n'
@@ -158,7 +163,20 @@ write_harness_env() {    # write_harness_env <mendix-install-dir>
       printf '# runtime directly instead. Delete this line once a fixed mxcli is installed.\n'
       printf 'MDL_BOOT_COMMAND="bash tests/run-app.sh"\n'
     fi
-  } > "$APP/tests/harness.env"
+  } > "$APP/tests/harness.env.new"
+  if [ -n "$previous" ]; then
+    local line key kept=""
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*|'export '*) continue ;; esac
+      key="${line%%=*}"
+      [ "$key" != "$line" ] || continue
+      case "$key" in *[!A-Za-z0-9_]*) continue ;; esac
+      grep -q "^${key}=" "$APP/tests/harness.env.new" && continue
+      kept="${kept}${line}"$'\n'
+    done <<< "$previous"
+    [ -n "$kept" ] && printf '\n# Kept from the previous tests/harness.env: the person'"'"'s own switches.\n%s' "$kept" >> "$APP/tests/harness.env.new"
+  fi
+  mv "$APP/tests/harness.env.new" "$APP/tests/harness.env"
   chmod 600 "$APP/tests/harness.env" 2>/dev/null || true
   ignore_credential_files
   case "$mxbuild" in

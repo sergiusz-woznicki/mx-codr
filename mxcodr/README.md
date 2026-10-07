@@ -695,7 +695,9 @@ same session takes no second snapshot; the next one does. The session is the id 
 start, Pi per session, OpenCode per tool call). Local PostgreSQL only, not in Docker mode. A step that
 fails leaves the database as it was and boots the app; the previous data stays as
 `<db>_before_restore`, the last three dumps in `.mxcli/db-snapshot/`. Measured on B2B: 1796 orders,
-1798 after a test, 1796 after DONE, the app up on it.
+1798 after a test, 1796 after DONE, the app up on it. Bundle 2026.10.07.8: a reinstall keeps every
+key of `tests/harness.env` it does not write itself; it used to write the file from scratch and drop
+the person's own switches.
 
 Bundle 2026.10.07.6, three fixes from the B2B session: a `scenario '...'` body that an apostrophe
 cut short while the file still parses (`// the customer's order`) is named with its line before the
