@@ -285,11 +285,13 @@ function untested(list, corpus, minRun = MIN_RUN) {
   return list.filter(o => matchable(o) && !asserted(o, corpus, minRun));
 }
 
-// tests/*.test.* of an app: [[relative name, text]].
+// The tests the gate runs, tests/verify-*.test.sh: [[relative name, text]]. Microflow tests
+// (*.test.mdl) are not among them -- the gate does not run them -- so a message written there walks
+// nothing: an assertion nothing executes is not a test of the path (B2B, 2026-10-08).
 function testFiles(appDir) {
   const dir = path.join(appDir, 'tests');
   let names = [];
-  try { names = fs.readdirSync(dir).filter(n => /\.test\./.test(n)).sort(); } catch { /* none */ }
+  try { names = fs.readdirSync(dir).filter(n => /^verify-.*\.test\.sh$/.test(n)).sort(); } catch { /* none */ }
   return names.map(n => ['tests/' + n, fs.readFileSync(path.join(dir, n), 'utf8')]);
 }
 

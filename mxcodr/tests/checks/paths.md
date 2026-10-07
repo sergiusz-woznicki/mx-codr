@@ -1,8 +1,8 @@
 # paths: every testable path has a test
 
 The `paths` step reads the paths from the model, whatever the app does, and asks for a test of each.
-A test walks a path when it asserts what the user meets there; a `# covers:` line or a comment walks
-nothing. Paths that were in the model when the harness was installed and have not changed are
+A test walks a path when it asserts what the user meets there; a `# covers:` line, a comment or a
+`.test.mdl` file (the gate does not run those) walks nothing. Paths that were in the model when the harness was installed and have not changed are
 warnings, the backlog; a new or changed one blocks DONE (`MDL_PATHS=error` in `tests/harness.env`:
 the backlog blocks too). Every finding, old ones included: `.mxcli/paths.txt` after each gate.
 

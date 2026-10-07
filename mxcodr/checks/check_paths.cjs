@@ -12,7 +12,7 @@
 //   ROLE01     each demo user's role is the user of some test
 //   SVC01      each published REST or OData service is called by a test
 //
-// Only tests count (tests/*.test.*), and only outside comment lines: a `# covers:` line, or a comment
+// Only the tests the gate runs count (tests/verify-*.test.sh), and only outside comment lines: a `# covers:` line, or a comment
 // quoting a message, walks nothing. A test signs in as a demo user when its text names that user
 // (TEST_USER=, sign_in_as('...'), a login form fill).
 //
