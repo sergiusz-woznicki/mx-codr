@@ -77,7 +77,10 @@ Rules that keep it that way:
   too long every time or too short on a slow run. It matches only text that appeared
   after the last click, fill or key press: a button captioned "Unpaid", or an earlier
   step's message still on screen, is not the reply. Quote four words of the message or
-  more -- the `paths` step counts a message as tested from four words in a row.
+  more -- the `paths` step counts a message as tested from four words in a row. Call it
+  right after the action: dismissing toasts or closing a dialog in between becomes the
+  last action and can close the very reply -- the test then passes only while the server
+  is slow enough, and fails on a film. Clear old messages BEFORE the action.
 - **Booleans come back as `true`/`false`.** `field "$result" ok` prints JSON:
   `[ "$(field "$result" ok)" = "true" ]`. Read several keys in one call with
   `fields "$result" a b c` (one line each, in order).

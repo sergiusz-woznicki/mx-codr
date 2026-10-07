@@ -143,7 +143,9 @@
   // Only text that appeared or changed after that action counts: matching the whole page let a
   // button captioned "Unpaid", or the message of an earlier step still on screen, pass for the reply,
   // and a test then asserted a message that never came. Returns the new text, so the test can
-  // assert more of it. Before the journey's first action the whole page counts.
+  // assert more of it. Before the journey's first action the whole page counts. Call it right after
+  // the action that causes the message: a click in between (dismissing toasts, closing a dialog) is
+  // the last action then, and may close the very message -- a race a slow run (a film) loses.
   // Every click, fill or key press starts a new reply. The wrappers live on Playwright's prototypes,
   // which outlive one scenario: installed once, the watcher re-armed in each new document.
   for (const proto of [Object.getPrototypeOf(page.locator('body')), Object.getPrototypeOf(page)]) {
@@ -155,6 +157,8 @@
       if (typeof original !== 'function') continue;
       proto[name] = async function (...args) {
         const pg = onPage ? this : this.page();
+        // Named in await_message's failure: a dismiss clicked after the real action is the "last action".
+        pg.__mdlLastAction = name + ' ' + (onPage ? String(args[0]) : String(this));
         // Through the page's own helper, so a closed page or a navigation never fails the action.
         await pg.evaluate(() => {
           window.__mdlAdded = [];
@@ -196,6 +200,7 @@
         const stale = fresh !== null && pattern.test(text);
         throw new Error('no message matching ' + pattern + ' appeared within '
           + (timeout || ACTION_TIMEOUT) + 'ms after the last action'
+          + (page.__mdlLastAction ? ' (' + page.__mdlLastAction.slice(0, 120) + ')' : '')
           + (stale ? ' -- the page matches it, but that text was there BEFORE the action: it is not the reply.'
             + ' Match words only the reply carries, or check the action really ran' : '')
           + '; the page says: ' + text.replace(/\s+/g, ' ').trim().slice(0, 300));
