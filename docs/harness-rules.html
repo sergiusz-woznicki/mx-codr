@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mx-codr Harness Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a reference manual — sticky contents rail on the left, sections that go from the whole harness down to each check code. */
+:root {
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --ink: #18201c;
+  --muted: #59645e;
+  --line: #dde2de;
+  --accent: #0b6e4f;
+  --accent-soft: #e2f1ea;
+  --block: #b42318;
+  --block-soft: #fde8e6;
+  --warn: #9a5b00;
+  --warn-soft: #fdf1dc;
+  --code-bg: #eef1ee;
+  --font-display: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #18201c; --ink: #e6ece8; --muted: #9aa8a0; --line: #2a352f;
+    --accent: #4cc79a; --accent-soft: #163a2c; --block: #ff8a7a; --block-soft: #3d1a17;
+    --warn: #f0b75a; --warn-soft: #3a2a10; --code-bg: #1f2925; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #18201c; --ink: #e6ece8; --muted: #9aa8a0; --line: #2a352f;
+  --accent: #4cc79a; --accent-soft: #163a2c; --block: #ff8a7a; --block-soft: #3d1a17;
+  --warn: #f0b75a; --warn-soft: #3a2a10; --code-bg: #1f2925; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--font-body); margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13px; }
+nav.toc .label { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-left: 2px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); border-left-color: var(--accent); outline: none; }
+nav.toc ol ol { padding-left: 10px; }
+main { min-width: 0; }
+header.top { padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+.eyebrow { font: 600 12px/1 var(--font-mono); color: var(--accent); letter-spacing: .04em; }
+h1 { font: 700 34px/1.15 var(--font-display); margin: 10px 0 12px; text-wrap: balance; letter-spacing: -.01em; }
+.lede { font-size: 17px; color: var(--muted); max-width: 64ch; margin: 0; }
+.verdict-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.verdict { font: 600 13px/1 var(--font-mono); padding: 8px 12px; border-radius: 4px; }
+.verdict.done { background: var(--accent-soft); color: var(--accent); }
+.verdict.not { background: var(--block-soft); color: var(--block); }
+.verdict.cant { background: var(--warn-soft); color: var(--warn); }
+section { margin-bottom: 52px; scroll-margin-top: 24px; }
+h2 { font: 700 22px/1.25 var(--font-display); margin: 0 0 6px; text-wrap: balance; }
+h2 .num { color: var(--accent); font-family: var(--font-mono); font-weight: 600; margin-right: 8px; }
+h3 { font: 600 16px/1.3 var(--font-display); margin: 26px 0 8px; }
+.intro { color: var(--muted); max-width: 70ch; margin: 0 0 16px; }
+p { max-width: 70ch; }
+ul.items { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 76ch; }
+ul.items li::marker { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; margin-bottom: 14px; }
+.step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
+.step-head h3 { margin: 0; }
+.step-head .file { font: 12px var(--font-mono); color: var(--muted); }
+.codes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.c { font: 500 12px/1 var(--font-mono); padding: 5px 7px; border-radius: 3px; white-space: nowrap; }
+.c.b { background: var(--block-soft); color: var(--block); }
+.c.w { background: var(--warn-soft); color: var(--warn); }
+dl.codes-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 10px 0 0; }
+dl.codes-list dt { font: 600 12px/1.6 var(--font-mono); }
+dl.codes-list dt.b { color: var(--block); }
+dl.codes-list dt.w { color: var(--warn); }
+dl.codes-list dd { margin: 0; color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin: 0 0 18px; align-items: center; }
+.flow { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.flow ol { display: flex; gap: 0; list-style: none; margin: 0; padding: 0; min-width: 760px; }
+.flow li { flex: 1; position: relative; padding: 10px 12px; font-size: 13px; border-top: 3px solid var(--accent); }
+.flow li + li { border-left: 1px dashed var(--line); }
+.flow li strong { display: block; font: 600 13px var(--font-display); margin-bottom: 2px; }
+.flow li span { color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.count-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 22px; }
+.count { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 4px; }
+.count .n { font: 700 26px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.count.b .n { color: var(--block); }
+.count.w .n { color: var(--warn); }
+.count .t { font-size: 13px; color: var(--muted); }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-inline: 16px; }
+  nav.toc { position: static; }
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 27px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <div class="label">Contents</div>
+  <ol>
+    <li><a href="#overview">1 · What it is</a></li>
+    <li><a href="#flow">2 · How a feature gets built</a></li>
+    <li><a href="#install">3 · The installer</a></li>
+    <li><a href="#context">4 · What the agent reads</a></li>
+    <li><a href="#hooks">5 · Hooks</a></li>
+    <li><a href="#gate">6 · The gate</a>
+      <ol>
+        <li><a href="#g-tests">tests</a></li>
+        <li><a href="#g-mx">mx check</a></li>
+        <li><a href="#g-lint">lint</a></li>
+        <li><a href="#g-coverage">coverage</a></li>
+        <li><a href="#g-naming">naming</a></li>
+        <li><a href="#g-layout">layout</a></li>
+        <li><a href="#g-security">security</a></li>
+        <li><a href="#g-scope">scope</a></li>
+        <li><a href="#g-paths">paths</a></li>
+        <li><a href="#g-folders">folders</a></li>
+        <li><a href="#g-unused">unused</a></li>
+      </ol>
+    </li>
+    <li><a href="#verdict">7 · Reading the verdict</a></li>
+    <li><a href="#switches">8 · The person's switches</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">mx-codr · bundle 2026.10.08.7 · mxcli v0.25.0</div>
+  <h1>Everything the mx-codr harness does</h1>
+  <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
+  <div class="verdict-strip">
+    <span class="verdict done">DONE — every check passed</span>
+    <span class="verdict not">NOT DONE — failed: &lt;checks&gt;</span>
+    <span class="verdict cant">NOT DONE — could not run: &lt;checks&gt;</span>
+  </div>
+</header>
+
+<section id="overview">
+  <h2><span class="num">1</span>What it is</h2>
+  <p class="intro">mx-codr sits on top of mxcli, the command line for a Mendix model. It turns that into a delivery workflow for five agents: Claude Code, Codex, Cursor, OpenCode and Pi, on macOS, Linux and Windows.</p>
+  <ul class="items">
+    <li><strong>Tests first.</strong> For each feature the agent writes a failing browser test, then builds until it passes.</li>
+    <li><strong>One definition of done.</strong> The gate runs the tests, Mendix's own consistency check and every rule below.</li>
+    <li><strong>No broken model.</strong> Every MDL script is tried on a copy of the model first; a script that would break the build never touches the real <code>.mpr</code>.</li>
+    <li><strong>A proper Mendix app.</strong> One menu, icons, one layout, Back buttons, Users and My account, no leftover <code>MyFirstModule</code>.</li>
+    <li><strong>A readable, secure model.</strong> Business captions, process folders, reuse, Atlas spacing, and Mendix's security best practices.</li>
+    <li><strong>Nothing to operate.</strong> The person runs the installer once; skills, rules and hooks make the agent use everything else on its own.</li>
+  </ul>
+</section>
+
+<section id="flow">
+  <h2><span class="num">2</span>How a feature gets built</h2>
+  <p class="intro">The loop the skills teach and the hooks enforce.</p>
+  <div class="flow">
+    <ol>
+      <li><strong>Ask</strong><span>The person asks for a feature.</span></li>
+      <li><strong>Test</strong><span>The agent writes <code>tests/verify-&lt;feature&gt;.test.sh</code>.</span></li>
+      <li><strong>Red</strong><span>The test fails: the feature is not there yet.</span></li>
+      <li><strong>Build</strong><span>An MDL script, checked on a copy, then applied.</span></li>
+      <li><strong>Green</strong><span>The test passes (<code>--only</code> says PASSED).</span></li>
+      <li><strong>Gate</strong><span>Eleven verdicts; only the full run says DONE.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="install">
+  <h2><span class="num">3</span>The installer</h2>
+  <p class="intro"><code>mxcodr/install.sh</code> on macOS and Linux, <code>bootstrap.ps1</code> on Windows. It checks what the machine has, installs what is missing, and lists plainly what it could not do.</p>
+  <div class="grid2">
+    <div class="step">
+      <h3>The project</h3>
+      <ul class="items">
+        <li>Creates a Mendix app with <code>mxcli new</code> when the folder has none, and picks the Studio Pro version (it asks on a Mac with several).</li>
+        <li>Offers Atlas or one of five themes (navy, teal, amber, plum, forest); <code>bash tests/theme.sh</code> switches later.</li>
+        <li>Asks how the app runs: locally (runtime and PostgreSQL on the machine, changes live in about a second) or in Docker.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <h3>The tools</h3>
+      <ul class="items">
+        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.25.0), checksum-verified.</li>
+        <li>Node, playwright-cli and its browser, MxBuild for <code>mx check</code>, PostgreSQL; Docker only in Docker mode.</li>
+        <li>On Windows: Git for Windows, the junctions and the ARM64 fixes Studio Pro's mxbuild needs.</li>
+        <li>What needs a person (a JDK, starting a Docker daemon) is listed with the command to run.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <h3>The harness files</h3>
+      <ul class="items">
+        <li>Skills, rules, hooks, plugins, lint rules and checkers, each where each of the five agents looks.</li>
+        <li>The gate and its parts in <code>tests/</code>; the checkers in <code>tools/mdl-checks/</code>.</li>
+        <li>A syntax digest generated from the project's own mxcli.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <h3>Existing apps</h3>
+      <ul class="items">
+        <li>Writes baselines of captions, widget names and testable paths: what existed before the install warns, what is new or changed blocks.</li>
+        <li>Keeps the person's switches in <code>tests/harness.env</code> across reinstalls.</li>
+        <li>Ignores test artefacts and credential files in git.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="context">
+  <h2><span class="num">4</span>What the agent reads</h2>
+  <p class="intro">Kept small on purpose: a session reads one skill up front, and every other file is named by the finding that needs it.</p>
+  <h3>Always in context</h3>
+  <ul class="items">
+    <li><strong>Project rules</strong> (<code>.claude/rules/</code>, <code>.cursor/rules/</code>, Pi's system prompt): how users sign in, Production security and strict mode from the first script, how the gate works, which files are the person's, ask before any git command that writes.</li>
+    <li><strong>Syntax digest</strong>: the topic indexes of <code>./mxcli syntax</code> and the pitfalls that cost sessions the most time.</li>
+    <li><strong>A reminder on every prompt</strong>, added by a hook.</li>
+  </ul>
+  <h3>Six skills</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Skill</th><th>When it is read</th></tr></thead>
+    <tbody>
+      <tr><td><code>test-first-delivery</code></td><td>Before the first feature: the loop, what a test can call, how the gate judges a test.</td></tr>
+      <tr><td><code>spacing-and-layout</code></td><td>When a <code>layout</code> finding names it.</td></tr>
+      <tr><td><code>naming-and-captions</code></td><td>When a <code>naming</code> finding names it.</td></tr>
+      <tr><td><code>module-structure</code></td><td>When a lint or <code>folders</code> finding names it.</td></tr>
+      <tr><td><code>reuse-and-snippets</code></td><td>When a lint finding about copies names it.</td></tr>
+      <tr><td><code>film-tests</code></td><td>When the person asks to see or film a test.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>One page per gate step</h3>
+  <ul class="items">
+    <li><code>tests/checks/&lt;step&gt;.md</code>: one line per code, what it wants and its fix. <code>tests/CHECKS.md</code> says which file holds a code.</li>
+  </ul>
+  <h3>Helper commands</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Command</th><th>What it gives</th></tr></thead>
+    <tbody>
+      <tr><td><code>bash tests/orient.sh</code></td><td>Structure, security, navigation, tests and their covers, coverage, lint, app state, in one call.</td></tr>
+      <tr><td><code>bash tests/diagnose.sh &lt;Entity&gt; &lt;user&gt;</code></td><td>Row counts, sessions, access rules, associations, runtime errors.</td></tr>
+      <tr><td><code>bash tests/peek.sh '&lt;menu item&gt;'</code></td><td>A page's visible text and console errors, without writing a test.</td></tr>
+      <tr><td><code>bash tests/film.sh &lt;name&gt; | --all</code></td><td>A video of a test's run with its name and steps on it, in <code>.mxcli/films/</code>.</td></tr>
+      <tr><td><code>bash tests/theme.sh [name]</code></td><td>Lists the themes or switches the app's look.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="hooks">
+  <h2><span class="num">5</span>Hooks</h2>
+  <p class="intro">They fire on their own. Claude Code and Codex get shell hooks, Cursor its own adapters, OpenCode and Pi a plugin that calls the same core.</p>
+  <div class="step">
+    <div class="step-head"><h3>On every prompt</h3><span class="file">remind-skills</span></div>
+    <ul class="items"><li>Adds the project rules as context and marks the session, so the database snapshot and the stop hook know which session is running.</li></ul>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>Before <code>mxcli exec</code></h3><span class="file">before-mxcli-exec → tests/precheck.sh</span></div>
+    <ul class="items">
+      <li>Applies the script to a scratch copy and runs <code>mx check</code> there. A script that fails, or one that would add build errors, is refused; the real model is untouched.</li>
+    </ul>
+    <dl class="codes-list">
+      <dt class="b">SCRIPT01</dt><dd>The same document is created in two scripts: whichever runs last wins. The hint offers <code>alter</code> only for the kinds mxcli can alter.</dd>
+      <dt class="b">STALE01</dt><dd>Re-running an old script would undo later changes to its pages and flows.</dd>
+      <dt class="b">TEST01</dt><dd>A new page or <code>ACT_</code> microflow that no test names yet: the test comes first.</dd>
+    </dl>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>After <code>mxcli exec</code></h3><span class="file">after-mxcli-exec</span></div>
+    <ul class="items">
+      <li>Says whether a restart is needed and shows the coverage gaps.</li>
+      <li>Records which script was applied, so STALE01 can compare later.</li>
+    </ul>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>When the agent wants to stop</h3><span class="file">stop-gate (Codex, Cursor)</span></div>
+    <ul class="items"><li>Runs the gate and sends the agent back to work unless it ends in DONE.</li></ul>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>On every tool call</h3><span class="file">guard-harness-env</span></div>
+    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline.</li></ul>
+  </div>
+</section>
+
+<section id="gate">
+  <h2><span class="num">6</span>The gate</h2>
+  <p class="intro"><code>bash tests/gate.sh</code> gives eleven verdicts: the browser suite and ten model checks that need no app. The model checks run while the suite does, and a pass replays from cache while its inputs are unchanged.</p>
+  <div class="legend"><span class="c b">CODE</span> blocks DONE <span class="c w">CODE</span> warning, does not block</div>
+  <div class="count-grid">
+    <div class="count"><span class="n">139</span><span class="t">rules in all</span></div>
+    <div class="count b"><span class="n">55</span><span class="t">always block</span></div>
+    <div class="count b"><span class="n">8</span><span class="t">block after the first DONE, for new or changed documents (7 caption rules, NAME02)</span></div>
+    <div class="count w"><span class="n">27</span><span class="t">harness advice</span></div>
+    <div class="count w"><span class="n">49</span><span class="t">mxcli lint advice (29 warnings, 20 info)</span></div>
+  </div>
+
+  <div class="step" id="g-tests">
+    <div class="step-head"><h3>tests</h3><span class="file">tests/verify-*.test.sh</span></div>
+    <ul class="items">
+      <li>Boots the app when asked (<code>--boot-if-needed</code>), clears the last run's artefacts, runs every browser test through playwright.</li>
+      <li>Notes tests that were never red: a test should fail before its feature exists.</li>
+      <li>Names the microflow tests (<code>*.test.mdl</code>) with the command that runs them, since the gate cannot run them next to the app.</li>
+      <li>Optional <code>MDL_DB_RESET=session</code>: snapshot the database when the session starts, restore it after the first DONE.</li>
+    </ul>
+    <dl class="codes-list">
+      <dt class="w">RUNTIME01</dt><dd>Server errors logged while the tests ran: a test can pass while the page behind it threw.</dd>
+      <dt class="w">VIS01–04</dt><dd>Each page measured after its test: overlapping widgets, sideways scrolling, cut-off text, a chart that does not fit one screen.</dd>
+      <dt class="w">LOOK01–02</dt><dd>With <code>MDL_VISUAL_REVIEW=agent</code>, a model that reads images judges a screenshot of each page.</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="g-mx">
+    <div class="step-head"><h3>mx check</h3><span class="file">Mendix's own consistency check</span></div>
+    <ul class="items"><li>0 errors, the same check Studio Pro runs. Common CE codes come with a hint per code.</li></ul>
+    <div class="codes"><span class="c b">CE0007</span><span class="c b">CE0106</span><span class="c b">CE0117</span><span class="c b">CE0161</span><span class="c b">CE0557</span><span class="c b">CE0582</span><span class="c b">CE0642</span><span class="c b">CE1613</span><span class="c b">CE2729</span><span class="c b">CE7247</span></div>
+  </div>
+
+  <div class="step" id="g-lint">
+    <div class="step-head"><h3>lint</h3><span class="file">mxcli lint + .claude/lint-rules/*.star</span></div>
+    <ul class="items"><li>Only lint errors block. UI001 is at error level and blocks; MOD001 and REU001 advise. The warnings worth fixing now are listed with their fix.</li></ul>
+    <dl class="codes-list">
+      <dt class="w">MOD001</dt><dd>Process folders, nothing at module root (FOLDER01 in the folders step is the blocking form).</dd>
+      <dt class="w">REU001</dt><dd>Shared documents instead of copies (info).</dd>
+      <dt class="b">UI001</dt><dd>No hand-built filter bar over a grid: the grid filters itself.</dd>
+      <dt class="b">MPR009, QUAL006, SEC007</dt><dd>mxcli's three rules at error level: a gallery selection listener, a required caption in the default language, anonymous unconstrained read.</dd>
+      <dt class="w">CONV011</dt><dd>A commit inside a loop, one database call per row.</dd>
+      <dt>MPR* SEC* CONV* ARCH* QUAL*</dt><dd>mxcli's other 49 rules (29 warnings, 20 info): naming, empty microflows, access rules, complexity, documentation.</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="g-coverage">
+    <div class="step-head"><h3>coverage</h3><span class="file">check_test_coverage.cjs</span></div>
+    <ul class="items"><li>Every page and action microflow is named by a test's <code># covers:</code> line, and every name there exists in the model.</li></ul>
+  </div>
+
+  <div class="step" id="g-naming">
+    <div class="step-head"><h3>naming</h3><span class="file">check_mdl.cjs and its rules</span></div>
+    <ul class="items"><li>A business caption on every activity, decisions as questions, a note on every loop; no placeholder variables or names that echo a type.</li></ul>
+    <dl class="codes-list">
+      <dt class="b">REFRESH01</dt><dd>A pop-up's Save commits with <code>refresh</code>, so the grid under it shows the new row at once.</dd>
+      <dt class="b">PERF02–08</dt><dd>Performance and indexes: retrieves in loops, unindexed sorts and filters.</dd>
+      <dt class="b">DS01</dt><dd>A list takes its rows from the database with an XPath, not from a flow that only retrieves them.</dd>
+      <dt class="b">EVENT01–02</dt><dd>An entity event handler that loops (commits its own object with events), or skips a save in silence.</dd>
+      <dt class="w">EVENT03–04, ERR01</dt><dd><code>without events</code> skipping a handler, a handler's error behind a Save button, a swallowed error.</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="g-layout">
+    <div class="step-head"><h3>layout</h3><span class="file">check_layout.cjs · the shape of the app</span></div>
+    <dl class="codes-list">
+      <dt class="b">NAV01–06</dt><dd>One menu for all roles on a standard Atlas layout, an icon on every item, no icon twice for one role, Log out last.</dd>
+      <dt class="b">HOME01</dt><dd>Admins start on a page of the app.</dd>
+      <dt class="b">ACCOUNT01–03</dt><dd>Users for admins, My account for everyone once people sign in.</dd>
+      <dt class="b">MODULE01</dt><dd><code>MyFirstModule</code> removed once the app has its own module.</dd>
+      <dt class="b">BACK01</dt><dd>A Back button top left on every page opened from another page.</dd>
+      <dt class="b">USER01</dt><dd>Who is signed in, top right: a user icon and e-mail that opens My account.</dd>
+      <dt class="b">LAYOUT01</dt><dd>One layout for all pages except pop-ups.</dd>
+      <dt class="b">ICON01</dt><dd>An icon on every button.</dd>
+      <dt class="b">SPACE01–04</dt><dd>Atlas spacing, no custom CSS; buttons and text never touch a grid, list or card.</dd>
+      <dt class="b">EDGE01</dt><dd>Everything inside a layout grid, so nothing touches the window's edge.</dd>
+      <dt class="b">GRID01–02</dt><dd>Filters inside the grid's columns; a button that changes a grid's rows sits in its header.</dd>
+      <dt class="b">ALERT01</dt><dd>No alert class on plain text.</dd>
+      <dt class="b">TEXT01</dt><dd>Long text is edited in a text area, not a one-line box.</dd>
+      <dt class="w">TEXT02</dt><dd>A field named like prose (Description, Notes) gets a hint.</dd>
+      <dt class="b">NAME01–02</dt><dd>Every widget named <code>&lt;Page&gt;_&lt;What&gt;&lt;Type&gt;</code>, unique in the app (warnings until the first DONE on an existing app).</dd>
+      <dt class="w">HEAD01</dt><dd>A heading on every page.</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="g-security">
+    <div class="step-head"><h3>security</h3><span class="file">view_access.cjs · security_rules.cjs · tests/checks/security.md</span></div>
+    <ul class="items">
+      <li>Project security at Production: below it, Mendix ignores the XPath on access rules.</li>
+      <li>Mendix's "Best Practices for App Security", read from the model. Every finding of the last run is in <code>.mxcli/security.txt</code>.</li>
+    </ul>
+    <dl class="codes-list">
+      <dt class="b">VIEW01</dt><dd>A role that sees only its own rows does not read a view of everyone's totals.</dd>
+      <dt class="b">CRED01</dt><dd>No secret (password, token, API key) in a constant's default value.</dd>
+      <dt class="b">ANON01</dt><dd>The guest role creates or writes no persistent entity.</dd>
+      <dt class="b">STRICT01</dt><dd>Strict mode on.</dd>
+      <dt class="b">FILTER01</dt><dd>An own-rows list (<code>[%CurrentUser%]</code>) is backed by the role's access rule, not only by the page.</dd>
+      <dt class="b">SQL01</dt><dd>No query built by joining text and a variable.</dd>
+      <dt class="w">EXTENDS01</dt><dd>No entity specialises <code>System.User</code> or <code>Administration.Account</code>.</dd>
+      <dt class="w">XSS01</dt><dd>No user-typed attribute shown as HTML.</dd>
+      <dt class="w">WRITE01</dt><dd>A role does not write totals and statuses only server-side flows set; the finding names the associations to keep.</dd>
+      <dt class="w">ADMIN01, PWD01</dt><dd>For the person: rename <code>MxAdmin</code>, strengthen the password policy. mxcli cannot change either.</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="g-scope">
+    <div class="step-head"><h3>scope</h3><span class="file">check_scope.cjs</span></div>
+    <dl class="codes-list"><dt class="w">SCOPE01</dt><dd>A page's data-source microflow returns rows its role may not read: a microflow does not apply entity access. Blocks with <code>MDL_SCOPE=error</code>.</dd></dl>
+  </div>
+
+  <div class="step" id="g-paths">
+    <div class="step-head"><h3>paths</h3><span class="file">check_paths.cjs · every testable path has a test</span></div>
+    <ul class="items"><li>Read from the model, so it holds for any app. Paths older than the install warn; new or changed ones block. Every finding: <code>.mxcli/paths.txt</code>.</li></ul>
+    <dl class="codes-list">
+      <dt class="b">OUTCOME01</dt><dd>Every message the app can show is asserted by a test, refusals included.</dd>
+      <dt class="b">WF01</dt><dd>A flow that completes a workflow task checks the user is one of its targets (always blocks).</dd>
+      <dt class="b">WF02</dt><dd>Every task outcome chosen in a test that signs in as both people.</dd>
+      <dt class="b">ISO01</dt><dd>Each role-scoped entity read as that role: own rows present, another user's absent.</dd>
+      <dt class="b">ROLE01</dt><dd>Every demo user's role is the user of some test.</dd>
+      <dt class="b">SVC01</dt><dd>Every published REST and OData service called by a test, once without signing in.</dd>
+    </dl>
+  </div>
+
+  <div class="step" id="g-folders">
+    <div class="step-head"><h3>folders</h3><span class="file">check_folders.cjs</span></div>
+    <dl class="codes-list"><dt class="b">FOLDER01</dt><dd>Every document in <code>&lt;business folder&gt;/UI</code> (pages, snippets), <code>/FNC</code> (microflows, nanoflows) or <code>/ENV</code> (everything else). The gate prints the <code>move</code> statements.</dd></dl>
+  </div>
+
+  <div class="step" id="g-unused">
+    <div class="step-head"><h3>unused</h3><span class="file">check_unused.cjs</span></div>
+    <dl class="codes-list"><dt class="b">UNUSED01</dt><dd>Nothing nothing uses. Three proofs: no reference in the model, the name in no other file, and <code>mx check</code> clean on a copy without it. The finding lists the <code>drop</code> statements.</dd></dl>
+  </div>
+</section>
+
+<section id="verdict">
+  <h2><span class="num">7</span>Reading the verdict</h2>
+  <ul class="items">
+    <li><strong>DONE</strong> (exit 0): every step passed. <code>--only</code> and <code>--tests-only</code> say PASSED, never DONE.</li>
+    <li><strong>NOT DONE — failed</strong> (exit 1): each failing step prints its findings, the fix, and the <code>tests/checks/&lt;step&gt;.md</code> file to read.</li>
+    <li><strong>NOT DONE — could not run</strong> (exit 2): a check or the app could not run; the line says why.</li>
+    <li><strong>Warnings</strong> are listed apart and never block: fix them with the next fix, not in a gate run of their own.</li>
+    <li><strong>Timing</strong> per step and a closing list of what still blocks DONE.</li>
+  </ul>
+</section>
+
+<section id="switches">
+  <h2><span class="num">8</span>The person's switches</h2>
+  <p class="intro">In <code>tests/harness.env</code>. The guard refuses a session that edits it or sets them inline.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Switch</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>MDL_REQUIRE_PRODUCTION=0</code></td><td>Skips the Production requirement, for an app with no users.</td></tr>
+      <tr><td><code>MDL_VISUAL</code>, <code>MDL_RUNTIME_ERRORS</code>, <code>MDL_CAPTIONS</code>, <code>MDL_SCOPE</code>, <code>MDL_WIDGET_NAMES</code></td><td><code>warn</code>, <code>error</code> or <code>0</code>: makes those warnings block, or turns them off.</td></tr>
+      <tr><td><code>MDL_PATHS=error</code></td><td>Old paths without a test block too.</td></tr>
+      <tr><td><code>MDL_UNTESTED</code></td><td>Paths deliberately left without a test.</td></tr>
+      <tr><td><code>MDL_KEEP_UNUSED</code></td><td>Documents kept on purpose though nothing uses them.</td></tr>
+      <tr><td><code>MDL_DB_RESET=session</code></td><td>Database snapshot per session, restored after the first DONE.</td></tr>
+      <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>
+      <tr><td><code>MDL_TEST_FIRST=0</code></td><td>Turns off TEST01 in precheck.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its READMEs and <code>tests/CHECKS.md</code>, bundle 2026.10.08.7.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -707,6 +707,10 @@ names the associations the role writes, to keep in a `write (...)` list, which d
 name: on B2B the session narrowed the write lists, the order's customer picker turned read-only and
 nine tests failed. On a copy with the old rules put back, the list the finding names is the one the
 session reached by trial (`Order_Customer, Order_Workflow`, `OrderLine_Order, OrderLine_Product`, ...).
+Bundle 2026.10.08.7: UI001 (a hand-built filter bar over a grid) blocks DONE -- its `.star` rule was at
+warning level, so it never did, though the docs said so; 2 of 32 local apps have one. The lint detail
+now shows each error with its fix: mxcli 0.25 marks errors with a different glyph, and the gate printed
+an empty detail under a red lint verdict. MOD001 stays a warning: FOLDER01 blocks the same.
 
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,

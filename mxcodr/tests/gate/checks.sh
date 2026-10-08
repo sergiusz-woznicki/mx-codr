@@ -188,7 +188,10 @@ check_lint() {
   echo "lint: $line" > "$WORK/lint.summary"
   errors="$(printf '%s\n' "$line" | grep -oE '[0-9]+ errors' | grep -oE '[0-9]+')"
   [ -n "$errors" ] && [ "$errors" != "0" ] || return 0
-  printf '%s\n' "$out" | grep -E '✖|\[error\]' | head -10 > "$WORK/lint.detail"
+  # Each error with its `at` and `→` (the fix) lines. mxcli 0.25 marks an error ✗, older ones ✖;
+  # matching only ✖ left the detail empty under a red lint verdict.
+  printf '%s\n' "$out" | awk '/✖|✗|\[error\]/ { n = 3 } n > 0 { print; n-- }' | head -15 > "$WORK/lint.detail"
+  { echo "   Lint errors block DONE; why each one and its fix: tests/checks/lint.md"; } >> "$WORK/lint.detail"
   return 1
 }
 
