@@ -70,7 +70,7 @@ show message '{1}' type info objects [$Obj/Name + ' saved'];   validation feedba
 Users who sign in need no login screen of your own (two sessions lost 15-25 minutes building one):
 
 - **Security on is the whole login**: at `PROTOTYPE` or `PRODUCTION` the runtime serves its own
-  sign-in page (`login.html`). **Build at `PRODUCTION` from the first script** -- `PROTOTYPE`
+  sign-in page (`login.html`). **Build at `PRODUCTION` from the first script**, `StrictMode: TRUE` -- `PROTOTYPE`
   ignores the XPath on access rules, so a test goes green on an app that leaks; the gate's
   `security` check fails below Production. Every entity a page reads then needs a rule for
   that role, or the page comes up empty.
