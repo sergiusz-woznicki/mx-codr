@@ -426,6 +426,12 @@ check_layout() {
   fi
   echo "layout: $(printf '%s\n' "$out" | head -1)" > "$WORK/layout.summary"
   printf '%s\n' "$out" | grep -E '^\s+[-!] ' | head -12 > "$WORK/layout.detail"
+  # Every finding, where a session reads them all without running the checker: the detail shows
+  # twelve, and on InvoiceB2B a session hunted the checker's source for the other five URL01 pages.
+  mkdir -p .mxcli 2>/dev/null && printf '%s\n' "$out" > .mxcli/layout.txt 2>/dev/null
+  local shown total
+  shown="$(grep -c . "$WORK/layout.detail")"; total="$(printf '%s\n' "$out" | grep -cE '^\s+[-!] ')"
+  [ "$total" -gt "$shown" ] && echo "   ... $shown of $total findings shown; all of them: .mxcli/layout.txt" >> "$WORK/layout.detail"
   # How a page renders (ALERT01) is a warning while MDL_VISUAL=warn, a failure with MDL_VISUAL=error.
   local look
   look="$(printf '%s\n' "$out" | grep -E '^[[:space:]]+! \[ALERT01\]' | sed -E 's/^[[:space:]]+! /   - /')"

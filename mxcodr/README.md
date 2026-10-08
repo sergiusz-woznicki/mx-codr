@@ -718,6 +718,10 @@ object and `{Qty}` for a value (one missing is CE5601), and a non-persistent ent
 (CE5605), so such a page is skipped. The finding prints `alter page ... { set Url = '...' };` with a
 segment per parameter; on a copy of InvoiceB2B the twelve it printed passed mx check. Almost no
 local app has URLs yet (0-1 each, 9-17 pages without on the B2B apps).
+Bundle 2026.10.08.9: the layout step writes every finding to `.mxcli/layout.txt` and says so when the
+detail shows only twelve; on InvoiceB2B URL01 found seventeen pages and the session read the checker's
+source for the other five. (The B2B session then reached DONE: seventeen URLs, and the URL change
+surfaced a CE2729 page leak -- a customer page showing an internal note -- which it fixed.)
 
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,

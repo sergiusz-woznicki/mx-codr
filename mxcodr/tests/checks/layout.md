@@ -1,6 +1,6 @@
 # layout -- the shape of a signed-in app (`tests/gate.sh`, skill `spacing-and-layout`)
 
-One line per code the `layout` step prints. Every code blocks DONE unless its line says "warning".
+One line per code the `layout` step prints. Every code blocks DONE unless its line says "warning". All findings: `.mxcli/layout.txt`.
 
 | Code | Wants | Fix |
 |---|---|---|
@@ -28,7 +28,7 @@ One line per code the `layout` step prints. Every code blocks DONE unless its li
 | `GRID02` | a button changing a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter |
 | `ALERT01` | an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
 | `NAME01` | warning: a widget name on one page only | its own `<Page>_<What><Type>` name |
-| `NAME02` | `<Page>_<What><Type>`: `OrderDetail_GenerateInvoiceButton` (skill `naming-and-captions`) | the name it prints; warns until the first DONE, then blocks a new or changed page. Rename `.mx-name-...` in tests too |
+| `NAME02` | `<Page>_<What><Type>`: `OrderDetail_GenerateInvoiceButton` | the name it prints; warns until the first DONE, then blocks a new or changed page. Rename `.mx-name-...` in tests too |
 | `TEXT01` | a textarea for a String over 500 or unlimited | `replace txtX with { textarea txtX (...) }` |
 | `TEXT02` | warning: a textbox on a prose-named attribute (Notes, Reason) of 100+ | a textarea if people write more than a line |
 | `URL01` | a URL on every non-pop-up page with no non-persistent parameter | the `alter page` it prints; the same `Url:` in the page's create |
