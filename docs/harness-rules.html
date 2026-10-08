@@ -140,7 +140,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.08.7 · mxcli v0.25.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.08.8 · mxcli v0.25.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -157,7 +157,7 @@ html { scroll-behavior: smooth; }
     <li><strong>Tests first.</strong> For each feature the agent writes a failing browser test, then builds until it passes.</li>
     <li><strong>One definition of done.</strong> The gate runs the tests, Mendix's own consistency check and every rule below.</li>
     <li><strong>No broken model.</strong> Every MDL script is tried on a copy of the model first; a script that would break the build never touches the real <code>.mpr</code>.</li>
-    <li><strong>A proper Mendix app.</strong> One menu, icons, one layout, Back buttons, Users and My account, no leftover <code>MyFirstModule</code>.</li>
+    <li><strong>A proper Mendix app.</strong> One menu, icons, one layout, Back buttons, a URL on every page, Users and My account, no leftover <code>MyFirstModule</code>.</li>
     <li><strong>A readable, secure model.</strong> Business captions, process folders, reuse, Atlas spacing, and Mendix's security best practices.</li>
     <li><strong>Nothing to operate.</strong> The person runs the installer once; skills, rules and hooks make the agent use everything else on its own.</li>
   </ul>
@@ -300,8 +300,8 @@ html { scroll-behavior: smooth; }
   <p class="intro"><code>bash tests/gate.sh</code> gives eleven verdicts: the browser suite and ten model checks that need no app. The model checks run while the suite does, and a pass replays from cache while its inputs are unchanged.</p>
   <div class="legend"><span class="c b">CODE</span> blocks DONE <span class="c w">CODE</span> warning, does not block</div>
   <div class="count-grid">
-    <div class="count"><span class="n">139</span><span class="t">rules in all</span></div>
-    <div class="count b"><span class="n">55</span><span class="t">always block</span></div>
+    <div class="count"><span class="n">140</span><span class="t">rules in all</span></div>
+    <div class="count b"><span class="n">56</span><span class="t">always block</span></div>
     <div class="count b"><span class="n">8</span><span class="t">block after the first DONE, for new or changed documents (7 caption rules, NAME02)</span></div>
     <div class="count w"><span class="n">27</span><span class="t">harness advice</span></div>
     <div class="count w"><span class="n">49</span><span class="t">mxcli lint advice (29 warnings, 20 info)</span></div>
@@ -376,6 +376,7 @@ html { scroll-behavior: smooth; }
       <dt class="b">TEXT01</dt><dd>Long text is edited in a text area, not a one-line box.</dd>
       <dt class="w">TEXT02</dt><dd>A field named like prose (Description, Notes) gets a hint.</dd>
       <dt class="b">NAME01–02</dt><dd>Every widget named <code>&lt;Page&gt;_&lt;What&gt;&lt;Type&gt;</code>, unique in the app (warnings until the first DONE on an existing app).</dd>
+      <dt class="b">URL01</dt><dd>A URL on every page that is not a pop-up or login page, whenever Mendix allows one: a segment per parameter (<code>{Order/Id}</code>, <code>{Qty}</code>), never a non-persistent parameter. The finding prints the <code>alter page</code> statement.</dd>
       <dt class="w">HEAD01</dt><dd>A heading on every page.</dd>
     </dl>
   </div>
@@ -460,7 +461,7 @@ html { scroll-behavior: smooth; }
   </div>
 </section>
 
-<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its READMEs and <code>tests/CHECKS.md</code>, bundle 2026.10.08.7.</footer>
+<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its READMEs and <code>tests/CHECKS.md</code>, bundle 2026.10.08.8.</footer>
 </main>
 </div>
 </body>
