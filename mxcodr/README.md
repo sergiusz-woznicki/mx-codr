@@ -711,6 +711,13 @@ Bundle 2026.10.08.7: UI001 (a hand-built filter bar over a grid) blocks DONE -- 
 warning level, so it never did, though the docs said so; 2 of 32 local apps have one. The lint detail
 now shows each error with its fix: mxcli 0.25 marks errors with a different glyph, and the gate printed
 an empty detail under a red lint verdict. MOD001 stays a warning: FOLDER01 blocks the same.
+Bundle 2026.10.08.8: `URL01` (step `layout`, `layout_rules/urls.cjs`) -- every page of the app's own
+modules that is not a pop-up or login page has a URL, whenever Mendix allows one. Measured with mx check
+on Mendix 11.12: a URL takes a segment per parameter, `{Order/Id}` or `{Order/OrderNumber}` for an
+object and `{Qty}` for a value (one missing is CE5601), and a non-persistent entity cannot be in a URL
+(CE5605), so such a page is skipped. The finding prints `alter page ... { set Url = '...' };` with a
+segment per parameter; on a copy of InvoiceB2B the twelve it printed passed mx check. Almost no
+local app has URLs yet (0-1 each, 9-17 pages without on the B2B apps).
 
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,

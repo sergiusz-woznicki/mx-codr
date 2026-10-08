@@ -414,7 +414,7 @@ microflow shows it again after an action: the menu is its way back.
 
 ```sql
 create or modify page Sales.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atlas_Default,
-  Params: ( $Order: Sales.Order )) {
+  Params: ( $Order: Sales.Order ), Url: 'order-detail/{Order/Id}') {
   layoutgrid pageGrid {
     row {
       column (DesktopWidth: 12) {
