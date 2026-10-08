@@ -115,10 +115,11 @@ function findings(model, modules) {
     if (!String(c.DefaultValue || '').length) continue;
     const exposed = String(c.ExposedToClient) === '1' || /^true$/i.test(String(c.ExposedToClient));
     add('CRED01', true, `${c.QualifiedName} holds a secret in its default value${exposed ? ', and it is exposed to the client, so every browser gets it' : ''}: ` +
-      'a default ships in every build, package and backup. Leave it blank -- create or modify constant ' + c.QualifiedName +
-      " ( Type: String, DefaultValue: '' ); -- and give the value per environment: locally in the run configuration " +
-      `(alter settings constant @${c.QualifiedName} value '...' in configuration 'Default'; -- the run configuration stays out of ` +
-      'the deployment package), on a server at deployment');
+      'a default ships in every build, package and backup. Set DefaultValue to \'\' in the script that creates the constant ' +
+      '(mxcli has no alter constant, and a second create of it elsewhere is SCRIPT01) and exec that script again -- when STALE01 refuses ' +
+      'that exec, move the constant into a script of its own and take it out of the old one; give the value per ' +
+      `environment: locally in a script of its own, alter settings constant @${c.QualifiedName} value '...' in configuration 'Default'; ` +
+      '(a run configuration stays out of the deployment package), on a server at deployment');
   }
 
   // STRICT01

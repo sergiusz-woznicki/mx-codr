@@ -661,6 +661,8 @@ function testFirst(args) {
 }
 
 // SCRIPT01: a document two scripts create is whatever the last one run says.
+// The kinds mxcli 0.25 can patch with `alter <kind>`; a constant or a menu it cannot.
+const ALTERABLE = new Set(['entity', 'enumeration', 'page', 'snippet', 'microflow', 'nanoflow', 'workflow']);
 function duplicateDefinitions(scripts) {
   const reported = new Set();
   for (const script of scripts) {
@@ -681,7 +683,8 @@ function duplicateDefinitions(scripts) {
         reported.add(key);
         py.print(`  - ${kind} ${name} is created in ${script} and in ${file}: whichever runs last decides what the ${kind} is, and ` +
           're-running the other silently undoes it. Keep ONE `create` of it, in one script, and ' +
-          `change it there (or with \`alter ${kind}\`).`);
+          (ALTERABLE.has(kind) ? `change it there (or with \`alter ${kind}\`).`
+            : `change it there and exec that script again -- mxcli has no \`alter ${kind}\`.`));
       }
     }
   }

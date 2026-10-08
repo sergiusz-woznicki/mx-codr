@@ -696,6 +696,11 @@ of its pages edits (`WRITE01`), and two for the person, since mxcli cannot chang
 fixes: `tests/checks/security.md`. Measured on 32 local apps: STRICT01 on 15, CRED01 on 3 (B2B's
 `MockApiPassword` and `WarehouseDbPassword`), EXTENDS01 on 2, WRITE01 on 19 (computed totals and
 statuses); ANON01, FILTER01, SQL01 and XSS01 on none, FILTER01 and XSS01 proven on a copy given one.
+Bundle 2026.10.08.5: on B2B the CRED01 fix cost a session 8 minutes in the harness's source -- the
+finding said `create or modify constant` (SCRIPT01 refuses a second create) and SCRIPT01 said "or with
+`alter constant`", which mxcli does not have. CRED01 now says to blank the default in the script that
+creates the constant (a script of its own when STALE01 refuses the re-exec); SCRIPT01 offers `alter`
+only for entity, enumeration, page, snippet, microflow, nanoflow and workflow.
 
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,
