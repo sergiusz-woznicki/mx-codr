@@ -1,11 +1,11 @@
 # layout -- the shape of a signed-in app (`tests/gate.sh`, skill `spacing-and-layout`)
 
-One line per code the `layout` step prints. Every code blocks DONE unless its line says "warning". All findings: `.mxcli/layout.txt`.
+One line per code the `layout` step prints. Every code blocks DONE unless its line says "warning". All: `.mxcli/layout.txt`.
 
 | Code | Wants | Fix |
 |---|---|---|
 | `NAV01` | a way to log out once users sign in | `menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )` as the menu's last item |
-| `NAV02` | Log out last in the menu | move it to the end |
+| `NAV02` | warning: Log out last in the menu | move it to the end |
 | `NAV03` | every role's home page in the menu | `menu item '<caption>' ( OnClick: show page <Page>, Icon: <icon> )` before Log out |
 | `NAV04` | no hand-built menu of link buttons in a layout | put those pages in the navigation profile's menu; the layout keeps Atlas's own menu |
 | `NAV05` | an icon on every menu entry | `Icon: Atlas_Core.Atlas_Filled.<name>` at the end of the item |
@@ -26,7 +26,7 @@ One line per code the `layout` step prints. Every code blocks DONE unless its li
 | `SPACE04` | a gap between a button or text and a grid, list or card above or below it | `'margin-bottom': 'S'` on the upper one; each `controlbar` button too |
 | `GRID01` | a column with a filter keeps its `Attribute` | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`; without it: "Unable to get filter store" |
 | `GRID02` | a button changing a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter |
-| `ALERT01` | an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
+| `ALERT01` | warning: an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
 | `NAME01` | warning: a widget name on one page only | its own `<Page>_<What><Type>` name |
 | `NAME02` | `<Page>_<What><Type>`: `OrderDetail_GenerateInvoiceButton` | the name it prints; warns until the first DONE, then blocks a new or changed page. Rename `.mx-name-...` in tests too |
 | `TEXT01` | a textarea for a String over 500 or unlimited | `replace txtX with { textarea txtX (...) }` |
