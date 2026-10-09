@@ -30,7 +30,7 @@ RULE_ID = "UI001"
 RULE_NAME = "HandRolledGridFilter"
 DESCRIPTION = "A data grid should use its own column filters, not a hand-built filter bar over a helper entity"
 CATEGORY = "design"
-SEVERITY = "warning"
+SEVERITY = "error"
 
 # The grid, and the filter widgets that belong inside its columns.
 GRID_TYPES = ("com.mendix.widget.web.datagrid.Datagrid",)

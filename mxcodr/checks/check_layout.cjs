@@ -57,6 +57,9 @@
 //                  the role may not open) show the same icon; with security off, any two entries
 //   NAV04    FAIL  one of the project's own layouts opens two or more pages from buttons: a menu
 //                  built by hand, with no hamburger, no active item and no phone view
+//   URL01    FAIL  a page of the app's own modules that is not a pop-up or login page has no URL,
+//                  though Mendix allows one (no non-persistent parameter); suggests one with a
+//                  segment per parameter
 //   ALERT01  WARN  a block class (alert, alert-*, card, well) on a dynamictext or text: it renders
 //                  as an inline <span>, so its padding and border overlap the widgets around it
 //   EDGE01   FAIL  a page on an Atlas_Core layout (pop-ups and the login page aside) has a widget at
@@ -85,6 +88,7 @@ const { headerButtonFindings } = require('./layout_rules/grids.cjs');
 const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
 const { verticalFindings } = require('./layout_rules/vertical.cjs');
 const { nameFindings, documentHashes } = require('./layout_rules/names.cjs');
+const { urlFindings } = require('./layout_rules/urls.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
@@ -357,6 +361,9 @@ function main() {
     failures = failures.concat(textFailures);
     warnings = warnings.concat(textWarnings);
   }
+  // URL01 needs to know which parameter entities are persistent; without --entities only pages with
+  // no parameter or value parameters are judged.
+  if (!args.port_parity) failures = failures.concat(urlFindings(lines, entityText));
   const report = {
     verdict: !failures.length ? 'PASS' : 'FAIL',
     pages,

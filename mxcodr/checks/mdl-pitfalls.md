@@ -17,6 +17,9 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   `column (Attribute: Invoice_Customer/Name)`, not the association itself. A data grid column has no
   name in Mendix: `column (...)`, addressed later as `dg column(Name)` (a name warns MDL-DEPR005).
 - **`Administration.Account.Name` does not exist**: Name is System.User's. Show `FullName`.
+- **A user's roles are the reference set `UserRoles`, not an attribute**: `retrieve $Role from System.UserRole
+  where [Name = 'Customer'] first;` then `change $User (UserRoles = $Role);` (`UserRole` does not exist, CE1613).
+- **`create module Shop;` takes nothing else**: no `( Description: ... )` and no `description '...'`.
 - **No `commit` inside a `loop`** (lint CONV011: one database call per row). Change the objects in
   the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
   `commit $Lines;` after `end loop;`. A new object goes into a list first (`$New = create list of

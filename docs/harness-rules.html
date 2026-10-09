@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mx-codr Harness Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: a reference manual — sticky contents rail on the left, sections that go from the whole harness down to each check code. */
+:root {
+  --bg: #f6f7f5;
+  --surface: #ffffff;
+  --ink: #18201c;
+  --muted: #59645e;
+  --line: #dde2de;
+  --accent: #0b6e4f;
+  --accent-soft: #e2f1ea;
+  --block: #b42318;
+  --block-soft: #fde8e6;
+  --warn: #9a5b00;
+  --warn-soft: #fdf1dc;
+  --code-bg: #eef1ee;
+  --font-display: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111613; --surface: #18201c; --ink: #e6ece8; --muted: #9aa8a0; --line: #2a352f;
+    --accent: #4cc79a; --accent-soft: #163a2c; --block: #ff8a7a; --block-soft: #3d1a17;
+    --warn: #f0b75a; --warn-soft: #3a2a10; --code-bg: #1f2925; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111613; --surface: #18201c; --ink: #e6ece8; --muted: #9aa8a0; --line: #2a352f;
+  --accent: #4cc79a; --accent-soft: #163a2c; --block: #ff8a7a; --block-soft: #3d1a17;
+  --warn: #f0b75a; --warn-soft: #3a2a10; --code-bg: #1f2925; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--font-body); margin: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; font-size: 13px; }
+nav.toc .label { text-transform: uppercase; letter-spacing: .08em; font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+nav.toc a { color: var(--muted); text-decoration: none; display: block; padding: 3px 8px; border-left: 2px solid transparent; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); border-left-color: var(--accent); outline: none; }
+nav.toc ol ol { padding-left: 10px; }
+main { min-width: 0; }
+header.top { padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+.eyebrow { font: 600 12px/1 var(--font-mono); color: var(--accent); letter-spacing: .04em; }
+h1 { font: 700 34px/1.15 var(--font-display); margin: 10px 0 12px; text-wrap: balance; letter-spacing: -.01em; }
+.lede { font-size: 17px; color: var(--muted); max-width: 64ch; margin: 0; }
+.verdict-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.verdict { font: 600 13px/1 var(--font-mono); padding: 8px 12px; border-radius: 4px; }
+.verdict.done { background: var(--accent-soft); color: var(--accent); }
+.verdict.not { background: var(--block-soft); color: var(--block); }
+.verdict.cant { background: var(--warn-soft); color: var(--warn); }
+section { margin-bottom: 52px; scroll-margin-top: 24px; }
+h2 { font: 700 22px/1.25 var(--font-display); margin: 0 0 6px; text-wrap: balance; }
+h2 .num { color: var(--accent); font-family: var(--font-mono); font-weight: 600; margin-right: 8px; }
+h3 { font: 600 16px/1.3 var(--font-display); margin: 26px 0 8px; }
+.intro { color: var(--muted); max-width: 70ch; margin: 0 0 16px; }
+p { max-width: 70ch; }
+ul.items { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 76ch; }
+ul.items li::marker { color: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px 18px; margin-bottom: 14px; }
+.step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 8px; }
+.step-head h3 { margin: 0; }
+.step-head .file { font: 12px var(--font-mono); color: var(--muted); }
+.codes { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 4px; }
+.c { font: 500 12px/1 var(--font-mono); padding: 5px 7px; border-radius: 3px; white-space: nowrap; }
+.c.b { background: var(--block-soft); color: var(--block); }
+.c.w { background: var(--warn-soft); color: var(--warn); }
+dl.codes-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 10px 0 0; }
+dl.codes-list dt { font: 600 12px/1.6 var(--font-mono); }
+dl.codes-list dt.b { color: var(--block); }
+dl.codes-list dt.w { color: var(--warn); }
+dl.codes-list dd { margin: 0; color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin: 0 0 18px; align-items: center; }
+.flow { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.flow ol { display: flex; gap: 0; list-style: none; margin: 0; padding: 0; min-width: 760px; }
+.flow li { flex: 1; position: relative; padding: 10px 12px; font-size: 13px; border-top: 3px solid var(--accent); }
+.flow li + li { border-left: 1px dashed var(--line); }
+.flow li strong { display: block; font: 600 13px var(--font-display); margin-bottom: 2px; }
+.flow li span { color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.count-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 22px; }
+.count { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; display: grid; gap: 4px; }
+.count .n { font: 700 26px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.count.b .n { color: var(--block); }
+.count.w .n { color: var(--warn); }
+.count .t { font-size: 13px; color: var(--muted); }
+.lvl { font: 600 11px/1 var(--font-mono); padding: 4px 6px; border-radius: 3px; white-space: nowrap; display: inline-block; }
+.lvl.b { background: var(--block-soft); color: var(--block); }
+.lvl.a { background: var(--block-soft); color: var(--block); opacity: .75; }
+.lvl.w { background: var(--warn-soft); color: var(--warn); }
+.lvl.i { background: var(--code-bg); color: var(--muted); }
+table.rules td:first-child { white-space: nowrap; }
+table.rules td:nth-child(2) { min-width: 260px; }
+table.rules td:nth-child(3) { color: var(--muted); font-size: 13px; min-width: 180px; }
+table.rules td:last-child { white-space: nowrap; }
+table.rules { margin-bottom: 8px; }
+section h3 { scroll-margin-top: 24px; }
+h2.part { font-size: 19px; margin: 34px 0 10px; padding-top: 18px; border-top: 2px solid var(--line); scroll-margin-top: 24px; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-inline: 16px; }
+  nav.toc { position: static; }
+  .grid2 { grid-template-columns: minmax(0, 1fr); }
+  h1 { font-size: 27px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+html { scroll-behavior: smooth; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <div class="label">Contents</div>
+  <ol>
+    <li><a href="#overview">1 · What it is</a></li>
+    <li><a href="#flow">2 · How a feature gets built</a></li>
+    <li><a href="#install">3 · The installer</a></li>
+    <li><a href="#context">4 · What the agent reads</a></li>
+    <li><a href="#hooks">5 · Hooks</a></li>
+    <li><a href="#gate">6 · The rule catalogue</a>
+      <ol>
+        <li><a href="#part-harness"><strong>A · mx-codr rules</strong></a></li>
+        <li><a href="#g-precheck">before a script</a></li>
+        <li><a href="#g-tests">browser tests</a></li>
+        <li><a href="#g-paths">paths</a></li>
+        <li><a href="#g-naming">microflows</a></li>
+        <li><a href="#g-layout">pages, navigation</a></li>
+        <li><a href="#g-structure">structure</a></li>
+        <li><a href="#g-security">security</a></li>
+        <li><a href="#part-mendix"><strong>B · Mendix, mxcli</strong></a></li>
+        <li><a href="#g-mx">stops DONE</a></li>
+        <li><a href="#g-mxcli-lint">lint advice</a></li>
+      </ol>
+    </li>
+    <li><a href="#verdict">7 · Reading the verdict</a></li>
+    <li><a href="#switches">8 · The person's switches</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="top">
+  <div class="eyebrow">mx-codr · bundle 2026.10.09.1 · mxcli v0.25.0</div>
+  <h1>Everything the mx-codr harness does</h1>
+  <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
+  <div class="verdict-strip">
+    <span class="verdict done">DONE — every check passed</span>
+    <span class="verdict not">NOT DONE — failed: &lt;checks&gt;</span>
+    <span class="verdict cant">NOT DONE — could not run: &lt;checks&gt;</span>
+  </div>
+</header>
+
+<section id="overview">
+  <h2><span class="num">1</span>What it is</h2>
+  <p class="intro">mx-codr sits on top of mxcli, the command line for a Mendix model. It turns that into a delivery workflow for five agents: Claude Code, Codex, Cursor, OpenCode and Pi, on macOS, Linux and Windows.</p>
+  <ul class="items">
+    <li><strong>Tests first.</strong> For each feature the agent writes a failing browser test, then builds until it passes.</li>
+    <li><strong>One definition of done.</strong> The gate runs the tests, Mendix's own consistency check and every rule below.</li>
+    <li><strong>No broken model.</strong> Every MDL script is tried on a copy of the model first; a script that would break the build never touches the real <code>.mpr</code>.</li>
+    <li><strong>A proper Mendix app.</strong> One menu, icons, one layout, Back buttons, a URL on every page, Users and My account, no leftover <code>MyFirstModule</code>.</li>
+    <li><strong>A readable, secure model.</strong> Business captions, process folders, reuse, Atlas spacing, and Mendix's security best practices.</li>
+    <li><strong>Nothing to operate.</strong> The person runs the installer once; skills, rules and hooks make the agent use everything else on its own.</li>
+  </ul>
+</section>
+
+<section id="flow">
+  <h2><span class="num">2</span>How a feature gets built</h2>
+  <p class="intro">The loop the skills teach and the hooks enforce.</p>
+  <div class="flow">
+    <ol>
+      <li><strong>Ask</strong><span>The person asks for a feature.</span></li>
+      <li><strong>Test</strong><span>The agent writes <code>tests/verify-&lt;feature&gt;.test.sh</code>.</span></li>
+      <li><strong>Red</strong><span>The test fails: the feature is not there yet.</span></li>
+      <li><strong>Build</strong><span>An MDL script, checked on a copy, then applied.</span></li>
+      <li><strong>Green</strong><span>The test passes (<code>--only</code> says PASSED).</span></li>
+      <li><strong>Gate</strong><span>Eleven verdicts; only the full run says DONE.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="install">
+  <h2><span class="num">3</span>The installer</h2>
+  <p class="intro"><code>mxcodr/install.sh</code> on macOS and Linux, <code>bootstrap.ps1</code> on Windows. It checks what the machine has, installs what is missing, and lists plainly what it could not do.</p>
+  <div class="grid2">
+    <div class="step">
+      <h3>The project</h3>
+      <ul class="items">
+        <li>Creates a Mendix app with <code>mxcli new</code> when the folder has none, and picks the Studio Pro version (it asks on a Mac with several).</li>
+        <li>Offers Atlas or one of five themes (navy, teal, amber, plum, forest); <code>bash tests/theme.sh</code> switches later.</li>
+        <li>Asks how the app runs: locally (runtime and PostgreSQL on the machine, changes live in about a second) or in Docker.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <h3>The tools</h3>
+      <ul class="items">
+        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.25.0), checksum-verified.</li>
+        <li>Node, playwright-cli and its browser, MxBuild for <code>mx check</code>, PostgreSQL; Docker only in Docker mode.</li>
+        <li>On Windows: Git for Windows, the junctions and the ARM64 fixes Studio Pro's mxbuild needs.</li>
+        <li>What needs a person (a JDK, starting a Docker daemon) is listed with the command to run.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <h3>The harness files</h3>
+      <ul class="items">
+        <li>Skills, rules, hooks, plugins, lint rules and checkers, each where each of the five agents looks.</li>
+        <li>The gate and its parts in <code>tests/</code>; the checkers in <code>tools/mdl-checks/</code>.</li>
+        <li>A syntax digest generated from the project's own mxcli.</li>
+      </ul>
+    </div>
+    <div class="step">
+      <h3>Existing apps</h3>
+      <ul class="items">
+        <li>Writes baselines of captions, widget names and testable paths: what existed before the install warns, what is new or changed blocks.</li>
+        <li>Keeps the person's switches in <code>tests/harness.env</code> across reinstalls.</li>
+        <li>Ignores test artefacts and credential files in git.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="context">
+  <h2><span class="num">4</span>What the agent reads</h2>
+  <p class="intro">Kept small on purpose: a session reads one skill up front, and every other file is named by the finding that needs it.</p>
+  <h3>Always in context</h3>
+  <ul class="items">
+    <li><strong>Project rules</strong> (<code>.claude/rules/</code>, <code>.cursor/rules/</code>, Pi's system prompt): how users sign in, Production security and strict mode from the first script, how the gate works, which files are the person's, ask before any git command that writes.</li>
+    <li><strong>Syntax digest</strong>: the topic indexes of <code>./mxcli syntax</code> and the pitfalls that cost sessions the most time.</li>
+    <li><strong>A reminder on every prompt</strong>, added by a hook.</li>
+  </ul>
+  <h3>Six skills</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Skill</th><th>When it is read</th></tr></thead>
+    <tbody>
+      <tr><td><code>test-first-delivery</code></td><td>Before the first feature: the loop, what a test can call, how the gate judges a test.</td></tr>
+      <tr><td><code>spacing-and-layout</code></td><td>When a <code>layout</code> finding names it.</td></tr>
+      <tr><td><code>naming-and-captions</code></td><td>When a <code>naming</code> finding names it.</td></tr>
+      <tr><td><code>module-structure</code></td><td>When a lint or <code>folders</code> finding names it.</td></tr>
+      <tr><td><code>reuse-and-snippets</code></td><td>When a lint finding about copies names it.</td></tr>
+      <tr><td><code>film-tests</code></td><td>When the person asks to see or film a test.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <h3>One page per gate step</h3>
+  <ul class="items">
+    <li><code>tests/checks/&lt;step&gt;.md</code>: one line per code, what it wants and its fix. <code>tests/CHECKS.md</code> says which file holds a code.</li>
+  </ul>
+  <h3>Helper commands</h3>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Command</th><th>What it gives</th></tr></thead>
+    <tbody>
+      <tr><td><code>bash tests/orient.sh</code></td><td>Structure, security, navigation, tests and their covers, coverage, lint, app state, in one call.</td></tr>
+      <tr><td><code>bash tests/diagnose.sh &lt;Entity&gt; &lt;user&gt;</code></td><td>Row counts, sessions, access rules, associations, runtime errors.</td></tr>
+      <tr><td><code>bash tests/peek.sh '&lt;menu item&gt;'</code></td><td>A page's visible text and console errors, without writing a test.</td></tr>
+      <tr><td><code>bash tests/film.sh &lt;name&gt; | --all</code></td><td>A video of a test's run with its name and steps on it, in <code>.mxcli/films/</code>.</td></tr>
+      <tr><td><code>bash tests/theme.sh [name]</code></td><td>Lists the themes or switches the app's look.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="hooks">
+  <h2><span class="num">5</span>Hooks</h2>
+  <p class="intro">They fire on their own. Claude Code and Codex get shell hooks, Cursor its own adapters, OpenCode and Pi a plugin that calls the same core.</p>
+  <div class="step">
+    <div class="step-head"><h3>On every prompt</h3><span class="file">remind-skills</span></div>
+    <ul class="items"><li>Adds the project rules as context and marks the session, so the database snapshot and the stop hook know which session is running.</li></ul>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>Before <code>mxcli exec</code></h3><span class="file">before-mxcli-exec → tests/precheck.sh</span></div>
+    <ul class="items">
+      <li>Applies the script to a scratch copy and runs <code>mx check</code> there. A script that fails, or one that would add build errors, is refused; the real model is untouched.</li>
+    </ul>
+    <dl class="codes-list">
+      <dt class="b">SCRIPT01</dt><dd>The same document is created in two scripts: whichever runs last wins. The hint offers <code>alter</code> only for the kinds mxcli can alter.</dd>
+      <dt class="b">STALE01</dt><dd>Re-running an old script would undo later changes to its pages and flows.</dd>
+      <dt class="b">TEST01</dt><dd>A new page or <code>ACT_</code> microflow that no test names yet: the test comes first.</dd>
+    </dl>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>After <code>mxcli exec</code></h3><span class="file">after-mxcli-exec</span></div>
+    <ul class="items">
+      <li>Says whether a restart is needed and shows the coverage gaps.</li>
+      <li>Records which script was applied, so STALE01 can compare later.</li>
+    </ul>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>When the agent wants to stop</h3><span class="file">stop-gate (Codex, Cursor)</span></div>
+    <ul class="items"><li>Runs the gate and sends the agent back to work unless it ends in DONE.</li></ul>
+  </div>
+  <div class="step">
+    <div class="step-head"><h3>On every tool call</h3><span class="file">guard-harness-env</span></div>
+    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline.</li></ul>
+  </div>
+</section>
+
+<section id="gate">
+  <h2><span class="num">6</span>The rule catalogue</h2>
+  <p class="intro"><code>bash tests/gate.sh</code> checks every rule below. The first part lists the rules mx-codr adds. The second part lists the rules that come from Mendix itself and from mxcli, which the gate runs too. Each rule is described in plain words: what it looks at, and why it matters.</p>
+  <div class="count-grid">
+    <div class="count"><span class="n">142</span><span class="t">rules in all</span></div>
+    <div class="count b"><span class="n">59</span><span class="t">mx-codr rules that stop DONE (51 always, 8 after the first DONE)</span></div>
+    <div class="count w"><span class="n">30</span><span class="t">mx-codr warnings</span></div>
+    <div class="count b"><span class="n">4</span><span class="t">Mendix and mxcli rules that stop DONE</span></div>
+    <div class="count w"><span class="n">49</span><span class="t">mxcli advice</span></div>
+  </div>
+  <div class="legend"><span class="lvl b">Blocks</span> the gate says NOT DONE <span class="lvl a">After DONE</span> only a warning while you build; once the app has reached DONE, it blocks pages and flows you add or change <span class="lvl w">Warning</span> shown, never blocks <span class="lvl i">Info</span> a hint</div>
+
+  <h2 class="part" id="part-harness">Part A · mx-codr's own rules</h2>
+
+  <h3 id="g-precheck">Before a script changes the app</h3>
+  <p class="intro">The agent changes the app with MDL scripts. Before a script runs for real, mx-codr tries it on a copy. If a rule below fails, the real app is not touched.</p>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>precheck</code></td><td>The script is run on a copy of the app first. If it stops halfway, or if Studio Pro would show new errors afterwards, it is refused. The app is never left half-changed.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCRIPT01</code></td><td>Each page, microflow, entity or constant is created in only one script in <code>mdlsource/</code>. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>STALE01</code></td><td>An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TEST01</code></td><td>Test first: before a new page or a new <code>ACT_</code> microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine.</td><td><span class="lvl b">Blocks</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-tests">The browser tests</h3>
+  <p class="intro">Tests are scripts in <code>tests/</code> named <code>verify-&lt;feature&gt;.test.sh</code>. Each one opens the running app in a browser, clicks through a feature like a user would, and checks the result.</p>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>tests</code></td><td>Every browser test passes. Microflow unit tests (<code>*.test.mdl</code>) are not run by the gate; it shows the command that runs them.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>coverage</code></td><td>Every page and every <code>ACT_</code> microflow has a test. A test says which pages and microflows it tests in a comment at its top, <code># covers: Order_List, ACT_Order_Save</code>. This rule checks that every page and <code>ACT_</code> microflow appears in such a comment, and that every name in those comments really exists in the app (a renamed page leaves an old name behind).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>RUNTIME01</code></td><td>While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>VIS01</code></td><td>On the page a test ends on, no two widgets lie on top of each other.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>VIS02</code></td><td>The page does not scroll sideways.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>VIS03</code></td><td>No text is cut off because its box is too small.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>VIS04</code></td><td>A chart fits on one screen, in height and in width.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>LOOK01</code></td><td>Only when switched on: an AI model has looked at a screenshot of every page.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>LOOK02</code></td><td>Only when switched on: none of those screenshots was judged to look wrong.</td><td><span class="lvl w">Warning</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-paths">Every path through the app has a test</h3>
+  <p class="intro">mx-codr reads the app and lists everything a user can run into: messages, workflow decisions, data only some users may see. Each of these needs a test. Paths that already existed when mx-codr was installed only warn; new ones block.</p>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>OUTCOME01</code></td><td>Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>WF01</code></td><td>A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>WF02</code></td><td>Every outcome of every workflow task (approve, reject…) is chosen in a test, and the test logs in as both people: the one who starts the workflow and the one who decides.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ISO01</code></td><td>When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ROLE01</code></td><td>Every demo user's role is used by at least one test.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SVC01</code></td><td>Every published REST or OData service is called by a test.</td><td><span class="lvl b">Blocks</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-naming">Readable microflows</h3>
+  <p class="intro">A colleague should understand a microflow by reading its captions, without opening every activity.</p>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>action-caption</code></td><td>Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices".</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>action-caption-is-default</code></td><td>No activity keeps the caption Mendix gives it by default, like "Retrieve Invoice" or "Commit object".</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>decision-caption</code></td><td>Every decision has a caption.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>caption-not-a-question</code></td><td>A decision's caption is a question and ends with "?", like "Is the order approved?".</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>caption-restates-expression</code></td><td>A decision's caption is not the expression itself (<code>$Order/Total &gt; 1000</code>). It says the question in words.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>loop-annotation</code></td><td>Every loop has an annotation saying what it walks through.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>caption-on-loop</code></td><td>A loop has no caption: mxcli drops loop captions, so the text belongs in the annotation.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>case-caption-dropped</code></td><td>Points out a decision whose caption was overwritten by its expression.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>placeholder-variable</code></td><td>No variables named like <code>$Int1</code>, <code>$tmp</code> or <code>$x</code>. A name says what the variable holds, like <code>$OpenInvoiceCount</code>.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>type-echo-variable</code></td><td>No variable names ending in <code>_List</code>, <code>_Object</code> or <code>_Obj</code>: <code>$OverdueInvoices</code>, not <code>$Invoice_List</code>.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REFRESH01</code></td><td>When the Save button of a pop-up commits an object and closes the pop-up, the commit refreshes the client. Otherwise the list behind the pop-up does not show the new or changed row until the user reloads.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>DS01</code></td><td>A data grid, list view or gallery whose data source is a microflow that only retrieves rows uses a Database source instead. The database then pages, sorts and filters, which is much faster.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>EVENT01</code></td><td>An entity's after-commit event microflow does not commit its own object again with events. That commit starts the same event again: an endless loop.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>EVENT02</code></td><td>A before-commit event microflow that can say "no" (return false) is set to raise an error. Otherwise the save is skipped and the user gets no message at all.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>EVENT03</code></td><td>Points out a commit "without events" on an entity whose event microflow sets or checks something: that work is silently skipped.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>EVENT04</code></td><td>Points out a plain Save button on an entity whose before-commit event can refuse: the user sees only "An error has occurred". Save through a microflow with a validation message instead.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ERR01</code></td><td>Points out an error handler that nobody would notice: it should log, show a message, raise the error again or return.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PERF02</code></td><td>Points out a loop over database rows that only adds them up or counts them. The database can do that in one query.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PERF03</code></td><td>Points out a database call for every row inside such a loop (a retrieve, a Java action, a sub-microflow that reads data): with 10,000 rows, 10,000 calls.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PERF05</code></td><td>Points out a retrieve of a whole table followed by an <code>if</code> that keeps some rows. Filter in the retrieve's XPath instead.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PERF06</code></td><td>Points out a loop that only looks for the highest or lowest value. One sorted retrieve of the first row does it.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PERF07</code></td><td>Points out a search on attributes that no index covers. The finding prints the index to add.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PERF08</code></td><td>Points out an index that no search in the app uses. It only slows down saving.</td><td><span class="lvl w">Warning</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-layout">Pages and navigation</h3>
+  <p class="intro">Rules marked "with login" apply once users sign in to the app.</p>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>NAV01</code></td><td>With login: the user can log out, through a Log out menu item or button.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>NAV02</code></td><td>With login: Log out is the last item in the menu.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>NAV03</code></td><td>With login: every role's home page is also in the menu, so users can get back to it.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>NAV04</code></td><td>The menu is a real Mendix navigation menu, not a row of buttons built into a layout (that has no mobile menu and no highlighted item).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>NAV05</code></td><td>Every menu item has an icon.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>NAV06</code></td><td>No two menu items that the same user can see have the same icon.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>HOME01</code></td><td>With login: administrators start on a page of the app itself, not on a template page.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT01</code></td><td>With login: administrators have a "Users" menu item to manage accounts.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT02</code></td><td>With login: everyone has a "My account" menu item to change their own password.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT03</code></td><td>With login: every role that logs in includes the Administration module's User role, and some role can manage users.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>MODULE01</code></td><td>The empty <code>MyFirstModule</code> from the Mendix template is deleted once the app has its own module. The finding lists what still uses it.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>USER01</code></td><td>With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>BACK01</code></td><td>A page opened from another page has a Back button, top left. Pop-ups don't need one: they close with their X.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>LAYOUT01</code></td><td>All normal pages use the same layout, so the menu looks and behaves the same everywhere. Pop-ups, the login page and phone pages may differ.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ICON01</code></td><td>Every button has an icon. The finding suggests one.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>EDGE01</code></td><td>Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SPACE01</code></td><td>Widgets next to each other have space between them, and a heading has space under it. Spacing uses Atlas's spacing settings.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SPACE02</code></td><td>Spacing uses only the Atlas sizes None, S, M or L. Other values make the Mendix build fail.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SPACE03</code></td><td>Widgets on the same line have the same spacing above and below them, so they line up.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SPACE04</code></td><td>A button or text never touches a grid, list or card right above or below it.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>GRID01</code></td><td>A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>GRID02</code></td><td>A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>UI001</code></td><td>A data grid is filtered with the filters inside its columns, not with a home-made filter bar of text boxes and checkboxes above it.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TEXT01</code></td><td>A long text attribute (more than 500 characters, or unlimited) is edited in a multi-line text area, not a one-line text box.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TEXT02</code></td><td>Points out a one-line text box for a field named like free text (Description, Notes, Reason).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>URL01</code></td><td>Every normal page has a URL, so it can be bookmarked, shared and reloaded. A page with a parameter gets the parameter in its URL, like <code>order/{Order/Id}</code>. Pop-ups, login pages and pages whose parameter can't be in a URL are skipped. The finding prints the line that adds the URL.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>NAME01</code></td><td>Points out a widget name used on more than one page.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>NAME02</code></td><td>Every widget is named after its page, what it is for and its type, in full words, like <code>OrderDetail_GenerateInvoiceButton</code>. Tests find widgets by these names.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>ALERT01</code></td><td>Points out an alert or card style put on a plain text, where it renders badly. Put it on a container around the text.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>HEAD01</code></td><td>Points out a page without a heading.</td><td><span class="lvl w">Warning</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-structure">Project structure</h3>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>FOLDER01</code></td><td>Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: <code>UI</code> for pages and snippets, <code>FNC</code> for microflows and nanoflows, <code>ENV</code> for everything else. The finding prints the moves to make.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>MOD001</code></td><td>Nothing lies at the top of a module, and no folder is named after a document type ("Microflows", "Pages"). FOLDER01 checks the same more strictly.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>REU001</code></td><td>Shows snippets used on several pages and sub-microflows called from several places: reuse that is working.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>UNUSED01</code></td><td>No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it.</td><td><span class="lvl b">Blocks</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-security">Security</h3>
+  <p class="intro">Based on Mendix's own security best practices. Every finding of the last run is in <code>.mxcli/security.txt</code>.</p>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>security</code></td><td>App security is set to Production. At Prototype level Mendix ignores the XPath constraints on access rules, so a test can pass on an app that shows everyone's data.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>STRICT01</code></td><td>Strict mode is on. Without it, a clever user can read and change data through the browser in ways the pages never offer.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>CRED01</code></td><td>A constant meant for a secret (a password, token or API key) has no default value. A default ends up in every build and backup. The value is set per environment instead.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ANON01</code></td><td>Anonymous (not logged in) users cannot create or change stored data.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>FILTER01</code></td><td>If a page shows a user only their own records (with <code>[%CurrentUser%]</code> in its XPath), the entity's access rule limits them the same way. A filter on a page is not security: another page or the browser could still read everything.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>VIEW01</code></td><td>A role that may only see its own records cannot read a view entity that adds up everybody's records, like a total of all customers' invoices.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SQL01</code></td><td>No microflow builds a database query by gluing text and a variable together. Whoever controls the variable controls the query (SQL injection).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCOPE01</code></td><td>Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>WRITE01</code></td><td>Points out a role that may change fields only the system should set, like a total or a status. The finding names the fields to remove and the associations to keep.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>EXTENDS01</code></td><td>Points out an entity that extends the user account (<code>System.User</code> or <code>Administration.Account</code>). Keep business data in its own entity, linked to the account.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>XSS01</code></td><td>Points out an HTML widget that shows text a user typed as HTML. Someone could type a script that runs in other users' browsers.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ADMIN01</code></td><td>Points out that the administrator account is still called MxAdmin. A task for you in Studio Pro; mxcli cannot change it.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>PWD01</code></td><td>Points out a weak password policy (fewer than 8 characters, or no digit, mixed case or symbol). A task for you in Studio Pro.</td><td><span class="lvl w">Warning</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 class="part" id="part-mendix">Part B · Rules from Mendix and mxcli</h2>
+  <p class="intro">These rules are not mx-codr's. They come from Mendix's own build check and from mxcli's linter. The gate runs them and stops on errors.</p>
+
+  <h3 id="g-mx">Stops DONE</h3>
+  <div class="table-wrap"><table class="rules">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>mx check</code></td><td>Mendix's own consistency check finds no errors: the same red errors Studio Pro would show in its Errors pane.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>MPR009</code></td><td>A gallery that feeds a data view through its selection allows selecting one item at a time (Studio Pro error CE3637).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>QUAL006</code></td><td>Every caption Mendix requires, like a tab's title, has text in the app's default language (error CE4899).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SEC007</code></td><td>Anonymous users cannot read all records of an entity: the access rule needs an XPath that limits them.</td><td><span class="lvl b">Blocks</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="g-mxcli-lint">Advice from mxcli's linter</h3>
+  <p class="intro">Shown by <code>mxcli lint</code>, never blocking. The gate itself prints only CONV011.</p>
+  <div class="table-wrap"><table class="rules compact">
+    <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
+    <tbody>
+      <tr><td><code>CONV011</code></td><td>No commit inside a loop: commit the list once after the loop.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR001</code></td><td>Entities, microflows, pages and enumerations follow the naming conventions.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR002</code></td><td>No empty microflows or nanoflows.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR003</code></td><td>A module has at most 15 stored entities.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR004</code></td><td>No validation message left empty.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR005</code></td><td>No image widget without an image (it crashes).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR006</code></td><td>No empty containers left on pages.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>MPR007</code></td><td>A page in the menu can be opened by at least one role.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR008</code></td><td>No microflow activities on top of each other on the canvas.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR010</code></td><td>A form inside a data view is wrapped in a layout grid.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR011</code></td><td>No activity drawn outside the loop it belongs to.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR012</code></td><td>No old image widgets the modern React client cannot show.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC001</code></td><td>Every stored entity has at least one access rule.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC002</code></td><td>Passwords must be at least 8 characters.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC004</code></td><td>Anonymous access is on: check every rule of the anonymous role.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC005</code></td><td>Strict mode is off.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC006</code></td><td>Entities with personal data have access rules.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC008</code></td><td>No role reads every record of an entity with personal data.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC009</code></td><td>Large entities limit which attributes each role may read.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV001</code></td><td>Boolean attributes start with Is, Has, Can, Should, Was or Will.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV002</code></td><td>No default values on attributes; set them in a microflow.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV003</code></td><td>Page names end in _NewEdit, _View, _Overview, _Select, _Details or _Dashboard.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV004</code></td><td>Enumerations start with <code>ENUM_</code>.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV005</code></td><td>Snippets start with <code>SNIPPET_</code>.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV006</code></td><td>Access rules don't allow create or delete directly; microflows do that.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV007</code></td><td>Read and write access rules have XPath constraints.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV008</code></td><td>Each module role belongs to exactly one user role.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV009</code></td><td>A microflow has at most 15 activities.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV010</code></td><td><code>ACT_</code> microflows only do UI work and call sub-microflows.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV012</code></td><td>Decisions have a meaningful caption.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV013</code></td><td>Calls to REST, web services and Java actions have error handling.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV014</code></td><td>No "Continue" error handling, which hides errors.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV015</code></td><td>No validation rules on entities; use <code>VAL_</code> microflows.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV016</code></td><td>No event handlers on entities; call microflows explicitly.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV017</code></td><td>No calculated attributes; store the value and update it in a microflow.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV018</code></td><td>Large modules use folders.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV019</code></td><td>Pages in the menu have a URL.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>ARCH001</code></td><td>Pages use entities from their own module.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ARCH002</code></td><td>Stored entities have microflows that create and update them.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ARCH003</code></td><td>Stored entities have a unique, required business key.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>DESIGN001</code></td><td>An entity has at most 10 attributes.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>QUAL001</code></td><td>A microflow is not too complex (cyclomatic complexity under 10).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>QUAL002</code></td><td>Documents have a description of their purpose.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>QUAL003</code></td><td>A microflow has at most 25 activities.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>QUAL004</code></td><td>Every document is used somewhere or is an entry point.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CUSTOM001</code></td><td>Entity names are PascalCase.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CUSTOM002</code></td><td>Microflow names start with ACT_, SUB_, DS_, VAL_ or SCH_.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>MDL-FLOW01</code></td><td>A microflow's branches can be written as nested if/else.</td><td><span class="lvl i">Info</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="verdict">
+  <h2><span class="num">7</span>Reading the verdict</h2>
+  <ul class="items">
+    <li><strong>DONE</strong> (exit 0): every step passed. <code>--only</code> and <code>--tests-only</code> say PASSED, never DONE.</li>
+    <li><strong>NOT DONE — failed</strong> (exit 1): each failing step prints its findings, the fix, and the <code>tests/checks/&lt;step&gt;.md</code> file to read.</li>
+    <li><strong>NOT DONE — could not run</strong> (exit 2): a check or the app could not run; the line says why.</li>
+    <li><strong>Warnings</strong> are listed apart and never block: fix them with the next fix, not in a gate run of their own.</li>
+    <li><strong>Timing</strong> per step and a closing list of what still blocks DONE.</li>
+  </ul>
+</section>
+
+<section id="switches">
+  <h2><span class="num">8</span>The person's switches</h2>
+  <p class="intro">In <code>tests/harness.env</code>. The guard refuses a session that edits it or sets them inline.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Switch</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>MDL_REQUIRE_PRODUCTION=0</code></td><td>Skips the Production requirement, for an app with no users.</td></tr>
+      <tr><td><code>MDL_VISUAL</code>, <code>MDL_RUNTIME_ERRORS</code>, <code>MDL_CAPTIONS</code>, <code>MDL_SCOPE</code>, <code>MDL_WIDGET_NAMES</code></td><td><code>warn</code>, <code>error</code> or <code>0</code>: makes those warnings block, or turns them off.</td></tr>
+      <tr><td><code>MDL_PATHS=error</code></td><td>Old paths without a test block too.</td></tr>
+      <tr><td><code>MDL_UNTESTED</code></td><td>Paths deliberately left without a test.</td></tr>
+      <tr><td><code>MDL_KEEP_UNUSED</code></td><td>Documents kept on purpose though nothing uses them.</td></tr>
+      <tr><td><code>MDL_DB_RESET=session</code></td><td>Database snapshot per session, restored after the first DONE.</td></tr>
+      <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>
+      <tr><td><code>MDL_TEST_FIRST=0</code></td><td>Turns off TEST01 in precheck.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its READMEs and <code>tests/CHECKS.md</code>, bundle 2026.10.09.1.</footer>
+</main>
+</div>
+</body>
+</html>

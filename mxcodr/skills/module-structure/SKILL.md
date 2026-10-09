@@ -215,7 +215,7 @@ module of its own with pages, remove it, so nothing in the app opens on the temp
 home page and no role carries a module role that grants nothing:
 
 ```sql
-create or modify page Shop.Admin_Home (Title: 'Administration', Layout: Atlas_Core.Atlas_Default) {
+create or modify page Shop.Admin_Home (Title: 'Administration', Layout: Atlas_Core.Atlas_Default, Url: 'admin-home') {
   -- what an administrator starts the day with, and a link to Users
 }
 grant view on page Shop.Admin_Home to Shop.Admin;

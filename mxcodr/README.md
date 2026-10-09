@@ -707,6 +707,27 @@ names the associations the role writes, to keep in a `write (...)` list, which d
 name: on B2B the session narrowed the write lists, the order's customer picker turned read-only and
 nine tests failed. On a copy with the old rules put back, the list the finding names is the one the
 session reached by trial (`Order_Customer, Order_Workflow`, `OrderLine_Order, OrderLine_Product`, ...).
+Bundle 2026.10.08.7: UI001 (a hand-built filter bar over a grid) blocks DONE -- its `.star` rule was at
+warning level, so it never did, though the docs said so; 2 of 32 local apps have one. The lint detail
+now shows each error with its fix: mxcli 0.25 marks errors with a different glyph, and the gate printed
+an empty detail under a red lint verdict. MOD001 stays a warning: FOLDER01 blocks the same.
+Bundle 2026.10.08.8: `URL01` (step `layout`, `layout_rules/urls.cjs`) -- every page of the app's own
+modules that is not a pop-up or login page has a URL, whenever Mendix allows one. Measured with mx check
+on Mendix 11.12: a URL takes a segment per parameter, `{Order/Id}` or `{Order/OrderNumber}` for an
+object and `{Qty}` for a value (one missing is CE5601), and a non-persistent entity cannot be in a URL
+(CE5605), so such a page is skipped. The finding prints `alter page ... { set Url = '...' };` with a
+segment per parameter; on a copy of InvoiceB2B the twelve it printed passed mx check. Almost no
+local app has URLs yet (0-1 each, 9-17 pages without on the B2B apps).
+Bundle 2026.10.08.9: the layout step writes every finding to `.mxcli/layout.txt` and says so when the
+detail shows only twelve; on InvoiceB2B URL01 found seventeen pages and the session read the checker's
+source for the other five. (The B2B session then reached DONE: seventeen URLs, and the URL change
+surfaced a CE2729 page leak -- a customer page showing an internal note -- which it fixed.)
+Bundle 2026.10.09.1, from an InvoiceChase session built from scratch (Qwen 3.8 27B, then Flash Next;
+DONE in 50 minutes): a credentials.env without a final newline lost its last password (the scenario
+read it with `while read`); precheck now says when a script clears an old error and Mendix reports what
+lay behind it, in other scripts' documents -- fix them where they are created, all in one exec; SCRIPT01
+compares only the owner scripts in `mdlsource/`, so an old one-off no longer blocks the next repair; and
+two pitfalls: a user's roles are the reference set `UserRoles`, and `create module` takes nothing else.
 
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,

@@ -75,7 +75,8 @@ for script in "$@"; do
 done
 set -- "${scripts[@]}"
 
-# SCRIPT01: a document these scripts create that another script in the same folder creates too.
+# SCRIPT01: a document these scripts create that another script in mdlsource/ creates too (one-offs
+# elsewhere are not compared: once run, they are history).
 # Whichever runs last wins, so re-running one silently undoes the other -- no mx check sees it.
 if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
   duplicates="$("$NODE" tools/mdl-checks/gate_helpers.cjs duplicate-definitions "$@" 2>/dev/null)"
@@ -254,6 +255,19 @@ if [ -z "$new_errors" ]; then
 fi
 echo "precheck: $(printf '%s\n' "$new_errors" | grep -c .) error(s) -- the build would fail. Fix the script, then exec (${seconds}s):"
 printf '%s\n' "$new_errors" | head -12
+# An old error these scripts clear can unmask others: Mendix stops checking a part of the model at
+# its first error, then reports what lay behind it. Those are not in these scripts. InvoiceChase
+# (2026-10-09): dropping a broken demo user surfaced a button and an XPath in two other scripts'
+# documents, and the session re-ran the same script four times on "fix the script".
+if [ -n "${old_errors:-}" ]; then
+  cleared="$(printf '%s\n' "$old_errors" | grep -Fxv -f <(printf '%s\n' "$out" | grep -E '^\[error\]') | grep -c .)"
+  if [ "${cleared:-0}" -gt 0 ]; then
+    echo "  These scripts clear $cleared of the model's old error(s), and Mendix then checks further: the errors"
+    echo "  above may sit in documents these scripts never touch (the widget or activity it names tells which)."
+    echo "  Fix each in the script that creates its document, and apply every fix in ONE exec -- one script"
+    echo "  holding them all -- since each one alone still leaves the others."
+  fi
+fi
 # The same one-line hints the gate prints for a failed boot: a block of 26 identical CE2729
 # errors is one missing pair of grants, and reads as 26 problems without them.
 if [ -f tests/gate/hints.sh ]; then

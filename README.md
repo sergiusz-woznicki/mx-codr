@@ -21,7 +21,7 @@ It sits on top of [mxcli](https://github.com/mendixlabs/mxcli):
   consistency check and the rules below in about 30 seconds. Only **DONE** means done.
 - **No broken model.** The agent changes the app with small MDL scripts (text files, a
   bit like SQL for a Mendix model). Each is tested on a copy first; if Studio Pro would
-  show errors, your `.mpr` is not touched. After each one the agent is told whether it applied.
+  show errors, your `.mpr` is not touched; when fixing one error reveals others, it says which scripts they belong to. After each one the agent is told whether it applied.
 - **A proper Mendix app.** One menu for all roles, icons, one layout, Back buttons,
   "Users" and "My account" for signed-in users, no leftover `MyFirstModule`.
 - **A readable model.** Business captions, process folders, reused snippets and
@@ -101,6 +101,7 @@ what to fix. Codes in brackets are what the gate prints.
 - A long text (over 500 characters, or unlimited) is edited in a text area, not a one-line
   text box (`TEXT01`); a field named like prose (Description, Notes, Reason ...) gets a hint (`TEXT02`, a warning).
 - Everything on a page inside a layout grid, so nothing touches the edge of the window (`EDGE01`).
+- A URL on every page that is not a pop-up, whenever Mendix allows one (no non-persistent parameter), so it can be bookmarked, shared and reloaded (`URL01`).
 - A heading on every page (`HEAD01`, a warning).
 - Pages checked as they render: after every test the gate measures the page for widgets
   that overlap, sideways scrolling, cut-off text and charts that do not fit one screen
