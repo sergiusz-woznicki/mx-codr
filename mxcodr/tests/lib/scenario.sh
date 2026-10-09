@@ -78,7 +78,9 @@ _mdl_js_settings() {
   # sign_in_as('<user>'): every TEST_PASSWORD_<user>= of tests/credentials.env, read as data.
   local cred_pairs=() cred_line cred_user cred_pw
   if [ -f "${CREDENTIALS:-}" ]; then
-    while IFS= read -r cred_line; do
+    # `|| [ -n ... ]`: a file whose last line has no newline still gives that line (a session's
+    # credentials.env lost its last password that way, InvoiceChase 2026-10-09).
+    while IFS= read -r cred_line || [ -n "$cred_line" ]; do
       case "$cred_line" in TEST_PASSWORD_*=*) ;; *) continue ;; esac
       cred_user="${cred_line%%=*}"; cred_user="${cred_user#TEST_PASSWORD_}"
       cred_pw="${cred_line#*=}"; cred_pw="${cred_pw%\"}"; cred_pw="${cred_pw#\"}"

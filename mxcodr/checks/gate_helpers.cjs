@@ -669,6 +669,10 @@ function duplicateDefinitions(scripts) {
     const own = definitions(script);
     if (!own.size) continue;
     const folder = py.dirname(script) || '.';
+    // Only the owner scripts in mdlsource/: a one-off elsewhere (tools/once/) is history once it ran,
+    // and an older one-off that created the same flow blocked every repair after it -- three times in
+    // one InvoiceChase session (2026-10-09). Overwriting newer work is STALE01's to catch.
+    if (py.basename(abspath(folder)) !== 'mdlsource') continue;
     const names = fs.readdirSync(folder).sort(py.compare);
     for (const other of names) {
       const file = py.join(folder, other);

@@ -722,6 +722,12 @@ Bundle 2026.10.08.9: the layout step writes every finding to `.mxcli/layout.txt`
 detail shows only twelve; on InvoiceB2B URL01 found seventeen pages and the session read the checker's
 source for the other five. (The B2B session then reached DONE: seventeen URLs, and the URL change
 surfaced a CE2729 page leak -- a customer page showing an internal note -- which it fixed.)
+Bundle 2026.10.09.1, from an InvoiceChase session built from scratch (Qwen 3.8 27B, then Flash Next;
+DONE in 50 minutes): a credentials.env without a final newline lost its last password (the scenario
+read it with `while read`); precheck now says when a script clears an old error and Mendix reports what
+lay behind it, in other scripts' documents -- fix them where they are created, all in one exec; SCRIPT01
+compares only the owner scripts in `mdlsource/`, so an old one-off no longer blocks the next repair; and
+two pitfalls: a user's roles are the reference set `UserRoles`, and `create module` takes nothing else.
 
 `FOLDER01` (`checks/check_folders.cjs`, step `folders`, bundle 2026.10.08.1): every document of the
 app's own modules sits in `<business folder>/UI` (pages, snippets, layouts), `/FNC` (microflows,

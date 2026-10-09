@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.08.9 · mxcli v0.25.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.09.1 · mxcli v0.25.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -327,7 +327,7 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>precheck</code></td><td>The script is run on a copy of the app first. If it stops halfway, or if Studio Pro would show new errors afterwards, it is refused. The app is never left half-changed.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>SCRIPT01</code></td><td>Each page, microflow, entity or constant is created in only one script. If two scripts both create the same page, running the older one again silently throws away the newer version.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCRIPT01</code></td><td>Each page, microflow, entity or constant is created in only one script in <code>mdlsource/</code>. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>STALE01</code></td><td>An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TEST01</code></td><td>Test first: before a new page or a new <code>ACT_</code> microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
@@ -568,7 +568,7 @@ html { scroll-behavior: smooth; }
   </div>
 </section>
 
-<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its READMEs and <code>tests/CHECKS.md</code>, bundle 2026.10.08.9.</footer>
+<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its READMEs and <code>tests/CHECKS.md</code>, bundle 2026.10.09.1.</footer>
 </main>
 </div>
 </body>
