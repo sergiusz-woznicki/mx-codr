@@ -6,6 +6,8 @@
 //           module whose grid has no column filter (ui001_handrolled_grid_filter.star)
 //   SEC007  an entity readable by anonymous users with no XPath constraint (DIVD-2022-00019;
 //           sec_unconstrained_anon_read.star)
+//   STATUS01 a button whose flow always sets one status, and that stays on the page once the object
+//           has it: a second click sets the same status again (a warning; the fix is a Visible: condition)
 //   LINT01  mxcli's own lint advice: off unless the rulebook says warn or block, then
 //           `mxcli lint --format json` runs here and its findings are listed at that level
 //
@@ -80,6 +82,106 @@ function anonymousUnconstrainedRead(model, entities) {
   return out;
 }
 
+// The text between the bracket at `open` and its partner (quotes respected), and the index after it.
+function balanced(text, open) {
+  const close = { '(': ')', '{': '}' }[text[open]];
+  let depth = 0, quote = '';
+  for (let i = open; i < text.length; i++) {
+    const c = text[i];
+    if (quote) { if (c === quote) quote = ''; continue; }
+    if (c === "'" || c === '"') { quote = c; continue; }
+    if (c === text[open]) depth++;
+    else if (c === close && --depth === 0) return { body: text.slice(open + 1, i), end: i + 1 };
+  }
+  return { body: text.slice(open + 1), end: text.length };
+}
+
+// `a = 1, b = f(x, y)` -> ['a = 1', 'b = f(x, y)']: commas outside brackets and quotes.
+function topLevel(text) {
+  const parts = [];
+  let depth = 0, quote = '', from = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) { if (c === quote) quote = ''; continue; }
+    if (c === "'" || c === '"') quote = c;
+    else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (c === ',' && !depth) { parts.push(text.slice(from, i).trim()); from = i + 1; }
+  }
+  if (text.slice(from).trim()) parts.push(text.slice(from).trim());
+  return parts;
+}
+
+// {param: {attr: value}} for a flow's parameters whose enumeration attribute the flow only ever sets
+// to that one value: `change $Invoice (Status = Mod.InvoiceStatus.Sent)` and nothing else for it.
+// A flow that sets two values (a button that walks through statuses) or a computed one is left out.
+function singleStatusTargets(source, enumerations) {
+  const header = /\b(?:microflow|nanoflow)\s+[\w.]+\s*\(/i.exec(source);
+  if (!header) return {};
+  const params = new Set();
+  const head = balanced(source, header.index + header[0].length - 1);
+  for (const m of head.body.matchAll(/\$(\w+)\s*:/g)) params.add(m[1]);
+  const seen = {};
+  const re = /\bchange\s+\$(\w+)\s*\(/gi;
+  let m;
+  while ((m = re.exec(source.slice(head.end)))) {
+    if (!params.has(m[1])) continue;
+    const at = head.end + m.index + m[0].length - 1;
+    for (const part of topLevel(balanced(source, at).body)) {
+      const a = /^(\w+)\s*=\s*([\s\S]+)$/.exec(part);
+      if (!a) continue;
+      const v = /^([\w]+\.[\w]+)\.(\w+)$/.exec(a[2].trim());
+      const entry = ((seen[m[1]] = seen[m[1]] || {})[a[1]] = seen[m[1]][a[1]] || { values: new Set(), other: false });
+      if (v && enumerations.has(v[1])) entry.values.add(a[2].trim()); else entry.other = true;
+    }
+  }
+  const out = {};
+  for (const [param, attrs] of Object.entries(seen)) {
+    for (const [attr, e] of Object.entries(attrs)) {
+      if (e.other || e.values.size !== 1) continue;
+      (out[param] = out[param] || {})[attr] = [...e.values][0];
+    }
+  }
+  return out;
+}
+
+// STATUS01: [{code, key, message}] -- sources: CATALOG.SOURCE rows of the app's own modules;
+// enumerations: the qualified names of every enumeration.
+function repeatStatusButtons(sources, enumerations) {
+  const flows = {};
+  for (const d of sources) if (d.ObjectType === 'MICROFLOW' || d.ObjectType === 'NANOFLOW') flows[d.QualifiedName] = singleStatusTargets(d.SourceText || '', enumerations);
+  const out = [];
+  for (const page of sources.filter(d => d.ObjectType === 'PAGE' || d.ObjectType === 'SNIPPET')) {
+    const text = page.SourceText || '';
+    const re = /\bactionbutton\s+(\w+)\s*\(/gi;
+    let m;
+    while ((m = re.exec(text))) {
+      const body = balanced(text, m.index + m[0].length - 1).body;
+      const call = /\bAction:\s*call\s+(?:microflow|nanoflow)\s+([\w.]+)\s*\(/i.exec(body);
+      if (!call || !flows[call[1]]) continue;
+      const args = topLevel(balanced(body, call.index + call[0].length - 1).body);
+      const visible = (/\bVisible:\s*([\s\S]*?)(?:,\s*\w+\s*:|$)/i.exec(body) || [])[1] || '';
+      if (/^\s*false\s*$/i.test(visible)) continue;
+      for (const arg of args) {
+        const p = /^(\w+)\s*=/.exec(arg);
+        const targets = p && flows[call[1]][p[1]];
+        if (!targets) continue;
+        for (const [attr, value] of Object.entries(targets)) {
+          if (new RegExp(`\\b${attr}\\b`).test(visible)) continue;
+          out.push({ code: 'STATUS01', key: page.QualifiedName,
+            message: `${m[1]} on ${page.QualifiedName} calls ${call[1]}, which always sets ${p[1]}/${attr} to ${value}, and the button ` +
+              `stays on the page once ${attr} is ${value.split('.').pop()}: a second click sets the same status again. Hide it then -- ` +
+              `fix this before DONE: alter page ${page.QualifiedName} { set Visible = [${attr} != ${value}] on ${m[1]} }; and put the same ` +
+              `Visible: in the script that creates the page; let ${call[1]} check the status too (an older open page still reaches it), ` +
+              `and make the test click it once and then see it gone (return {gone: !(await page.locator('.mx-name-${m[1]}').count())}). ` +
+              'Leave it only when a second click must really do it again, and then say why in the final report' });
+        }
+      }
+    }
+  }
+  return out;
+}
+
 // LINT01: mxcli lint's findings, each as one line, when the rulebook asks for them. The JSON (mxcli
 // 0.25): {violations: [{ruleId, severity, message, module, document, documentType, suggestion}], summary}.
 function lintFindings(appDir, mpr) {
@@ -108,7 +210,7 @@ function main() {
   const { appDir, mpr, refresh } = args;
   const modules = new Set(args.modules);
   if (!mpr) { process.stdout.write(`ERROR no .mpr in ${appDir}\n`); return 2; }
-  const level = code => levelOf(levels, code, code === 'LINT01' ? 'off' : 'block');
+  const level = code => levelOf(levels, code, { LINT01: 'off', STATUS01: 'warn' }[code] || 'block');
   let found = [];
   try {
     if (refresh) mxcli(appDir, mpr, 'refresh catalog full source');
@@ -118,6 +220,11 @@ function main() {
       found.push(...handRolledGridFilter(widgets.filter(w => modules.has(w.ModuleName)), entities));
     }
     if (level('SEC007') !== 'off') found.push(...anonymousUnconstrainedRead(readModel(appDir, mpr), entities.filter(e => modules.has(e.ModuleName))));
+    if (level('STATUS01') !== 'off') {
+      const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ModuleName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('MICROFLOW', 'NANOFLOW', 'PAGE', 'SNIPPET')", true);
+      const enumerations = new Set(mxcli(appDir, mpr, 'SELECT QualifiedName FROM CATALOG.ENUMERATIONS', true).map(e => e.QualifiedName));
+      found.push(...repeatStatusButtons(sources.filter(d => modules.has(d.ModuleName)), enumerations));
+    }
     if (level('LINT01') !== 'off') found.push(...lintFindings(appDir, mpr));
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
@@ -136,4 +243,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint };
+module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons };

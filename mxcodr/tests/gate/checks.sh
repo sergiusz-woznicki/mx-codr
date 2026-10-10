@@ -233,6 +233,14 @@ rulebook_ok() {
   return 1
 }
 # rulebook_fingerprint <step> -- `env:RULEBOOK_<step>=<digest of its effective levels and exceptions>`.
+# What the offline rules read beyond the model (OFFLINE01, OFFLINE03), for the layout step's cache key:
+# whether the built app registers a service worker, and how many tests cut the network.
+offline_inputs() {
+  local sw="" tests
+  [ -f deployment/web/index.js ] && sw="$(grep -o '"registerServiceWorker": *[a-z]*' deployment/web/index.js | head -1)"
+  tests="$(grep -l 'go_offline *(' tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ')"
+  printf '%s|%s' "$sw" "$tests"
+}
 rulebook_fingerprint() { printf 'env:RULEBOOK_%s=%s\n' "$1" "$(mdl_rulebook digest "$1" 2>/dev/null || echo none)"; }
 
 # Starts the model checks in the background, each through the cache.
@@ -242,11 +250,11 @@ start_model_checks() {
   local -a cache_inputs=(tests/gate.sh tests/gate tools/mdl-checks/gate_helpers.cjs tools/mdl-checks/gate_values.cjs tools/mdl-checks/gate_scripts.cjs tools/mdl-checks/gate_runtime.cjs tools/mdl-checks/gate_visual.cjs tools/mdl-checks/gate_changed.cjs tools/mdl-checks/py_compat.cjs tools/mdl-checks/rulebook.cjs tools/mdl-checks/mxcli_client.cjs tests/harness.env "meta:$MXCLI")
   ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
       meta:widgets meta:theme meta:themesource meta:javasource ) &
-  ( run_cached catalog  check_catalog  "${cache_inputs[@]}" tools/mdl-checks/catalog_rules.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint catalog)" ) &
+  ( run_cached catalog  check_catalog  "${cache_inputs[@]}" tools/mdl-checks/catalog_rules.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint catalog)" ) &
   ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs tools/mdl-checks/test_rules.cjs "$(rulebook_fingerprint coverage)" ) &
   ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs tools/mdl-checks/event_rules.cjs tools/mdl-checks/datasource_rules.cjs "$CACHE_DIR/captions-baseline.json" "$(rulebook_fingerprint naming)" ) &
-  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "$(rulebook_fingerprint layout)" ) &
-  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint security)" ) &
+  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_OFFLINE_INPUTS=$(offline_inputs)" "$(rulebook_fingerprint layout)" ) &
+  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint security)" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "$(rulebook_fingerprint scope)" ) &
   ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
   ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint folders)" ) &

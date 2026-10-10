@@ -89,6 +89,7 @@ const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs'
 const { verticalFindings } = require('./layout_rules/vertical.cjs');
 const { nameFindings, documentHashes } = require('./layout_rules/names.cjs');
 const { urlFindings } = require('./layout_rules/urls.cjs');
+const { offlineFindings, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings } = require('./layout_rules/offline.cjs');
 const { levelArgs } = require('./rulebook.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
@@ -200,6 +201,10 @@ const OPTIONS = {
   '--page-hashes': { dest: 'page_hashes', kind: 'path' },
   '--names-baseline': { dest: 'names_baseline', kind: 'path' },
   '--json': { dest: 'json', kind: 'flag' },
+  // Not in USAGE, which stays byte-identical to the frozen reference: the offline rules' inputs.
+  '--web-index': { dest: 'web_index', kind: 'path' },
+  '--tests-dir': { dest: 'tests_dir', kind: 'path' },
+  '--phone-layouts': { dest: 'phone_layouts', kind: 'append' },
   '--help': { dest: 'help', kind: 'help' },
   '-h': { dest: 'help', kind: 'help' },
 };
@@ -231,6 +236,7 @@ function parseArgs(argv) {
     sources: [], navigation: null, sign_out_sources: [], layouts: [], admin_module: false, user_roles: null,
     menu_access: null, guest_role: '', own_modules: '', template_module: false, opened_from: [], entities: [],
     users_sign_in: false, expect_pages: 0, port_parity: false, names: '', page_hashes: null, names_baseline: null, json: false,
+    web_index: null, tests_dir: null, phone_layouts: [],
   };
   const unknown = [];
   let positionalRuns = 0, inRun = false;
@@ -345,6 +351,12 @@ function main() {
   failures = failures.concat(headerButtonFindings(lines, flows));
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
   if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
+  // Offline profiles (OFFLINE01-03), the menus phone and tablet layouts show (PHONE01) and the
+  // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03).
+  if (hasNavigation) failures = failures.concat(offlineFindings(navigation, readOptional(args.web_index), args.tests_dir ? fsPath(args.tests_dir) : ''));
+  if (args.phone_layouts.length) failures = failures.concat(phoneMenuFindings(lines, collect(args.phone_layouts)[0]));
+  if (args.phone_layouts.length && hasNavigation) failures = failures.concat(webPhoneLayoutFindings(navigation, lines, collect(args.phone_layouts)[0]));
+  if (args.phone_layouts.length) failures = failures.concat(phoneGridFindings(lines, collect(args.phone_layouts)[0]));
   // Widget names: warnings while the app is built; a page new or changed since the last DONE
   // (the hashes the gate kept then) needs them, and --names error makes every one block.
   if (args.names === 'warn' || args.names === 'error') {

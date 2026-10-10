@@ -11,7 +11,7 @@ key: none
 Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window.
 
 ## Fix
-`layoutgrid pageGrid { row rowTop { column colTop (DesktopWidth: 12) { ... } } }` around the page's widgets, the top row too.
+A `layoutgrid` around the page's widgets, the top row too.
 
 ## Local
 # level: block

@@ -46,6 +46,22 @@ MPR="${MPR:-$(cd "$APP_DIR" && ls -1 *.mpr | head -1)}"
 PORTABLE_APP_DIR="$APP_DIR"
 . "$(dirname "${BASH_SOURCE[0]}")/portable.sh"
 
+# The test browser opens only the origins .playwright/cli.config.json allows, a list mxcli writes
+# for ports 8079-8085 when it creates the app: an app on APP_PORT=8086 was refused with
+# net::ERR_BLOCKED_BY_CLIENT before any test step ran. Its own origin is added, and an open browser
+# that read the old list is closed so the next scenario opens it with the new one.
+_mdl_allow_origin() {
+  local config="$APP_DIR/.playwright/cli.config.json" origin
+  origin="$(printf '%s' "$1" | sed -E 's#^(https?://[^/]+).*#\1#')"
+  [ -f "$config" ] && [ -n "$origin" ] && grep -q '"allowedOrigins"' "$config" || return 0
+  grep -qF "\"$origin\"" "$config" && return 0
+  "$NODE" -e 'const fs = require("fs"); const [f, o] = process.argv.slice(1); const c = JSON.parse(fs.readFileSync(f, "utf8"));
+    if (!c.network.allowedOrigins.includes(o)) c.network.allowedOrigins.push(o);
+    fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");' "$config" "$origin" 2>/dev/null || return 0
+  (cd "$APP_DIR" && playwright-cli close >/dev/null 2>&1) || true
+}
+_mdl_allow_origin "$BASE_URL"
+
 # --- 2. Credentials ---
 # From the environment, else tests/credentials.env (TEST_USER=, TEST_PASSWORD=,
 # TEST_PASSWORD_<user>=), else none (Security Level: Off).

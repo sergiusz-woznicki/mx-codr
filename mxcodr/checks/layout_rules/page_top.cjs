@@ -84,11 +84,17 @@ function currentUserFindings(lines, snippets, navigation, layouts) {
   const snippet = defined.length ? defined[0] : `${module}.${CURRENT_USER_SNIPPET}`;
   const shown = missing.slice(0, 6).join(', ') + (missing.length > 6 ? ` and ${missing.length - 6} more` : '');
   const missingSnippet = defined.length ? '' : ` (${snippet} does not exist yet: the skill has it)`;
+  // A page an offline profile reaches needs the variant that reads the account on the device.
+  const offline = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?navigation\s+\w+Offline\b/im.test(navigation || '')
+    ? ` A page an offline profile reaches uses ${module}.${CURRENT_USER_SNIPPET}Offline instead (a database list of the` +
+      " signed-in account, synced by the profile, and no account link): the microflow and the ManageMyAccount link do" +
+      ' not work offline (skill spacing-and-layout).'
+    : '';
   return [...failures, { check: 'USER01', line: 0, message:
     `${missing.length} page(s) lack the signed-in user top right: ${shown} -- start each with \`container` +
     ` ctPageTop (DesignProperties: ${ROW_RIGHT_PROPS}) { snippetcall scCurrentUser (Snippet: ${snippet}) }\`;` +
     ' on a page with Back, Back goes first in that row and \'Right\' becomes \'Space between (only for' +
-    ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, 'Who is signed in'` }];
+    ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, 'Who is signed in'.${offline}` }];
 }
 
 const FLOW_HEAD_RE = String.raw`^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)`;

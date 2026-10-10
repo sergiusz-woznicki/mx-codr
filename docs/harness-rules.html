@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.10.3 · mxcli v0.25.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.11.2 · mxcli v0.25.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -312,11 +312,11 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">90</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">46</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">97</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">52</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
-    <div class="count w"><span class="n">29</span><span class="t">warnings</span></div>
+    <div class="count w"><span class="n">30</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
   </div>
   <p class="intro">The mxcli lint list in part B is advice, shown on request.</p>
@@ -346,7 +346,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>RUNTIME01</code></td><td>While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS01</code></td><td>On the page a test ends on, no two widgets lie on top of each other.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS02</code></td><td>The page does not scroll sideways.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>VIS03</code></td><td>No text is cut off because its box is too small.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>VIS03</code></td><td>No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS04</code></td><td>A chart fits on one screen, in height and in width.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>LOOK01</code></td><td>Only when switched on: an AI model has looked at a screenshot of every page.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>LOOK02</code></td><td>Only when switched on: none of those screenshots was judged to look wrong.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -412,7 +412,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>NAV06</code></td><td>No two menu items that the same user can see have the same icon.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>HOME01</code></td><td>With login: administrators start on a page of the app itself, not on a template page.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ACCOUNT01</code></td><td>With login: administrators have a "Users" menu item to manage accounts.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>ACCOUNT02</code></td><td>With login: everyone has a "My account" menu item to change their own password.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT02</code></td><td>With login: everyone has a "My account" menu item to change their own password. Not asked of an offline profile, where the Administration pages cannot be reached.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ACCOUNT03</code></td><td>With login: every role that logs in includes the Administration module's User role, and some role can manage users.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>MODULE01</code></td><td>The empty <code>MyFirstModule</code> from the Mendix template is deleted once the app has its own module. The finding lists what still uses it.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>USER01</code></td><td>With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -427,6 +427,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>GRID01</code></td><td>A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>GRID02</code></td><td>A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>UI001</code></td><td>A data grid is filtered with the filters inside its columns, not with a home-made filter bar of text boxes and checkboxes above it (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>STATUS01</code></td><td>A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>TEXT01</code></td><td>A long text attribute (more than 500 characters, or unlimited) is edited in a multi-line text area, not a one-line text box.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TEXT02</code></td><td>Points out a one-line text box for a field named like free text (Description, Notes, Reason).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>URL01</code></td><td>Every normal page has a URL, so it can be bookmarked, shared and reloaded. A page with a parameter gets the parameter in its URL, like <code>order/{Order/Id}</code>. Pop-ups, login pages and pages whose parameter can't be in a URL are skipped. The finding prints the line that adds the URL.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -434,6 +435,12 @@ html { scroll-behavior: smooth; }
       <tr><td><code>NAME02</code></td><td>Every widget is named after its page, what it is for and its type, in full words, like <code>OrderDetail_GenerateInvoiceButton</code>. Tests find widgets by these names.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>ALERT01</code></td><td>Points out an alert or card style put on a plain text, where it renders badly. Put it on a container around the text.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>HEAD01</code></td><td>Points out a page without a heading.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli v0.25 creates offline profiles without them, and Studio Pro shows them greyed out, so the person deletes the profile and adds it again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>OFFLINE02</code></td><td>An offline profile synchronizes the entities its pages show. Without a sync mode the device downloads nothing and shows an empty app.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>OFFLINE03</code></td><td>An app with an offline profile has a test that cuts the network, does the work, checks the server has nothing yet, then syncs and checks it arrived.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>PHONE01</code></td><td>A phone or tablet page shows the app's own menu, not Atlas's template menu (Home, Layouts, Templates, Widgets) whose items do nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>PHONE02</code></td><td>A page the browser profile opens (home page, menu item, or a button on such a page) is not on a phone or tablet layout; a page the phone shares gets a web copy.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>PHONE03</code></td><td>A page on a phone or tablet layout lists its items as cards in a list view, each value on its own line, not in a data grid whose columns cut every value short.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -453,7 +460,7 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>PRODUCTION01</code></td><td>App security is set to Production. At Prototype level Mendix ignores the XPath constraints on access rules, so a test can pass on an app that shows everyone's data.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>STRICT01</code></td><td>Strict mode is on. Without it, a clever user can read and change data through the browser in ways the pages never offer.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>STRICT01</code></td><td>Strict mode is on. Without it, a clever user can read and change data through the browser in ways the pages never offer. Only warns in an app with an offline profile on Mendix before 11.12.5, where strict mode breaks offline commits (fixed in 11.12.5).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>CRED01</code></td><td>A constant meant for a secret (a password, token or API key) has no default value. A default ends up in every build and backup. The value is set per environment instead.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ANON01</code></td><td>Anonymous (not logged in) users cannot create or change stored data.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>FILTER01</code></td><td>If a page shows a user only their own records (with <code>[%CurrentUser%]</code> in its XPath), the entity's access rule limits them the same way. A filter on a page is not security: another page or the browser could still read everything.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -576,7 +583,7 @@ html { scroll-behavior: smooth; }
   <p class="intro">The switches that set these levels in <code>tests/harness.env</code> until bundle 2026.10.10.2 (<code>MDL_VISUAL</code>, <code>MDL_CAPTIONS</code>, <code>MDL_KEEP_UNUSED</code> ...) are no longer read; the installer moves them into the cards.</p>
 </section>
 
-<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its rule cards (<code>rulebook/&lt;group&gt;/&lt;CODE&gt;.md</code>), <code>tests/CHECKS.md</code> and the repository README, bundle 2026.10.10.3.</footer>
+<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its rule cards (<code>rulebook/&lt;group&gt;/&lt;CODE&gt;.md</code>), <code>tests/CHECKS.md</code> and the repository README, bundle 2026.10.11.2.</footer>
 </main>
 </div>
 </body>

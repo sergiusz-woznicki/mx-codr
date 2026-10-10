@@ -12,7 +12,7 @@ baseline: names
 Every widget is named after its page, what it is for and its type, in full words, like OrderDetail_GenerateInvoiceButton. Tests find widgets by these names.
 
 ## Fix
-The name it prints; warns until the first DONE, then blocks a new or changed page. Rename `.mx-name-...` in tests too.
+The name it prints; rename `.mx-name-...` in tests too.
 
 ## Local
 # level: warn

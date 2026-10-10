@@ -97,6 +97,7 @@ _mdl_js_settings() {
   printf '  const VISUAL = %s;\n' "$([ "$(_mdl_visual_mode)" = "0" ] && echo false || echo true)"
   printf '  const VISUAL_DIR = %s;\n' "$(mdl_json_string "$(_mdl_visual_dir)")"
   printf '  const TEST_NAME = %s;\n' "$(mdl_json_string "$(_mdl_test_name)")"
+  printf '  const OFFLINE_PAGES = [%s];\n' "$(_mdl_offline_pages)"
   # vars.<NAME>: every SV_<NAME> shell variable, JSON-encoded -- `SV_PW="$pw" scenario '...'`, then
   # vars.PW in the body. Splicing '"$var"' into the body cost three models minutes each.
   local name pairs=()
@@ -156,6 +157,19 @@ _mdl_js_film_pace() {
     }
   }
 PACE
+}
+
+# The page modules of the built app (deployment/web/dist/pages/<Module.Page>.js), as a JSON list's
+# items: open_app('<Kind>Offline') loads each one while online, so the pages open without a network.
+_mdl_offline_pages() {
+  local f first=1
+  for f in "$APP_DIR"/deployment/web/dist/pages/*.js; do
+    [ -f "$f" ] || continue
+    f="${f##*/}"; f="${f%.js}"
+    case "$f" in *[!A-Za-z0-9_.]*) continue ;; esac
+    [ "$first" = 1 ] || printf ','
+    printf '"%s"' "$f"; first=0
+  done
 }
 
 # The visual checks' mode from the rulebook (warn, error or 0), read once per test run.

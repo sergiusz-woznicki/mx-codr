@@ -11,7 +11,7 @@ key: none
 A page opened from another page has a Back button, top left. Pop-ups don't need one: they close with their X.
 
 ## Fix
-First widget `actionbutton btnBack (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')`; pop-ups excepted.
+First widget `actionbutton btnBack (Caption: 'Back', Action: close page)`; pop-ups excepted.
 
 ## Local
 # level: block

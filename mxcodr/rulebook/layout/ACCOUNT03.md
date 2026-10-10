@@ -11,7 +11,7 @@ key: none
 With login: every role that logs in includes the Administration module's User role, and some role can manage users.
 
 ## Fix
-`alter user role <Role> add module roles (Administration.User);` and `Administration.Administrator` on the administrators' role.
+`alter user role <Role> add module roles (Administration.User);`; admins get Administration.Administrator.
 
 ## Local
 # level: block
