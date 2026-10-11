@@ -112,6 +112,22 @@ check_layout() {
   # The project's own layouts, for a menu built from buttons (NAV04); unreadable ones do not block.
   describe_all layout-layouts "$WORK/layouts" "LAYOUTS" || layout_unread layouts NAV04
   ls "$WORK"/layouts/*.mdl >/dev/null 2>&1 && nav_args+=(--layouts "$WORK/layouts")
+  # Offline profiles (OFFLINE01-03): the built index.js says whether a service worker registers (not
+  # judged where the app is built elsewhere, Docker), and the tests say whether one cuts the network.
+  [ -f deployment/web/index.js ] && nav_args+=(--web-index deployment/web/index.js)
+  [ -f deployment/web/theme.compiled.css ] && nav_args+=(--theme-css deployment/web/theme.compiled.css)
+  nav_args+=(--tests-dir tests)
+  # PHONE01/02: the layouts the pages use (their type), and the menus their simple menu bars show.
+  local page_layout bar_menu
+  mkdir -p "$WORK/layout-menus"
+  for page_layout in $(sed -nE 's/^[[:space:]]*[Ll]ayout[[:space:]]*:[[:space:]]*([A-Za-z0-9_]+\.[A-Za-z0-9_]+).*/\1/p' "$WORK"/pages/*.mdl | sort -u); do
+    "$MXCLI" -p "$MPR" -c "DESCRIBE LAYOUT $page_layout" > "$WORK/layout-menus/layout-$page_layout.mdl" 2>/dev/null || { layout_unread menus PHONE01; continue; }
+    for bar_menu in $(sed -nE 's/.*simplemenubar.*[Mm]enu[[:space:]]*:[[:space:]]*([A-Za-z0-9_]+\.[A-Za-z0-9_]+).*/\1/p' "$WORK/layout-menus/layout-$page_layout.mdl" | sort -u); do
+      [ -f "$WORK/layout-menus/menu-$bar_menu.mdl" ] && continue
+      "$MXCLI" -p "$MPR" -c "DESCRIBE MENU $bar_menu" > "$WORK/layout-menus/menu-$bar_menu.mdl" 2>/dev/null || layout_unread menus PHONE01
+    done
+  done
+  ls "$WORK"/layout-menus/*.mdl >/dev/null 2>&1 && nav_args+=(--phone-layouts "$WORK/layout-menus")
   # Flows open pages too (`show page` in an ACT_ microflow), for the Back-button rule (BACK01),
   # and write entities, for buttons that change a grid's rows outside its header (GRID02).
   describe_all layout-flows "$WORK/layout-flows" "MICROFLOWS NANOFLOWS" || layout_unread flows "BACK01, GRID02"

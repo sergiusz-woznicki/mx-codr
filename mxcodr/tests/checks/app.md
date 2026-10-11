@@ -17,8 +17,9 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `UNUSED01` | nothing is left that nothing uses | The `drop` lines given, its `mdlsource/` source and `# covers:` name too; kept on purpose: `except: Mod.Doc` in ## Local. |
 | `VIS01` | warning: no two widgets overlap on the page a test ends on | Usually a box class on inline text or a negative margin (`level: block` in ## Local blocks). |
 | `VIS02` | warning: the page does not scroll sideways | A negative margin or a fixed width wider than the screen (`level: block` in ## Local blocks). |
-| `VIS03` | warning: no text is cut off by its box | A fixed height on a text box, or a box class on inline text (`level: block` in ## Local blocks). |
+| `VIS03` | warning: no text is cut off by its box | A fixed height or a box class on inline text; on a phone, PHONE03. |
 | `VIS04` | warning: a chart fits one screen | A chart height that fits one screen (`level: block` in ## Local blocks). |
+| `VIS05` | warning: a phone's bar stays on screen | See PHONE04. |
 | `WAIT01` | warning: a test waits for events, not for time | Await what the action causes (`await_message`, `landed`, a locator); a filtered list: `filter_list`. |
 
 ## Hints: what the gate says when...

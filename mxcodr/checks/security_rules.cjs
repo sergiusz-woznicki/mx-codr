@@ -7,7 +7,8 @@
 //            deployment"); worse when it is exposed to the client
 //   ANON01   the anonymous (guest) role may create or write a persistent entity ("do not allow anonymous
 //            users to create or write to persistable objects")
-//   STRICT01 strict mode is off ("enable strict mode")
+//   STRICT01 strict mode is off ("enable strict mode"); a warning in an app with an offline profile on
+//            Mendix before 11.12.5, where strict mode breaks offline commits (strictBreaksOffline)
 //   FILTER01 a page shows a role only its own rows through a list's XPath ([%CurrentUser%]), while that
 //            role's access rule on the entity has no XPath: every other way in -- another page, an API,
 //            the client API -- reads every row ("do not use widget constraints as a security measure";
@@ -30,6 +31,7 @@
 'use strict';
 const { mxcli, ModelReadError, moduleRolesOf, catalogArgs } = require('./mxcli_client.cjs');
 const { levelArgs, levelOf } = require('./rulebook.cjs');
+const { offlineProfiles } = require('./layout_rules/offline.cjs');
 
 const words = text => (String(text).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
   .toLowerCase().match(/[a-z0-9]+/g) || []);
@@ -124,8 +126,15 @@ function findings(model, modules) {
 
   // STRICT01
   if (sec.level && !/^off/i.test(sec.level) && !sec.strict) {
-    add('STRICT01', true, 'strict mode is off: the client API can then retrieve and change data in ways the model never offers. ' +
-      'Turn it on: alter app security ( StrictMode: TRUE );');
+    const offline = model.offline || [];
+    if (offline.length && strictBreaksOffline(model.version)) {
+      add('STRICT01', false, `strict mode is off, accepted for now: navigation profile ${offline.join(', ')} works offline, and on ` +
+        `Mendix ${model.version} strict mode breaks every client commit of a synced object ("mx.data.commit is disabled"; fixed in ` +
+        '11.12.5, same LTS). After the person upgrades the app to 11.12.5 or later, turn it on: alter app security ( StrictMode: TRUE );');
+    } else {
+      add('STRICT01', true, 'strict mode is off: the client API can then retrieve and change data in ways the model never offers. ' +
+        'Turn it on: alter app security ( StrictMode: TRUE );');
+    }
   }
 
   const persistent = new Set(model.sources.filter(d => d.ObjectType === 'ENTITY' && /\bpersistent\s+entity\b/i.test(d.SourceText || '') &&
@@ -298,6 +307,17 @@ function findings(model, modules) {
   return out;
 }
 
+// Mendix before 11.12.5 sends an offline app's client commits through mx.data, which strict mode
+// disables (release notes 11.12.5: "Strict mode did not work correctly with certain Client APIs and
+// nanoflow actions in offline apps"). Measured on 11.12.1, OfflineLab 2026-10-10. An unknown version
+// is not relaxed.
+function strictBreaksOffline(version) {
+  const v = /^(\d+)\.(\d+)\.(\d+)/.exec(String(version || ''));
+  if (!v) return false;
+  const [major, minor, patch] = v.slice(1).map(Number);
+  return major < 11 || (major === 11 && (minor < 12 || (minor === 12 && patch < 5)));
+}
+
 function readModel(appDir, mpr, read = mxcli) {
   const sources = read(appDir, mpr, 'SELECT QualifiedName, ModuleName, ObjectType, SourceText FROM CATALOG.SOURCE', true);
   if (!sources.length) throw new ModelReadError('the catalog holds no MDL source (refresh catalog full source)');
@@ -306,7 +326,11 @@ function readModel(appDir, mpr, read = mxcli) {
   const associations = read(appDir, mpr, 'SELECT QualifiedName FROM CATALOG.ASSOCIATIONS', true);
   const security = projectSecurity(read(appDir, mpr, 'show project security;'));
   const moduleRoles = moduleRolesOf(appDir, mpr, read);
-  return { sources, permissions, constants, associations, security, moduleRoles };
+  // STRICT01 only: the Mendix version and the offline profiles; a read that fails leaves STRICT01 blocking.
+  let version = '', offline = [];
+  try { version = (/Mendix Version:\s*(\S+)/.exec(read(appDir, mpr, 'show version;')) || [])[1] || ''; } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
+  try { offline = [...offlineProfiles(read(appDir, mpr, 'describe navigation;')).keys()]; } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
+  return { sources, permissions, constants, associations, security, moduleRoles, version, offline };
 }
 
 function main() {
@@ -337,4 +361,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { secretName, databaseSources, widgetBodies, projectSecurity, findings, readModel };
+module.exports = { secretName, databaseSources, widgetBodies, projectSecurity, findings, readModel, strictBreaksOffline };

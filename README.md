@@ -76,7 +76,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 87 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 98 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -90,6 +90,10 @@ tested in a real browser and checked the way a senior Mendix developer would che
   is described in its own short text file in your project. Write one line in that file to make the
   check stop the agent, only warn it, or switch it off, or to exclude one page that should stay as it
   is. The agent cannot change these files; it can only suggest the line for you to add.
+- **Phone and offline apps, tested without a network.** A test opens the phone or tablet profile at
+  its screen size, cuts the network, does the work a field worker does in a basement, checks the
+  server has nothing yet, then reconnects, syncs and checks it arrived. Rules catch an offline app
+  that cannot work offline: no service worker, nothing synchronized, the template's dead phone menu.
 - **Any agent, any OS.** Claude Code, Codex, Cursor, OpenCode or Pi, on macOS, Linux or Windows,
   with a cloud model or a local one.
 - **See what was tested.** Ask the agent to film a test, or run `bash tests/film.sh <name>`: you
@@ -158,7 +162,8 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `UNUSED01` | No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it. | Blocks |
 | `VIS01` | On the page a test ends on, no two widgets lie on top of each other. | Warning |
 | `VIS02` | The page does not scroll sideways. | Warning |
-| `VIS03` | No text is cut off because its box is too small. | Warning |
+| `VIS03` | No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included. | Warning |
+| `VIS05` | On a phone- or tablet-wide screen the layout's top and bottom bars stay on the screen while the content scrolls. | Warning |
 | `VIS04` | A chart fits on one screen, in height and in width. | Warning |
 | `WAIT01` | A browser test that pauses for a fixed time (`page.waitForTimeout` over 500 ms), or that waits up to N ms for something that may never come (`waitFor({timeout: N}).then(() => true).catch(() => false)`), pays that time on every run. On InvoiceB2B two tests paid 6 s per order they opened that way. | Warning |
 
@@ -189,7 +194,7 @@ Mendix's security best practices, checked on the model.
 | `PRODUCTION01` | App security is set to Production. At Prototype level Mendix ignores the XPath constraints on access rules, so a test can pass on an app that shows everyone's data. | Blocks |
 | `PWD01` | Points out a weak password policy (fewer than 8 characters, or no digit, mixed case or symbol). A task for you in Studio Pro. | Warning |
 | `SQL01` | No microflow builds a database query by gluing text and a variable together. Whoever controls the variable controls the query (SQL injection). | Blocks |
-| `STRICT01` | Strict mode is on. Without it, a clever user can read and change data through the browser in ways the pages never offer. | Blocks |
+| `STRICT01` | Strict mode is on. Without it, a clever user can read and change data through the browser in ways the pages never offer. Only warns in an app with an offline profile on Mendix before 11.12.5, where strict mode breaks offline commits (fixed in 11.12.5). | Blocks |
 | `VIEW01` | A role that may only see its own records cannot read a view entity that adds up everybody's records, like a total of all customers' invoices. | Blocks |
 | `WRITE01` | Points out a role that may change fields only the system should set, like a total or a status. The finding names the fields to remove and the associations to keep. | Warning |
 | `XSS01` | Points out an HTML widget that shows text a user typed as HTML. Someone could type a script that runs in other users' browsers. | Warning |
@@ -224,7 +229,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `VAR01` | No variables named like $Int1, $tmp or $x. A name says what the variable holds, like $OpenInvoiceCount. | Blocks |
 | `VAR02` | No variable names ending in _List, _Object or _Obj: $OverdueInvoices, not $Invoice_List. | Blocks |
 
-**Screens and navigation** (29 rules)
+**Screens and navigation** (39 rules)
 
 What makes the app look and behave like a proper Mendix app.
 
@@ -238,6 +243,7 @@ What makes the app look and behave like a proper Mendix app.
 | `EDGE01` | Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window. | Blocks |
 | `GRID01` | A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing. | Blocks |
 | `GRID02` | A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page. | Blocks |
+| `STATUS01` | A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged. | Warning |
 | `HEAD01` | Points out a page without a heading. | Warning |
 | `HOME01` | With login: administrators start on a page of the app itself, not on a template page. | Blocks |
 | `ICON01` | Every button has an icon. The finding suggests one. | Blocks |
@@ -251,6 +257,15 @@ What makes the app look and behave like a proper Mendix app.
 | `NAV04` | The menu is a real Mendix navigation menu, not a row of buttons built into a layout (that has no mobile menu and no highlighted item). | Blocks |
 | `NAV05` | Every menu item has an icon. | Blocks |
 | `NAV06` | No two menu items that the same user can see have the same icon. | Blocks |
+| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli v0.25 writes offline profiles without these settings, and Studio Pro shows them greyed out for an offline profile, so they cannot be set afterwards: the profile has to be deleted and added again in Studio Pro. Judged where the app is built on this machine (local mode). | Blocks |
+| `OFFLINE02` | An offline profile downloads nothing until each entity has a sync mode, and then shows an empty app while every check passes. At least one entity is synchronized with all or where. | Blocks |
+| `OFFLINE03` | An app with an offline profile has a test that cuts the network: it opens the profile, calls go_offline(), does the work the user does without a network, checks the server has nothing yet, then go_online() and sync_now() and checks it arrived. | Blocks |
+| `PHONE01` | Atlas's phone and tablet layouts show a bottom menu from Atlas_Core (Phone_Menu, Tablet_Menu): the template's Home, Layouts, Templates and Widgets, which do nothing. A page whose layout shows a menu whose items all do nothing is reported. | Blocks |
+| `PHONE02` | A page the browser profile opens (home page, menu item, or a button on such a page) is not on a phone or tablet layout; a page the phone shares gets a web copy. | Blocks |
+| `PHONE03` | A page on a phone or tablet layout lists its items as cards in a list view, each value on its own line, not in a data grid whose columns cut every value short. | Blocks |
+| `PHONE04` | On a phone the bottom bar stays on the screen and only the content scrolls: Atlas Core 4.1.3 (Mendix 11.12.1's blank app) has a typo that scrolls the whole page; the finding prints the one-line fix. | Blocks |
+| `PHONE05` | On a phone the login form fits the screen: Atlas Core gives it a fixed 400 px, so it touches the left edge and runs off the right one; the finding prints the narrow-screen rule for theme/web/main.scss. | Blocks |
+| `TABS01` | A phone or tablet page that shows its object's form and, under it, a list that belongs to that object puts the two in tabs, the object first; leave it only with a reason in the report. | Warning |
 | `SPACE01` | Widgets next to each other have space between them, and a heading has space under it. Spacing uses Atlas's spacing settings. | Blocks |
 | `SPACE02` | Spacing uses only the Atlas sizes None, S, M or L. Other values make the Mendix build fail. | Blocks |
 | `SPACE03` | Widgets on the same line have the same spacing above and below them, so they line up. | Blocks |
@@ -308,7 +323,7 @@ The default is in bold. A key you leave out takes its default.
 **Test users: `tests/credentials.env`.** `TEST_PASSWORD_<user>=...` for each demo user a test signs
 in as.
 
-**The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches.
+**The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 
 **Commands you can run yourself**
 

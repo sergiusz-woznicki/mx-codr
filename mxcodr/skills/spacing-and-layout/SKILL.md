@@ -402,7 +402,29 @@ Then every page opens with one row. The row, not the snippet, decides where the 
   sidebar toggle (the hamburger), and Atlas_Core itself is a Marketplace module that is
   never edited.
 
-The gate fails `USER01` for every page that does not start with the snippet.
+**A page an offline profile reaches** (PhoneOffline, TabletOffline, ResponsiveOffline) uses
+`SNIPPET_CurrentUserOffline` instead, in the same row. The snippet above breaks there twice:
+its microflow data source needs the server, so offline it shows nothing, and its link to
+`ManageMyAccount` makes the Administration pages reachable offline, which Mendix refuses
+(CE6900, CE6904). The offline one reads the signed-in account from the device's own database,
+and the profile downloads that one account:
+
+```sql
+create or modify snippet Shop.SNIPPET_CurrentUserOffline {
+  listview CurrentUserOffline_AccountList (DataSource: database from Administration.Account where [id = '[%CurrentUser%]']) {
+    dynamictext CurrentUserOffline_NameText (Content: '{1}', ContentParams: ({1} = Name))
+  }
+};
+-- in the offline profile's sync block, beside the app's own entities:
+--   sync Administration.Account where [id = '[%CurrentUser%]'];
+```
+
+A list, not a data view: a data view cannot take a database source. No account link: a user
+changes the password on the online profile. A page both kinds of profile reach uses the
+offline one; it works online too. Proven offline on a PhoneOffline app (2026-10-10): the page
+opened without a network shows the user's name.
+
+The gate fails `USER01` for every page that does not start with one of the two snippets.
 
 ## Back, top left, on every page you navigate to
 

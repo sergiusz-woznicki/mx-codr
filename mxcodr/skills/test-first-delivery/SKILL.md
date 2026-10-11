@@ -106,11 +106,9 @@ skipped -- not for renames, folder moves or refactors that change no behaviour.
 
 ## Phone and offline profiles
 
-`open_app()` opens the app's default (responsive) profile, and there is no helper for a
-Phone or Offline profile, the service worker or true offline behaviour -- `tests/lib.sh`
-has nothing to find on it. Test the shared logic and pages through the responsive
-profile, and report the phone profile as not covered by a browser test rather than
-writing one that only pretends to.
+`open_app("PhoneOffline")` opens a profile at its screen size; `go_offline()`, `go_online()` and
+`sync_now("List_SyncButton")` test work without a network. Never reload offline.
+How, with a complete test: [reference/offline.md](reference/offline.md).
 
 ## The rules that make it bite
 
@@ -145,6 +143,7 @@ grows without a big-bang backfill.
 | Writing the scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
 | Hitting sign-in failures, "Maximum number of sessions", startup or idempotence regressions, planning subagents, or wanting facts about the app in one call | [reference/facts.md](reference/facts.md) |
 | Listing a feature's paths, or reading a `paths` finding | [reference/paths.md](reference/paths.md) |
+| A phone, tablet or offline profile, or an OFFLINE / PHONE finding | [reference/offline.md](reference/offline.md) |
 | Debugging a suite that fails but `--only` passes, reading the gate's verdict, the coverage checker, red-first records and mutation testing | [reference/gate-and-suite.md](reference/gate-and-suite.md) |
 
 ## Validation checklist

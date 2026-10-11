@@ -42,6 +42,11 @@ function accountFindings(navigation, userRoleText, guestRole) {
   }
   for (const [p, menu] of byKey(targets)) {
     if (!menu) continue;  // a profile without a menu is not where users navigate
+    // Not on an offline profile: account management needs the server, and the Administration
+    // module's pages break the offline rules (CE6900, CE6904) once a menu makes them reachable --
+    // a Pi session on a field-service app got 14 errors for adding 'My account' to PhoneOffline
+    // because this rule asked for it (2026-10-10). Users manage their account on the online profile.
+    if (/Offline$/.test(p)) continue;
     if (!re.search(String.raw`\bpage\s+` + re.escape(ADMIN_PAGE) + String.raw`\b`, menu, 'i')) {
       failures.push({ check: 'ACCOUNT01', line: 0, message:
         `navigation profile ${p}: no menu item for user management -- add \`${ADMIN_ITEM}\` before` +

@@ -11,7 +11,7 @@ key: none
 With login: administrators have a "Users" menu item to manage accounts.
 
 ## Fix
-`menu item 'Users' ( OnClick: show page Administration.Account_Overview, Icon: ... )` before Log out.
+`menu item 'Users' ( OnClick: show page Administration.Account_Overview )`.
 
 ## Local
 # level: block

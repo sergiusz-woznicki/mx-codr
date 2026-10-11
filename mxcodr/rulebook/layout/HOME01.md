@@ -11,7 +11,7 @@ key: none
 With login: administrators start on a page of the app itself, not on a template page.
 
 ## Fix
-Create `<Module>.Admin_Home` and `home page <Module>.Admin_Home for Administrator`.
+`home page <Module>.Admin_Home for Administrator`.
 
 ## Local
 # level: block

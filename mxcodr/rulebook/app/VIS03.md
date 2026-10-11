@@ -8,10 +8,10 @@ key: none
 # VIS03 — no text is cut off by its box
 
 ## What it checks
-No text is cut off because its box is too small.
+No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included.
 
 ## Fix
-A fixed height on a text box, or a box class on inline text (`level: block` in ## Local blocks).
+A fixed height or a box class on inline text; on a phone, PHONE03.
 
 ## Local
 # level: warn

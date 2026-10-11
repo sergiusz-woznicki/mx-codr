@@ -11,7 +11,7 @@ key: none
 The empty MyFirstModule from the Mendix template is deleted once the app has its own module. The finding lists what still uses it.
 
 ## Fix
-Re-point home pages, drop `MyFirstModule.User` from user roles, `drop module MyFirstModule;`.
+Re-point home pages and roles, then `drop module MyFirstModule;`.
 
 ## Local
 # level: block

@@ -3,6 +3,11 @@
 //
 // 'widget' = the Mendix widget name, i.e. the element with class .mx-name-<widget>.
 //   open_app()                         open the app, sign in as TEST_USER if asked
+//   open_app('PhoneOffline')           the same on a navigation profile (Phone, Tablet, PhoneOffline,
+//                                      TabletOffline, ResponsiveOffline), at that device's screen size;
+//                                      an offline profile also waits for its service worker
+//   go_offline() / go_online()         cut the network / restore it (offline profiles keep working)
+//   sync_now('widget')                 click the app's sync button; returns when the server answered
 //   reopen_app()                       start over (page.goto is refused once the app is open)
 //   menu('Label'[, 'widget'])          click a menu item; the widget proves arrival
 //   landed('widget', 'what')           throw unless the widget appears
@@ -24,6 +29,12 @@
   // failing case is the normal case, so fail in 8s instead -- red runs are what
   // cost time, not green ones. Override per call where a step is genuinely slow.
   page.setDefaultTimeout(ACTION_TIMEOUT);
+
+  // Every scenario starts online and, unless it opens a profile, at the browser's own size: the
+  // browser is shared by the whole suite, and a test that ended offline or on a phone screen must
+  // not decide the next one.
+  await page.context().setOffline(false);
+  if (page.__mdl_viewport) { await page.setViewportSize(page.__mdl_viewport); page.__mdl_viewport = null; }
 
   const LOGIN_FIELD = '#usernameInput, input[name=username]';
   // '/' redirects to login.html, and the redirect finishes after goto returns --
@@ -117,8 +128,32 @@
     await page.waitForSelector('.mx-page', {timeout: 20000});
   };
 
-  const open_app = async () => {
-    await page.goto(BASE + '/');
+  // The screen of each navigation profile kind; Responsive keeps the browser's own size.
+  const PROFILE_SCREENS = {Phone: {width: 390, height: 844}, Tablet: {width: 820, height: 1180}};
+  const PROFILES = ['Responsive', 'Phone', 'Tablet', 'ResponsiveOffline', 'PhoneOffline', 'TabletOffline'];
+  const open_app = async (profile) => {
+    if (profile !== undefined && !PROFILES.includes(profile)) {
+      throw new Error('open_app(' + JSON.stringify(profile) + '): a navigation profile is one of ' + PROFILES.join(', '));
+    }
+    const offline = Boolean(profile && /Offline$/.test(profile));
+    const screen = profile && PROFILE_SCREENS[profile.replace(/Offline$/, '')];
+    if (screen) {
+      if (!page.__mdl_viewport) page.__mdl_viewport = page.viewportSize();
+      await page.setViewportSize(screen);
+    }
+    // An offline profile works without a network through its service worker's cache. `mxcli run
+    // --local` builds the app with "enableServiceWorkerCaching": false (a production package has
+    // true), and its worker then caches nothing: the served index.js gets the production value.
+    if (offline && !page.context().__mdlPwaRoute) {
+      page.context().__mdlPwaRoute = true;
+      await page.context().route(/\/index\.js(\?|$)/, async route => {
+        const res = await route.fetch();
+        await route.fulfill({response: res,
+          body: (await res.text()).replace('"enableServiceWorkerCaching": false', '"enableServiceWorkerCaching": true')});
+      });
+    }
+    await __mdl_drop_stale_pages();
+    await page.goto(BASE + '/' + (profile ? '?profile=' + profile : ''));
     await page.waitForSelector(LOGIN_FIELD + ', .mx-page', {timeout: 20000});
     // Signing out only makes sense where there is something to sign in to. With
     // Security Level: Off there is no login page, so mx.logout() would leave the
@@ -139,6 +174,63 @@
     await sign_in_if_asked();
     await page.waitForSelector('.mx-page', {timeout: 20000});
     __journey_started = true;
+    if (offline) await __mdl_ready_offline(profile);
+  };
+  // An app with an offline profile registers a service worker for the whole site, and it serves page
+  // modules stale-while-revalidate (cache "mendix-resources-revalidate"): the first page opened after
+  // an exec is the build before it, and a renamed widget is "not found" (measured on OfflineLab
+  // 2026-10-11: a caption changed on Job_Detail still showed the old one; the next run showed the new).
+  // Dropping that one cache before the app opens makes every page come from the running build; the
+  // precache, which works offline, stays. Chromium only; elsewhere nothing happens.
+  const __mdl_drop_stale_pages = async () => {
+    let cdp = null;
+    try {
+      cdp = await page.context().newCDPSession(page);
+      // The scenario has no global URL: the origin is cut from BASE.
+      const origin = String(BASE).replace(/^(\w+:\/\/[^/]+).*$/, '$1');
+      const {caches} = await cdp.send('CacheStorage.requestCacheNames', {securityOrigin: origin});
+      for (const c of caches || []) if (/revalidate/.test(c.cacheName)) await cdp.send('CacheStorage.deleteCache', {cacheId: c.cacheId});
+    } catch (e) {} finally { if (cdp) await cdp.detach().catch(() => {}); }
+  };
+  // The worker must control the page, and every page module must be loaded, before the network goes:
+  // a page opened offline is read from the cache. The dev build's precache leaves the page modules
+  // out (a production package has them), so they are imported once here while online.
+  const __mdl_ready_offline = async (profile) => {
+    // A worker takes over within a second of signing in (12 ms measured); three action timeouts is ample.
+    const ok = await page.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller,
+      null, {timeout: ACTION_TIMEOUT * 3}).then(() => true, () => false);
+    if (!ok) {
+      const flag = await page.evaluate(() => fetch('index.js').then(r => r.text()))
+        .then(t => (/"registerServiceWorker":\s*(true|false)/.exec(t) || [])[1]).catch(() => '');
+      throw new Error('open_app(' + JSON.stringify(profile) + '): no service worker took over the page, so nothing'
+        + ' works offline' + (flag === 'false' ? ' -- index.js says "registerServiceWorker": false: the profile has no'
+        + ' Progressive web app settings (OFFLINE01: delete and re-add the profile in Studio Pro)' : ''));
+    }
+    const failed = await page.evaluate(async (pages) => {
+      const out = [];
+      for (const p of pages) await import('/dist/pages/' + p + '.js').catch(e => out.push(p + ': ' + e.message));
+      return out;
+    }, OFFLINE_PAGES);
+    if (failed.length) throw new Error('open_app(' + JSON.stringify(profile) + '): could not load ' + failed.join('; '));
+  };
+  // go_offline() -- the device loses its network: no request reaches the server until go_online().
+  // The page stays loaded; reloading it offline is not possible here (Playwright does not serve a
+  // navigation from the worker), so a test walks on with menu(), clicks and fill().
+  const go_offline = async () => { await page.context().setOffline(true); };
+  const go_online = async () => { await page.context().setOffline(false); };
+  // sync_now('List_SyncButton') -- click the button that synchronizes (a nanoflow with `synchronize`),
+  // and return once the server answered the synchronization. Throws while offline, or when no
+  // synchronization reached the server.
+  const sync_now = async (widget, timeout) => {
+    const answered = page.waitForResponse(r => r.url().includes('/xas/')
+      && /"action":"synchronize/.test(r.request().postData() || ''), {timeout: timeout || 30000});
+    await page.click('.mx-name-' + widget);
+    const res = await answered.catch(() => null);
+    if (!res) throw new Error('sync_now(' + JSON.stringify(widget) + '): no synchronization reached the server'
+      + ' -- is the device online (go_online()), and does the button call a nanoflow with `synchronize`?');
+    if (!res.ok()) throw new Error('sync_now(' + JSON.stringify(widget) + '): the server answered ' + res.status());
+    await page.waitForFunction(() => !document.querySelector('.mx-progress'), null, {timeout: timeout || 30000});
+    return res.status();
   };
   // await_message(/reminder sent/i) -- wait for the text the app shows in reply to the last action
   // (click, fill, key press), wherever it puts it: a dialog, an alert bar, a toast, a rendered message.
@@ -228,7 +320,8 @@
   // rows, Gallery items, List view items) and any text or number filter. It waits for the list's
   // items to change and settle, not a fixed time, and says what the list showed when no item
   // matches, instead of a retry loop that waits out a timeout on every run.
-  const LIST_ITEMS = '[role=row]:not(:has([role=columnheader])), .widget-gallery-item, .mx-listview-item';
+  // A List view's items are its list's own <li> (Mendix 11 gives them no item class; measured 2026-10-10).
+  const LIST_ITEMS = '[role=row]:not(:has([role=columnheader])), .widget-gallery-item, .mx-listview-item, :scope.mx-listview > ul > li';
   const filter_list = async (list, filter, text, timeout) => {
     const root = page.locator('.mx-name-' + list).first();
     await root.waitFor({timeout: timeout || ACTION_TIMEOUT});
@@ -263,8 +356,10 @@
       + ', none containing it' + (now.length ? ': ' + now.slice(0, 3).map((t) => '"' + t.slice(0, 60) + '"').join(', ') : '')
       + (JSON.stringify(now) === before ? ' (the list did not change after the filter was typed)' : ''));
   };
+  // row_action('list', 'text', 'widget') -- click a widget inside the item that shows the text, in
+  // any Mendix list: Data grid 2 rows, Gallery items, List view items (LIST_ITEMS above).
   const row_action = async (grid, row_text, widget) => {
-    const row = page.locator('.mx-name-' + grid + ' [role=row]', {hasText: row_text}).first();
+    const row = page.locator('.mx-name-' + grid).first().locator(LIST_ITEMS, {hasText: row_text}).first();
     await row.waitFor({timeout: 15000});
     await row.locator('.mx-name-' + widget).click();
   };
@@ -358,8 +453,14 @@
   // bounding box over both, which 'overlapped' its neighbours on the first line.
   // viewport: {width, scrollWidth}. charts: [{name, w, h, availW, availH, inner}] -- each chart's
   // size, the screen space it has (its scrolling container), and how far a box between them makes
-  // it scroll sideways. Returns [{code, widgets, px, message}].
-  const visual_findings = (boxes, viewport, charts) => {
+  // it scroll sideways. cells: [{name, cut, total, width, sample}] -- per data grid, on a phone- or
+  // tablet-wide screen only, how many of its cells cut their text (an ellipsis counts: a whole
+  // table of "J..." and "M..." on a phone; measured on OfflineLab 2026-10-10, a grid's cells carry
+  // no widget name of their own, so the leaves above never saw them). Returns [{code, widgets, px, message}].
+  // bars: [{name, top, bottom, height, docScroll}] -- the layout's top and bottom bars on a phone- or
+  // tablet-wide screen: each must stay on the screen while only the content scrolls (VIS05; measured
+  // on OfflineLab 2026-10-11: the bottom bar sat at 3067 px on an 844 px screen and scrolled with the page).
+  const visual_findings = (boxes, viewport, charts, cells, bars) => {
     const found = [];
     const MIN = 4;   // px both ways: touching borders and 1-2 px rounding are not an overlap
     const leaves = boxes.filter(b => b.leaf && b.w > 0 && b.h > 0);
@@ -394,6 +495,21 @@
     for (const b of leaves) {
       if (b.clipped) found.push({code: 'VIS03', widgets: [b.name], px: b.clipped,
         message: b.name + ' cuts its text off (' + b.clipped + ' px hidden)'});
+    }
+    for (const b of bars || []) {
+      const off = b.top < -1 || b.bottom > b.height + 1;
+      if (!off && !b.docScroll) continue;
+      found.push({code: 'VIS05', widgets: [b.name], px: Math.round(Math.max(b.bottom - b.height, -b.top, b.docScroll, 0)),
+        message: 'the layout\'s ' + b.name + ' ' + (off ? 'is off the screen (' + Math.round(b.top) + ' px from the top of a '
+          + b.height + ' px screen)' : 'scrolls with the page (the page scrolls ' + b.docScroll + ' px)')
+          + ': on a phone it must stay put while only the content scrolls -- see PHONE04 (Atlas\'s broken scroll selector)'});
+    }
+    for (const c of cells || []) {
+      if (!c.cut) continue;
+      found.push({code: 'VIS03', widgets: [c.name], px: 0,
+        message: c.name + ' cuts the text of ' + c.cut + ' of its ' + c.total + ' cells on a ' + c.width + ' px wide screen'
+          + (c.sample ? ' ("' + c.sample + '" shows as far as it fits)' : '')
+          + ': a table does not fit a phone -- show the items as a list view of cards, each value on its own line (PHONE03)'});
     }
     // A chart is read whole or not at all: it must fit the screen without scrolling either way.
     for (const c of (charts || [])) {
@@ -469,11 +585,31 @@
               availW: Math.min(box.clientWidth, doc.clientWidth), availH: Math.min(box.clientHeight, window.innerHeight)};
           }).filter(c => c.w > 0 && c.h > 0);
         const sideways = Math.max(doc.scrollWidth - doc.clientWidth, root.scrollWidth - root.clientWidth, 0);
-        return {boxes, charts, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
+        // Data grid cells on a phone- or tablet-wide screen: those whose text does not fit (VIS03).
+        const cells = [];
+        if (doc.clientWidth < 768) {
+          for (const grid of Array.from(root.querySelectorAll('.widget-datagrid')).filter(shown)) {
+            const m = /(?:^|\s)mx-name-(\S+)/.exec(typeof grid.className === 'string' ? grid.className : '');
+            const all = Array.from(grid.querySelectorAll('[role=gridcell], [role=columnheader]'));
+            let cut = 0, sample = '';
+            for (const cell of all) {
+              const over = Array.from(cell.querySelectorAll('*')).concat([cell]).find(e => !e.children.length
+                && (e.innerText || '').trim() && e.scrollWidth - e.clientWidth > 1);
+              if (over) { cut++; if (!sample) sample = (over.innerText || '').trim().slice(0, 30); }
+            }
+            if (all.length) cells.push({name: m ? m[1] : 'data grid', cut, total: all.length, width: doc.clientWidth, sample});
+          }
+        }
+        // The layout's bars on a phone- or tablet-wide screen (VIS05).
+        const bars = doc.clientWidth < 768 ? Array.from(document.querySelectorAll('.region-bottombar, .region-topbar')).filter(shown)
+          .map(e => { const r = e.getBoundingClientRect();
+            return {name: /bottombar/.test(e.className) ? 'bottom bar' : 'top bar', top: r.top, bottom: r.bottom, height: window.innerHeight,
+              docScroll: Math.max(doc.scrollHeight - doc.clientHeight, 0)}; }) : [];
+        return {boxes, charts, cells, bars, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
           fullHeight: Math.max(...scrollers.map(e => e.scrollHeight - e.clientHeight)) + window.innerHeight,
           title: document.title};
       });
-      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts);
+      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells, snap.bars);
       let shot = '';
       if (VISUAL_DIR) {
         shot = VISUAL_DIR + '/' + TEST_NAME + '-' + (__mdl_visual.length + 1) + '.png';
