@@ -11,7 +11,7 @@ key: none
 An app with an offline profile has a test that cuts the network: it opens the profile, calls go_offline(), does the work the user does without a network, checks the server has nothing yet, then go_online() and sync_now() and checks it arrived.
 
 ## Fix
-`go_offline()`, then `go_online()` and `sync_now()`.
+`go_offline()`, `go_online()`, `sync_now()`.
 
 ## Local
 # level: block

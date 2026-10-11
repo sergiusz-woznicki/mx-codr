@@ -21,6 +21,9 @@
 //              one Mendix 11.12.1's blank app ships; 4.3.7 has it right): the content region never scrolls by itself, so on a phone
 //              the whole page scrolls and the bottom bar slides off the screen (measured on
 //              OfflineLab 2026-10-11: with 30 lines the bar sat at 3067 px on an 844 px screen).
+//   TABS01     WARN  a phone or tablet page shows its object's form and, under it, a list of a related
+//              entity (where [Module.Assoc = $Param]): two things a user works with one at a time
+//              belong in tabs, the object's first (OfflineLab's Job and its parts used, 2026-10-11).
 //   PHONE05    the same app's login form keeps Atlas Core's fixed `width: 400px` with no narrow-screen
 //              rule: on a 390 px phone it touches the left edge and runs off the right one (every
 //              Atlas version, 4.1.3 and 4.3.7 alike; measured on OfflineLab 2026-10-11).
@@ -310,4 +313,60 @@ function loginWidthFindings(pageLines, layoutText, themeCss) {
     ' margin: 0 var(--spacing-large, 24px); } } -- measured: 24 px each side at 390 and 320 px, 400 px on a desktop as before' }];
 }
 
-module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings };
+// TABS01 over the pages (DESCRIBE PAGE lines) and the describes of their layouts: [{check, line, message}]
+// warnings. A page judged: on a Phone or Tablet layout, a data view of a page parameter, and a list
+// (list view, data grid, gallery) whose source goes over an association to that parameter, neither
+// inside a tab container.
+function tabsFindings(pageLines, layoutText) {
+  const kinds = layoutKinds(layoutText);
+  const out = [];
+  let page = null;
+  const flush = () => {
+    if (!page || !/^(phone|tablet)$/i.test(page.kind)) return;
+    const form = page.forms.find(f => !f.inTabs);
+    const list = form && page.lists.find(l => !l.inTabs && l.param === form.param);
+    if (!form || !list) return;
+    const prefix = form.name.split('_')[0];
+    const what = form.param.charAt(0).toUpperCase() + form.param.slice(1);
+    const related = list.name.replace(/^[^_]*_/, '').replace(/(List|Grid|Gallery)$/, '') || 'Items';
+    out.push({ check: 'TABS01', line: 0, message: `${page.name} shows the ${form.param} (${form.name}) and under it ${list.name}, a list` +
+      ` that belongs to it: on a ${page.kind.toLowerCase()} that is one long screen of two things the user works with one at a time.` +
+      ` Put them in tabs, the ${form.param} first (it opens on it): tabcontainer ${prefix}_${what}Tabs { tabpage ${prefix}_${what}Tab` +
+      ` (Caption: '${what}') { <${form.name}, as it is> } tabpage ${prefix}_${related}Tab (Caption: '${related}') { <${list.name} with` +
+      ` its heading and buttons, as they are> } } -- the widgets keep their names; a test clicks .mx-name-${prefix}_${related}Tab before` +
+      ' it reads the list. Leave them as they are only when the user needs both on one screen, and then say why in the final report' });
+  };
+  let tabsIndent = -1, pending = null;
+  for (const line of pageLines) {
+    const p = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?page\s+([\w.]+)/i.exec(line);
+    if (p) { flush(); page = { name: p[1], kind: '', params: new Set(), forms: [], lists: [] }; tabsIndent = -1; pending = null; continue; }
+    if (!page) continue;
+    const indent = line.search(/\S/);
+    if (!page.kind) {
+      const l = /^\s*layout\s*:\s*([\w.]+)/i.exec(line);
+      if (l) page.kind = kinds.get(l[1]) || '-';
+    }
+    for (const m of line.matchAll(/\$(\w+)\s*:\s*[\w.]+/g)) page.params.add(m[1]);
+    if (tabsIndent >= 0 && /^\s*}/.test(line) && indent <= tabsIndent) tabsIndent = -1;
+    if (/^\s*tabcontainer\b/i.test(line)) { if (tabsIndent < 0) tabsIndent = indent; continue; }
+    const inTabs = tabsIndent >= 0;
+    const w = /^\s*(dataview|listview|datagrid|gallery)\s+(\w+)/i.exec(line);
+    if (w) pending = { type: w[1].toLowerCase(), name: w[2], inTabs, budget: 4 };
+    if (!pending) continue;
+    const ds = /\bDataSource:\s*(.*)$/i.exec(line);
+    if (ds) {
+      if (pending.type === 'dataview') {
+        const v = /^\$(\w+)\b/.exec(ds[1].trim());
+        if (v && page.params.has(v[1])) page.forms.push({ name: pending.name, param: v[1], inTabs: pending.inTabs });
+      } else {
+        const a = /=\s*\$(\w+)\s*\]/.exec(ds[1]);
+        if (a && page.params.has(a[1])) page.lists.push({ name: pending.name, param: a[1], inTabs: pending.inTabs });
+      }
+      pending = null;
+    } else if (--pending.budget <= 0) pending = null;
+  }
+  flush();
+  return out;
+}
+
+module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings, tabsFindings };

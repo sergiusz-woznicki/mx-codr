@@ -11,7 +11,7 @@ key: none
 An app on a phone or tablet layout overrides Atlas Core's fixed 400 px login form for narrow screens, or on a phone the form touches the left edge and runs off the right one.
 
 ## Fix
-The finding prints it.
+In the finding.
 
 ## Local
 # level: block

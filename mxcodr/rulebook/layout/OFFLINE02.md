@@ -11,7 +11,7 @@ key: none
 An offline profile downloads nothing until each entity has a sync mode, and then shows an empty app while every check passes. At least one entity is synchronized with all or where.
 
 ## Fix
-`sync ( sync Module.Entity all; )` in the profile.
+`sync Module.Entity all;` in its sync block.
 
 ## Local
 # level: block

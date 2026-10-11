@@ -89,7 +89,7 @@ const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs'
 const { verticalFindings } = require('./layout_rules/vertical.cjs');
 const { nameFindings, documentHashes } = require('./layout_rules/names.cjs');
 const { urlFindings } = require('./layout_rules/urls.cjs');
-const { offlineFindings, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings } = require('./layout_rules/offline.cjs');
+const { offlineFindings, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings, tabsFindings } = require('./layout_rules/offline.cjs');
 const { levelArgs } = require('./rulebook.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
@@ -353,13 +353,14 @@ function main() {
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
   if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
   // Offline profiles (OFFLINE01-03), the menus phone and tablet layouts show (PHONE01) and the
-  // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03), a theme whose content region never scrolls (PHONE04), a login form wider than a phone (PHONE05).
+  // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03), a theme whose content region never scrolls (PHONE04), a login form wider than a phone (PHONE05), a phone page's object and its list not in tabs (TABS01, a warning).
   if (hasNavigation) failures = failures.concat(offlineFindings(navigation, readOptional(args.web_index), args.tests_dir ? fsPath(args.tests_dir) : ''));
   if (args.phone_layouts.length) failures = failures.concat(phoneMenuFindings(lines, collect(args.phone_layouts)[0]));
   if (args.phone_layouts.length && hasNavigation) failures = failures.concat(webPhoneLayoutFindings(navigation, lines, collect(args.phone_layouts)[0]));
   if (args.phone_layouts.length) failures = failures.concat(phoneGridFindings(lines, collect(args.phone_layouts)[0]));
   if (args.phone_layouts.length) failures = failures.concat(stickyBarFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
   if (args.phone_layouts.length) failures = failures.concat(loginWidthFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
+  if (args.phone_layouts.length) warnings = warnings.concat(tabsFindings(lines, collect(args.phone_layouts)[0]));
   // Widget names: warnings while the app is built; a page new or changed since the last DONE
   // (the hashes the gate kept then) needs them, and --names error makes every one block.
   if (args.names === 'warn' || args.names === 'error') {
