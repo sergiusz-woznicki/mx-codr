@@ -241,7 +241,8 @@ offline_inputs() {
   tests="$(grep -l 'go_offline *(' tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ')"
   # PHONE04: whether the compiled theme carries Atlas's broken scroll selector.
   local scroll=0
-  [ -f deployment/web/theme.compiled.css ] && grep -q 'scrollcontainer-fixed d ' deployment/web/theme.compiled.css && scroll=1
+  # and (PHONE05) the theme's own rules: its bytes, since a narrow-screen login rule may be added anywhere.
+  [ -f deployment/web/theme.compiled.css ] && scroll="$(cksum < deployment/web/theme.compiled.css | cut -d' ' -f1)"
   printf '%s|%s|%s' "$sw" "$tests" "$scroll"
 }
 rulebook_fingerprint() { printf 'env:RULEBOOK_%s=%s\n' "$1" "$(mdl_rulebook digest "$1" 2>/dev/null || echo none)"; }

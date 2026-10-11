@@ -21,6 +21,9 @@
 //              one Mendix 11.12.1's blank app ships; 4.3.7 has it right): the content region never scrolls by itself, so on a phone
 //              the whole page scrolls and the bottom bar slides off the screen (measured on
 //              OfflineLab 2026-10-11: with 30 lines the bar sat at 3067 px on an 844 px screen).
+//   PHONE05    the same app's login form keeps Atlas Core's fixed `width: 400px` with no narrow-screen
+//              rule: on a 390 px phone it touches the left edge and runs off the right one (every
+//              Atlas version, 4.1.3 and 4.3.7 alike; measured on OfflineLab 2026-10-11).
 // Measured on OfflineLab (2026-10-10): every one of these passed mxcli check, exec and mx check.
 'use strict';
 const fs = require('fs');
@@ -271,14 +274,19 @@ function phoneGridFindings(pageLines, layoutText) {
 // PHONE04 over the pages, the describes of their layouts and the compiled theme
 // (deployment/web/theme.compiled.css; '' when not built here: not judged).
 const BROKEN_SCROLL = /\.mx-scrollcontainer-fixed\s+d\s+\.mx-scrollcontainer-middle/;
-function stickyBarFindings(pageLines, layoutText, themeCss) {
-  if (!BROKEN_SCROLL.test(themeCss || '')) return [];
+function phoneLayoutsUsed(pageLines, layoutText) {
   const kinds = layoutKinds(layoutText);
   const used = new Set();
   for (const line of pageLines) {
     const l = /^\s*layout\s*:\s*([\w.]+)/i.exec(line);
     if (l && /^(phone|tablet)$/i.test(kinds.get(l[1]) || '')) used.add(l[1]);
   }
+  return used;
+}
+
+function stickyBarFindings(pageLines, layoutText, themeCss) {
+  if (!BROKEN_SCROLL.test(themeCss || '')) return [];
+  const used = phoneLayoutsUsed(pageLines, layoutText);
   if (!used.size) return [];
   const scss = 'themesource/atlas_core/web/core/widgets/_scroll-container-react.scss';
   return [{ check: 'PHONE04', line: 0, message: `the app's theme carries Atlas Core's broken selector` +
@@ -290,4 +298,16 @@ function stickyBarFindings(pageLines, layoutText, themeCss) {
     ' fixes it too, and is the person\'s call)' }];
 }
 
-module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings };
+// PHONE05 over the same inputs: the login form's fixed width, and no narrow-screen rule after it.
+const FIXED_LOGIN = /\.loginpage-formwrapper\s*\{\s*width:\s*400px/;
+const NARROW_LOGIN = /@media[^{]*max-width:\s*\d+px[^{]*\{\s*\.loginpage-formwrapper\s*\{[^}]*width:\s*(auto|100%|calc)/;
+function loginWidthFindings(pageLines, layoutText, themeCss) {
+  if (!FIXED_LOGIN.test(themeCss || '') || NARROW_LOGIN.test(themeCss || '')) return [];
+  if (!phoneLayoutsUsed(pageLines, layoutText).size) return [];
+  return [{ check: 'PHONE05', line: 0, message: 'the login page keeps Atlas Core\'s fixed ".loginpage-formwrapper { width: 400px }",' +
+    ' so on a phone the form touches the left edge and runs off the right one. Add to the end of theme/web/main.scss (the' +
+    ' app\'s own file; Atlas Core says not to edit its core): @media (max-width: 479px) { .loginpage-formwrapper { width: auto;' +
+    ' margin: 0 var(--spacing-large, 24px); } } -- measured: 24 px each side at 390 and 320 px, 400 px on a desktop as before' }];
+}
+
+module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings };

@@ -13,7 +13,7 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `GRID01` | a column with a filter keeps its Attribute | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`. |
 | `GRID02` | a button that changes a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter. |
 | `HEAD01` | warning: a heading on every page |  |
-| `HOME01` | administrators open on a page of the app's own module | `home page <Module>.Admin_Home for Administrator` on a page of the app. |
+| `HOME01` | administrators open on a page of the app's own module | `home page <Module>.Admin_Home for Administrator`. |
 | `ICON01` | an icon on every button | `Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'` Save, `trash-can` Delete, `pencil` Edit, `add` New. |
 | `LAYOUT01` | one layout for every page that is not a pop-up | Pick one (`Atlas_Core.Atlas_Default`) and set it on every page. |
 | `MODULE01` | MyFirstModule is gone once the app has its own module | Re-point home pages and roles, then `drop module MyFirstModule;`. |
@@ -32,6 +32,7 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `PHONE02` | the browser never gets a phone layout | The finding prints it. |
 | `PHONE03` | a phone page lists items as cards | The finding prints it. |
 | `PHONE04` | a phone's bar stays on screen | The finding prints it. |
+| `PHONE05` | the login form fits a phone | The finding prints it. |
 | `SPACE01` | a margin after an inline widget and under a heading | `DesignProperties: ('Spacing': ('margin-bottom': 'S'))` on the heading. |
 | `SPACE02` | only Atlas spacing values (None, S, M, L) | `margin-`/`padding-` + `top|right|bottom|left`, `None S M L`; no `Class:`. |
 | `SPACE03` | the same vertical spacing on widgets that share a line | Give them the same `margin-top`/`margin-bottom`. |

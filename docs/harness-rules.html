@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.11.3 · mxcli v0.25.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.11.4 · mxcli v0.25.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -312,8 +312,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">99</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">53</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">100</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">54</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">31</span><span class="t">warnings</span></div>
@@ -443,6 +443,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>PHONE02</code></td><td>A page the browser profile opens (home page, menu item, or a button on such a page) is not on a phone or tablet layout; a page the phone shares gets a web copy.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE03</code></td><td>A page on a phone or tablet layout lists its items as cards in a list view, each value on its own line, not in a data grid whose columns cut every value short.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE04</code></td><td>On a phone the bottom bar stays on the screen and only the content scrolls: Atlas Core 4.1.3 (Mendix 11.12.1's blank app) has a typo that scrolls the whole page; the finding prints the one-line fix.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>PHONE05</code></td><td>On a phone the login form fits the screen: Atlas Core gives it a fixed 400 px, so it touches the left edge and runs off the right one; the finding prints the narrow-screen rule for theme/web/main.scss.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -585,7 +586,7 @@ html { scroll-behavior: smooth; }
   <p class="intro">The switches that set these levels in <code>tests/harness.env</code> until bundle 2026.10.10.2 (<code>MDL_VISUAL</code>, <code>MDL_CAPTIONS</code>, <code>MDL_KEEP_UNUSED</code> ...) are no longer read; the installer moves them into the cards.</p>
 </section>
 
-<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its rule cards (<code>rulebook/&lt;group&gt;/&lt;CODE&gt;.md</code>), <code>tests/CHECKS.md</code> and the repository README, bundle 2026.10.11.3.</footer>
+<footer>Source: the mx-codr bundle (<code>mxcodr/</code>), its rule cards (<code>rulebook/&lt;group&gt;/&lt;CODE&gt;.md</code>), <code>tests/CHECKS.md</code> and the repository README, bundle 2026.10.11.4.</footer>
 </main>
 </div>
 </body>
