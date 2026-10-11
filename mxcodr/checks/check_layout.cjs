@@ -95,6 +95,7 @@ const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layout
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
 const { phoneTopFindings } = require('./layout_rules/phone_top.cjs');
+const { listItemFindings } = require('./layout_rules/list_items.cjs');
 const { pageBlocks } = require('./layout_rules/pages.cjs');
 const { check } = require('./layout_rules/spacing.cjs');
 const { toMdl0 } = require('./layout_rules/mdl1.cjs');
@@ -352,6 +353,8 @@ function main() {
   failures = failures.concat(backButtonFindings(lines, flows, navigation));
   failures = failures.concat(headerButtonFindings(lines, flows));
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
+  // LIST01: a list view item shows its texts on the left and its buttons on the right, in one row.
+  failures = failures.concat(listItemFindings(lines.concat(py.splitlines(snippets))));
   if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
   // Offline profiles (OFFLINE01-03), the menus phone and tablet layouts show (PHONE01) and the
   // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03), a theme whose content region never scrolls (PHONE04), a login form wider than a phone (PHONE05), a phone page whose Back, title and signed-in user are not one row (PHONE06), a phone page's object and its list not in tabs (TABS01, a warning).

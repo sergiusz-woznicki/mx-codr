@@ -23,12 +23,19 @@ function isHeading(widget) {
   return (widget.type === 'dynamictext' || widget.type === 'text') && Boolean(HEADING_MODE.search(widget.text));
 }
 
+// A text rendered as a paragraph or a smaller heading (<p>, <h4>-<h6>) is a block too: it starts its own
+// line (measured on OfflineLab 2026-10-11: an H4 and three Paragraph texts stacked, 33 px apart).
+const BLOCK_TEXT_MODE = /RenderMode:\s*(Paragraph|H4|H5|H6)\b/i;
+function isBlockText(widget) {
+  return (widget.type === 'dynamictext' || widget.type === 'text') && BLOCK_TEXT_MODE.test(widget.text);
+}
+
 // Split siblings into the runs of inline widgets that share one line.
 function runsOf(group) {
   const runs = [];
   let current = [];
   for (const widget of group) {
-    if (!INLINE.has(widget.type) || STRUCTURAL.has(widget.type) || isHeading(widget)) {
+    if (!INLINE.has(widget.type) || STRUCTURAL.has(widget.type) || isHeading(widget) || isBlockText(widget)) {
       if (current.length) runs.push(current);
       current = [];
       continue;

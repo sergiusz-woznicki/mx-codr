@@ -312,8 +312,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">103</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">55</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">104</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">56</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
@@ -420,6 +420,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>USER01</code></td><td>With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it. On a phone or tablet page PHONE06 checks it, in the title's row.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>BACK01</code></td><td>A page opened from another page has a Back button, top left. Pop-ups don't need one: they close with their X.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>LAYOUT01</code></td><td>All normal pages use the same layout, so the menu looks and behaves the same everywhere. Pop-ups, the login page and phone pages may differ.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>LIST01</code></td><td>A list view item with buttons is one row that does not wrap: its texts in a box on the left, its buttons in a box on the right; the finding prints the row.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ICON01</code></td><td>Every button has an icon. The finding suggests one.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>EDGE01</code></td><td>Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SPACE01</code></td><td>Widgets next to each other have space between them, and a heading has space under it. Spacing uses Atlas's spacing settings.</td><td><span class="lvl b">Blocks</span></td></tr>

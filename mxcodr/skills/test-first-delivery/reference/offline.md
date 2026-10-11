@@ -40,8 +40,9 @@ the device; a test picks it by name.
   (CE2994: its menu reaches pages that only work online).
 - **A phone page lists items as cards, not a data grid** (PHONE03): a grid's columns cut every
   value to a letter and "..." at 390 px. A `listview` whose item is a container with one dynamic
-  text per value (the first `RenderMode: H4`, the rest `Paragraph`) and the row's buttons below
-  them; the grid's header buttons go above the list. `row_action()` reads list views too.
+  text per value (the first `RenderMode: H4`, the rest `Paragraph`) on the left and the row's
+  buttons on the right (LIST01); the grid's header buttons go above the list. `row_action()` reads
+  list views too.
 - What only the server may do -- an invoice number, a PDF, a mail -- runs in a microflow after the
   synchronization (an event handler on the synced status), never on the device.
 

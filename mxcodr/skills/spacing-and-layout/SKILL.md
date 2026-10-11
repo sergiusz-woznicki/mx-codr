@@ -480,6 +480,29 @@ create or modify page Sales.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atl
 
 The gate fails `BACK01` for every opened page without it and says which page opens it.
 
+## A list item: what it is on the left, what you do on the right
+
+A list view item with buttons is one row that does not wrap (LIST01): the texts in a box on
+the left, the buttons in a box on the right. A text with `RenderMode: Paragraph` or `H4`-`H6`
+starts its own line, so the texts in the left box need no margins between them.
+
+```sql
+  listview MyJobs_JobsList (DataSource: database from Field.RepairJob) {
+    container MyJobs_JobsCardBox (DesignProperties: ('Flex container': 'Horizontal (row)',
+        'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center',
+        'Disable row wrap': ON, 'Spacing': ('padding': 'M'))) {
+      container MyJobs_JobsInfoBox {
+        dynamictext MyJobs_NumberText (Content: '{1}', RenderMode: H4, ContentParams: ({1} = Number))
+        dynamictext MyJobs_StatusText (Content: 'Status {1}', RenderMode: Paragraph, ContentParams: ({1} = Status))
+      }
+      container MyJobs_JobsActionsBox {
+        actionbutton MyJobs_OpenButton (Caption: 'Open', Action: show page Field.Job_Detail(Job = $currentObject),
+          Icon: 'Atlas_Core.Atlas_Filled.view')
+      }
+    }
+  }
+```
+
 ## Buttons that change a grid go in its header
 
 A button that changes the rows a data grid shows -- New, Delete selected, Mark paid, Run the

@@ -246,9 +246,14 @@ function phoneGridFindings(pageLines, layoutText) {
       ` each value on its own line: alter page ${grid.page} { replace ${grid.name} with {` +
       (grid.header.length ? ` <${grid.header.join(', ')}, as they are, above the list>` : '') +
       ` listview ${list} (DataSource: <the grid's>) {` +
-      ` container ${prefix}_ItemCardBox (DesignProperties: ('Spacing': ('padding': 'M'))) { ${texts.join(' ')}` +
-      (grid.buttons.length ? ` container ${prefix}_ItemActionsBox { <${grid.buttons.join(', ')}, as they are> }` : '') +
-      ' } } } }; and the same in the script that creates the page. The buttons keep their names, so row_action() still finds' +
+      (grid.buttons.length
+        ? ` container ${prefix}_ItemCardBox (DesignProperties: ('Flex container': 'Horizontal (row)', 'Align items X': 'Space between` +
+          ` (only for horizontal containers)', 'Align items Y': 'Center', 'Disable row wrap': ON, 'Spacing': ('padding': 'M')))` +
+          ` { container ${prefix}_ItemInfoBox { ${texts.join(' ')} } container ${prefix}_ItemActionsBox { <${grid.buttons.join(', ')},` +
+          ' as they are> } }'
+        : ` container ${prefix}_ItemCardBox (DesignProperties: ('Spacing': ('padding': 'M'))) { ${texts.join(' ')} }`) +
+      ' } } }; and the same in the script that creates the page -- the values on the left, the buttons on the right (LIST01).' +
+      ' The buttons keep their names, so row_action() still finds' +
       ' them (it reads any list); a column filter has no list view counterpart (skill spacing-and-layout)' });
     grid = null;
   };

@@ -76,7 +76,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 100 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 101 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -230,7 +230,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `VAR01` | No variables named like $Int1, $tmp or $x. A name says what the variable holds, like $OpenInvoiceCount. | Blocks |
 | `VAR02` | No variable names ending in _List, _Object or _Obj: $OverdueInvoices, not $Invoice_List. | Blocks |
 
-**Screens and navigation** (40 rules)
+**Screens and navigation** (41 rules)
 
 What makes the app look and behave like a proper Mendix app.
 
@@ -249,6 +249,7 @@ What makes the app look and behave like a proper Mendix app.
 | `HOME01` | With login: administrators start on a page of the app itself, not on a template page. | Blocks |
 | `ICON01` | Every button has an icon. The finding suggests one. | Blocks |
 | `LAYOUT01` | All normal pages use the same layout, so the menu looks and behaves the same everywhere. Pop-ups, the login page and phone pages may differ. | Blocks |
+| `LIST01` | A list view item with buttons is one row that does not wrap: its texts in a box on the left, its buttons in a box on the right; the finding prints the row. | Blocks |
 | `MODULE01` | The empty MyFirstModule from the Mendix template is deleted once the app has its own module. The finding lists what still uses it. | Blocks |
 | `NAME01` | Points out a widget name used on more than one page. | Warning |
 | `NAME02` | Every widget is named after its page, what it is for and its type, in full words, like OrderDetail_GenerateInvoiceButton. Tests find widgets by these names. | Warning until the first DONE; then blocks a new or changed page |

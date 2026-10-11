@@ -8,7 +8,7 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `ACCOUNT02` | a My account menu item | `menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount )`. |
 | `ACCOUNT03` | every signing-in role has Administration.User | `alter user role <Role> add module roles (Administration.User);`. |
 | `ALERT01` | warning: an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }` |
-| `BACK01` | a Back button, top left, on a page another page opens | First widget `actionbutton btnBack (Caption: 'Back', Action: close page)`. |
+| `BACK01` | a Back button, top left, on a page another page opens | In the finding. |
 | `EDGE01` | every widget sits inside a layout grid | A `layoutgrid` around the page's widgets, the top row too. |
 | `GRID01` | a column with a filter keeps its Attribute | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`. |
 | `GRID02` | a button that changes a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter. |
@@ -16,13 +16,14 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `HOME01` | administrators open on a page of the app's own module | `home page <Module>.Admin_Home for Administrator`. |
 | `ICON01` | an icon on every button | `Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'` Save, `trash-can` Delete, `pencil` Edit, `add` New. |
 | `LAYOUT01` | one layout for every page that is not a pop-up | Pick one (`Atlas_Core.Atlas_Default`) and set it on every page. |
-| `MODULE01` | MyFirstModule is gone once the app has its own module | Re-point home pages and roles, then `drop module MyFirstModule;`. |
+| `LIST01` | a list item: texts left, buttons right | In the finding. |
+| `MODULE01` | MyFirstModule is gone once the app has its own module | Re-point home pages and roles; `drop module MyFirstModule;`. |
 | `NAME01` | warning: a widget name is used on one page only | Its own `<Page>_<What><Type>` name. |
 | `NAME02` | warning: every widget is named <Page>_<What><Type> | The name it prints; rename `.mx-name-...` in tests too. |
-| `NAV01` | users can log out | `menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )` as the menu's last item. |
+| `NAV01` | users can log out | `menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )` last. |
 | `NAV02` | warning: Log out is the last menu item | Move it to the end. |
 | `NAV03` | every role's home page is in the menu | `menu item '<caption>' ( OnClick: show page <Page>, Icon: <icon> )` before Log out. |
-| `NAV04` | no menu built from buttons in a layout | Put those pages in the navigation profile's menu; the layout keeps Atlas's own menu. |
+| `NAV04` | no menu built from buttons in a layout | Put those pages in the profile's menu; the layout keeps Atlas's menu. |
 | `NAV05` | an icon on every menu item | `Icon: Atlas_Core.Atlas_Filled.<name>` at the end of the item. |
 | `NAV06` | no icon twice in what one role sees | The other icon the message suggests. |
 | `OFFLINE01` | an offline profile has a service worker | The person re-adds it in Studio Pro. |
