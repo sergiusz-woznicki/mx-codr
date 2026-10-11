@@ -6,7 +6,7 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 |---|---|---|
 | `ACCOUNT01` | a Users menu item for administrators | `menu item 'Users' ( OnClick: show page Administration.Account_Overview )` before Log out. |
 | `ACCOUNT02` | a My account menu item | `menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount )` before Log out. |
-| `ACCOUNT03` | every signing-in role includes Administration.User; someone manages users | `alter user role <Role> add module roles (Administration.User);`; admins get Administration.Administrator. |
+| `ACCOUNT03` | every signing-in role includes Administration.User; someone manages users | `alter user role <Role> add module roles (Administration.User);`. |
 | `ALERT01` | warning: an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }`. |
 | `BACK01` | a Back button, top left, on every page another page opens | First widget `actionbutton btnBack (Caption: 'Back', Action: close page)`; pop-ups excepted. |
 | `EDGE01` | every widget sits inside a layout grid | A `layoutgrid` around the page's widgets, the top row too. |
@@ -31,11 +31,12 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `PHONE01` | phone layouts show the app's own menu | The finding prints it. |
 | `PHONE02` | the browser never gets a phone layout | The finding prints it. |
 | `PHONE03` | a phone page lists items as cards | The finding prints it. |
+| `PHONE04` | a phone's bar stays on screen | The finding prints it. |
 | `SPACE01` | a margin after an inline widget and under a heading | `DesignProperties: ('Spacing': ('margin-bottom': 'S'))` on the heading. |
-| `SPACE02` | only Atlas spacing values (None, S, M, L) | Sides `margin-`/`padding-` `top|right|bottom|left`, values `None S M L`; no `Class:` for spacing. |
+| `SPACE02` | only Atlas spacing values (None, S, M, L) | `margin-`/`padding-` + `top|right|bottom|left`, `None S M L`; no `Class:`. |
 | `SPACE03` | the same vertical spacing on widgets that share a line | Give them the same `margin-top`/`margin-bottom`. |
 | `SPACE04` | a gap between a button or text and a grid, list or card | `'margin-bottom': 'S'` on the upper one; each `controlbar` button too. |
 | `TEXT01` | a text area for a long String | `replace txtX with { textarea txtX (...) }`. |
 | `TEXT02` | warning: a text area for a prose-named attribute | A textarea if people write more than a line. |
 | `URL01` | every page that can have a URL has one | The `alter page` it prints; the same `Url:` in the page's create. |
-| `USER01` | who is signed in, top right, on every page | A `snippetcall` of the current-user snippet, top right; the finding prints it. |
+| `USER01` | who is signed in, top right, on every page | The finding prints it. |

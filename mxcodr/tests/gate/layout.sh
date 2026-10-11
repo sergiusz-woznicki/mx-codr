@@ -115,6 +115,7 @@ check_layout() {
   # Offline profiles (OFFLINE01-03): the built index.js says whether a service worker registers (not
   # judged where the app is built elsewhere, Docker), and the tests say whether one cuts the network.
   [ -f deployment/web/index.js ] && nav_args+=(--web-index deployment/web/index.js)
+  [ -f deployment/web/theme.compiled.css ] && nav_args+=(--theme-css deployment/web/theme.compiled.css)
   nav_args+=(--tests-dir tests)
   # PHONE01/02: the layouts the pages use (their type), and the menus their simple menu bars show.
   local page_layout bar_menu

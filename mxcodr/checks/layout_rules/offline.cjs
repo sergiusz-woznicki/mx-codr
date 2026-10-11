@@ -16,6 +16,11 @@
 //   PHONE03    a page on a Phone or Tablet layout that shows a data grid: on a phone its columns cut
 //              every value to "J..." and "M..." (measured on OfflineLab 2026-10-10, 390 px); the
 //              items belong in a list view of cards, each value on its own line.
+//   PHONE04    an app on a Phone or Tablet layout whose compiled theme carries Atlas Core's broken
+//              selector `.mx-scrollcontainer-fixed d .mx-scrollcontainer-middle` (Atlas Core 4.1.3, the
+//              one Mendix 11.12.1's blank app ships; 4.3.7 has it right): the content region never scrolls by itself, so on a phone
+//              the whole page scrolls and the bottom bar slides off the screen (measured on
+//              OfflineLab 2026-10-11: with 30 lines the bar sat at 3067 px on an 844 px screen).
 // Measured on OfflineLab (2026-10-10): every one of these passed mxcli check, exec and mx check.
 'use strict';
 const fs = require('fs');
@@ -263,4 +268,26 @@ function phoneGridFindings(pageLines, layoutText) {
   return out;
 }
 
-module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings };
+// PHONE04 over the pages, the describes of their layouts and the compiled theme
+// (deployment/web/theme.compiled.css; '' when not built here: not judged).
+const BROKEN_SCROLL = /\.mx-scrollcontainer-fixed\s+d\s+\.mx-scrollcontainer-middle/;
+function stickyBarFindings(pageLines, layoutText, themeCss) {
+  if (!BROKEN_SCROLL.test(themeCss || '')) return [];
+  const kinds = layoutKinds(layoutText);
+  const used = new Set();
+  for (const line of pageLines) {
+    const l = /^\s*layout\s*:\s*([\w.]+)/i.exec(line);
+    if (l && /^(phone|tablet)$/i.test(kinds.get(l[1]) || '')) used.add(l[1]);
+  }
+  if (!used.size) return [];
+  const scss = 'themesource/atlas_core/web/core/widgets/_scroll-container-react.scss';
+  return [{ check: 'PHONE04', line: 0, message: `the app's theme carries Atlas Core's broken selector` +
+    ' ".mx-scrollcontainer-fixed d .mx-scrollcontainer-middle" (a stray "d"), so the content region of a layout never' +
+    ` scrolls by itself: on a phone the whole page scrolls and the bottom bar of ${[...used].join(', ')} slides off the screen.` +
+    ` Fix the one line in ${scss}: sed -i.bak 's/^\\( *\\)d \\.mx-scrollcontainer-middle {/\\1.mx-scrollcontainer-middle {/' ${scss}` +
+    ' && rm ' + scss + '.bak -- the theme rebuilds by itself; the bar then stays on the screen and only the content scrolls.' +
+    ' (Atlas Core 4.1.3, which the blank app of Mendix 11.12.1 ships, has the typo; 4.3.7 has it right: updating Atlas Core' +
+    ' fixes it too, and is the person\'s call)' }];
+}
+
+module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings };

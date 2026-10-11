@@ -239,7 +239,10 @@ offline_inputs() {
   local sw="" tests
   [ -f deployment/web/index.js ] && sw="$(grep -o '"registerServiceWorker": *[a-z]*' deployment/web/index.js | head -1)"
   tests="$(grep -l 'go_offline *(' tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ')"
-  printf '%s|%s' "$sw" "$tests"
+  # PHONE04: whether the compiled theme carries Atlas's broken scroll selector.
+  local scroll=0
+  [ -f deployment/web/theme.compiled.css ] && grep -q 'scrollcontainer-fixed d ' deployment/web/theme.compiled.css && scroll=1
+  printf '%s|%s|%s' "$sw" "$tests" "$scroll"
 }
 rulebook_fingerprint() { printf 'env:RULEBOOK_%s=%s\n' "$1" "$(mdl_rulebook digest "$1" 2>/dev/null || echo none)"; }
 

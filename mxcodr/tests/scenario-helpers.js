@@ -457,7 +457,10 @@
   // tablet-wide screen only, how many of its cells cut their text (an ellipsis counts: a whole
   // table of "J..." and "M..." on a phone; measured on OfflineLab 2026-10-10, a grid's cells carry
   // no widget name of their own, so the leaves above never saw them). Returns [{code, widgets, px, message}].
-  const visual_findings = (boxes, viewport, charts, cells) => {
+  // bars: [{name, top, bottom, height, docScroll}] -- the layout's top and bottom bars on a phone- or
+  // tablet-wide screen: each must stay on the screen while only the content scrolls (VIS05; measured
+  // on OfflineLab 2026-10-11: the bottom bar sat at 3067 px on an 844 px screen and scrolled with the page).
+  const visual_findings = (boxes, viewport, charts, cells, bars) => {
     const found = [];
     const MIN = 4;   // px both ways: touching borders and 1-2 px rounding are not an overlap
     const leaves = boxes.filter(b => b.leaf && b.w > 0 && b.h > 0);
@@ -492,6 +495,14 @@
     for (const b of leaves) {
       if (b.clipped) found.push({code: 'VIS03', widgets: [b.name], px: b.clipped,
         message: b.name + ' cuts its text off (' + b.clipped + ' px hidden)'});
+    }
+    for (const b of bars || []) {
+      const off = b.top < -1 || b.bottom > b.height + 1;
+      if (!off && !b.docScroll) continue;
+      found.push({code: 'VIS05', widgets: [b.name], px: Math.round(Math.max(b.bottom - b.height, -b.top, b.docScroll, 0)),
+        message: 'the layout\'s ' + b.name + ' ' + (off ? 'is off the screen (' + Math.round(b.top) + ' px from the top of a '
+          + b.height + ' px screen)' : 'scrolls with the page (the page scrolls ' + b.docScroll + ' px)')
+          + ': on a phone it must stay put while only the content scrolls -- see PHONE04 (Atlas\'s broken scroll selector)'});
     }
     for (const c of cells || []) {
       if (!c.cut) continue;
@@ -589,11 +600,16 @@
             if (all.length) cells.push({name: m ? m[1] : 'data grid', cut, total: all.length, width: doc.clientWidth, sample});
           }
         }
-        return {boxes, charts, cells, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
+        // The layout's bars on a phone- or tablet-wide screen (VIS05).
+        const bars = doc.clientWidth < 768 ? Array.from(document.querySelectorAll('.region-bottombar, .region-topbar')).filter(shown)
+          .map(e => { const r = e.getBoundingClientRect();
+            return {name: /bottombar/.test(e.className) ? 'bottom bar' : 'top bar', top: r.top, bottom: r.bottom, height: window.innerHeight,
+              docScroll: Math.max(doc.scrollHeight - doc.clientHeight, 0)}; }) : [];
+        return {boxes, charts, cells, bars, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
           fullHeight: Math.max(...scrollers.map(e => e.scrollHeight - e.clientHeight)) + window.innerHeight,
           title: document.title};
       });
-      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells);
+      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells, snap.bars);
       let shot = '';
       if (VISUAL_DIR) {
         shot = VISUAL_DIR + '/' + TEST_NAME + '-' + (__mdl_visual.length + 1) + '.png';

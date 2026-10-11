@@ -11,7 +11,7 @@ key: none
 With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it.
 
 ## Fix
-A `snippetcall` of the current-user snippet, top right; the finding prints it.
+The finding prints it.
 
 ## Local
 # level: block
