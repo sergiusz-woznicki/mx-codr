@@ -76,7 +76,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 98 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 100 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -143,7 +143,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (16 rules)
+**Done means tested and building** (17 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -164,6 +164,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `VIS02` | The page does not scroll sideways. | Warning |
 | `VIS03` | No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included. | Warning |
 | `VIS05` | On a phone- or tablet-wide screen the layout's top and bottom bars stay on the screen while the content scrolls. | Warning |
+| `VIS06` | On a phone- or tablet-wide screen the page title starts at the top of the content, with who is signed in beside it, not under it. | Warning |
 | `VIS04` | A chart fits on one screen, in height and in width. | Warning |
 | `WAIT01` | A browser test that pauses for a fixed time (`page.waitForTimeout` over 500 ms), or that waits up to N ms for something that may never come (`waitFor({timeout: N}).then(() => true).catch(() => false)`), pays that time on every run. On InvoiceB2B two tests paid 6 s per order they opened that way. | Warning |
 
@@ -229,7 +230,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `VAR01` | No variables named like $Int1, $tmp or $x. A name says what the variable holds, like $OpenInvoiceCount. | Blocks |
 | `VAR02` | No variable names ending in _List, _Object or _Obj: $OverdueInvoices, not $Invoice_List. | Blocks |
 
-**Screens and navigation** (39 rules)
+**Screens and navigation** (40 rules)
 
 What makes the app look and behave like a proper Mendix app.
 
@@ -265,6 +266,7 @@ What makes the app look and behave like a proper Mendix app.
 | `PHONE03` | A page on a phone or tablet layout lists its items as cards in a list view, each value on its own line, not in a data grid whose columns cut every value short. | Blocks |
 | `PHONE04` | On a phone the bottom bar stays on the screen and only the content scrolls: Atlas Core 4.1.3 (Mendix 11.12.1's blank app) has a typo that scrolls the whole page; the finding prints the one-line fix. | Blocks |
 | `PHONE05` | On a phone the login form fits the screen: Atlas Core gives it a fixed 400 px, so it touches the left edge and runs off the right one; the finding prints the narrow-screen rule for theme/web/main.scss. | Blocks |
+| `PHONE06` | A page on a phone or tablet layout opens with one row that does not wrap: Back (where there is one), the title, and who is signed in. Nothing stands on a row of its own above the title; the finding prints the row. | Blocks |
 | `TABS01` | A phone or tablet page that shows its object's form and, under it, a list that belongs to that object puts the two in tabs, the object first; leave it only with a reason in the report. | Warning |
 | `SPACE01` | Widgets next to each other have space between them, and a heading has space under it. Spacing uses Atlas's spacing settings. | Blocks |
 | `SPACE02` | Spacing uses only the Atlas sizes None, S, M or L. Other values make the Mendix build fail. | Blocks |
@@ -273,7 +275,7 @@ What makes the app look and behave like a proper Mendix app.
 | `TEXT01` | A long text attribute (more than 500 characters, or unlimited) is edited in a multi-line text area, not a one-line text box. | Blocks |
 | `TEXT02` | Points out a one-line text box for a field named like free text (Description, Notes, Reason). | Warning |
 | `URL01` | Every normal page has a URL, so it can be bookmarked, shared and reloaded. A page with a parameter gets the parameter in its URL, like order/{Order/Id}. Pop-ups, login pages and pages whose parameter can't be in a URL are skipped. The finding prints the line that adds the URL. | Blocks |
-| `USER01` | With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it. | Blocks |
+| `USER01` | With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it. On a phone or tablet page PHONE06 checks it, in the title's row. | Blocks |
 
 **Structure** (1 rule)
 

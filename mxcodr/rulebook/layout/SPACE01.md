@@ -11,7 +11,7 @@ key: none
 Widgets next to each other have space between them, and a heading has space under it. Spacing uses Atlas's spacing settings.
 
 ## Fix
-`DesignProperties: ('Spacing': ('margin-bottom': 'S'))` on the heading.
+`('Spacing': ('margin-bottom': 'S'))` on the heading.
 
 ## Local
 # level: block

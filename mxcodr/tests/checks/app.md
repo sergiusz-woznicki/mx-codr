@@ -4,15 +4,15 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 
 | Code | Wants | Fix |
 |---|---|---|
-| `COVERAGE01` | every page and ACT_ microflow is named on a # covers: line of a test | Names separated by commas or spaces; a `SUB_`, an entity or an enumeration does not count. |
+| `COVERAGE01` | every page and ACT_ microflow is on a test's # covers: line | Names separated by commas or spaces; a `SUB_`, an entity or an enumeration does not count. |
 | `LOOK01` | warning: every screenshot the suite took has been reviewed (MDL_VISUAL_REVIEW=agent) | Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`. |
 | `LOOK02` | warning: no reviewed screenshot was rejected (MDL_VISUAL_REVIEW=agent) | Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`. |
 | `MX01` | Mendix's consistency check reports 0 errors | The CE hints under each error; the pitfalls in the syntax digest cover the same ground. |
 | `RUNTIME01` | warning: no server error logged while the suite ran | The log line names the flow or page; `level: block` in ## Local blocks. |
-| `SCOPE01` | warning: a data source microflow limits its rows to the user when the page's role is row-scoped | Constrain its retrieve (`= '[%CurrentUser%]'` or `= $SignedInCustomer`): microflows ignore entity access. |
+| `SCOPE01` | warning: a data source microflow scopes its rows to the user, as the role does | Constrain its retrieve (`= '[%CurrentUser%]'`): microflows ignore entity access. |
 | `SCRIPT01` | each document is created by one script in mdlsource/ | Change it there or with `alter`, never a second `create or modify` in a later script. |
 | `STALE01` | a re-run script does not undo later changes to its documents | A new `alter` script, or DESCRIBE those documents into it first. |
-| `TEST01` | a test exists before a new page or ACT_ microflow | Write `tests/verify-<feature>.test.sh` first, run it (red), then exec; fixing a page already in the model passes. |
+| `TEST01` | a test exists before a new page or ACT_ microflow | Write `tests/verify-<feature>.test.sh` first, run it (red), then exec; a fix to an existing page passes. |
 | `TESTS01` | every browser test passes | Read the failing scenario's own message; the test names the widget and the page. |
 | `UNUSED01` | nothing is left that nothing uses | The `drop` lines given, its `mdlsource/` source and `# covers:` name too; kept on purpose: `except: Mod.Doc` in ## Local. |
 | `VIS01` | warning: no two widgets overlap on the page a test ends on | Usually a box class on inline text or a negative margin (`level: block` in ## Local blocks). |
@@ -20,6 +20,7 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `VIS03` | warning: no text is cut off by its box | A fixed height or a box class on inline text; on a phone, PHONE03. |
 | `VIS04` | warning: a chart fits one screen | A chart height that fits one screen (`level: block` in ## Local blocks). |
 | `VIS05` | warning: a phone's bar stays on screen | See PHONE04. |
+| `VIS06` | warning: phone: title row on top | See PHONE06. |
 | `WAIT01` | warning: a test waits for events, not for time | Await what the action causes (`await_message`, `landed`, a locator); a filtered list: `filter_list`. |
 
 ## Hints: what the gate says when...

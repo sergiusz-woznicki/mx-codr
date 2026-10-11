@@ -11,7 +11,7 @@ key: none
 With login: everyone has a "My account" menu item to change their own password.
 
 ## Fix
-`menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount )` before Log out.
+`menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount )`.
 
 ## Local
 # level: block

@@ -460,7 +460,11 @@
   // bars: [{name, top, bottom, height, docScroll}] -- the layout's top and bottom bars on a phone- or
   // tablet-wide screen: each must stay on the screen while only the content scrolls (VIS05; measured
   // on OfflineLab 2026-10-11: the bottom bar sat at 3067 px on an 844 px screen and scrolled with the page).
-  const visual_findings = (boxes, viewport, charts, cells, bars) => {
+  // head: {name, top, bottom, user} -- on a phone- or tablet-wide screen, the page's first heading
+  // measured from the top of the content region, and the top of who is signed in (a widget named
+  // CurrentUser...), or null: the title opens the page and the name shares its row (VIS06; measured
+  // on OfflineLab 2026-10-11: a row holding only the name put My jobs' title at 101 px, Job's at 175).
+  const visual_findings = (boxes, viewport, charts, cells, bars, head) => {
     const found = [];
     const MIN = 4;   // px both ways: touching borders and 1-2 px rounding are not an overlap
     const leaves = boxes.filter(b => b.leaf && b.w > 0 && b.h > 0);
@@ -503,6 +507,15 @@
         message: 'the layout\'s ' + b.name + ' ' + (off ? 'is off the screen (' + Math.round(b.top) + ' px from the top of a '
           + b.height + ' px screen)' : 'scrolls with the page (the page scrolls ' + b.docScroll + ' px)')
           + ': on a phone it must stay put while only the content scrolls -- see PHONE04 (Atlas\'s broken scroll selector)'});
+    }
+    if (head && head.top > 72) {
+      found.push({code: 'VIS06', widgets: [head.name], px: Math.round(head.top),
+        message: 'the page title ' + head.name + ' starts ' + Math.round(head.top) + ' px down a ' + viewport.width
+          + ' px wide screen: on a phone the page opens with one row of Back, the title and who is signed in -- see PHONE06'});
+    } else if (head && head.user !== null && head.user !== undefined && head.user >= head.bottom - 1) {
+      found.push({code: 'VIS06', widgets: [head.name], px: Math.round(head.user - head.top),
+        message: 'who is signed in sits under the page title ' + head.name + ', not beside it: the row wraps on a '
+          + viewport.width + ' px wide screen -- \'Disable row wrap\': ON on the row (PHONE06)'});
     }
     for (const c of cells || []) {
       if (!c.cut) continue;
@@ -605,11 +618,23 @@
           .map(e => { const r = e.getBoundingClientRect();
             return {name: /bottombar/.test(e.className) ? 'bottom bar' : 'top bar', top: r.top, bottom: r.bottom, height: window.innerHeight,
               docScroll: Math.max(doc.scrollHeight - doc.clientHeight, 0)}; }) : [];
-        return {boxes, charts, cells, bars, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
+        // The page title and who is signed in, from the top of the content region (VIS06).
+        let head = null;
+        const region = doc.clientWidth < 768 ? document.querySelector('.region-content') : null;
+        const title = region && Array.from(region.querySelectorAll('h1, h2, h3')).filter(shown)[0];
+        if (title) {
+          const base = region.getBoundingClientRect().top - region.scrollTop, r = title.getBoundingClientRect();
+          const owner = title.closest('[class*="mx-name-"]');
+          const nm = owner && /(?:^|\s)mx-name-(\S+)/.exec(owner.className);
+          const who = Array.from(region.querySelectorAll('[class*="mx-name-"][class*="CurrentUser"]')).filter(shown)[0];
+          head = {name: nm ? nm[1] : title.tagName.toLowerCase(), top: r.top - base, bottom: r.bottom - base,
+            user: who ? who.getBoundingClientRect().top - base : null};
+        }
+        return {boxes, charts, cells, bars, head, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
           fullHeight: Math.max(...scrollers.map(e => e.scrollHeight - e.clientHeight)) + window.innerHeight,
           title: document.title};
       });
-      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells, snap.bars);
+      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells, snap.bars, snap.head);
       let shot = '';
       if (VISUAL_DIR) {
         shot = VISUAL_DIR + '/' + TEST_NAME + '-' + (__mdl_visual.length + 1) + '.png';

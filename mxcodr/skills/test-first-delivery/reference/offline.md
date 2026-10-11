@@ -17,6 +17,7 @@ the device; a test picks it by name.
   `SNIPPET_CurrentUserOffline` (skill spacing-and-layout): a database list of
   `Administration.Account where [id = '[%CurrentUser%]']`, which the profile syncs, and no account
   link. The online snippet's microflow and `ManageMyAccount` link break offline (CE6900, CE6904).
+  On a phone page it shares one row with Back and the title (PHONE06; skill spacing-and-layout).
 - **Menu items for user management stay on the online profile.** ACCOUNT01/02 do not ask an
   offline profile for them: they would make the Administration pages reachable offline.
 - The profile needs **Progressive web app** settings, or no service worker registers and no page

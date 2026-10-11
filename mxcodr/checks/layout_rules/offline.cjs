@@ -323,7 +323,7 @@ function tabsFindings(pageLines, layoutText) {
   let page = null;
   const flush = () => {
     if (!page || !/^(phone|tablet)$/i.test(page.kind)) return;
-    const form = page.forms.find(f => !f.inTabs);
+    const form = page.forms.find(f => !f.inTabs && !/_TitleForm$/.test(f.name));  // PHONE06's row of Back, title and user is not the object
     const list = form && page.lists.find(l => !l.inTabs && l.param === form.param);
     if (!form || !list) return;
     const prefix = form.name.split('_')[0];
@@ -369,4 +369,4 @@ function tabsFindings(pageLines, layoutText) {
   return out;
 }
 
-module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings, tabsFindings };
+module.exports = { layoutKinds, offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings, tabsFindings };

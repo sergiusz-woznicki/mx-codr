@@ -11,7 +11,7 @@ key: none
 A button or text never touches a grid, list or card right above or below it.
 
 ## Fix
-`'margin-bottom': 'S'` on the upper one; each `controlbar` button too.
+`'margin-bottom': 'S'` on the upper one; each `controlbar` button too
 
 ## Local
 # level: block

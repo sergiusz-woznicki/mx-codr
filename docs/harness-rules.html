@@ -312,11 +312,11 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">101</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">54</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">103</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">55</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
-    <div class="count w"><span class="n">32</span><span class="t">warnings</span></div>
+    <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
   </div>
   <p class="intro">The mxcli lint list in part B is advice, shown on request.</p>
@@ -348,6 +348,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>VIS02</code></td><td>The page does not scroll sideways.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS03</code></td><td>No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS05</code></td><td>On a phone- or tablet-wide screen the layout's top and bottom bars stay on the screen while the content scrolls.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>VIS06</code></td><td>On a phone- or tablet-wide screen the page title starts at the top of the content, with who is signed in beside it, not under it.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS04</code></td><td>A chart fits on one screen, in height and in width.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>LOOK01</code></td><td>Only when switched on: an AI model has looked at a screenshot of every page.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>LOOK02</code></td><td>Only when switched on: none of those screenshots was judged to look wrong.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -416,7 +417,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>ACCOUNT02</code></td><td>With login: everyone has a "My account" menu item to change their own password. Not asked of an offline profile, where the Administration pages cannot be reached.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ACCOUNT03</code></td><td>With login: every role that logs in includes the Administration module's User role, and some role can manage users.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>MODULE01</code></td><td>The empty <code>MyFirstModule</code> from the Mendix template is deleted once the app has its own module. The finding lists what still uses it.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>USER01</code></td><td>With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>USER01</code></td><td>With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it. On a phone or tablet page PHONE06 checks it, in the title's row.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>BACK01</code></td><td>A page opened from another page has a Back button, top left. Pop-ups don't need one: they close with their X.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>LAYOUT01</code></td><td>All normal pages use the same layout, so the menu looks and behaves the same everywhere. Pop-ups, the login page and phone pages may differ.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ICON01</code></td><td>Every button has an icon. The finding suggests one.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -444,6 +445,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>PHONE03</code></td><td>A page on a phone or tablet layout lists its items as cards in a list view, each value on its own line, not in a data grid whose columns cut every value short.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE04</code></td><td>On a phone the bottom bar stays on the screen and only the content scrolls: Atlas Core 4.1.3 (Mendix 11.12.1's blank app) has a typo that scrolls the whole page; the finding prints the one-line fix.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE05</code></td><td>On a phone the login form fits the screen: Atlas Core gives it a fixed 400 px, so it touches the left edge and runs off the right one; the finding prints the narrow-screen rule for theme/web/main.scss.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>PHONE06</code></td><td>A page on a phone or tablet layout opens with one row that does not wrap: Back (where there is one), the title, and who is signed in. Nothing stands on a row of its own above the title; the finding prints the row.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TABS01</code></td><td>A phone or tablet page that shows its object's form and, under it, a list that belongs to that object puts the two in tabs, the object first; leave it only with a reason in the report.</td><td><span class="lvl w">Warning</span></td></tr>
     </tbody>
   </table></div>

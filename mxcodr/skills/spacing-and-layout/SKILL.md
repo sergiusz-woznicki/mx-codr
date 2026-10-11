@@ -395,6 +395,27 @@ Then every page opens with one row. The row, not the snippet, decides where the 
 - `Align items X` is Atlas's `justify-content`, and it only works together with
   `Flex container`: without it the link lands on the left, above the heading (seen in a
   session). It moves the row's direct children, which is why it goes on the row.
+- **On a phone or tablet page** (PHONE06) the title joins that row, so nothing stands on a row
+  of its own above it: Back and the title in a box on the left, the user on the right, and
+  `'Disable row wrap': ON` on both containers -- Back, an H1 and the name need 375 px of a
+  phone's 358, and Atlas wraps the row otherwise. A title that reads the page's object sits in
+  a data view of its own around the row. The offline snippet's list view takes
+  `('Style': 'No styling')`, or each name is a 69 px card:
+
+```sql
+        dataview JobDetail_TitleForm (DataSource: $Job) {
+          container JobDetail_PageTopBox (DesignProperties: ('Flex container': 'Horizontal (row)',
+              'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center',
+              'Disable row wrap': ON, 'Spacing': ('margin-bottom': 'M'))) {
+            container JobDetail_TitleBox (DesignProperties: ('Flex container': 'Horizontal (row)',
+                'Align items Y': 'Center', 'Disable row wrap': ON)) {
+              actionbutton JobDetail_BackButton (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
+              dynamictext JobDetail_HeadingText (Content: 'Job {1}', RenderMode: H1, ContentParams: ({1} = Number))
+            }
+            snippetcall JobDetail_CurrentUserSnippet (Snippet: Field.SNIPPET_CurrentUserOffline)
+          }
+        }
+```
 - `CurrentUser` is a reserved name in Mendix (CE7247) -- hence `SignedInUser`.
 - A button caption takes an attribute, not an expression, so the microflow picks e-mail or
   user name and the snippet only shows `Label`.
