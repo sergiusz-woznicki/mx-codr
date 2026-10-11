@@ -323,7 +323,7 @@ The default is in bold. A key you leave out takes its default.
 **Test users: `tests/credentials.env`.** `TEST_PASSWORD_<user>=...` for each demo user a test signs
 in as.
 
-**The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches.
+**The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 
 **Commands you can run yourself**
 
