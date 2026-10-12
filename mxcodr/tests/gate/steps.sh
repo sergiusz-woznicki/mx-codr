@@ -181,7 +181,7 @@ check_scope() {
   fi
   # 0 passes and 1 has findings, each under a PASS or WARN line; anything else (a traceback
   # exits 1 too) did not check the model, and counted as "findings", a pass while SCOPE01 warned.
-  if { [ "$code" != "0" ] && [ "$code" != "1" ]; } || ! printf '%s\n' "$out" | head -1 | grep -qE '^(PASS|WARN|FAIL) '; then
+  if { [ "$code" != "0" ] && [ "$code" != "1" ]; } || ! grep -qE '^(PASS|WARN|FAIL) ' <<< "${out%%$'\n'*}"; then
     echo "scope: could not run -- check_scope.cjs exited $code" > "$WORK/scope.summary"
     printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -3 > "$WORK/scope.detail"
     return 2
@@ -189,7 +189,7 @@ check_scope() {
   echo "scope: $(printf '%s\n' "$out" | head -1)" > "$WORK/scope.summary"
   [ "$code" = "0" ] && return 0
   # SCOPE01 at `block` (tests/rulebook/app/SCOPE01.md): the checker says FAIL.
-  if printf '%s\n' "$out" | head -1 | grep -q '^FAIL '; then
+  if grep -q '^FAIL ' <<< "${out%%$'\n'*}"; then
     printf '%s\n' "$out" | grep -E '^\s+- ' > "$WORK/scope.detail"
     return 1
   fi
@@ -214,14 +214,14 @@ check_unused() {
   found="$STEP_OUT"; code="$STEP_CODE"
   case "$code" in
     0) echo "unused: no unused document" > "$WORK/unused.summary"; return 0 ;;
-    1) printf '%s\n' "$found" | head -1 | grep -qE '^(FAIL|WARN) ' || code=2 ;;
+    1) grep -qE '^(FAIL|WARN) ' <<< "${found%%$'\n'*}" || code=2 ;;
   esac
   if [ "$code" != "1" ]; then
     echo "unused: could not run -- $(printf '%s\n' "$found" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/unused.summary"
     return 2
   fi
   # UNUSED01 below block in tests/rulebook: listed under the warnings, not dropped on a copy.
-  if printf '%s\n' "$found" | head -1 | grep -q '^WARN '; then
+  if grep -q '^WARN ' <<< "${found%%$'\n'*}"; then
     echo "unused: $(printf '%s\n' "$found" | head -1 | sed 's/^WARN  //') (UNUSED01 is a warning in tests/rulebook)" > "$WORK/unused.summary"
     printf '%s\n' "$found" | grep '^  ~ ' | head -10 | sed 's/^  ~ /   - /' > "$WORK/unused.warnings"
     return 0
@@ -297,7 +297,7 @@ check_folders() {
   found="$STEP_OUT"
   [ "$STEP_CODE" = "0" ] && return 0
   # FOLDER01 below block in tests/rulebook: the documents and their moves under the warnings.
-  if printf '%s\n' "$found" | head -1 | grep -q '^WARN '; then
+  if grep -q '^WARN ' <<< "${found%%$'\n'*}"; then
     { printf '%s\n' "$found" | grep '^  ~ ' | head -10 | sed 's/^  ~ /   - /'
       printf '%s\n' "$found" | sed -n 's/^move: /     /p' | head -10; } > "$WORK/folders.warnings"
     return 0

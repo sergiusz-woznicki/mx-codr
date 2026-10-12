@@ -50,13 +50,16 @@ function isBackButton(wtype, props) {
 }
 
 // USER01: every page shows who is signed in, in the same place -- its first widget, top right.
-function currentUserFindings(lines, snippets, navigation, layouts) {
+// Not a page on a phone or tablet layout (phoneLayouts: their describes): PHONE06 wants the user
+// there too, in one row with Back and the title.
+function currentUserFindings(lines, snippets, navigation, layouts, phoneLayouts = '') {
   const defined = [];
   for (const line of py.splitlines(snippets)) {
     const m = SNIPPET_DEF_RE.match(line);
     if (m && m.group('name').endsWith('.' + CURRENT_USER_SNIPPET)) defined.push(m.group('name'));
   }
   const types = layoutTypes(layouts);
+  const small = require('./offline.cjs').layoutKinds(phoneLayouts);
   const loginPages = loginPagesOf(navigation);
   const missing = [], unaligned = [], failures = [];
   const isUser = w => w[0] === 'snippetcall' && w[1].includes(CURRENT_USER_SNIPPET);
@@ -64,6 +67,7 @@ function currentUserFindings(lines, snippets, navigation, layouts) {
     const layout = PAGE_LAYOUT_RE.search(block.slice(0, 8).join('\n'));
     const name = layout ? layout.group('layout') : '';
     if (loginPages.has(page) || re.search('popup|login', name + ' ' + (types.has(name) ? types.get(name) : ''), 'i')) continue;
+    if (/^(phone|tablet)$/i.test(small.get(name) || types.get(name) || '')) continue;
     const lead = leadingWidgets(block);
     // First on the page, or right after the Back button in the same row.
     if (lead.length && (isUser(lead[0]) || (lead.length === 2 && isBackButton(lead[0][0], lead[0][1]) &&
@@ -94,7 +98,7 @@ function currentUserFindings(lines, snippets, navigation, layouts) {
     `${missing.length} page(s) lack the signed-in user top right: ${shown} -- start each with \`container` +
     ` ctPageTop (DesignProperties: ${ROW_RIGHT_PROPS}) { snippetcall scCurrentUser (Snippet: ${snippet}) }\`;` +
     ' on a page with Back, Back goes first in that row and \'Right\' becomes \'Space between (only for' +
-    ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, 'Who is signed in'.${offline}` }];
+    ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, reference/signed-in-user.md.${offline}` }];
 }
 
 const FLOW_HEAD_RE = String.raw`^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)`;

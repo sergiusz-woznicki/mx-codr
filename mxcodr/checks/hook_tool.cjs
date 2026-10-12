@@ -137,9 +137,16 @@ const tools = {
     // the whole verdict, as d.get("tool_input", {}).get(...) raised.
     const input = get(d, 'tool_input', {});
     if (!isDict(input)) return;
-    if (re.search(String.raw`Nothing was written|Refusing to execute|^\s*(Parse error|Error|error)\b`, text, 'm')) {
+    const applied = re.search(String.raw`^\s*(Created|Modified|Replaced|Updated|Dropped|Altered|Moved|Granted|Revoked)\b|already in sync`, text, 'm');
+    if (re.search(String.raw`Nothing was written|Refusing to execute|^\s*Parse error\b`, text, 'm')) {
       py.print('exec: FAILED -- mxcli wrote nothing; the reason is in its output above. Fix the script and exec it again.');
-    } else if (re.search(String.raw`^\s*(Created|Modified|Replaced|Updated|Dropped|Altered|Moved|Granted|Revoked)\b|already in sync`, text, 'm')) {
+    } else if (applied && re.search(String.raw`^\s*(Error|error)\b`, text, 'm')) {
+      // `mxcli exec x.mdl && bash tests/gate.sh --restart`: the exec applied, the boot after it failed.
+      // "FAILED -- wrote nothing" sent a session to fix a script that had applied (2026-10-12).
+      py.print('exec: applied. An Error line in this output comes from a later step of the same command (a boot or the gate), not from the exec: the model has the change.');
+    } else if (re.search(String.raw`^\s*(Error|error)\b`, text, 'm')) {
+      py.print('exec: FAILED -- mxcli wrote nothing; the reason is in its output above. Fix the script and exec it again.');
+    } else if (applied) {
       py.print('exec: applied. ("0 errors, N warnings" in mxcli output is a count, not a failure.)');
     } else {
       const command = get(input, 'command', '');

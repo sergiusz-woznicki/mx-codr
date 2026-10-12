@@ -19,7 +19,8 @@ behind single lines; read one when its line is the thing you are doing (table at
 ## The loop, in one screen
 
 ```bash
-# 0. say what "working" means: one sentence in the user's words; too vague for one? ask
+# 0. a new app, role, module or channel? skill requirements-interview first; then per
+#    feature, what "working" means: one sentence in the user's words
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call;
 #    a script without `scenario()` hangs for the full timeout. Logic with no screen goes
 #    in tests/*.test.mdl (`mxcli test`, skill test-microflows): extra, the gate skips it.
@@ -53,8 +54,8 @@ throws. menu() proves the page arrived. dismiss_dialog() before the next click;
 await_message(/sent/i), never page.waitForTimeout.
 ```
 
-What a test script can call, so there is no need to read `tests/lib.sh` to find out
-(one session spent its first minute grepping it). A complete script is in
+What a test script can call, so there is no need to read `tests/lib.sh` to find out.
+A complete script is in
 [reference/scenario.md](reference/scenario.md).
 
 ```bash

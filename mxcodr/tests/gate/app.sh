@@ -15,7 +15,29 @@ boot_failed() {   # boot_failed <log>
 
 # Prints the error lines, and the indented lines under an `Error:` line: mxbuild lists one build
 # error per indented line, and not every one carries a [CE] code ("Invalid token ...").
+# CE0463 is the only build error: a page's pluggable widget (Data grid 2) stored in an older
+# definition, which `create or modify page` writes every time. The fix is mechanical -- stop, update
+# the widgets, boot -- and it cost each InvoiceChase run several rounds by hand (2026-10-12), so the
+# gate does it once itself. Reads the errors from stdin; true when CE0463 is all there is.
+widgets_only_failure() {
+  local codes
+  codes="$(grep -oE '\[CE[0-9]+\]' | sort -u | tr -d '\n')"
+  [ "$codes" = "[CE0463]" ]
+}
+fix_widgets_and_boot() {
+  [ -z "${MDL_WIDGETS_FIXED:-}" ] || return 1
+  MDL_WIDGETS_FIXED=1
+  echo "   CE0463 only (a data grid stored in an older widget definition): updating the widgets and starting again"
+  stop_project_app >/dev/null 2>&1
+  "$MXCLI" fix widgets -p "$MPR" >/dev/null 2>&1 || return 1
+  BOOT=1; BASE_URL=""
+  ensure_app
+}
+
 report_boot_failure() {   # report_boot_failure <log> <waited>
+  if [ -z "${MDL_WIDGETS_FIXED:-}" ] && widgets_only_failure < "$1" && fix_widgets_and_boot; then
+    return 0
+  fi
   echo "the app did not start (${2}s): the boot reported an error rather than coming up" >&2
   # A runtime that builds but fails to start says only "See logging output"; the cause is the
   # runtime's own ERROR line, the step logged before it, and the exception's "Caused by".
@@ -152,6 +174,9 @@ stop_project_app() {
   for pid in $(project_pids) $(orphan_mxbuild_pids); do
     victims="$victims $(descendants "$pid" | tr '\n' ' ') $pid"
   done
+  # The loop keeping the offline cache on (keep_offline_caching) ends with the app.
+  pid="$(cat .mxcli/offline-caching.pid 2>/dev/null)"
+  [ -n "$pid" ] && kill "$pid" 2>/dev/null && rm -f .mxcli/offline-caching.pid
   # A child of `mxcli run` is also found on its own: list each pid once.
   victims="$(printf '%s\n' $victims | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
   if [ -z "${victims// /}" ]; then
@@ -364,4 +389,125 @@ boot_with_mxcli_run() {
   ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
   BASE_URL="http://localhost:$APP_PORT"
   wait_for_boot .mxcli/gate-boot.log
+}
+
+# An offline profile works without a network through its service worker's cache. A local build
+# (`mxcli run --local`, run-app.sh) writes "enableServiceWorkerCaching": false into index.js -- a
+# package build writes true -- so the worker registers and caches nothing, and the app opened in a
+# browser with the network cut in DevTools cannot load a page. The tests turn it on in the index.js
+# they are served (open_app); this turns it on in the built file, which the runtime serves from
+# disk, so a person testing by hand sees what the tests see. Returns 0 when it changed the file.
+offline_caching_on() {   # offline_caching_on [<index.js>]
+  local f="${1:-deployment/web/index.js}" tmp
+  [ -f "$f" ] && grep -q '"registerServiceWorker": *true' "$f" \
+    && grep -q '"enableServiceWorkerCaching": *false' "$f" || return 1
+  tmp="$f.mdl-$$"
+  sed 's/"enableServiceWorkerCaching": *false/"enableServiceWorkerCaching": true/' "$f" > "$tmp" \
+    && mv -f "$tmp" "$f"
+}
+
+# Every --watch rebuild writes false again: this loop puts true back once the file has stood still
+# for a round (the build may still be writing it). It ends by itself after the app has not answered
+# for MDL_OFFLINE_KEEPER_DOWN rounds, so nothing has to find and stop it (Windows has no pgrep).
+offline_caching_keeper() {   # offline_caching_keeper <base-url>
+  local stamp=.mxcli/offline-caching.stamp down=0
+  touch "$stamp"
+  while [ "$down" -lt "${MDL_OFFLINE_KEEPER_DOWN:-60}" ]; do
+    sleep "${MDL_OFFLINE_KEEPER_SECONDS:-2}"
+    if answers "$1"; then down=0; else down=$((down + 1)); fi
+    [ deployment/web/index.js -ot "$stamp" ] && offline_caching_on
+    touch "$stamp"
+  done
+  rm -f .mxcli/offline-caching.pid "$stamp"
+}
+
+# Once the app answers: an app with an offline profile gets its cache on now and kept on across
+# rebuilds. Not in Docker, where the app is built inside the container.
+keep_offline_caching() {
+  [ "${MDL_RUN_MODE:-}" = "docker" ] && return 0
+  [ -f deployment/web/index.js ] || return 0
+  # grep reads it all (no -q): under pipefail, mxcli cut off mid-write fails the pipe.
+  [ "$("$MXCLI" -p "$MPR" -c "DESCRIBE NAVIGATION" 2>/dev/null \
+    | grep -ciE '^create or modify navigation [a-z]*offline([[:space:]]|$)')" != 0 ] || return 0
+  if offline_caching_on; then
+    echo "   offline: the local build turns the service worker's cache off; turned on in"
+    echo "     deployment/web/index.js (and kept on), so a browser with the network cut in DevTools sees"
+    echo "     what the tests see. After a rebuild the worker serves the old pages once: reload twice."
+  fi
+  local pid
+  pid="$(cat .mxcli/offline-caching.pid 2>/dev/null)"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+  mkdir -p .mxcli
+  # Its own process, named for what it is: a subshell keeps the gate's command line, and film.sh
+  # (pgrep tests/gate.sh) then took the loop for a gate still running.
+  ( MDL_KEEPER="$(declare -f answers offline_caching_on offline_caching_keeper)" \
+    MDL_OFFLINE_KEEPER_SECONDS="${MDL_OFFLINE_KEEPER_SECONDS:-2}" MDL_OFFLINE_KEEPER_DOWN="${MDL_OFFLINE_KEEPER_DOWN:-60}" \
+      exec bash -c 'eval "$MDL_KEEPER"; offline_caching_keeper "$1"' mdl-offline-cache-keeper "$BASE_URL" \
+      </dev/null >/dev/null 2>&1 &
+    echo $! > .mxcli/offline-caching.pid )
+}
+
+# After DONE: what the person needs from the app just finished. The agent ends its report with this
+# block (rules/mdl-skills.md), so the person need not ask: who can sign in -- each demo user with its
+# roles and the password the tests sign in with (tests/credentials.env) -- and the assumptions the
+# agent made without them, open in the project brain (skill requirements-interview). Nothing when
+# there is neither.
+print_for_the_person() {
+  local users questions staged
+  users="$(demo_sign_ins)"
+  questions="$(open_brain_questions)"
+  staged="$(staged_brain_entries)"
+  [ -n "$users$questions$staged" ] || return 0
+  echo "== for the person -- end your report with this block, as printed"
+  if [ -n "$users" ]; then
+    echo "   sign in at ${BASE_URL:-http://localhost:${APP_PORT:-8081}}"
+    printf '%s\n' "$users"
+  fi
+  if [ -n "$questions" ]; then
+    echo "   assumed without you -- confirm or correct each: ./mxcli brain resolve <id> \"<answer>\""
+    printf '%s\n' "$questions"
+  fi
+  if [ -n "$staged" ]; then
+    echo "   recorded but never promoted, so no check reads them -- promote each (./mxcli brain promote <id>) or drop it:"
+    printf '%s\n' "$staged"
+  fi
+}
+
+# Entries captured but left in mxcli's queue (.mxcli, git-ignored): an unattended session recorded five
+# assumptions and promoted none, and the DONE block, reading docs/brain/, showed none (2026-10-12).
+staged_brain_entries() {
+  "$MXCLI" brain staged -p "$MPR" 2>/dev/null | sed -nE 's/^([0-9a-f]{6,})[[:space:]]+[^[:space:]]+[[:space:]]+(.*)$/   \1   \2/p'
+}
+
+# The open questions in docs/brain/ (`mxcli brain capture --open`): a `## ` heading whose entry line
+# ends in OPEN. Read from the files: `mxcli brain plan` rebuilds the catalog first.
+open_brain_questions() {
+  local file
+  for file in docs/brain/*.md docs/brain/*/*.md; do
+    [ -f "$file" ] || continue
+    awk '/^## /{ heading = substr($0, 4); next }
+         /OPEN[[:space:]]*$/ && heading != "" && match($0, /id `[0-9a-f]+`/) {
+           printf "   %-8s %s\n", substr($0, RSTART + 4, RLENGTH - 5), heading; heading = "" }' "$file"
+  done
+}
+
+# Each demo user, one line: name, roles, password (from tests/credentials.env). Nothing when demo users are off.
+demo_sign_ins() {
+  local security users name roles password per shared credentials="$APP_DIR/tests/credentials.env"
+  security="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null)"
+  grep -qiE '^Demo Users Enabled: *true' <<<"$security" || return 0
+  users="$("$MXCLI" -p "$MPR" --json -c "SHOW DEMO USERS" 2>/dev/null | "$NODE" -e '
+    let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+      try { for (const u of JSON.parse(s)) console.log(u["User Name"] + "\t" + (u["User Roles"] || "")); } catch (e) {}
+    });' 2>/dev/null)"
+  [ -n "$users" ] || return 0
+  shared="$(grep -E '^TEST_PASSWORD=' "$credentials" 2>/dev/null | tail -1)"
+  while IFS=$'\t' read -r name roles; do
+    [ -n "$name" ] || continue
+    # Read as data, never sourced; -F: a user name is a literal, not a pattern.
+    per="$(grep -F -- "TEST_PASSWORD_${name}=" "$credentials" 2>/dev/null | grep -F -v -e '#' | tail -1)"
+    password="${per#*=}"; [ -n "$per" ] || password="${shared#*=}"
+    password="${password%\"}"; password="${password#\"}"
+    printf '   %-22s %-28s %s\n' "$name" "($roles)" "${password:-password not in tests/credentials.env}"
+  done <<<"$users"
 }

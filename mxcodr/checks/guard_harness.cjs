@@ -411,7 +411,7 @@ function tokenRead(command) {
 // The gate's switches a session must not set for one run. A rule's level is in its card
 // (tests/rulebook/, guarded above), not here.
 const SWITCHES = ['MDL_ALLOW_GREEN_FIRST', 'MDL_VISUAL_REVIEW', 'MDL_PRECHECK', 'MDL_GATE_CACHE',
-  'MDL_HARNESS_EDITS', 'MDL_MARKETPLACE_LOGIN', 'MDL_DB_RESET'];
+  'MDL_HARNESS_EDITS', 'MDL_MARKETPLACE_LOGIN', 'MDL_DB_RESET', 'MDL_REQUIREMENTS'];
 let hit = null;
 if (tool === 'bash') {
   const command = String(args.command || '');

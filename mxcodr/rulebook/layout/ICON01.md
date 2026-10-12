@@ -11,7 +11,7 @@ key: none
 Every button has an icon. The finding suggests one.
 
 ## Fix
-`Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'` Save, `trash-can` Delete, `pencil` Edit, `add` New.
+`Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'`; `trash-can`, `pencil`, `add`.
 
 ## Local
 # level: block

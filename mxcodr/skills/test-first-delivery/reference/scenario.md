@@ -150,7 +150,7 @@ fails with what playwright-cli actually said. If you call `playwright-cli` direc
 instead, check its output, because a throw inside the page prints an error and exits 0:
 
 ```bash
-playwright-cli eval "() => { ... ; return true }" | grep -q true || fail "could not click"
+grep -q true <<< "$(playwright-cli eval "() => { ... ; return true }")" || fail "could not click"
 ```
 
 

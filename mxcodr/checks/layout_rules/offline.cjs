@@ -1,6 +1,6 @@
 // Offline profiles (PWAs that work without a network) and the menus of phone and tablet layouts.
 //   OFFLINE01  an offline profile in an app whose build registers no service worker: the
-//              profile has no Progressive web app settings (mxcli v0.25 writes none; Studio
+//              profile has no Progressive web app settings (mxcli v0.26 and before write none; Studio
 //              Pro shows them greyed out and fixed for an offline profile, so the only repair
 //              is deleting and re-adding the profile there), so no page opens without a
 //              network. Read from the built index.js.
@@ -246,9 +246,14 @@ function phoneGridFindings(pageLines, layoutText) {
       ` each value on its own line: alter page ${grid.page} { replace ${grid.name} with {` +
       (grid.header.length ? ` <${grid.header.join(', ')}, as they are, above the list>` : '') +
       ` listview ${list} (DataSource: <the grid's>) {` +
-      ` container ${prefix}_ItemCardBox (DesignProperties: ('Spacing': ('padding': 'M'))) { ${texts.join(' ')}` +
-      (grid.buttons.length ? ` container ${prefix}_ItemActionsBox { <${grid.buttons.join(', ')}, as they are> }` : '') +
-      ' } } } }; and the same in the script that creates the page. The buttons keep their names, so row_action() still finds' +
+      (grid.buttons.length
+        ? ` container ${prefix}_ItemCardBox (DesignProperties: ('Flex container': 'Horizontal (row)', 'Align items X': 'Space between` +
+          ` (only for horizontal containers)', 'Align items Y': 'Center', 'Disable row wrap': ON, 'Spacing': ('padding': 'M')))` +
+          ` { container ${prefix}_ItemInfoBox { ${texts.join(' ')} } container ${prefix}_ItemActionsBox { <${grid.buttons.join(', ')},` +
+          ' as they are> } }'
+        : ` container ${prefix}_ItemCardBox (DesignProperties: ('Spacing': ('padding': 'M'))) { ${texts.join(' ')} }`) +
+      ' } } }; and the same in the script that creates the page -- the values on the left, the buttons on the right (LIST01).' +
+      ' The buttons keep their names, so row_action() still finds' +
       ' them (it reads any list); a column filter has no list view counterpart (skill spacing-and-layout)' });
     grid = null;
   };
@@ -323,7 +328,7 @@ function tabsFindings(pageLines, layoutText) {
   let page = null;
   const flush = () => {
     if (!page || !/^(phone|tablet)$/i.test(page.kind)) return;
-    const form = page.forms.find(f => !f.inTabs);
+    const form = page.forms.find(f => !f.inTabs && !/_TitleForm$/.test(f.name));  // PHONE06's row of Back, title and user is not the object
     const list = form && page.lists.find(l => !l.inTabs && l.param === form.param);
     if (!form || !list) return;
     const prefix = form.name.split('_')[0];
@@ -369,4 +374,4 @@ function tabsFindings(pageLines, layoutText) {
   return out;
 }
 
-module.exports = { offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings, tabsFindings };
+module.exports = { layoutKinds, offlineProfiles, offlineFindings, testGoesOffline, layoutMenus, menuItems, phoneMenuFindings, webPhoneLayoutFindings, phoneGridFindings, stickyBarFindings, loginWidthFindings, tabsFindings };

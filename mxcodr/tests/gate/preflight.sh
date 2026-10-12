@@ -100,11 +100,15 @@ restart_after_missed_watch() {
   restart_app
   BOOT=1
   ensure_app
+  keep_offline_caching
 }
 
 # The last --watch rebuild failed, so the app still runs the model from before it: tests would
 # fail on a fix that never reached the app. Names the error and stops the gate.
 report_watch_build_failure() {   # report_watch_build_failure <boot-log>
+  if [ -z "${MDL_WIDGETS_FIXED:-}" ] && gate_helper watch-state "$1" | widgets_only_failure && fix_widgets_and_boot; then
+    return 0
+  fi
   {
     echo "--watch could not rebuild the app, so it still runs the model from before your last exec:"
     gate_helper watch-state "$1" | tail -n +2 | head -8 | sed 's/^/   /'
@@ -132,7 +136,7 @@ debugger_enabled() {
 # True when the running app answers that its microflow debugger is on.
 debugger_on() {
   [ -n "${BASE_URL:-}" ] || return 1
-  "$MXCLI" debug status -p "$MPR" --app-url "$BASE_URL" 2>/dev/null | grep -q 'Debugger: enabled'
+  grep -q 'Debugger: enabled' <<< "$("$MXCLI" debug status -p "$MPR" --app-url "$BASE_URL" 2>/dev/null)"
 }
 
 # Stops the gate while the microflow debugger is on: a test that reaches a breakpoint waits there

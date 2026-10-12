@@ -3,6 +3,7 @@
 // itself, so it holds for any app, whatever it does and whatever its documents are called:
 //
 //   OUTCOME01  every message a user can be shown (outcome_rules.cjs) is asserted by a test
+//   REQ02      every requirement in docs/brain/plan is named by a test (# requirement: <id>)
 //   WF01       a microflow completes a workflow user task without checking the user is one of its
 //              targets: anyone allowed to run it decides the task
 //   WF02       each workflow user task: every outcome is chosen in a test, and a test of it signs in
@@ -82,6 +83,20 @@ function userTasks(source) {
 const tokens = text => ' ' + (String(text).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
   .toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).join(' ') + ' ';
 
+// What OUTCOME01 counts, said as an example: consecutive words from one piece of the message -- a
+// {1} splits it, and words on both sides of one do not join. The example joined them (`login created
+// for initial` for "Login {1} created for {2}. Initial password: ..."), the session wrote it, and the
+// finding stayed (InvoiceChaseAsm, 2026-10-12).
+function example(o) {
+  const parts = String(o.text).split(/\{\d+\}/).map(t => t.replace(/^[\s.,;:!?-]+|\s+$/g, ''));
+  const count = t => rules.words(t).length;
+  const longest = parts.reduce((a, b) => (count(b) > count(a) ? b : a), '');
+  const shown = (count(longest) ? longest : String(o.text)).replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
+  const need = Math.min(rules.MIN_RUN, count(longest) || rules.MIN_RUN);
+  const split = parts.length > 1 ? ' (words on both sides of a {1} do not join: take them from one part)' : '';
+  return `at least ${need} consecutive words of it${split}, e.g. await_message(/${shown}/i)`;
+}
+
 // All findings: [{code, key, version, message}]. key + version decide old (warning) or new (failure).
 function findings(model, tests, modules) {
   const own = new Set(modules);
@@ -94,7 +109,7 @@ function findings(model, tests, modules) {
   for (const o of rules.untested(list, all)) {
     const doc = model.sources.find(d => d.QualifiedName === o.document);
     out.push({ code: 'OUTCOME01', key: o.document, version: hash(doc && doc.SourceText),
-      message: `${o.document} can show "${o.text}" (${o.kind}) and no test asserts it: walk the path that shows it and assert at least four words of it (or all of a shorter one), e.g. await_message(/${(rules.words(o.text).slice(0, 4).join(' ') || o.text).replace(/\//g, '\\/')}/i)` });
+      message: `${o.document} can show "${o.text}" (${o.kind}) and no test asserts it: walk the path that shows it and assert ${example(o)}` });
   }
 
   // WF01
@@ -135,7 +150,7 @@ function findings(model, tests, modules) {
     const ok = tests.some(t => holders.some(h => t.users.has(h)) && t.tokens.includes(' ' + tokens(entity).trim() + ' '));
     if (!ok) {
       out.push({ code: 'ISO01', key: `${p.ElementName}|${p.ModuleRoleName}`, version: hash(p.XPathConstraint),
-        message: `${p.ModuleRoleName} reads ${p.ElementName} only where ${p.XPathConstraint}: no test signs in as ${holders.join(' or ')} and reads ${entity} -- prove both sides, one of the user's own rows is there and another user's row is not (oql_count as that user, or the API the role reads through)` });
+        message: `${p.ModuleRoleName} reads ${p.ElementName} only where ${p.XPathConstraint}: no test signs in as ${holders.join(' or ')} and reads ${entity} -- prove both sides, one of the user's own rows is there and another user's row is not (oql_count as that user, or the API the role reads through; never a widget added only for the test)` });
     }
   }
 
@@ -162,6 +177,90 @@ function findings(model, tests, modules) {
 }
 
 const USAGE = 'usage: check_paths.cjs app_dir Module... [--mpr copy.mpr] [--baseline file] [--write-baseline file] [--untested Key,...] [--no-refresh] [--all-fail]';
+
+// REQ02: each requirement the person agreed (docs/brain/plan/<slice>.md, skill requirements-interview)
+// is named by a test -- `# requirement: <id>` under its `# covers:` line. Two of three InvoiceChase runs
+// (2026-10-12) recorded a requirement, built around it, and dropped it with the gate green: nothing
+// tied a test to it. An open question (an assumption) is not a requirement yet; a test naming an id
+// the plan does not have is a stale link.
+const PLAN_ENTRY_RE = /^## (.+)\n\nAnchors: (.*)$/gm;
+// Words too common to show a requirement was checked.
+const STOP = new Set(['that', 'this', 'with', 'from', 'when', 'than', 'then', 'them', 'they', 'their', 'there', 'each', 'every',
+  'only', 'into', 'onto', 'must', 'have', 'shows', 'show', 'sees', 'user', 'users', 'page', 'pages', 'list', 'can', 'cannot',
+  'which', 'what', 'where', 'while', 'after', 'before', 'other', 'others', 'same', 'also', 'more', 'less', 'least', 'most',
+  'never', 'always', 'should', 'will', 'would', 'does', 'done', 'checked', 'check', 'test', 'tests', 'button', 'screen']);
+function requirementFindings(appDir, testFiles) {
+  const dir = path.join(appDir, 'docs', 'brain', 'plan');
+  let names = [];
+  try { names = fs.readdirSync(dir).filter(n => n.endsWith('.md')).sort(); } catch { return []; }
+  const requirements = [];
+  for (const name of names) {
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    for (const m of text.matchAll(PLAN_ENTRY_RE)) {
+      const id = (m[2].match(/id `([0-9a-f]+)`/) || [])[1];
+      if (!id || /OPEN\s*$/.test(m[2])) continue;
+      requirements.push({ id, text: m[1].trim(), slice: name });
+    }
+  }
+  if (!requirements.length) return [];
+  // Where each id is named, and the test code under it: from its `# requirement:` line (or a run of
+  // them) to the next one, comments left out. A test that names an id but checks nothing of it passed:
+  // one B2B test named thirteen requirements on one line, the date and amount formats among them, and
+  // asserted no format -- the grid showed 10/6/2026 and 19190.829 under a gate that said DONE
+  // (InvoiceB2BG2, 2026-10-12). So a requirement counts as tested when the code under its name holds
+  // one of its own words that few other requirements share -- a selector, a value, an OQL column, or
+  // the fail message that says what is checked.
+  const named = new Map();
+  for (const [file, text] of testFiles) {
+    let pending = [], code = [], sawCode = false;
+    const flush = () => {
+      const block = code.join('\n').toLowerCase();
+      for (const id of pending) {
+        const seen = named.get(id) || { file, code: '' };
+        seen.code += '\n' + block;
+        named.set(id, seen);
+      }
+      pending = []; code = []; sawCode = false;
+    };
+    for (const line of text.split(/\r?\n/)) {
+      const m = /^\s*#\s*requirements?\s*:\s*(.+)$/i.exec(line);
+      if (m) {
+        if (sawCode) flush();
+        pending.push(...(m[1].match(/[0-9a-f]{6,}/g) || []));
+        continue;
+      }
+      if (/^\s*(#|\/\/)/.test(line)) continue;
+      if (pending.length && line.trim()) { code.push(line); sawCode = true; }
+    }
+    flush();
+  }
+  const words = t => new Set((t.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(w => w.length >= 4 && !STOP.has(w)));
+  const df = new Map();
+  for (const r of requirements) for (const w of words(r.text)) df.set(w, (df.get(w) || 0) + 1);
+  const rare = Math.max(1, Math.floor(requirements.length / 3));
+  const known = new Set(requirements.map(r => r.id));
+  const out = [];
+  for (const r of requirements) {
+    const where = named.get(r.id);
+    if (!where) {
+      out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
+        message: `requirement ${r.id} (docs/brain/plan/${r.slice}) has no test: "${r.text}" -- write the test that ` +
+          `checks its "checked when" and name it there, a line \`# requirement: ${r.id}\` above the step that checks it` });
+      continue;
+    }
+    const own = [...words(r.text)].filter(w => df.get(w) <= rare).slice(0, 8);
+    if (!own.length || own.some(w => where.code.includes(w))) continue;
+    out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
+      message: `${where.file} names requirement ${r.id} but its code checks none of it: "${r.text}" -- under ` +
+        `\`# requirement: ${r.id}\`, assert what it says, with a fail message in its words (one of: ${own.join(', ')})` });
+  }
+  for (const [id, { file }] of named) {
+    if (known.has(id)) continue;
+    out.push({ code: 'REQ02', key: `stale:${id}`, version: id,
+      message: `${file} names requirement ${id}, which docs/brain/plan does not have (an open question, dropped, or a typo) -- name an id ./mxcli brain plan lists, or drop the line` });
+  }
+  return out;
+}
 
 function parseArgs(argv) {
   const a = { positional: [], mpr: '', baseline: '', writeBaseline: '', untested: [], refresh: true, allFail: false };
@@ -227,9 +326,11 @@ function main() {
   if (a.baseline) { try { baseline = JSON.parse(fs.readFileSync(a.baseline, 'utf8')); } catch { baseline = null; } }
   const skip = new Set(a.untested);
   const failures = [], warnings = [];
-  for (const f of findings(model, tests, a.modules)) {
+  const all = findings(model, tests, a.modules).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)));
+  for (const f of all) {
     if (skip.has(f.key) || skip.has(f.key.split('#')[0])) continue;
-    const level = levelOf(levels, f.code, f.code === 'WF01' ? 'block' : 'baseline');
+    // WF01 and REQ02 block whatever their age: a requirement the person agreed has no old version.
+    const level = levelOf(levels, f.code, f.code === 'WF01' || f.code === 'REQ02' ? 'block' : 'baseline');
     if (level === 'off' || level === 'info') continue;
     // A task anyone can decide is a defect, not a missing test: WF01 blocks whatever its age.
     // `baseline` (the default): old paths warn, new or changed ones block; `block`: every one blocks.
@@ -246,4 +347,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { tokens, readModel, readTests, userTasks, findings, baselineOf, hash };
+module.exports = { tokens, readModel, readTests, userTasks, findings, requirementFindings, example, baselineOf, hash };

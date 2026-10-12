@@ -74,8 +74,8 @@ layout_sign_out_inputs() {
   guest="$("$MXCLI" -p "$MPR" -c "SHOW PROJECT SECURITY" 2>/dev/null | grep -iE '^(Guest|Anonymous) (User )?Role:' | head -1 | sed -E 's/^[^:]*:[[:space:]]*//')"
   if [ -n "$guest" ]; then nav_args+=(--guest-role "$guest"); fi
   # ACCOUNT01-02: only when the Administration module is there to link to.
-  if "$MXCLI" -p "$MPR" --json -c "SHOW PAGES IN Administration" 2>/dev/null | grep -q '"Administration.Account_Overview"' \
-     && "$MXCLI" -p "$MPR" --json -c "SHOW MICROFLOWS IN Administration" 2>/dev/null | grep -q '"Administration.ManageMyAccount"'; then
+  if grep -q '"Administration.Account_Overview"' <<< "$("$MXCLI" -p "$MPR" --json -c "SHOW PAGES IN Administration" 2>/dev/null)" \
+     && grep -q '"Administration.ManageMyAccount"' <<< "$("$MXCLI" -p "$MPR" --json -c "SHOW MICROFLOWS IN Administration" 2>/dev/null)"; then
     nav_args+=(--admin-module)
   fi
   return 0
@@ -106,7 +106,7 @@ check_layout() {
   rm -f "$WORK/layout.unread"
   layout_sign_out_inputs || return 2
   # MODULE01: the empty template's module, still in an app that has its own.
-  if "$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null | grep -q '"MyFirstModule"'; then
+  if grep -q '"MyFirstModule"' <<< "$("$MXCLI" -p "$MPR" --json -c "SHOW MODULES" 2>/dev/null)"; then
     nav_args+=(--template-module)
   fi
   # The project's own layouts, for a menu built from buttons (NAV04); unreadable ones do not block.

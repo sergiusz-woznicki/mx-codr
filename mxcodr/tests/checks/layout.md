@@ -4,25 +4,28 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 
 | Code | Wants | Fix |
 |---|---|---|
-| `ACCOUNT01` | a Users menu item for administrators | `menu item 'Users' ( OnClick: show page Administration.Account_Overview )`. |
-| `ACCOUNT02` | a My account menu item | `menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount )` before Log out. |
-| `ACCOUNT03` | every signing-in role includes Administration.User; someone manages users | `alter user role <Role> add module roles (Administration.User);`. |
-| `ALERT01` | warning: an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { dynamictext ... }`. |
-| `BACK01` | a Back button, top left, on every page another page opens | First widget `actionbutton btnBack (Caption: 'Back', Action: close page)`. |
+| `ACCOUNT01` | a Users menu item for administrators | `menu item 'Users'` showing `Administration.Account_Overview`. |
+| `ACCOUNT02` | a My account menu item | `menu item 'My account'` calling `Administration.ManageMyAccount`. |
+| `ACCOUNT03` | every signing-in role has Administration.User | `alter user role <Role> add module roles (Administration.User);`. |
+| `ALERT01` | warning: an alert class on a container, not on inline text | `container ctNote (Class: 'alert alert-info') { ... }` |
+| `BACK01` | a Back button, top left, on a page another page opens | In the finding. |
 | `EDGE01` | every widget sits inside a layout grid | A `layoutgrid` around the page's widgets, the top row too. |
 | `GRID01` | a column with a filter keeps its Attribute | `column colX (Attribute: X) { textfilter fltX (Attribute: X) }`. |
 | `GRID02` | a button that changes a grid's rows sits in its header | `controlbar` in the datagrid; `$dgX` or a page parameter. |
 | `HEAD01` | warning: a heading on every page |  |
+| `HIDDEN01` | no never-shown widget | Remove it; prove access with `oql_count` in the test. |
 | `HOME01` | administrators open on a page of the app's own module | `home page <Module>.Admin_Home for Administrator`. |
-| `ICON01` | an icon on every button | `Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'` Save, `trash-can` Delete, `pencil` Edit, `add` New. |
-| `LAYOUT01` | one layout for every page that is not a pop-up | Pick one (`Atlas_Core.Atlas_Default`) and set it on every page. |
-| `MODULE01` | MyFirstModule is gone once the app has its own module | Re-point home pages and roles, then `drop module MyFirstModule;`. |
+| `ICON01` | an icon on every button | `Icon: 'Atlas_Core.Atlas_Filled.floppy-disk'`; `trash-can`, `pencil`, `add`. |
+| `LABEL01` | captions are words | `Caption: 'Due date'`; one left out takes the attribute's name. |
+| `LAYOUT01` | one layout for every page that is not a pop-up | One (`Atlas_Core.Atlas_Default`) on every page. |
+| `LIST01` | a list item: texts left, buttons right | In the finding. |
+| `MODULE01` | MyFirstModule gone once the app has a module | Re-point home pages and roles; `drop module MyFirstModule;`. |
 | `NAME01` | warning: a widget name is used on one page only | Its own `<Page>_<What><Type>` name. |
 | `NAME02` | warning: every widget is named <Page>_<What><Type> | The name it prints; rename `.mx-name-...` in tests too. |
-| `NAV01` | users can log out | `menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )` as the menu's last item. |
+| `NAV01` | users can log out | `menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )` last. |
 | `NAV02` | warning: Log out is the last menu item | Move it to the end. |
-| `NAV03` | every role's home page is in the menu | `menu item '<caption>' ( OnClick: show page <Page>, Icon: <icon> )` before Log out. |
-| `NAV04` | no menu built from buttons in a layout | Put those pages in the navigation profile's menu; the layout keeps Atlas's own menu. |
+| `NAV03` | every role's home page is in the menu | `menu item '<caption>' ( OnClick: show page <Page> )` before Log out. |
+| `NAV04` | no menu built from buttons in a layout | Those pages go in the profile's menu. |
 | `NAV05` | an icon on every menu item | `Icon: Atlas_Core.Atlas_Filled.<name>` at the end of the item. |
 | `NAV06` | no icon twice in what one role sees | The other icon the message suggests. |
 | `OFFLINE01` | an offline profile has a service worker | The person re-adds it in Studio Pro. |
@@ -33,10 +36,11 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `PHONE03` | a phone page lists items as cards | In the finding. |
 | `PHONE04` | a phone's bar stays on screen | In the finding. |
 | `PHONE05` | the login form fits a phone | In the finding. |
-| `SPACE01` | a margin after an inline widget and under a heading | `DesignProperties: ('Spacing': ('margin-bottom': 'S'))` on the heading. |
-| `SPACE02` | only Atlas spacing values (None, S, M, L) | `margin-`/`padding-` + `top|right|bottom|left`, `None S M L`; no `Class:`. |
+| `PHONE06` | phone: Back, title, user in one row | In the finding. |
+| `SPACE01` | a margin after an inline widget and under a heading | `('Spacing': ('margin-bottom': 'S'))` on the heading. |
+| `SPACE02` | Atlas spacing only (None, S, M, L) | `margin-`/`padding-` + `top|right|bottom|left`, `None S M L`; no `Class:`. |
 | `SPACE03` | the same vertical spacing on widgets that share a line | Give them the same `margin-top`/`margin-bottom`. |
-| `SPACE04` | a gap between a button or text and a grid, list or card | `'margin-bottom': 'S'` on the upper one; each `controlbar` button too. |
+| `SPACE04` | a gap above a grid, list or card | `'margin-bottom': 'S'` on the upper one; each `controlbar` button too |
 | `TABS01` | warning: a phone page tabs its object and its list | In the finding. |
 | `TEXT01` | a text area for a long String | `replace txtX with { textarea txtX (...) }`. |
 | `TEXT02` | warning: a text area for a prose-named attribute | A textarea if people write more than a line. |

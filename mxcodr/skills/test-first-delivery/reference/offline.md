@@ -17,10 +17,11 @@ the device; a test picks it by name.
   `SNIPPET_CurrentUserOffline` (skill spacing-and-layout): a database list of
   `Administration.Account where [id = '[%CurrentUser%]']`, which the profile syncs, and no account
   link. The online snippet's microflow and `ManageMyAccount` link break offline (CE6900, CE6904).
+  On a phone page it shares one row with Back and the title (PHONE06; skill spacing-and-layout).
 - **Menu items for user management stay on the online profile.** ACCOUNT01/02 do not ask an
   offline profile for them: they would make the Administration pages reachable offline.
 - The profile needs **Progressive web app** settings, or no service worker registers and no page
-  opens offline (OFFLINE01). mxcli v0.25 creates offline profiles without them, and Studio Pro shows
+  opens offline (OFFLINE01). mxcli (v0.26 and before) creates offline profiles without them, and Studio Pro shows
   them greyed out for an offline profile, so they cannot be set afterwards: stop and ask the person
   to delete the profile in Studio Pro and add it again there, then re-apply its home pages, menu and
   sync with `create or modify navigation` (that leaves the settings alone).
@@ -39,8 +40,9 @@ the device; a test picks it by name.
   (CE2994: its menu reaches pages that only work online).
 - **A phone page lists items as cards, not a data grid** (PHONE03): a grid's columns cut every
   value to a letter and "..." at 390 px. A `listview` whose item is a container with one dynamic
-  text per value (the first `RenderMode: H4`, the rest `Paragraph`) and the row's buttons below
-  them; the grid's header buttons go above the list. `row_action()` reads list views too.
+  text per value (the first `RenderMode: H4`, the rest `Paragraph`) on the left and the row's
+  buttons on the right (LIST01); the grid's header buttons go above the list. `row_action()` reads
+  list views too.
 - What only the server may do -- an invoice number, a PDF, a mail -- runs in a microflow after the
   synchronization (an event handler on the synced status), never on the device.
 
@@ -83,4 +85,6 @@ scenario '
 - `sync_now()` fails when no synchronization reached the server: the device is offline, or the
   button does not call a nanoflow with `synchronize`.
 - `mxcli run --local` builds without the worker's cache and without the page modules in its
-  pre-cache; `open_app` makes up for both. A production package has them already.
+  pre-cache; `open_app` makes up for both. A production package has them already. The gate also
+  turns the cache on in the built `deployment/web/index.js` and keeps it on across rebuilds, so the
+  app opened by hand, with the network cut in DevTools, works offline as the tests see it.

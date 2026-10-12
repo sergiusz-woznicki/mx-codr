@@ -32,7 +32,7 @@ mx_check_in() {
   local -a mx_args=(docker check -p "$1/$MPR")
   [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
   out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
-  if printf '%s\n' "$out" | grep -q 'CE0463'; then
+  if grep -q 'CE0463' <<< "$out"; then
     out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
   fi
   return 0
@@ -47,7 +47,7 @@ qualified_names() {
 checker_verdict() {
   case "$1" in
     0) return 0 ;;
-    1) printf '%s\n' "$2" | head -1 | grep -qE '^FAIL ' && return 1 ;;
+    1) grep -qE '^FAIL ' <<< "${2%%$'\n'*}" && return 1 ;;
   esac
   return 2
 }
@@ -150,7 +150,7 @@ step_run() {
 # the step's summary is `<label>: <that line>`. Otherwise the checker did not check the model:
 # the summary says "could not run" with its last line, and the return is 2.
 step_verdict() {
-  if ! printf '%s\n' "$STEP_OUT" | head -1 | grep -qE "^($3) "; then
+  if ! grep -qE "^($3) " <<< "${STEP_OUT%%$'\n'*}"; then
     echo "$2: could not run -- $(printf '%s\n' "$STEP_OUT" | grep -v '^[[:space:]]*$' | tail -1)" > "$WORK/$1.summary"
     return 2
   fi
@@ -260,7 +260,7 @@ start_model_checks() {
   ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_OFFLINE_INPUTS=$(offline_inputs)" "$(rulebook_fingerprint layout)" ) &
   ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint security)" ) &
   ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "$(rulebook_fingerprint scope)" ) &
-  ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
+  ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests docs/brain "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
   ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint folders)" ) &
   ( run_cached unused   check_unused   "${cache_inputs[@]}" tools/mdl-checks/check_unused.cjs javasource javascriptsource meta:theme meta:themesource tests "$(rulebook_fingerprint unused)" ) &
   echo "== mx check, catalog, coverage, naming, layout, security, scope, paths, folders and unused started (they need no app; running while the suite does)"

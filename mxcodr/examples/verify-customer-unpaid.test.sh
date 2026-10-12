@@ -24,6 +24,6 @@ result="$(scenario '
 ')"
 
 [ "$(field "$result" reported)" = "true" ] || fail "no unpaid-count message shown for $customer"
-printf '%s' "$(field "$result" text)" | grep -q "has $expected_unpaid unpaid invoice" || fail "message does not report the expected count of $expected_unpaid"
+grep -q "has $expected_unpaid unpaid invoice" <<< "$(field "$result" text)" || fail "message does not report the expected count of $expected_unpaid"
 
 echo "OK: $customer reported $expected_unpaid unpaid invoice(s)"

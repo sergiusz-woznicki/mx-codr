@@ -37,6 +37,8 @@
 //   LAYOUT01 FAIL  the app's pages (pop-ups, login and phone/tablet pages aside) use more than one
 //                  layout: the menu and its open/closed state change from page to page
 //   ICON01   FAIL  a button (actionbutton, linkbutton) without an icon; the message suggests one
+//   HIDDEN01 FAIL  a widget with Visible: [false] -- never shown, so no feature and no proof for a test
+//   LABEL01  FAIL  a column caption or field label that is an attribute name (DueDate) -- write words
 //                  from its action and caption
 //   USER01   FAIL  users sign in, and a page (pop-ups and the login page aside) does not open with
 //                  the "who is signed in" snippet, <Module>.SNIPPET_CurrentUser, on the right of its top
@@ -83,6 +85,8 @@ const py = require('./py_compat.cjs');
 const { strRepr, readTextReplace } = require('./layout_rules/compat.cjs');
 const { USER_ROLE_RE, userRoles, accountFindings, adminHomeFindings, templateModuleFindings } = require('./layout_rules/accounts.cjs');
 const { buttonIconFindings } = require('./layout_rules/controls.cjs');
+const { hiddenWidgetFindings } = require('./layout_rules/hidden.cjs');
+const { rawLabelFindings } = require('./layout_rules/labels.cjs');
 const { edgeFindings } = require('./layout_rules/edges.cjs');
 const { headerButtonFindings } = require('./layout_rules/grids.cjs');
 const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
@@ -94,6 +98,8 @@ const { levelArgs } = require('./rulebook.cjs');
 const { layoutMenuFindings, oneLayoutFindings } = require('./layout_rules/layouts.cjs');
 const { PROFILE_RE, duplicateIconFindings, menuIconFindings, readMenuAccess, roleHomeFindings, signOutFindings } = require('./layout_rules/navigation.cjs');
 const { backButtonFindings, currentUserFindings } = require('./layout_rules/page_top.cjs');
+const { phoneTopFindings } = require('./layout_rules/phone_top.cjs');
+const { listItemFindings } = require('./layout_rules/list_items.cjs');
 const { pageBlocks } = require('./layout_rules/pages.cjs');
 const { check } = require('./layout_rules/spacing.cjs');
 const { toMdl0 } = require('./layout_rules/mdl1.cjs');
@@ -338,7 +344,7 @@ function main() {
     failures = failures.concat(templateModuleFindings(ownModules, Boolean(pageBlocks(lines).size), navigation, roles, text + '\n' + flows));
   }
   if (args.users_sign_in && ownModules.length && navigation) failures = failures.concat(adminHomeFindings(navigation, roles, ownModules));
-  if (args.users_sign_in) failures = failures.concat(currentUserFindings(lines, snippets, navigation, layouts));
+  if (args.users_sign_in) failures = failures.concat(currentUserFindings(lines, snippets, navigation, layouts, args.phone_layouts.length ? collect(args.phone_layouts)[0] : ''));
   if (args.users_sign_in && args.admin_module && hasNavigation) failures = failures.concat(accountFindings(navigation, roles, args.guest_role));
   if (hasNavigation) {
     failures = failures.concat(menuIconFindings(navigation));
@@ -348,18 +354,25 @@ function main() {
   }
   failures = failures.concat(oneLayoutFindings(lines, navigation, layouts));
   failures = failures.concat(buttonIconFindings(lines.concat(py.splitlines(snippets))));
+  // HIDDEN01: a widget with Visible: [false] is never shown.
+  if (!args.port_parity) failures = failures.concat(hiddenWidgetFindings(lines.concat(py.splitlines(snippets))));
+  // LABEL01: a caption or label that is an attribute's name.
+  if (!args.port_parity) failures = failures.concat(rawLabelFindings(lines.concat(py.splitlines(snippets))));
   failures = failures.concat(backButtonFindings(lines, flows, navigation));
   failures = failures.concat(headerButtonFindings(lines, flows));
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
+  // LIST01: a list view item shows its texts on the left and its buttons on the right, in one row.
+  failures = failures.concat(listItemFindings(lines.concat(py.splitlines(snippets))));
   if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
   // Offline profiles (OFFLINE01-03), the menus phone and tablet layouts show (PHONE01) and the
-  // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03), a theme whose content region never scrolls (PHONE04), a login form wider than a phone (PHONE05), a phone page's object and its list not in tabs (TABS01, a warning).
+  // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03), a theme whose content region never scrolls (PHONE04), a login form wider than a phone (PHONE05), a phone page whose Back, title and signed-in user are not one row (PHONE06), a phone page's object and its list not in tabs (TABS01, a warning).
   if (hasNavigation) failures = failures.concat(offlineFindings(navigation, readOptional(args.web_index), args.tests_dir ? fsPath(args.tests_dir) : ''));
   if (args.phone_layouts.length) failures = failures.concat(phoneMenuFindings(lines, collect(args.phone_layouts)[0]));
   if (args.phone_layouts.length && hasNavigation) failures = failures.concat(webPhoneLayoutFindings(navigation, lines, collect(args.phone_layouts)[0]));
   if (args.phone_layouts.length) failures = failures.concat(phoneGridFindings(lines, collect(args.phone_layouts)[0]));
   if (args.phone_layouts.length) failures = failures.concat(stickyBarFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
   if (args.phone_layouts.length) failures = failures.concat(loginWidthFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
+  if (args.phone_layouts.length) failures = failures.concat(phoneTopFindings(lines, collect(args.phone_layouts)[0], snippets));
   if (args.phone_layouts.length) warnings = warnings.concat(tabsFindings(lines, collect(args.phone_layouts)[0]));
   // Widget names: warnings while the app is built; a page new or changed since the last DONE
   // (the hashes the gate kept then) needs them, and --names error makes every one block.

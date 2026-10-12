@@ -74,6 +74,17 @@ for script in "$@"; do
   [ "$seen" = "1" ] || scripts+=("$script")
 done
 set -- "${scripts[@]}"
+# A probe -- a scratch script outside the project, run here by hand -- costs a full mx check on a
+# copy (~7s) for what `mxcli check` answers in 0.4s: sessions tried three syntax variants this way in
+# one command (InvoiceChaseReq, 2026-10-12). Said, not refused: the check below still runs.
+if [ "$for_exec" = "0" ]; then
+  for script in "$@"; do
+    case "$(cd "$(dirname "$script")" 2>/dev/null && pwd -P)/" in
+      "$(pwd -P)/"*) ;;
+      *) echo "precheck: $script is outside the project -- to try syntax, ./mxcli check $script -p $MPR --references answers in 0.4s; this precheck is for the script you are about to exec"; break ;;
+    esac
+  done
+fi
 
 # SCRIPT01: a document these scripts create that another script in mdlsource/ creates too (one-offs
 # elsewhere are not compared: once run, they are history).
@@ -83,6 +94,38 @@ if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
   if [ -n "$duplicates" ]; then
     echo "precheck: SCRIPT01 -- a document is created in more than one script (the real model is untouched):"
     printf '%s\n' "$duplicates"
+    exit 1
+  fi
+fi
+
+# REQ01: requirements before the first feature. With MDL_REQUIREMENTS ask or assume (tests/harness.env),
+# the first pages and ACT_ microflows of an app (it has no page of its own yet) wait while
+# docs/brain/plan/ holds no requirement, recorded or waiting for the person's yes; an app that grew
+# without a brain gets the after-exec warning (hooks/after-mxcli-exec.sh) instead. A warning after the exec came too late: a session built the whole
+# app first, then wrote seven requirements for a nine-section request and missed the formats it asked
+# for, so no test asked for them (InvoiceB2BG1, 2026-10-12). The block carries the procedure, so the
+# requirements come right with no skill to find. REQ01 `off` in tests/rulebook/app/REQ01.md turns it off.
+if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ01 block)" = "block" ] \
+   && [ -f tools/mdl-checks/gate_helpers.cjs ] && ! ls docs/brain/plan/*.md >/dev/null 2>&1 \
+   && ! grep -q ' plan/' <<< "$("$MXCLI" brain staged -p "$MPR" 2>/dev/null)"; then
+  fresh="$("$NODE" tools/mdl-checks/gate_helpers.cjs new-features . "$MPR" "$@" 2>/dev/null)"
+  if [ -n "$fresh" ]; then
+    echo "precheck: REQ01 -- requirements first: these scripts build the app's first features and docs/brain/plan/ is empty (the real model is untouched):"
+    printf '%s\n' "$fresh"
+    if [ "${MDL_REQUIREMENTS:-ask}" = "assume" ]; then
+      echo "  Nobody will answer (MDL_REQUIREMENTS=assume): decide yourself, and record before building:"
+    else
+      echo "  Ask the person first and wait for the answers (skill requirements-interview), then record:"
+    fi
+    echo "  - one requirement per testable statement of the request, in its own words: every rule, field format,"
+    echo "    count, limit, role and screen it names is its own line (a request in numbered sections gives"
+    echo "    several per section; \"dates as DD/MM/YYYY\" is one). Slices by feature, one command per slice:"
+    echo "      ./mxcli brain capture \"<requirement>\" --slice 01-<feature> -a @<Module.Doc> -p $MPR && ./mxcli brain capture ..."
+    echo "  - what the request leaves open, and what you build differently from its words (a sign-in where it asks"
+    echo "    for a picker), as an assumption: ./mxcli brain capture \"Assumed: <decision>\" --open --slice <slice> -p $MPR"
+    echo "  - then ./mxcli brain promote <id> for each (assume mode promotes its own; ask mode waits for the person)."
+    echo "  Each requirement then needs a test that names it (# requirement: <id>, gate REQ02), one test file per"
+    echo "  slice so --only <slice> runs a short one. Then exec again."
     exit 1
   fi
 fi
@@ -141,6 +184,14 @@ if [ -f tests/mdl-applied.sh ] && [ "$(mdl_rule_level STALE01 block)" != "off" ]
     echo "  create or modify for what is new), or first bring $script up to the model: DESCRIBE each"
     echo "  document above (./mxcli -p $MPR -c \"describe page Module.Name\") and replace its part of the"
     echo "  script with it. Never restore an old script to undo a test edit -- alter it back."
+    # After `mxcli fix widgets` every page with a data grid is "changed": the fix rewrote its widget.
+    # Sessions re-ran the page script, got CE0463 back, fixed widgets again, and went round the
+    # loop three times (InvoiceChaseReq, 2026-10-12).
+    if grep -q '^Page:' <<< "$overwritten"; then
+      echo "  After ./mxcli fix widgets this is expected for each page with a data grid -- the fix rewrote the grid. Re-running"
+      echo "  the page's whole script writes the old grid back (CE0463 again): change the page with alter page in a new"
+      echo "  script, or DESCRIBE the page into this one first."
+    fi
     exit 1
   done
 fi
@@ -184,9 +235,23 @@ for script in "$@"; do
     # A page that calls a new microflow which opens that page: each script fails alone, in either
     # order, and a session reached for --no-check (mxcli's own advice) -- which the precheck refuses.
     # "not found" too: a calculated attribute's microflow, or a page's microflow, in a later script.
-    if printf '%s\n' "$out" | grep -qiE 'unresolved reference|(microflow|nanoflow|page|entity|snippet|enumeration|association)[^\n]{0,40}not found'; then
+    # An icon name the collection does not have: the names nearest to it, from the collection itself.
+    # A session guessed three Atlas_Filled names and was refused three times (InvoiceB2BG1, 2026-10-12).
+    printf '%s\n' "$out" | sed -nE 's/.*"([^"]+)" does not exist in icon collection "([^"]+)".*/\2 \1/p' | sort -u \
+      | while read -r collection icon; do
+          near="$("$MXCLI" -p "$MPR" -c "describe icon collection $collection" 2>/dev/null \
+            | "$NODE" tools/mdl-checks/gate_helpers.cjs near-icons "$icon" 2>/dev/null)"
+          if [ -n "$near" ]; then
+            echo "  icons in $collection near \"$icon\": $near"
+          else
+            echo "  \"$icon\" is not near any icon in $collection: ./mxcli -p $MPR -c \"describe icon collection $collection\" lists them all"
+          fi
+        done
+    # Reference errors other than icons: what this script calls is not created yet.
+    refs="$(grep -iE 'Reference error|(microflow|nanoflow|page|entity|snippet|enumeration|association)[^\n]{0,40}not found' <<< "$out")"
+    if grep -qviE 'does not exist in icon collection' <<< "$refs"; then
       echo "  Not found = not created yet. Order matters, inside a script too: create what is called before"
-      echo "  its caller (mxcli 0.24 refuses a call to a microflow that the same script creates further down)."
+      echo "  its caller (mxcli refuses a call to a microflow that the same script creates further down)."
       echo "  If another script creates it, exec that one first; if the two need EACH OTHER (a page calls a"
       echo "  new microflow that opens that page), move them into ONE .mdl. --no-check does not get past this check."
     fi
@@ -202,7 +267,7 @@ done
 mx_args=(docker check -p "$scratch/$MPR")
 [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
 out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
-if printf '%s\n' "$out" | grep -q 'CE0463'; then
+if grep -q 'CE0463' <<< "$out"; then
   out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
 fi
 # mx check exits 0 even with model errors, so read the count it prints.
@@ -238,9 +303,19 @@ base="$(mdl_tmpdir mdl-precheck-base)" && {
 }
 seconds=$(( $(date +%s) - started ))
 if [ -n "${old_errors:-}" ]; then
-  echo "precheck: the model ALREADY has $(printf '%s\n' "$old_errors" | grep -c .) error(s) before these scripts -- a change made"
-  echo "  without a precheck (an inline mxcli -c, or Studio Pro). They are not in your script; fix them first:"
+  echo "precheck: the model ALREADY has $(printf '%s\n' "$old_errors" | grep -c .) error(s) before these scripts. They are not in your script; fix them first:"
   printf '%s\n' "$old_errors" | head -8 | sed 's/^/  /'
+  # CE0463 comes from an exec of a page with a pluggable widget (Data grid 2) written in an older
+  # widget definition, not from a change made around the precheck: the message that said so sent a
+  # session looking for a Studio Pro edit that never happened (InvoiceChaseReq, 2026-10-12).
+  if grep -q 'CE0463' <<< "$old_errors"; then
+    echo "  CE0463 is a page's pluggable widget (a data grid) stored in an older definition -- an earlier exec of that"
+    echo "  page wrote it. Stop the app, update the widgets, then exec again:"
+    echo "    bash tests/gate.sh --stop && ./mxcli fix widgets -p $MPR"
+  fi
+  if printf '%s\n' "$old_errors" | grep -vq 'CE0463'; then
+    echo "  Any other one came from a change made without a precheck (an inline mxcli -c, or Studio Pro)."
+  fi
 fi
 if [ -z "$new_errors" ]; then
   echo "precheck: 0 new errors -- $* adds no error of its own (${seconds}s)"
@@ -248,6 +323,9 @@ if [ -z "$new_errors" ]; then
 fi
 echo "precheck: $(printf '%s\n' "$new_errors" | grep -c .) error(s) -- the build would fail. Fix the script, then exec (${seconds}s):"
 printf '%s\n' "$new_errors" | head -12
+# The script line each error names: mxbuild names the activity or widget, never the expression.
+[ -f tools/mdl-checks/gate_helpers.cjs ] \
+  && "$NODE" tools/mdl-checks/gate_helpers.cjs error-sources "$@" <<< "$new_errors" 2>/dev/null
 # An old error these scripts clear can unmask others: Mendix stops checking a part of the model at
 # its first error, then reports what lay behind it. Those are not in these scripts. InvoiceChase
 # (2026-10-09): dropping a broken demo user surfaced a button and an XPath in two other scripts'

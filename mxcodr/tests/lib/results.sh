@@ -28,9 +28,14 @@ oql() {
   # `if !` keeps the output and stops set -e exiting before the error is reported.
   if ! output="$("$MXCLI" oql -p "$APP_DIR/$MPR" --host "${ADMIN_HOST:-localhost}" \
                  --port "${ADMIN_PORT:-8090}" --json "$query" 2>&1)"; then
+    # The fix for the error OQL gave, when it is one sessions met; else the general reminder.
+    local how='write an entity as Module."Entity", e.g. '"${MODULE:-MyModule}"'."Order"; reach an association with
+   JOIN o/Module.Assoc/Module.Entity AS x; or count with oql_count <Entity> "<where>"'
+    case "$output" in
+      *"columns must have a name"*) how='name every column: SELECT COUNT(*) AS Total, SUM(o.TotalGross) AS Gross FROM ... -- then field "$json" Gross' ;;
+    esac
     fail "OQL failed: $(printf '%s' "$output" | grep -v '^$' | grep -v 'vibe-coded PoC' | head -2 | tr '\n' ' ')
-   (write an entity as Module.\"Entity\", e.g. ${MODULE:-MyModule}.\"Order\"; reach an association with
-   JOIN o/Module.Assoc/Module.Entity AS x; or count with oql_count <Entity> \"<where>\")"
+   ($how)"
   fi
   # mxcli appends a "(n rows)" line, so decode only the first JSON value.
   local json
@@ -89,6 +94,11 @@ oql_value() {
   local entity="$1" attribute="$2" where="$3"
   local json
   [ -n "${MODULE:-}" ] || fail "oql_value needs a module: set MODULE=<YourModule> or run through tests/gate.sh"
+  # One attribute: a session passed CAST(COALESCE(SUM(...)...)) and OQL read it as an entity path
+  # (InvoiceB2BG1, 2026-10-12).
+  case "$attribute" in
+    *[!A-Za-z0-9_]*|'') fail "oql_value takes one attribute name, not '$attribute' -- for an expression name it and read the rows: oql 'SELECT SUM(o.Total) AS V FROM $MODULE.\"$entity\" AS o WHERE ...' prints [{\"V\": ...}]" ;;
+  esac
   json="$(oql "SELECT $attribute FROM $(oql_entity "$entity") WHERE $where")" || exit 1
   printf '%s' "$json" | "$NODE" "$MDL_SHELL_HELPERS" oql-value "$attribute"
 }

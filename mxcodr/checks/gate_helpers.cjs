@@ -13,6 +13,12 @@
 //                                                   in the same folder creates too (SCRIPT01)
 //     gate_helpers.cjs test-first <app> <mpr> <mdl>... pages and ACT_ microflows these scripts create that
 //                                                   no tests/verify-*.test.sh covers yet (TEST01)
+//     gate_helpers.cjs new-features <app> <mpr> <mdl>... pages and ACT_ microflows these scripts create that
+//                                                   the model does not have yet (REQ01)
+//     gate_helpers.cjs error-sources <mdl>... < errors  the script line each build error names (its @caption and
+//                                                   statement, or the widget), for the precheck
+//     gate_helpers.cjs near-icons <name> < listing    the icons of a `describe icon collection` listing closest
+//                                                   to a name that is not in it
 //     gate_helpers.cjs watch-state <boot-log>        where a --watch boot is: ready, building, applied or
 //                                                   failed; after failed, one line per build error
 //     gate_helpers.cjs runtime-errors <runtime.log> <since>
@@ -42,7 +48,7 @@ const path = require('path');
 const py = require('./py_compat.cjs');
 const { re } = py;
 const { PyError, isDict, typeName, truthy, or, head, get, joinStr, strRepr, str, loads, dict, readStrict, stdinText, statOf, walk, pyInt, naive, nowNaive } = require('./gate_values.cjs');
-const { definitions, testFirst, duplicateDefinitions } = require('./gate_scripts.cjs');
+const { definitions, testFirst, newFeaturesCommand, nearIconsCommand, errorSourcesCommand, duplicateDefinitions } = require('./gate_scripts.cjs');
 const { deploymentAge, runtimeAge, watchState, runtimeErrors } = require('./gate_runtime.cjs');
 const { fdOpen, visualReport } = require('./gate_visual.cjs');
 const { docMap, recordTestsSeen, changedTests } = require('./gate_changed.cjs');
@@ -176,6 +182,9 @@ function main(argv) {
   if (command === 'runtime-age' && args.length === 2) return runtimeAge(...args);
   if (command === 'duplicate-definitions') return duplicateDefinitions(args);
   if (command === 'test-first' && args.length >= 3) return testFirst(args);
+  if (command === 'new-features' && args.length >= 3) return newFeaturesCommand(args);
+  if (command === 'near-icons' && args.length === 1) return nearIconsCommand(args);
+  if (command === 'error-sources' && args.length) return errorSourcesCommand(args);
   if (command === 'runtime-errors' && args.length === 2) return runtimeErrors(...args);
   if (command === 'visual-report' && args.length) {
     let review = '';

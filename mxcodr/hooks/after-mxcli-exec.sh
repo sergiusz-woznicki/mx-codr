@@ -31,18 +31,69 @@ $(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" words 2>/dev/null)
 HOOK_APPLIED
   mdl_applied_record ${_applied[@]+"${_applied[@]}"}
 fi
+# CE0463: mxcli writes a data grid in an older widget definition on every exec of its page, so the
+# next precheck blocks on errors no script holds -- each InvoiceChase run lost rounds to it
+# (2026-10-12). Update the widgets right after such an exec (about 6 s), as Studio Pro's
+# "Update all widgets" would.
+widgets_refresh() {
+  local _word _grid="" _mpr _mxcli
+  while IFS= read -r _word; do
+    case "$_word" in *.mdl) [ -f "$_word" ] && grep -qiE '^[[:space:]]*datagrid[[:space:]]' "$_word" && _grid=1 ;; esac
+  done <<HOOK_GRID
+$(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" words 2>/dev/null)
+HOOK_GRID
+  [ -n "$_grid" ] || return 0
+  _mpr="$(ls -1 *.mpr 2>/dev/null | head -1)"; [ -n "$_mpr" ] || return 0
+  _mxcli="./mxcli"; [ -x "$_mxcli" ] || { [ -x "./mxcli.exe" ] && _mxcli="./mxcli.exe"; }
+  [ -x "$_mxcli" ] || return 0
+  if "$_mxcli" fix widgets -p "$_mpr" >/dev/null 2>&1; then
+    echo "Data grids updated to the installed widget definition (mxcli fix widgets), so CE0463 does not come back."
+  fi
+}
+widgets_refresh
 # Studio Pro with this project open saves its own copy of a document over what the exec wrote
 # (it dropped 12 indexes on 2026-10-04). The same process pattern as mdl_studio_pro_open in
 # tests/portable.sh, which also covers Windows; a test keeps the two patterns identical.
 if command -v pgrep >/dev/null 2>&1; then
   _here="$(pwd -P)"
   for _pid in $(pgrep -f '(/MacOS/studiopro|[Ss]tudio[Pp]ro(\.exe)?)$' 2>/dev/null); do
-    if ! command -v lsof >/dev/null 2>&1 || lsof -p "$_pid" -Fn 2>/dev/null | grep -qF "n$_here"; then
+    if ! command -v lsof >/dev/null 2>&1 || grep -qF "n$_here" <<< "$(lsof -p "$_pid" -Fn 2>/dev/null)"; then
       echo "!! Studio Pro has this project open: what it saves next replaces what that exec wrote. Close it without saving, or make the change in Studio Pro."
       break
     fi
   done
 fi
+# REQ01: a page or module built while no requirement is recorded (skill requirements-interview). Said
+# once a session; not while answers wait in the queue for the person (`brain staged`), not with
+# MDL_REQUIREMENTS=off, not at level off in tests/rulebook/app/REQ01.md.
+req01_note() {
+  local _req_mode _req_level _req_built _req_mpr _req_mxcli _req_session _req_marker _req_how _word
+  _req_mode="${MDL_REQUIREMENTS:-$(sed -nE 's/^[[:space:]]*MDL_REQUIREMENTS=["'"'"']?([a-z]*).*/\1/p' tests/harness.env 2>/dev/null | tail -1)}"
+  _req_level=warn
+  [ -f tools/mdl-checks/rulebook.cjs ] && [ -d tests/rulebook ] \
+    && _req_level="$("$NODE" tools/mdl-checks/rulebook.cjs tests/rulebook level REQ01 2>/dev/null || echo warn)"
+  if [ "$_req_mode" != "off" ] && [ "$_req_level" != "off" ] && ! ls docs/brain/plan/*.md >/dev/null 2>&1; then
+    _req_built=""
+    while IFS= read -r _word; do
+      case "$_word" in *.mdl) [ -f "$_word" ] && grep -qiE '^[[:space:]]*create[[:space:]]+((or[[:space:]]+(modify|replace)[[:space:]]+)?page|module)[[:space:]]' "$_word" && _req_built=1 ;; esac
+    done <<HOOK_REQ
+$(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" words 2>/dev/null)
+HOOK_REQ
+    grep -qiE 'create[[:space:]]+((or[[:space:]]+(modify|replace)[[:space:]]+)?page|module)[[:space:]]' <<< "$command" && _req_built=1
+    _req_mpr="$(ls -1 *.mpr 2>/dev/null | head -1)"
+    _req_mxcli="./mxcli"; [ -x "$_req_mxcli" ] || _req_mxcli="./mxcli.exe"
+    _req_session="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" get session_id 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
+    _req_marker="${TMPDIR:-/tmp}/mendix-mdl-hooks/$(printf '%s\n%s' "$(pwd -P)" "$_req_session" | "$NODE" "$HOOK_TOOL" sha256 20 2>/dev/null).req01"
+    if [ -n "$_req_built" ] && [ ! -f "$_req_marker" ] \
+       && ! grep -q ' plan/' <<< "$("$_req_mxcli" brain staged -p "$_req_mpr" 2>/dev/null)"; then
+      if [ "$_req_mode" = "assume" ]; then _req_how="take your recommended answers as assumptions"; else _req_how="ask the person and wait for the answers"; fi
+      echo "REQ01 (warning): that exec built a page or a module, and no requirement is recorded yet (docs/brain/plan/ is empty)."
+      echo "  Before the next feature, read skill requirements-interview: $_req_how, and record each one with ./mxcli brain capture."
+      mkdir -p "${_req_marker%/*}" 2>/dev/null && : > "$_req_marker" 2>/dev/null
+    fi
+  fi
+}
+req01_note
 # Re-running an older script undoes a later one: `create or modify page` drops another script's
 # `alter page`, and a `grant` puts back access another script revoked (script_overrides.cjs).
 [ -f tools/mdl-checks/script_overrides.cjs ] && "$NODE" tools/mdl-checks/script_overrides.cjs --command "$command" 2>/dev/null
@@ -109,12 +160,12 @@ HOOK_WORDS
   # Any statement at all; without one the exec's effect is unknown.
   _any_statement='(create|alter|drop|grant|revoke|move|rename)[[:space:]]'
   _schema_or_security=""
-  printf '%s' "$_changed" | grep -viE "$_document_grant" | grep -qiE "$_restart_needed" && _schema_or_security=1
+  grep -qiE "$_restart_needed" <<< "$(grep -viE "$_document_grant" <<< "$_changed")" && _schema_or_security=1
   if [ -n "$_schema_or_security" ] && [ -n "$_watching" ]; then
     printf 'That exec touched entities, associations, enumerations, modules or security. This project runs under `mxcli run --watch`, which applies those itself with an in-place runtime restart in about 10 seconds (its log .mxcli/gate-boot.log says "applied via restart"), so do not restart by hand. Run the test: bash tests/gate.sh --only <feature> -- the gate waits for the change to be applied and warns if it was not.\n'
   elif [ -n "$_schema_or_security" ]; then
     printf 'That exec touched entities, associations, enumerations, modules or security, which do NOT hot-apply: the app is still serving the model it booted with, so a test failing now says nothing about the feature. Restart first: bash tests/gate.sh --restart --only <feature>\n'
-  elif [ -n "$_unreadable" ] || ! printf '%s' "$_changed" | grep -qiE "$_any_statement"; then
+  elif [ -n "$_unreadable" ] || ! grep -qiE "$_any_statement" <<< "$_changed"; then
     if [ -n "$_unreadable" ]; then _why="could not open${_unreadable}"; else _why="no script path or MDL in the command"; fi
     printf 'Could not tell what that exec changed (%s). If it touched entities, associations, enumerations or security, the app does not have it yet: bash tests/gate.sh --restart --only <feature>. Logic and screen changes need no restart: bash tests/gate.sh --only <feature>\n' "$_why"
   elif [ -n "$_custom_boot" ]; then

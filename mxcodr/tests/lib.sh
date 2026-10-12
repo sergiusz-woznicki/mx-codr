@@ -19,7 +19,7 @@
 # top of tests/scenario-helpers.js.
 #
 # Env (all optional):
-#   BASE_URL                               app address (default http://localhost:8081)
+#   BASE_URL                               app address (default http://localhost:$APP_PORT, else 8081)
 #   APP_DIR, MPR                           project folder and .mpr (default: folder above tests/)
 #   MXCLI, NODE                            mxcli and Node (default: tests/portable.sh)
 #   TEST_USER, TEST_PASSWORD, CREDENTIALS  sign-in (default: tests/credentials.env)
@@ -38,13 +38,15 @@
 # --- 1. Paths and tools ---
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:8081}"
 APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 _MDL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MPR="${MPR:-$(cd "$APP_DIR" && ls -1 *.mpr | head -1)}"
 # MXCLI and NODE come from portable.sh unless already set.
 PORTABLE_APP_DIR="$APP_DIR"
 . "$(dirname "${BASH_SOURCE[0]}")/portable.sh"
+# After portable.sh: it reads APP_PORT from tests/harness.env. peek.sh and film.sh source this file
+# without BASE_URL, and on an app with its own port they opened 8081 (InvoiceChaseReq, 2026-10-12).
+BASE_URL="${BASE_URL:-http://localhost:${APP_PORT:-8081}}"
 
 # The test browser opens only the origins .playwright/cli.config.json allows, a list mxcli writes
 # for ports 8079-8085 when it creates the app: an app on APP_PORT=8086 was refused with

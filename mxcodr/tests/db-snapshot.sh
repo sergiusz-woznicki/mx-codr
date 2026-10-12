@@ -22,9 +22,14 @@
 
 DBSNAP_DIR=".mxcli/db-snapshot"
 
-# True when MDL_DB_RESET=session applies here; sets the connection the other functions use.
+# True when a reset applies here; sets the connection the other functions use. MDL_DB_RESET is
+# `done` by default: every full DONE puts the data back to the snapshot (taken at the first gate after
+# the previous reset), so what the tests created never stays in the app the person opens -- three
+# InvoiceChase runs left 5-8 test customers and 6-11 test invoices on the owner's and the customer's
+# pages (2026-10-12). `session`: only after a session's first DONE (the earlier behaviour). `off`: never.
 dbsnap_enabled() {
-  [ "${MDL_DB_RESET:-}" = "session" ] || return 1
+  DBSNAP_MODE="${MDL_DB_RESET:-done}"
+  case "$DBSNAP_MODE" in done|session) ;; *) return 1 ;; esac
   [ "${MDL_RUN_MODE:-}" = "docker" ] && return 1
   case "${MDL_DB_NAME:-}" in ''|*[!A-Za-z0-9_]*) return 1 ;; esac
   DBSNAP_HOST="${MDL_DB_HOST:-127.0.0.1:5432}"
@@ -62,8 +67,8 @@ dbsnap_take() {
   [ -f "$DBSNAP_DIR/pending.dump" ] && return 0
   local session
   session="$(dbsnap_session)"
-  # This session already had its rollback: later runs leave the data alone.
-  if [ -n "$session" ] && [ "$(cat "$DBSNAP_DIR/restored.session" 2>/dev/null)" = "$session" ]; then
+  # session mode: this session already had its rollback, so later runs leave the data alone.
+  if [ "$DBSNAP_MODE" = "session" ] && [ -n "$session" ] && [ "$(cat "$DBSNAP_DIR/restored.session" 2>/dev/null)" = "$session" ]; then
     return 0
   fi
   # A new app's database appears with its first boot: nothing to keep yet, the next run takes it.
@@ -71,11 +76,20 @@ dbsnap_take() {
   mkdir -p "$DBSNAP_DIR" || return 0
   if dbsnap_pg pg_dump -Fc -f "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DB" 2>"$DBSNAP_DIR/take.err"; then
     mv "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DIR/pending.dump"
+    rm -f "$DBSNAP_DIR/unavailable"
     printf 'session=%s\ntaken=%s\n' "$session" "$(date '+%Y-%m-%d %H:%M:%S')" > "$DBSNAP_DIR/pending.info"
-    echo "   database snapshot taken (MDL_DB_RESET=session): the data goes back to it after this session's first DONE"
+    if [ "$DBSNAP_MODE" = "session" ]; then
+      echo "   database snapshot taken (MDL_DB_RESET=session): the data goes back to it after this session's first DONE"
+    else
+      echo "   database snapshot taken: at DONE the data goes back to it, so test rows do not stay in the app (MDL_DB_RESET=off keeps them)"
+    fi
   else
     rm -f "$DBSNAP_DIR/pending.dump.tmp"
-    echo "   !! MDL_DB_RESET=session: no database snapshot -- pg_dump failed: $(tail -1 "$DBSNAP_DIR/take.err" 2>/dev/null)"
+    # Said once, not at every gate: without pg_dump there is nothing to do about it here.
+    if [ ! -f "$DBSNAP_DIR/unavailable" ]; then
+      echo "   !! no database snapshot, so test rows stay in the app -- pg_dump failed: $(tail -1 "$DBSNAP_DIR/take.err" 2>/dev/null)"
+      : > "$DBSNAP_DIR/unavailable"
+    fi
   fi
   return 0
 }
@@ -87,7 +101,7 @@ dbsnap_restore() {
   [ -f "$DBSNAP_DIR/pending.dump" ] || return 0
   local side="${DBSNAP_DB}_restored" old="${DBSNAP_DB}_before_restore" taken
   taken="$(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null)"
-  echo "== rolling the database back to the start of this session (MDL_DB_RESET=session, snapshot ${taken:-?})"
+  echo "== putting the data back to the snapshot of ${taken:-?}: what the tests created goes (MDL_DB_RESET=${DBSNAP_MODE})"
   # 1. The snapshot into a database beside the live one, while the app still runs.
   dbsnap_sql "DROP DATABASE IF EXISTS \"$side\"" >/dev/null
   if ! dbsnap_sql "CREATE DATABASE \"$side\"" >/dev/null \
@@ -134,6 +148,7 @@ dbsnap_restore() {
   rm -f "$DBSNAP_DIR/pending.info"
   echo "   the data is back to ${taken:-the snapshot}, and the app runs on it; what the tests created is gone"
   echo "   (the previous data is kept as the database ${old})"
+  dbsnap_empty_note
   return 0
 }
 
@@ -145,12 +160,12 @@ dbsnap_boot() {
 
 dbsnap_status() {
   if ! dbsnap_enabled; then
-    echo "MDL_DB_RESET=session is off here (or the database is not a local PostgreSQL): no snapshot is taken"
+    echo "the database reset is off here (MDL_DB_RESET=off, Docker, or not a local PostgreSQL): no snapshot is taken"
     return 0
   fi
   if [ -f "$DBSNAP_DIR/pending.dump" ]; then
-    echo "pending snapshot of $DBSNAP_DB, taken $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null); restored after the first full DONE"
-  elif [ -n "$(dbsnap_session)" ] && [ "$(cat "$DBSNAP_DIR/restored.session" 2>/dev/null)" = "$(dbsnap_session)" ]; then
+    echo "pending snapshot of $DBSNAP_DB, taken $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null); restored after the next full DONE"
+  elif [ "$DBSNAP_MODE" = "session" ] && [ -n "$(dbsnap_session)" ] && [ "$(cat "$DBSNAP_DIR/restored.session" 2>/dev/null)" = "$(dbsnap_session)" ]; then
     echo "this session's rollback is done; the next session takes a new snapshot"
   else
     echo "no pending snapshot; the next gate, orient or film run takes one"
@@ -169,3 +184,23 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   esac
   exit 0
 fi
+
+# After a rollback: the app's own tables empty means the person opens an empty app. A session seeded
+# its demo data only from a test's reset button, so the snapshot taken before the tests held none,
+# and the DONE handed over an app with no customer and no invoice (InvoiceChaseG7, 2026-10-12).
+# Counted rows, not pg_stat (a restored database has no statistics yet).
+dbsnap_empty_note() {
+  local module tables total=0 n table
+  [ -n "${USER_MODULES:-}" ] || return 0
+  for module in $USER_MODULES; do
+    tables="$(dbsnap_pg psql -d "$DBSNAP_DB" -tAc "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename LIKE '$(printf '%s' "$module" | tr '[:upper:]' '[:lower:]')\$%'" 2>/dev/null)"
+    for table in $tables; do
+      n="$(dbsnap_pg psql -d "$DBSNAP_DB" -tAc "SELECT count(*) FROM \"$table\"" 2>/dev/null)"
+      total=$(( total + ${n:-0} ))
+    done
+  done
+  [ "$total" = "0" ] || return 0
+  echo "   !! the app's own tables ($(echo $USER_MODULES)) are empty now: the person opens an app with no data."
+  echo "      Seed the demo data in the after-startup microflow, only when its tables are empty -- not from"
+  echo "      a test's reset button: the snapshot is taken before the tests, so seed data must exist by then."
+}
