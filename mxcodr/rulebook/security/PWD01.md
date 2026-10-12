@@ -3,6 +3,7 @@ step: security
 level: warn
 check: security_rules.cjs#findings
 key: none
+owner: person
 ---
 
 # PWD01 — a strong password policy

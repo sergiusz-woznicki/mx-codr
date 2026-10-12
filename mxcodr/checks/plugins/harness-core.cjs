@@ -207,6 +207,62 @@ function mdlScripts(command) {
 }
 
 // Gate output contains project text: fence and label it as data, and cap its size.
+// The codes only the person can clear: rule cards with `owner: person` in tests/rulebook/ (an offline
+// profile re-added in Studio Pro, the administrator's name, the password policy).
+function personCodes(root) {
+  const codes = new Set()
+  const dir = join(root, "tests", "rulebook")
+  let groups = []
+  try { groups = require("node:fs").readdirSync(dir) } catch { return codes }
+  for (const group of groups) {
+    let files = []
+    try { files = require("node:fs").readdirSync(join(dir, group)) } catch { continue }
+    for (const file of files) {
+      if (!file.endsWith(".md")) continue
+      try {
+        const head = readFileSync(join(dir, group, file), "utf8").split("\n---")[0]
+        if (/^owner:\s*person\s*$/m.test(head)) codes.add(file.slice(0, -3))
+      } catch {}
+    }
+  }
+  return codes
+}
+
+// The person-only codes behind a red gate, or null when the agent still has work. Every finding
+// under "still blocking DONE" must name one of them -- a failed test counts when its message does
+// (an offline test fails with "... (OFFLINE01: delete and re-add the profile in Studio Pro)"). Then
+// sending the agent back to the gate only repeats it: a field-service session ran the same gate
+// three more times, byte for byte, after saying it could not fix it (2026-10-12).
+function personOnly(root, out) {
+  const codes = personCodes(root)
+  if (!codes.size) return null
+  const at = String(out).lastIndexOf("== still blocking DONE")
+  if (at < 0) return null
+  const section = String(out).slice(at).split("\n").slice(1)
+  // Findings the section leaves out ("... 7 more under == layout above") may be the agent's own.
+  if (section.some(line => /^\s+\.\.\. \d+ more/.test(line))) return null
+  // A test's own line ("- FAIL  verify-offline-jobs (25.5s)") names no reason: the line above it does.
+  const lines = section.filter(line => /^\s+- /.test(line) && !/^\s+- FAIL\s+verify-\S+ \([\d.]+s\)\s*$/.test(line))
+  if (!lines.length) return null
+  const named = new Set()
+  for (const line of lines) {
+    const hit = [...codes].find(code => new RegExp("\\b" + code + "\\b").test(line))
+    if (!hit) return null
+    named.add(hit)
+  }
+  return [...named]
+}
+
+// What the agent is told when only the person can clear what still blocks DONE: one last turn to
+// say so in its report, then the hosts stop sending it back to the gate.
+function personOnlyMessage(codes) {
+  return (
+    "What still blocks DONE only the person can clear: " + codes.join(", ") + " (tests/checks/<step>.md " +
+    "says what each one needs). Do not run the gate again for it and do not work around it: end your " +
+    "report with what the person has to do, in one short list, and what you built."
+  )
+}
+
 function gateFailureMessage(out) {
   return (
     "The project gate has not passed, so this feature is not done. " +
@@ -286,5 +342,5 @@ module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
   EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
-  blockReason, afterExecText, reminder,
+  blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }

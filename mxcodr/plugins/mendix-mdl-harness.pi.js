@@ -158,12 +158,15 @@ export default function mendixMdlHarness(pi) {
         return
       }
       rounds += 1
+      // Only the person can clear what is left: one turn to say so, then no more gate rounds.
+      const owners = core.personOnly(root, gate.out)
+      if (owners) gateRequired = false
       return {
         entries: [
           {
             type: "custom_message",
             customType: "mendix-mdl-gate",
-            content: core.gateFailureMessage(gate.out),
+            content: owners ? core.personOnlyMessage(owners) : core.gateFailureMessage(gate.out),
             display: true,
           },
         ],

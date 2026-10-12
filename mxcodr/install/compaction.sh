@@ -48,5 +48,7 @@ apply_compaction() {
     n="$("$NODE" "$SRC/install/install_tool.cjs" pi-compaction "$APP/.pi/settings.json" "$pi_models" 2>/dev/null)"
     [ "${n:-0}" -gt 0 ] 2>/dev/null && done_for="${done_for}Pi ($n models) "
   fi
-  ui_done "Agent compaction" "${done_for:-already set} at 70% of the window"
+  if [ -n "$done_for" ]; then ui_done "Agent compaction" "${done_for}at 70% of the window"
+  elif [ -f "$pi_models" ]; then ui_done "Agent compaction" "already set at 70% of the window"
+  else ui_done "Agent compaction" "on, but nothing to set: no Pi models.json at $pi_models"; fi
 }

@@ -3,6 +3,7 @@ step: security
 level: warn
 check: security_rules.cjs#findings
 key: none
+owner: person
 ---
 
 # ADMIN01 — the administrator is not called MxAdmin

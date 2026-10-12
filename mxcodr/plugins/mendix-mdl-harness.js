@@ -141,9 +141,12 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
           return
         }
         writeState(sessionID, "rounds", rounds + 1)
+        // Only the person can clear what is left: one message saying so, then no more gate rounds.
+        const owners = core.personOnly(root, gate.out)
+        if (owners) clearState(sessionID, "gate-required")
         await client.session.prompt({
           path: { id: sessionID },
-          body: { parts: [{ type: "text", text: core.gateFailureMessage(gate.out) }] },
+          body: { parts: [{ type: "text", text: owners ? core.personOnlyMessage(owners) : core.gateFailureMessage(gate.out) }] },
         })
       } catch (error) {
         await client.app?.log?.({

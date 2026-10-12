@@ -316,7 +316,7 @@ except: Orders.Approval_Task   # opened only from the task inbox; a URL would sk
 The gate then judges with your level and skips the excepted documents, and says so in its output
 (`rulebook: 1 excepted (URL01 Orders.Approval_Task)`). On a rule that only warns about what existed
 before the install (the paths cards), `level: block` makes those old findings block too.
-`bash tests/rules.sh check` validates the cards. The agent may read them and propose a line, but a hook stops it from writing one.
+A card marked `owner: person` in its header (OFFLINE01, ADMIN01, PWD01) is one only you can clear, in Studio Pro. When nothing else blocks DONE, the hooks stop sending the agent back to the gate: it ends its report with what you have to do. `bash tests/rules.sh check` validates the cards. The agent may read them and propose a line, but a hook stops it from writing one.
 
 **The project's settings: `tests/harness.env`.** Written by the installer, yours to edit; the agent
 cannot change it.

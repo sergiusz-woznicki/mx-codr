@@ -209,6 +209,13 @@ const tools = {
     }
   },
   // The block message when a step before the exec writes one of its scripts.
+  // The person-only codes behind a red gate (output on stdin), as the agent is told them; nothing
+  // when the agent still has work (harness-core personOnly).
+  'person-only'(root) {
+    const core = require('./plugins/harness-core.cjs');
+    const codes = core.personOnly(root || '.', py.readStdin());
+    if (codes) py.print(core.personOnlyMessage(codes));
+  },
   'script-written'(...scripts) {
     const text = py.readStdin();
     const m = re.search(EXEC, text);
