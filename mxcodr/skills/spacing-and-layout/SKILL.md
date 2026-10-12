@@ -156,115 +156,11 @@ create or modify page Module.Entity_NewEdit
 - **Tests work unchanged.** A pop-up renders in the same browser page, so `landed()`,
   `fill()` and `pick_combo()` find its widgets as before.
 
-## The main menu: Log out once users can sign in
+## The menu
 
-The navigation menu frames every screen. As soon as the app has user accounts that
-sign in (customer logins, demo users, an Administration account page), its main menu
-ends with a **Log out** item, in every navigation profile those users reach. Without
-it a user can only end the session by closing the browser.
-
-```sql
-create or modify navigation Responsive
-  home page MyFirstModule.Home_Web
-  {
-    menu item 'Invoices' ( OnClick: show page Invoicing.Invoice_Overview, Icon: Atlas_Core.Atlas_Filled.document )
-    menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )
-  }
-;
-```
-
-`sign out` needs no page or microflow, and it is always the **last** item.
-`create or modify navigation` replaces the whole menu: `DESCRIBE NAVIGATION Responsive`
-first and keep the items already there.
-
-The gate's layout verdict fails (`NAV01`) while security is on and no menu, page or
-snippet offers a way to log out.
-
-## One menu for every role
-
-The menu is the **navigation profile's** menu, shown by `Atlas_Core.Atlas_Default`:
-a sidebar on a wide screen, a hamburger button that opens it on a phone, the current
-page highlighted. Nothing else gives an app that for free.
-
-Different roles do **not** need different menus. Mendix hides a menu item from a
-user who cannot open its page, so a single menu lists every page and each role sees
-only its own. What a role can open is page access; where it lands is its home page:
-
-```sql
-grant view on page Sales.Order_List to Sales.Employee;
-grant view on page Sales.Cust_MyOrders to Sales.Customer;
-
-create or modify navigation Responsive
-  home page Sales.Order_List
-  home page Sales.Order_List for Employee
-  home page Sales.Cust_MyOrders for CustomerPortal
-  {
-    menu item 'Orders' ( OnClick: show page Sales.Order_List, Icon: Atlas_Core.Atlas_Filled."shopping-cart" )
-    menu item 'My orders' ( OnClick: show page Sales.Cust_MyOrders, Icon: Atlas_Core.Atlas_Filled.document )
-    menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )
-  }
-;
-```
-
-An employee sees Orders and Log out; a customer sees My orders and Log out.
-
-Never build the menu yourself — a layout of your own with link buttons to pages, one
-per role. A session did exactly that because MDL menu items take no roles: the links
-ran together into one line of text, a fixed 232 px panel covered half a phone
-screen, and there was no hamburger and no highlighted page. Keep the pages on
-`Atlas_Core.Atlas_Default` (or another stock Atlas layout) and put them in the menu.
-
-Every menu entry — item or sub-menu, Log out included — has an **icon that shows
-what it opens**: with the sidebar collapsed the icon is all a user sees. Take it
-from `Atlas_Core.Atlas_Filled` (`DESCRIBE ICON COLLECTION Atlas_Core.Atlas_Filled`
-lists the names; hyphenated ones are double-quoted). Ones that fit common screens:
-
-| Screen | Icon |
-|---|---|
-| orders, cart | `Atlas_Core.Atlas_Filled."shopping-cart"` |
-| customers, contacts | `Atlas_Core.Atlas_Filled."user-neutral-group"` |
-| users (user management) | `Atlas_Core.Atlas_Filled."user-neutral-shield"` |
-| My account | `Atlas_Core.Atlas_Filled.user` |
-| invoices, bills | `Atlas_Core.Atlas_Filled."cash-payment-bill"` |
-| dashboard, overview | `Atlas_Core.Atlas_Filled.dashboard` |
-| reports | `Atlas_Core.Atlas_Filled."analytics-bars"` |
-| shipments, products | `Atlas_Core.Atlas_Filled."shipment-box"` |
-| tasks, approvals | `Atlas_Core.Atlas_Filled."task-list-multiple"` |
-| documents | `Atlas_Core.Atlas_Filled.document` |
-| setup, settings | `Atlas_Core.Atlas_Filled.cog` |
-| home | `Atlas_Core.Atlas_Filled.home` |
-| Log out | `Atlas_Core.Atlas_Filled.logout` |
-
-Two items with the same icon read as the same screen; pick different ones. The gate fails
-`NAV06` when two entries one role sees share an icon -- only the entries that role may open
-count, since Mendix hides the rest.
-
-The gate fails `NAV03` when a role's home page is not in the menu, and `NAV04` when
-one of the project's own layouts opens two or more pages from buttons.
-
-## Users and "My account" in the menu
-
-Once users sign in, the menu also carries the Administration module's own account screens.
-Nothing needs building, and nothing in the Marketplace module changes:
-
-```sql
-    menu item 'Users' ( OnClick: show page Administration.Account_Overview, Icon: Atlas_Core.Atlas_Filled."user-neutral-shield" )
-    menu item 'My account' ( OnClick: call microflow Administration.ManageMyAccount, Icon: Atlas_Core.Atlas_Filled.user )
-    menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )
-```
-
-- **Users** (`Account_Overview`) is user management: create accounts, reset passwords,
-  assign roles. Only `Administration.Administrator` may open it, so only administrators
-  see the item — the one-menu rule does the rest.
-- **My account** is every user's own account and password. The page behind it,
-  `Administration.MyAccount`, needs the account as its parameter, so a menu item cannot open
-  it; `ManageMyAccount` fetches the signed-in account and opens it.
-- Every user role that signs in includes `Administration.User` (without it "My account" is
-  hidden), and the administrators' role includes `Administration.Administrator`:
-  `alter user role Employee add module roles (Administration.User);`
-
-The gate fails `ACCOUNT01` (no Users item), `ACCOUNT02` (no My account item) and `ACCOUNT03`
-(a role without `Administration.User`, or nobody with `Administration.Administrator`).
+Once users sign in, the main menu ends with Log out (NAV01), one menu serves every role with the items
+each may open (NAV03), and Users and My account are in it (ACCOUNT01-03). How to write it, per role:
+[reference/menu.md](reference/menu.md) -- read it when a NAV or ACCOUNT code names the menu.
 
 ## A long text gets a text area
 
@@ -331,121 +227,10 @@ The gate fails `LAYOUT01` when the app's pages use more than one layout, and lis
 
 ## Who is signed in, top right, on every page
 
-Once users sign in, every page (pop-ups and the login page aside) shows the user icon and the
-signed-in user's e-mail on the right of its top row, just under the language selector, with
-the Back button (where there is one) on the left of the same row. Clicking it opens My account.
-
-```sql
-/** Who is signed in, as one line for the page header. */
-create or modify non-persistent entity Shop.SignedInUser ( Label: String(200) );
-grant read * on entity Shop.SignedInUser to Shop.User;      -- every role that signs in
-
-/** The signed-in user's e-mail, or their user name when the account has none. */
-create or modify microflow Shop.DS_SignedInUser ()
-returns Shop.SignedInUser as $SignedInUser
-begin
-  @caption 'Find the signed-in account'
-  retrieve $Account from Administration.Account where [id = '[%CurrentUser%]'] first;
-  declare $Label String = $Account/Name;
-  @caption 'Has an e-mail address?'
-  if $Account/Email != empty and $Account/Email != '' then
-    @caption 'Use the e-mail'
-    set $Label = $Account/Email;
-  end if;
-  @caption 'Create the header line'
-  $SignedInUser = create Shop.SignedInUser (Label = $Label);
-  return $SignedInUser;
-end;
-/
-grant execute on microflow Shop.DS_SignedInUser to Shop.User;
-
-create or modify snippet Shop.SNIPPET_CurrentUser {
-  dataview dvCurrentUser (DataSource: microflow Shop.DS_SignedInUser) {
-    linkbutton lnkCurrentUser (Caption: '{1}', CaptionParams: ({1} = Label),
-      Icon: 'Atlas_Core.Atlas_Filled.user', Action: call microflow Administration.ManageMyAccount)
-  }
-}
-```
-
-Then every page opens with one row. The row, not the snippet, decides where the link goes:
-
-```sql
-  -- a page opened from another page: Back on the left, the user on the right
-  layoutgrid pageGrid {
-    row rowTop {
-      column colTop (DesktopWidth: 12) {
-        container ctPageTop (DesignProperties: ('Flex container': 'Horizontal (row)',
-            'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center', 'Spacing': ('margin-bottom': 'M'))) {
-          actionbutton btnBack (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
-          snippetcall scCurrentUser (Snippet: Shop.SNIPPET_CurrentUser)
-        }
-        dynamictext heading (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
-      }
-    }
-    -- the page's other rows follow here, in the same grid
-  }
-
-  -- any other page: the user on the right, the same way inside the grid
-        container ctPageTop (DesignProperties: ('Flex container': 'Horizontal (row)',
-            'Align items X': 'Right', 'Align items Y': 'Center', 'Spacing': ('margin-bottom': 'M'))) {
-          snippetcall scCurrentUser (Snippet: Shop.SNIPPET_CurrentUser)
-        }
-```
-
-- `Align items X` is Atlas's `justify-content`, and it only works together with
-  `Flex container`: without it the link lands on the left, above the heading (seen in a
-  session). It moves the row's direct children, which is why it goes on the row.
-- **On a phone or tablet page** (PHONE06) the title joins that row, so nothing stands on a row
-  of its own above it: Back and the title in a box on the left, the user on the right, and
-  `'Disable row wrap': ON` on both containers -- Back, an H1 and the name need 375 px of a
-  phone's 358, and Atlas wraps the row otherwise. A title that reads the page's object sits in
-  a data view of its own around the row. The offline snippet's list view takes
-  `('Style': 'No styling')`, or each name is a 69 px card:
-
-```sql
-        dataview JobDetail_TitleForm (DataSource: $Job) {
-          container JobDetail_PageTopBox (DesignProperties: ('Flex container': 'Horizontal (row)',
-              'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center',
-              'Disable row wrap': ON, 'Spacing': ('margin-bottom': 'M'))) {
-            container JobDetail_TitleBox (DesignProperties: ('Flex container': 'Horizontal (row)',
-                'Align items Y': 'Center', 'Disable row wrap': ON)) {
-              actionbutton JobDetail_BackButton (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
-              dynamictext JobDetail_HeadingText (Content: 'Job {1}', RenderMode: H1, ContentParams: ({1} = Number))
-            }
-            snippetcall JobDetail_CurrentUserSnippet (Snippet: Field.SNIPPET_CurrentUserOffline)
-          }
-        }
-```
-- `CurrentUser` is a reserved name in Mendix (CE7247) -- hence `SignedInUser`.
-- A button caption takes an attribute, not an expression, so the microflow picks e-mail or
-  user name and the snippet only shows `Label`.
-- Why a snippet and not the layout's top bar: copying an Atlas layout with mxcli drops its
-  sidebar toggle (the hamburger), and Atlas_Core itself is a Marketplace module that is
-  never edited.
-
-**A page an offline profile reaches** (PhoneOffline, TabletOffline, ResponsiveOffline) uses
-`SNIPPET_CurrentUserOffline` instead, in the same row. The snippet above breaks there twice:
-its microflow data source needs the server, so offline it shows nothing, and its link to
-`ManageMyAccount` makes the Administration pages reachable offline, which Mendix refuses
-(CE6900, CE6904). The offline one reads the signed-in account from the device's own database,
-and the profile downloads that one account:
-
-```sql
-create or modify snippet Shop.SNIPPET_CurrentUserOffline {
-  listview CurrentUserOffline_AccountList (DataSource: database from Administration.Account where [id = '[%CurrentUser%]']) {
-    dynamictext CurrentUserOffline_NameText (Content: '{1}', ContentParams: ({1} = Name))
-  }
-};
--- in the offline profile's sync block, beside the app's own entities:
---   sync Administration.Account where [id = '[%CurrentUser%]'];
-```
-
-A list, not a data view: a data view cannot take a database source. No account link: a user
-changes the password on the online profile. A page both kinds of profile reach uses the
-offline one; it works online too. Proven offline on a PhoneOffline app (2026-10-10): the page
-opened without a network shows the user's name.
-
-The gate fails `USER01` for every page that does not start with one of the two snippets.
+Once users sign in, every page (pop-ups and the login page aside) opens with the signed-in user on the
+right of its top row (gate USER01). The entity, the data source microflow, the snippet and where it goes
+on a page, ready to copy: [reference/signed-in-user.md](reference/signed-in-user.md) -- read it when
+USER01 names a page, or before the first page of an app users sign in to.
 
 ## Back, top left, on every page you navigate to
 
@@ -589,46 +374,9 @@ Patch the page body instead, which is re-runnable:
 bash tests/gate.sh            # the layout verdict, with the rest
 ```
 
-```
-layout: PASS  0 failure(s) over 6 page(s)
-```
-
-| Check | Severity | Fails when |
-|---|---|---|
-`SPACE01` | error | a widget sharing a line with the next and no `margin-right`; or a heading with content under it and no `margin-bottom` |
-`SPACE02` | error | a spacing value outside `None` `S` `M` `L` |
-`SPACE03` | error | widgets on one line disagreeing on vertical margins (misaligned), or none carrying `margin-bottom` (wraps into the row above) |
-`SPACE04` | error | a button or text right on top of, or right under, a box (data grid, list, gallery, group box, tab container, a card or coloured container) with no margin between them; a button in a grid's `controlbar` without `margin-bottom` |
-`HEAD01` | warning | the page renders no heading and calls no header snippet |
-`NAV01` | error | project security is on, a navigation menu has no `sign out` item, and no page or snippet has a sign-out button |
-`NAV02` | warning | the `sign out` item is not the last item of its menu |
-`GRID01` | error | a grid filter sits in a column with no `Attribute:` and has none of its own: it renders "Unable to get filter store" and filters nothing |
-`GRID02` | error | a button outside a data grid changes the rows it shows; it goes in the grid's `controlbar` |
-`NAV03` | error | project security is on, and a role's home page (`home page X for Role`) is not in the menu |
-`NAV04` | error | one of the project's own layouts opens two or more pages from buttons: a menu built by hand |
-`NAV05` | error | a menu item or sub-menu has no icon (the message suggests one for its caption) |
-`NAV06` | error | two menu entries one role sees share an icon (the message suggests another) |
-`ACCOUNT01` | error | users sign in and the menu has no `page Administration.Account_Overview` item (user management) |
-`ACCOUNT02` | error | users sign in and the menu has no `microflow Administration.ManageMyAccount` item (own account, password) |
-`ACCOUNT03` | error | a role that signs in lacks `Administration.User`, or no role has `Administration.Administrator` |
-`ICON01` | error | a button (`actionbutton`, `linkbutton`) without an icon; the message suggests one from its action and caption |
-`LAYOUT01` | error | the app's pages (pop-ups, login and phone/tablet pages aside) use more than one layout |
-`USER01` | error | users sign in, and a page (pop-ups and the login page aside) does not open with `<Module>.SNIPPET_CurrentUser` on the right of its top row (first, or right after Back in the same container) |
-`BACK01` | error | a page another page or a flow opens does not start with a Back button (`close page`, icon `chevron-left`); pop-ups, menu pages and home pages are exempt |
-`ALERT01` | warning | a box class (`alert`, `alert-*`, `card`, `well`) on a `dynamictext` or `text` |
-`EDGE01` | error | a page on an Atlas_Core layout (pop-ups and the login page aside) has a widget outside a `layoutgrid` at its top level: it touches the edge of the window |
-`TEXT01` | error | a `textbox` edits a String over 500 characters or unlimited: use a `textarea` |
-`TEXT02` | warning | a `textbox` edits an attribute named like prose (Description, Notes, Reason ...) of 100 characters or more |
-`VIS01` | warning | measured in the browser at the end of every test: two unrelated widgets overlap by 4 px or more |
-`VIS02` | warning | measured: the page scrolls sideways |
-`VIS03` | warning | measured: a widget cuts its text off |
-`VIS04` | warning | measured: a chart cannot be seen whole on one screen |
-`LOOK01` | warning | with `MDL_VISUAL_REVIEW=agent`: a screenshot not reviewed yet — open `.mxcli/visual/review.md`, read each PNG, answer every question, write `verdicts.json` |
-`LOOK02` | warning | with review on: a screenshot you rejected; the line repeats your own fix |
-
-The warnings list under `== warnings` in the gate's output and do not block DONE yet;
-`level: block` in the `## Local` of `tests/rulebook/app/VIS01.md`..`VIS04.md` makes them block,
-`level: off` turns them off -- the person's cards: a session does not edit them.
+What each layout code wants and its one-line fix: `tests/checks/layout.md`. The warnings (VIS01-04, HEAD01,
+NAV02, ALERT01, TEXT02) do not block DONE; `level:` in the `## Local` of a card in `tests/rulebook/` is the
+person's to change -- a session does not edit them.
 
 ## What this cannot see
 

@@ -98,7 +98,7 @@ function currentUserFindings(lines, snippets, navigation, layouts, phoneLayouts 
     `${missing.length} page(s) lack the signed-in user top right: ${shown} -- start each with \`container` +
     ` ctPageTop (DesignProperties: ${ROW_RIGHT_PROPS}) { snippetcall scCurrentUser (Snippet: ${snippet}) }\`;` +
     ' on a page with Back, Back goes first in that row and \'Right\' becomes \'Space between (only for' +
-    ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, 'Who is signed in'.${offline}` }];
+    ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, reference/signed-in-user.md.${offline}` }];
 }
 
 const FLOW_HEAD_RE = String.raw`^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)`;

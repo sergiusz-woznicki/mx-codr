@@ -10,6 +10,7 @@
 //   release-asset <asset>           "<tag> <sha256> <url>" of an asset in a GitHub release (stdin)
 //   sha256-file <file>              a file's SHA-256
 //   powershell-encode <script>      base64 of the script as UTF-16LE, for -EncodedCommand
+//   pi-compaction <settings> <models.json>   Pi compacts each model's context at 70% of its window
 'use strict';
 const crypto = require('crypto');
 const fs = require('fs');
@@ -139,6 +140,40 @@ const tools = {
   },
   'powershell-encode'(script) {
     py.print(Buffer.from(script, 'utf16le').toString('base64'));
+  },
+  // Pi compacts a session's context only when it nears the model's window (window - 16384 by
+  // default): DeepSeek's 262k window meant every turn re-read up to ~245k tokens. At 70% of the
+  // window (G7, 2026-10-12, InvoiceChase) one compaction, 17.5M tokens against 25.7M, 153 turns
+  // against 173, and as many requirements and tests; at ~47% (G6) four compactions, and the model
+  // lost its thread: 266 turns for half the scope. So `reserveTokens` is 30% of each window, per
+  // model of the person's models.json, in the project's .pi/settings.json; an override the person
+  // set there is kept. Prints how many models it set.
+  'pi-compaction'(settingsFile, modelsFile) {
+    let models = {};
+    try { models = JSON.parse(fs.readFileSync(modelsFile, 'utf8')).providers || {}; } catch { py.print('0'); return; }
+    let settings = {};
+    try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch { settings = {}; }
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) settings = {};
+    const compaction = settings.compaction && typeof settings.compaction === 'object' ? settings.compaction : {};
+    const overrides = compaction.modelOverrides && typeof compaction.modelOverrides === 'object' ? compaction.modelOverrides : {};
+    let set = 0;
+    for (const [provider, entry] of Object.entries(models)) {
+      for (const model of (entry && Array.isArray(entry.models) ? entry.models : [])) {
+        const window = Number(model && model.contextWindow);
+        if (!model.id || !(window >= 64000)) continue;
+        const key = `${provider}/${model.id}`;
+        if (overrides[key]) continue;
+        overrides[key] = { reserveTokens: Math.round(window * 0.3) };
+        set++;
+      }
+    }
+    if (set) {
+      compaction.modelOverrides = overrides;
+      settings.compaction = compaction;
+      fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+      fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+    }
+    py.print(String(set));
   },
 };
 

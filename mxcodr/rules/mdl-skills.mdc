@@ -10,8 +10,7 @@ Read **one** up front: `test-first-delivery`, before the first feature. The othe
 by the check that needs them -- a `layout` finding says `spacing-and-layout`, a `folders` finding
 `module-structure` or `reuse-and-snippets`, a `naming` finding `naming-and-captions` -- and
 each finding already carries its fix, so read a skill when a finding names it, one file per
-command, not all of them at the start (measured: four skills read up front cost more context
-than these rules and the syntax digest together, and the same findings came anyway).
+command, not all of them at the start.
 
 Facts about this app come from one call, not from exploring by hand:
 
@@ -33,8 +32,7 @@ bash tests/gate.sh                           # "done" is this ending in DONE; --
 ```
 
 The gate boots, restarts and waits by itself: never boot the app or run `mxcli test` by hand.
-Never wrap a harness command in `timeout` (macOS has none). Never hand-roll a wait for the app
-or a reload (`sleep` before the gate is blocked). Microflow tests (`*.test.mdl`) are not run by
+Never wrap a harness command in `timeout`. Never hand-roll a wait for the app. Microflow tests (`*.test.mdl`) are not run by
 the gate and do not count for DONE; only `tests/verify-*.test.sh` do.
 
 **What each check code wants, and its fix: `tests/checks/<step>.md`**, the file the gate names for the step that failed; `tests/CHECKS.md` says which file holds a code (layout codes such
@@ -48,8 +46,7 @@ topic indexes -- what `./mxcli syntax`, `syntax microflow`, `syntax page` list -
 pitfalls that cost sessions the most time, so go straight to the leaf: `./mxcli syntax
 microflow.show-page`, several per command, never the index again.
 **Do not probe syntax by writing variant files** and running precheck on each:
-`./mxcli check <file> -p <app>.mpr --references` answers in 0.4s and writes nothing. Never `exec` a probe into the model (a session
-left `ZZ_Probe1`..`3` behind). Keep `tests/precheck.sh` for the script you are about to exec:
+`./mxcli check <file> -p <app>.mpr --references` answers in 0.4s and writes nothing. Never `exec` a probe into the model. Keep `tests/precheck.sh` for the script you are about to exec:
 under Claude, Cursor, OpenCode and Pi a hook runs it before every `mxcli exec` and blocks a
 failing one -- do not call it by hand there; under Codex call it yourself. It applies the
 script to a scratch copy and runs `mx check`, so build-only errors (reserved names, a broken
@@ -72,7 +69,7 @@ datagrid dg (...) { column colStatus (attribute: "Status") { dropdownfilter fltS
 show message '{1}' type info objects [$Obj/Name + ' saved'];   validation feedback $Obj/Attr message 'Name is required';
 ```
 
-Users who sign in need no login screen of your own (two sessions lost 15-25 minutes building one):
+Users who sign in need no login screen of your own:
 
 - **Security on is the whole login**: at `PROTOTYPE` or `PRODUCTION` the runtime serves its own
   sign-in page (`login.html`). **Build at `PRODUCTION` from the first script**, `StrictMode: TRUE` -- `PROTOTYPE`
@@ -100,7 +97,8 @@ Users who sign in need no login screen of your own (two sessions lost 15-25 minu
   Atlas_Core's image, replaced from the theme (Atlas's `$brand-logo`), never inside that
   Marketplace module.
 - **Tests sign in as that user:** `export TEST_USER=demo_customer` before sourcing `tests/lib.sh`,
-  and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`.
+  and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`. End your DONE report with
+  the gate's `== for the person` block, as printed.
 
 Three names are reserved by the platform and quoting does not help:
 **`Owner`, `Type`, `Default`** -- rename them (CE7247 at boot; `./mxcli syntax keywords`, skill `check-syntax`).

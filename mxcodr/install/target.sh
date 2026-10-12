@@ -162,6 +162,8 @@ fi
 choose_run_mode
 # A new app also gets its look chosen now, with the other questions.
 [ "$mpr_count" = "0" ] && choose_theme
+# When the agents compact their context: proposed, the person decides (install/compaction.sh).
+choose_compaction
 
 # NOTE: there are 12 ui_done steps (13 with a new app), so these totals are one short.
 # A new app adds its creation; an existing one the refresh of mxcli's own skills (step_skills.sh).

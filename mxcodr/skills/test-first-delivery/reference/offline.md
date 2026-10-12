@@ -21,7 +21,7 @@ the device; a test picks it by name.
 - **Menu items for user management stay on the online profile.** ACCOUNT01/02 do not ask an
   offline profile for them: they would make the Administration pages reachable offline.
 - The profile needs **Progressive web app** settings, or no service worker registers and no page
-  opens offline (OFFLINE01). mxcli v0.25 creates offline profiles without them, and Studio Pro shows
+  opens offline (OFFLINE01). mxcli (v0.26 and before) creates offline profiles without them, and Studio Pro shows
   them greyed out for an offline profile, so they cannot be set afterwards: stop and ask the person
   to delete the profile in Studio Pro and add it again there, then re-apply its home pages, menu and
   sync with `create or modify navigation` (that leaves the settings alone).
@@ -85,4 +85,6 @@ scenario '
 - `sync_now()` fails when no synchronization reached the server: the device is offline, or the
   button does not call a nanoflow with `synchronize`.
 - `mxcli run --local` builds without the worker's cache and without the page modules in its
-  pre-cache; `open_app` makes up for both. A production package has them already.
+  pre-cache; `open_app` makes up for both. A production package has them already. The gate also
+  turns the cache on in the built `deployment/web/index.js` and keeps it on across rebuilds, so the
+  app opened by hand, with the network cut in DevTools, works offline as the tests see it.

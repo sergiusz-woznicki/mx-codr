@@ -175,13 +175,21 @@ const EXEC_THROUGH_VARIABLE =
 const WRITE_MDL = /^\s*(create|alter|drop|grant|revoke|move|rename)\b/i
 function inlineMdl(command) {
   if (typeof command !== "string" || !/mxcli(\.exe)?\b/.test(command)) return []
+  // Only the -c of mxcli itself, as hook_tool.cjs inline-mdl reads it: `grep -c "drop microflow" x.mdl`
+  // in the same command was taken for MDL and blocked a read-only command (InvoiceChaseReq, 2026-10-12).
+  const words = command.match(/"(?:[^"\\]|\\.)*"|'[^']*'|&&|\|\||[;|\n]|[^\s;|&]+/g) || []
   const found = []
-  const pattern = /\s-c\s+("((?:[^"\\]|\\.)*)"|'([^']*)')/g
-  let match
-  while ((match = pattern.exec(command)) !== null) {
-    const text = match[2] !== undefined ? match[2].replace(/\\(["\\$`])/g, "$1") : match[3]
-    if (WRITE_MDL.test(text)) found.push(text)
-  }
+  let seenMxcli = false
+  words.forEach((word, i) => {
+    if (/(^|\/)mxcli(\.exe)?$/.test(word)) seenMxcli = true
+    else if ([";", "|", "&&", "||", "\n"].includes(word)) seenMxcli = false
+    else if (seenMxcli && word === "-c" && i + 1 < words.length) {
+      const raw = words[i + 1]
+      const text = raw.startsWith('"') ? raw.slice(1, -1).replace(/\\(["\\$`])/g, "$1")
+        : raw.startsWith("'") ? raw.slice(1, -1) : raw
+      if (WRITE_MDL.test(text)) found.push(text)
+    }
+  })
   return found
 }
 

@@ -72,6 +72,18 @@ rulebook_section() {
   fi
 }
 
+# How the agent learns whether to ask the person before building (skill requirements-interview):
+# MDL_REQUIREMENTS in tests/harness.env -- ask (default), assume (nobody answers), off.
+requirements_line() {
+  local slices
+  slices="$(ls docs/brain/plan/*.md 2>/dev/null | wc -l | tr -d ' ')"
+  case "${MDL_REQUIREMENTS:-ask}" in
+    off) echo "   requirements: off -- no interview before building" ;;
+    assume) echo "   requirements: assume -- nobody answers: before the first feature, take your recommended answers as assumptions (skill requirements-interview); $slices slice(s) in docs/brain/plan" ;;
+    *) echo "   requirements: ask -- before the first feature, ask the person and wait (skill requirements-interview); $slices slice(s) in docs/brain/plan" ;;
+  esac
+}
+
 app_section() {
   echo "== app"
   if [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 "http://localhost:$APP_PORT" 2>/dev/null)" = "200" ]; then
@@ -81,6 +93,7 @@ app_section() {
   fi
   [ -f tests/credentials.env ] && echo "   tests/credentials.env present (test sign-in configured)"
   [ -d docs/brain ] && echo "   docs/brain/ present -- read project.md before building"
+  requirements_line
   [ -f tools/mdl-checks/VERSION ] && echo "   harness $(cat tools/mdl-checks/VERSION)"
   mdl_check_mxcli_freshness
   mdl_check_install_freshness

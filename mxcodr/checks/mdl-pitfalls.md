@@ -17,8 +17,9 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   `column (Attribute: Invoice_Customer/Name)`, not the association itself. A data grid column has no
   name in Mendix: `column (...)`, addressed later as `dg column(Name)` (a name warns MDL-DEPR005).
 - **`Administration.Account.Name` does not exist**: Name is System.User's. Show `FullName`.
-- **A user's roles are the reference set `UserRoles`, not an attribute**: `retrieve $Role from System.UserRole
-  where [Name = 'Customer'] first;` then `change $User (UserRoles = $Role);` (`UserRole` does not exist, CE1613).
+- **A user's roles are the reference set `System.UserRoles` -- write it qualified**: `retrieve $Role from
+  System.UserRole where [Name = 'Customer'] first;` then `change $User (System.UserRoles = $Role);`. Unqualified
+  `UserRoles` passes `mxcli check` and exec, but is stored as an attribute: CE1613 at build.
 - **`create module Shop;` takes nothing else**: no `( Description: ... )` and no `description '...'`.
 - **No `commit` inside a `loop`** (lint CONV011: one database call per row). Change the objects in
   the loop and commit the list once after it: `change $Line (Done = true);` in the loop, then
@@ -42,6 +43,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   a query on PaymentStatus alone, so drop the old (PaymentStatus) and any index no query needs (PERF08).
   Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
+- **A text's `{1}` takes an attribute of the widget's own object**: inside `dataview ... (DataSource: $Invoice)`,
+  `dynamictext X (Content: 'Invoice {1}', ContentParams: ({1} = Number))` -- never `$Invoice/Number` (refused).
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **A list takes its rows from the database, not from a flow that only retrieves them** (gate DS01):
   `datagrid OrderDetail_LinesGrid (DataSource: database Shop.OrderLine where [Shop.OrderLine_Order = $Order])`;
@@ -90,14 +93,15 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **A non-persistent object a page shows or a flow hands to a page** needs `grant create, read *,
   write * on entity Mod.Entity to Mod.Role;`, or the client fails with "cannot create Mendix object"
   (CE2729 at check).
-- **Every statement in an owner script is re-runnable** (each form checked on mxcli 0.25): `create or
+- **Every statement in an owner script is re-runnable** (each form checked on mxcli 0.26): `create or
   modify` for module, entity, view entity, enumeration, page, microflow, java action, user role and
   module role;
   `drop user role if exists`, `drop demo user if exists`, `create persistent entity if not exists`,
   `alter entity X add attribute if not exists ...`, `alter entity X add event handler if not exists on
-  before commit call Mod.MF raise error`. There is no `drop module if exists` and no `drop entity|page|
-  microflow if exists`: a plain `create` or an unguarded `drop` stops the second exec at "already
-  exists" / "not found" -- put a one-off `drop module` in its own script.
+  before commit call Mod.MF raise error`, and `drop module|entity|page|snippet|microflow if exists
+  Mod.X` (`if exists` before the name). A plain `create` or an unguarded `drop` stops the second exec
+  at "already exists" / "not found". A microflow `create or modify` cannot reshape is rebuilt with
+  `drop microflow if exists Mod.F;` then `create microflow Mod.F ...` in the same script.
 - **Demo user passwords are 12+ characters** with a digit (the template's policy); a shorter one stops
   the exec at "password policy violation".
 - **A data source microflow does not apply entity access**: an XPath rule that scopes a customer to

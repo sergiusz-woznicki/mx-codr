@@ -11,7 +11,7 @@ key: none
 Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user.
 
 ## Fix
-Constrain its retrieve (`= '[%CurrentUser%]'`): microflows ignore entity access.
+Constrain its retrieve to the user: microflows skip entity access.
 
 ## Local
 # level: warn

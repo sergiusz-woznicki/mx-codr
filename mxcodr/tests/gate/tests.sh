@@ -114,6 +114,28 @@ step_tests() {
     ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
   fi
   environment="$(environment_cause "$out")"
+  # Out of licence sessions: every sign-in after that fails, so the result says nothing about the
+  # features. Sessions a test or a hand-run scenario left open last until they time out; a fresh
+  # runtime has none. The gate restarts once and runs the suite again -- InvoiceChaseG1 spent rounds
+  # on lists that "did not show" a customer the refused session never saved (2026-10-12).
+  if [ "$status" != "0" ] && [ "$environment" = "$SESSION_LIMIT_CAUSE" ] && [ -z "${MDL_SESSIONS_RESET:-}" ] \
+     && declare -F ensure_app >/dev/null; then
+    MDL_SESSIONS_RESET=1
+    echo "   the runtime ran out of licence sessions: restarting the app once (a fresh runtime has none) and running the suite again"
+    stop_project_app >/dev/null 2>&1
+    BOOT=1; BASE_URL=""
+    if ensure_app >/dev/null 2>&1; then
+      date '+%Y-%m-%d %H:%M:%S' > "$WORK/tests.started"
+      out="$(run_suite "${targets[@]}")"
+      status=$?
+      echo $((SECONDS - started)) > "$WORK/tests.secs"
+      printf '%s\n' "$out" | grep -E '^\s+(PASS|FAIL)\s|^Total:'
+      if [ -z "$ONLY" ] && [ "${KEEP_SESSION:-0}" != "1" ]; then
+        ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
+      fi
+      environment="$(environment_cause "$out")"
+    fi
+  fi
   if [ -n "$environment" ]; then
     echo "   !! not a feature failure: $environment"
   fi
@@ -142,6 +164,11 @@ syntax_notes() {
         echo "   FAIL $(basename "$script" .test.sh): line ${cut%%:*}: an apostrophe ends the scenario '...' body there (${cut#*: }) -- write ’, or reword the comment or string"
         continue
       fi
+      # `printf ... | grep -q x` under lib.sh's pipefail fails at random: grep -q stops reading at the
+      # first match and printf dies of SIGPIPE (exit 141), so the assertion fails though the text is
+      # there. InvoiceChaseG1 chased "missing" rows for half an hour (2026-10-12).
+      grep -nE '\|[[:space:]]*grep[[:space:]]+(-[a-zA-Z]*q|--quiet)' "$script" 2>/dev/null | head -1 \
+        | sed -E "s/^([0-9]+):.*/   note $(basename "$script" .test.sh): line \1: '| grep -q' fails at random under lib.sh's pipefail (exit 141, SIGPIPE) -- read through a here-string: grep -q 'text' <<< \"\$value\"/"
       err="$(bash -n "$script" 2>&1)" && continue
       err="$(printf '%s\n' "$err" | head -1 | sed 's/^[^:]*: //')"
       hint=""
@@ -223,7 +250,7 @@ close_browser_if_asked() {
 run_suite() {
   export PY MXCLI BASE_URL SCRIPT_TIMEOUT
   # The visual checks' mode from the rulebook, read once for the suite instead of in every test.
-  _MDL_VISUAL_MODE="$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 LOOK01 LOOK02)"; export _MDL_VISUAL_MODE
+  _MDL_VISUAL_MODE="$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 VIS07 LOOK01 LOOK02)"; export _MDL_VISUAL_MODE
   export_test_module
   # One licence session: a full run reuses it; --only keeps it signed in between runs.
   if [ -n "$ONLY" ]; then
@@ -314,7 +341,7 @@ record_suite_result() {
 step_visual() {
   # The level comes from the rulebook (tests/rulebook/app/VIS01..VIS04.md, LOOK01/02).
   local mode out
-  mode="$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 LOOK01 LOOK02)"
+  mode="$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 VIS07 LOOK01 LOOK02)"
   [ "$mode" = "0" ] && return 0
   [ -z "${ONLY:-}" ] && [ "${TESTS_ONLY:-0}" != "1" ] || return 0
   local -a review=()
@@ -329,14 +356,30 @@ step_visual() {
     summary+=("visual: nothing overlaps, scrolls sideways or is cut off on the pages the tests reached")
     return 0
   fi
-  if [ "$mode" = "error" ]; then
-    printf '%s\n' "$out" > "$WORK/visual.detail"
-    echo "visual: $(printf '%s\n' "$out" | grep -c .) finding(s) on the pages the tests reached" > "$WORK/visual.summary"
+  # Each finding at its own code's level: VIS07 blocks by default while VIS01..VIS04 warn.
+  local line code level blocking="" warnings="" seen_codes="" levels=""
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    code="$(sed -nE 's/^[[:space:]]*- \[([A-Z]+[0-9]+)\].*/\1/p' <<< "$line")"
+    case " $seen_codes " in
+      *" $code "*) level="$(sed -nE "s/.* $code=([a-z]+).*/\1/p" <<< " $levels ")" ;;
+      *) level="$(mdl_rule_level "${code:-VIS01}" warn)"; seen_codes="$seen_codes $code"; levels="$levels $code=$level " ;;
+    esac
+    case "$level" in
+      block) blocking+="$line"$'\n' ;;
+      off) ;;
+      *) warnings+="$line"$'\n' ;;
+    esac
+  done <<< "$out"
+  if [ -n "$blocking" ]; then
+    printf '%s' "$blocking" > "$WORK/visual.detail"
+    echo "visual: $(grep -c . <<< "$blocking") finding(s) on the pages the tests reached" > "$WORK/visual.summary"
     echo 1 > "$WORK/visual.status"
     collect visual "visual"
-  else
-    printf '%s\n' "$out" > "$WORK/visual.warnings"
-    summary+=("visual: $(printf '%s\n' "$out" | grep -c .) warning(s) -- see == warnings (level: block in tests/rulebook/app/VIS01..VIS04.md makes them block DONE)")
+  fi
+  if [ -n "$warnings" ]; then
+    printf '%s' "$warnings" > "$WORK/visual.warnings"
+    summary+=("visual: $(grep -c . <<< "$warnings") warning(s) -- see == warnings (level: block in tests/rulebook/app/VIS01..VIS04.md makes them block DONE)")
   fi
 }
 

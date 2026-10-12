@@ -11,7 +11,7 @@ key: none
 Points out an alert or card style put on a plain text, where it renders badly. Put it on a container around the text.
 
 ## Fix
-`container ctNote (Class: 'alert alert-info') { dynamictext ... }`
+`container ctNote (Class: 'alert alert-info') { ... }`
 
 ## Local
 # level: warn

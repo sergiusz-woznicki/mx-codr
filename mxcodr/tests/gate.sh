@@ -20,7 +20,7 @@
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
 #      MDL_MXBUILD_PATH, MDL_DB_*, MDL_PSQL, MDL_VISUAL_REVIEW=agent, MDL_CLOSE_BROWSER=1,
-#      MDL_DB_RESET=session -- also in tests/harness.env. A rule's level and exceptions: its card
+#      MDL_DB_RESET=done|session|off -- also in tests/harness.env. A rule's level and exceptions: its card
 #      in tests/rulebook/ (bash tests/rules.sh lists them).
 # Lines 2-24 are printed by --help; keep them 23 lines.
 
@@ -42,7 +42,7 @@ for part in hints app checks steps layout security preflight tests; do
   fi
   . "$HARNESS_DIR/gate/$part.sh"
 done
-# MDL_DB_RESET=session: dbsnap_take before the tests, dbsnap_restore after the first DONE.
+# MDL_DB_RESET (done by default): dbsnap_take before the tests, dbsnap_restore after each DONE.
 [ -f "$HARNESS_DIR/db-snapshot.sh" ] && . "$HARNESS_DIR/db-snapshot.sh"
 
 # The gate's helpers (digests, JSON, timestamps) live in tools/mdl-checks/gate_helpers.cjs.
@@ -117,13 +117,26 @@ add_red_first_notes() {
 # What a check found that does not block DONE (yet): <check>.warnings, as `   - [CODE] ...` lines.
 # "fix them anyway" sent sessions round extra full gates after DONE for warnings alone. Now a
 # warning rides along with the next real fix, and one left at DONE goes into the report.
+# Every warning goes to .mxcli/warnings.txt; the output carries a short form of them. They were
+# up to 11k of a 26k gate output, re-read on every later turn of the session (B2B, 2026-10-12): while
+# a check fails, one line per step (how many, which codes); at DONE, four lines per step.
 print_warnings() {
-  local file shown=0
+  local file shown=0 step count codes
+  mkdir -p .mxcli 2>/dev/null && : > .mxcli/warnings.txt 2>/dev/null
   for file in "$WORK"/*.warnings; do
     [ -s "$file" ] || continue
-    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them together with your next fix, not in a gate run of their own -- level: block in a rule's card in tests/rulebook/ makes it block)"; }
+    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them together with your next fix, not in a gate run of their own -- level: block in a rule's card in tests/rulebook/ makes it block; all of them: .mxcli/warnings.txt)"; }
     shown=1
-    head -12 "$file"
+    step="$(basename "$file" .warnings)"
+    { echo "== $step"; cat "$file"; } >> .mxcli/warnings.txt 2>/dev/null
+    if [ ${#failures[@]} -gt 0 ]; then
+      count="$(grep -cE '^[[:space:]]*- ' "$file")"
+      codes="$(grep -oE '\[[A-Z]+[0-9]+\]|\[[a-z]+(-[a-z]+)+\]' "$file" | tr -d '[]' | sort | uniq -c | sort -k1,1nr -k2,2 | awk '{printf "%s%s x%s", (NR > 1 ? ", " : ""), $2, $1}')"
+      echo "   $step: ${count:-0} warning(s)${codes:+ ($codes)} -- after the blocking ones are fixed"
+    else
+      head -4 "$file"
+      [ "$(wc -l < "$file" | tr -d ' ')" -gt 4 ] && echo "   ... $(( $(wc -l < "$file" | tr -d ' ') - 4 )) more line(s) of $step in .mxcli/warnings.txt"
+    fi
   done
   WARNINGS_SHOWN=$shown
 }
@@ -222,6 +235,7 @@ print_verdict_and_exit() {
     only_coverage_note
     exit 0
   fi
+  print_for_the_person
   echo "   DONE — every check passed"
   done_repeat_note
   captions_after_done
@@ -344,6 +358,9 @@ main() {
   # Warn about drifted checkers before any verdict, and before the no-app exit.
   mdl_check_install_freshness
   ensure_app
+  keep_offline_caching
+  # A new app's database appears with its first boot: the snapshot is taken now, before any test writes.
+  declare -F dbsnap_take >/dev/null && dbsnap_take
   # 3. Preflights, then the suite.
   failures=(); cannot_run=(); summary=(); details=()
   preflight_session

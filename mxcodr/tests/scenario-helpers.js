@@ -464,7 +464,7 @@
   // measured from the top of the content region, and the top of who is signed in (a widget named
   // CurrentUser...), or null: the title opens the page and the name shares its row (VIS06; measured
   // on OfflineLab 2026-10-11: a row holding only the name put My jobs' title at 101 px, Job's at 175).
-  const visual_findings = (boxes, viewport, charts, cells, bars, head) => {
+  const visual_findings = (boxes, viewport, charts, cells, bars, head, texts, columns) => {
     const found = [];
     const MIN = 4;   // px both ways: touching borders and 1-2 px rounding are not an overlap
     const leaves = boxes.filter(b => b.leaf && b.w > 0 && b.h > 0);
@@ -532,6 +532,43 @@
         : Math.round(c.w) + ' x ' + Math.round(c.h) + ' px, but the screen shows ' + Math.round(c.availW) + ' x ' + Math.round(c.availH);
       found.push({code: 'VIS04', widgets: [c.name], px: Math.round(over),
         message: 'chart ' + c.name + ' cannot be seen whole on one screen: ' + why});
+    }
+    // Amounts as the page writes them (VIS07): one grouped with a thousands separator ("50,000.00"),
+    // and one of 1000 or more with decimals and no separator ("19190.829"), on the same page, are one
+    // kind of value in two formats -- a B2B grid under its summary (InvoiceB2BG2, 2026-10-12).
+    const GROUPED = /(?:^|[^\d.,])\d{1,3}(?:[,.\u00a0\u202f']\d{3})+[.,]\d{2}(?![\d.,])/;
+    const UNGROUPED = /(?:^|[^\d.,\/\-:])(\d{4,}[.,]\d+)(?![\d.,\/\-:])/;
+    let grouped = '';
+    const ungrouped = [];
+    // A grid's cells count as texts too: the summary's "50,000.00" and a grid's "19190.829".
+    const all = (texts || []).concat((columns || []).flatMap(c => c.values.map(v => ({name: c.name, text: v}))));
+    for (const t of all) {
+      const g = GROUPED.exec(t.text);
+      if (g && !grouped) grouped = g[0].replace(/^[^\d]/, '');
+      const u = UNGROUPED.exec(t.text);
+      if (u && ungrouped.length < 3 && !ungrouped.some(x => x.name === t.name)) ungrouped.push({name: t.name, sample: u[1]});
+    }
+    const numbers = grouped && ungrouped.length ? {grouped, ungrouped} : null;
+    // One column, one format: numbers in a column whose decimals differ ("688.8", "1228.77", "5535")
+    // show a value Mendix formats by default -- a Decimal without a format.
+    const NUMBER = /^-?\d[\d.,\u00a0\u202f' ]*$/;
+    for (const c of columns || []) {
+      const nums = c.values.filter(v => NUMBER.test(v) && /\d/.test(v));
+      if (nums.length < 2 || !nums.some(v => /[.,]\d+$/.test(v))) continue;
+      const places = v => { const m = /[.,](\d+)$/.exec(v); return m ? m[1].length : 0; };
+      const kinds = new Set(nums.map(places));
+      if (kinds.size < 2) continue;
+      const shown = [];
+      for (const k of kinds) shown.push(nums.find(v => places(v) === k));
+      found.push({code: 'VIS07', widgets: [c.name], px: 0,
+        message: c.name + ' shows its numbers with ' + [...kinds].sort().join(', ') + ' decimals ("' + shown.slice(0, 3).join('", "')
+          + '"): one value, one format -- formatDecimal($Value, \'#,##0.00\') in a custom column, or the format the request asks for'});
+    }
+    if (numbers) {
+      const where = numbers.ungrouped.map(u => u.name + ' "' + u.sample + '"').join(', ');
+      found.push({code: 'VIS07', widgets: numbers.ungrouped.map(u => u.name), px: 0,
+        message: 'amounts in two formats on one page: ' + where + ' without a thousands separator, "' + numbers.grouped
+          + '" with one -- format them the same, e.g. formatDecimal($Value, \'#,##0.00\') in a dynamic text (a custom column in a data grid)'});
     }
     return found;
   };
@@ -630,11 +667,32 @@
           head = {name: nm ? nm[1] : title.tagName.toLowerCase(), top: r.top - base, bottom: r.bottom - base,
             user: who ? who.getBoundingClientRect().top - base : null};
         }
-        return {boxes, charts, cells, bars, head, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
+        // Each data grid's columns, cell by cell, for VIS07: a grid's whole text is too long to read as one
+        // leaf, and a column is where one value type shows (B4 2026-10-12: "688.8" over "1228.77" in Value).
+        const columns = [];
+        for (const grid of Array.from(root.querySelectorAll('.widget-datagrid')).filter(shown)) {
+          const gm = /(?:^|\s)mx-name-(\S+)/.exec(typeof grid.className === 'string' ? grid.className : '');
+          const heads = Array.from(grid.querySelectorAll('[role=columnheader]')).map(h => (h.innerText || '').trim().split('\n')[0]);
+          const rows = Array.from(grid.querySelectorAll('[role=row]')).slice(0, 60)
+            .map(r => Array.from(r.querySelectorAll('[role=gridcell]')).map(c => (c.innerText || '').trim()));
+          heads.forEach((head, i) => {
+            const values = rows.map(r => r[i]).filter(v => v);
+            if (values.length) columns.push({name: (gm ? gm[1] : 'data grid') + (head ? ' ' + head : ' column ' + (i + 1)), values});
+          });
+        }
+        // The leaf widgets' texts, for VIS07 (amounts in two formats on one page).
+        const texts = [];
+        for (const el of els) {
+          if (texts.length >= 400 || el.querySelector('[class*="mx-name-"]') || el.closest(LAYOUT_PARTS) || !shown(el)) continue;
+          const t = (el.innerText || '').trim();
+          const m = /(?:^|\s)mx-name-(\S+)/.exec(typeof el.className === 'string' ? el.className : '');
+          if (t && t.length <= 400 && m) texts.push({name: m[1], text: t});
+        }
+        return {boxes, charts, cells, bars, head, texts, columns, viewport: {width: doc.clientWidth, scrollWidth: doc.clientWidth + sideways},
           fullHeight: Math.max(...scrollers.map(e => e.scrollHeight - e.clientHeight)) + window.innerHeight,
           title: document.title};
       });
-      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells, snap.bars, snap.head);
+      const findings = visual_findings(snap.boxes, snap.viewport, snap.charts, snap.cells, snap.bars, snap.head, snap.texts, snap.columns);
       let shot = '';
       if (VISUAL_DIR) {
         shot = VISUAL_DIR + '/' + TEST_NAME + '-' + (__mdl_visual.length + 1) + '.png';

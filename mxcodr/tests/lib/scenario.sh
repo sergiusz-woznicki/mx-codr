@@ -10,7 +10,7 @@ scenario() {
   local code_file output
   code_file="$(mdl_tmpfile mdl-scenario)"
   # The visual checks' mode, once per test script (the gate exports it for the whole suite).
-  [ -n "${_MDL_VISUAL_MODE:-}" ] || _MDL_VISUAL_MODE="$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 LOOK01 LOOK02)"
+  [ -n "${_MDL_VISUAL_MODE:-}" ] || _MDL_VISUAL_MODE="$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 VIS07 LOOK01 LOOK02)"
   # Written to a file: bodies contain double quotes.
   _mdl_scenario_js "$body" > "$code_file"
 
@@ -174,7 +174,7 @@ _mdl_offline_pages() {
 
 # The visual checks' mode from the rulebook (warn, error or 0), read once per test run.
 _mdl_visual_mode() {
-  printf '%s\n' "${_MDL_VISUAL_MODE:-$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 LOOK01 LOOK02)}"
+  printf '%s\n' "${_MDL_VISUAL_MODE:-$(mdl_rule_mode VIS01 VIS02 VIS03 VIS04 VIS07 LOOK01 LOOK02)}"
 }
 
 # Where look() saves screenshots; empty unless MDL_VISUAL_REVIEW=agent.
@@ -246,7 +246,7 @@ CATCH
 # playwright-cli prints its answer in sections headed "### Result" or "### Error".
 _mdl_fail_on_scenario_error() {
   local output="$1"
-  if printf '%s' "$output" | grep -q '^### Error'; then
+  if grep -q '^### Error' <<< "$output"; then
     # Full block to stderr; a one-line summary in fail(), the only line verify reprints.
     printf '%s\n' "$output" | sed -n '/^### Error/,/^###/p' | head -8 >&2
     local why
@@ -259,8 +259,8 @@ _mdl_fail_on_scenario_error() {
   # Neither marker. "### Ran Playwright code" means the code did run and simply returned nothing:
   # a session read the old "needs: playwright-cli open" hint for that case and went looking at
   # the browser instead of the missing `return` at the end of its scenario.
-  if ! printf '%s' "$output" | grep -q '^### Result'; then
-    if printf '%s' "$output" | grep -q '^### Ran Playwright code'; then
+  if ! grep -q '^### Result' <<< "$output"; then
+    if grep -q '^### Ran Playwright code' <<< "$output"; then
       fail "browser scenario returned nothing -- end the scenario body with a return, e.g. \`return {ok: true};\` (the checks above it ran; a scenario must return a value)"
     fi
     fail "browser scenario produced no result: $(printf '%s' "$output" | tr '\n' ' ' | tr -s ' ' | cut -c1-200) (running a test outside the runner needs: playwright-cli open)"

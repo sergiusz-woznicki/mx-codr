@@ -50,3 +50,5 @@ if [ -f "$APP/.pi/AGENTS.md" ] && head -3 "$APP/.pi/AGENTS.md" | grep -q 'The ru
   rm -f "$APP/.pi/AGENTS.md"
 fi
 ui_done "Pi extension" "1 $I_ARROW .pi/extensions/ (rules in the system prompt)"
+# When the agents compact their context, as the person chose (install/compaction.sh).
+apply_compaction

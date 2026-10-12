@@ -238,10 +238,23 @@ function outcomes(documents, modules) {
       }
     }
   }
+  // A validation rule shows its message only where a user edits the attribute: an order or invoice
+  // number the app assigns itself is on no input, and a B2B session spent its last half hour on four
+  // such "must be unique" messages no user can reach (InvoiceB2BG3, 2026-10-12). So a rule counts when
+  // some page or snippet of the app's own modules has an input bound to an attribute of that name.
+  const edited = new Set();
+  for (const d of documents) {
+    if (!/^(PAGE|SNIPPET)$/.test(d.ObjectType) || !own.has(d.ModuleName)) continue;
+    for (const m of (d.SourceText || '').matchAll(/\b(?:textbox|textarea|datepicker|combobox|checkbox|radiobuttons|dropdown|referenceselector|richtext\w*)\s+\w+\s*\(([^)]*)\)/gi)) {
+      const attr = /\bAttribute:\s*"?([\w/.]+)/i.exec(m[1]);
+      if (attr) edited.add(attr[1].split(/[/.]/).pop().toLowerCase());
+    }
+  }
   for (const d of documents) {
     if (d.ObjectType !== 'ENTITY' || !own.has(d.ModuleName)) continue;
-    for (const m of (d.SourceText || '').matchAll(/\berror\s+message\s+'((?:[^']|'')*)'/gi)) {
-      add(d.QualifiedName, 'validation rule', [m[1].replace(/''/g, "'")]);
+    for (const m of (d.SourceText || '').matchAll(/^\s*"?(\w+)"?\s*:[^\n]*?\berror\s+message\s+'((?:[^']|'')*)'/gim)) {
+      if (!edited.has(m[1].toLowerCase())) continue;
+      add(d.QualifiedName, 'validation rule', [m[2].replace(/''/g, "'")]);
     }
   }
   return out;

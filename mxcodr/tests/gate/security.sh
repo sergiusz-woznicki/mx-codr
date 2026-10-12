@@ -57,7 +57,7 @@ view_findings() {
     --expect "$(ls "$WORK/entities/" 2>/dev/null | grep -c '\.mdl$')" 2>"$WORK/view.error")"; code=$?
   case "$code" in
     0) return 0 ;;
-    1) if printf '%s\n' "$out" | grep -q '^\[VIEW01\]'; then printf '%s\n' "$out"; return 1; fi ;;
+    1) if grep -q '^\[VIEW01\]' <<< "$out"; then printf '%s\n' "$out"; return 1; fi ;;
   esac
   return 2
 }

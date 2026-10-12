@@ -37,6 +37,8 @@
 //   LAYOUT01 FAIL  the app's pages (pop-ups, login and phone/tablet pages aside) use more than one
 //                  layout: the menu and its open/closed state change from page to page
 //   ICON01   FAIL  a button (actionbutton, linkbutton) without an icon; the message suggests one
+//   HIDDEN01 FAIL  a widget with Visible: [false] -- never shown, so no feature and no proof for a test
+//   LABEL01  FAIL  a column caption or field label that is an attribute name (DueDate) -- write words
 //                  from its action and caption
 //   USER01   FAIL  users sign in, and a page (pop-ups and the login page aside) does not open with
 //                  the "who is signed in" snippet, <Module>.SNIPPET_CurrentUser, on the right of its top
@@ -83,6 +85,8 @@ const py = require('./py_compat.cjs');
 const { strRepr, readTextReplace } = require('./layout_rules/compat.cjs');
 const { USER_ROLE_RE, userRoles, accountFindings, adminHomeFindings, templateModuleFindings } = require('./layout_rules/accounts.cjs');
 const { buttonIconFindings } = require('./layout_rules/controls.cjs');
+const { hiddenWidgetFindings } = require('./layout_rules/hidden.cjs');
+const { rawLabelFindings } = require('./layout_rules/labels.cjs');
 const { edgeFindings } = require('./layout_rules/edges.cjs');
 const { headerButtonFindings } = require('./layout_rules/grids.cjs');
 const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
@@ -350,6 +354,10 @@ function main() {
   }
   failures = failures.concat(oneLayoutFindings(lines, navigation, layouts));
   failures = failures.concat(buttonIconFindings(lines.concat(py.splitlines(snippets))));
+  // HIDDEN01: a widget with Visible: [false] is never shown.
+  if (!args.port_parity) failures = failures.concat(hiddenWidgetFindings(lines.concat(py.splitlines(snippets))));
+  // LABEL01: a caption or label that is an attribute's name.
+  if (!args.port_parity) failures = failures.concat(rawLabelFindings(lines.concat(py.splitlines(snippets))));
   failures = failures.concat(backButtonFindings(lines, flows, navigation));
   failures = failures.concat(headerButtonFindings(lines, flows));
   failures = failures.concat(edgeFindings(lines, snippets, navigation));

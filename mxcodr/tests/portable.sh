@@ -146,7 +146,7 @@ mdl_load_harness_env() {
       MDL_NO_DOCKER|MDL_MXBUILD_PATH|MDL_DB_HOST|MDL_DB_NAME|MDL_DB_USER|MDL_DB_PASSWORD| \
       MDL_PSQL|MDL_BOOT_COMMAND|MDL_PRECHECK|MDL_ALLOW_GREEN_FIRST|JAVA_HOME|MX_VERSION| \
       MDL_GATE_CACHE|MDL_VISUAL_REVIEW|MDL_RUN_MODE|APP_PORT|ADMIN_PORT|MDL_CLOSE_BROWSER| \
-      MDL_MARKETPLACE_LOGIN|MDL_DB_RESET) ;;
+      MDL_MARKETPLACE_LOGIN|MDL_DB_RESET|MDL_REQUIREMENTS) ;;
       # A rule's level and exceptions moved to its card in tests/rulebook/ (bundle 2026.10.10.3); the
       # installer moves these keys there. Left in the file, they are not read and the gate says so.
       MDL_REQUIRE_PRODUCTION|MDL_VISUAL|MDL_RUNTIME_ERRORS|MDL_CAPTIONS|MDL_SCOPE|MDL_TEST_FIRST| \
