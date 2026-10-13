@@ -261,9 +261,21 @@ for script in "$@"; do
             echo "  \"$icon\" is not near any icon in $collection: ./mxcli -p $MPR -c \"describe icon collection $collection\" lists them all"
           fi
         done
+    # An association named in an index: mxcli says "attribute 'X' not found", and the order hint below sent
+    # a room-booking session looking for a script that would create it (2026-10-13). An index takes
+    # attributes only; Mendix indexes an association itself.
+    while read -r assoc entity; do
+      [ -n "$assoc" ] || continue
+      if "$MXCLI" -p "$MPR" -c "describe association ${entity%.*}.$assoc" >/dev/null 2>&1 \
+         || grep -qiE "association +\"?${entity%.*}\"?\.\"?$assoc\b" "$@" 2>/dev/null; then
+        echo "  $assoc is an association, not an attribute of $entity: Mendix indexes an association itself, so it"
+        echo "  never goes into an index -- drop it from the index and keep the attributes (gate PERF07)."
+      fi
+    done <<< "$(printf '%s\n' "$out" | sed -nE "s/.*attribute '([A-Za-z0-9_]+)' not found for index on entity ([A-Za-z0-9_.]+).*/\1 \2/p" | sort -u)"
+    # An empty $refs is one empty line to `grep -v`, hence `[ -n ]`: the hint printed after every failed exec.
     # Reference errors other than icons: what this script calls is not created yet.
-    refs="$(grep -iE 'Reference error|(microflow|nanoflow|page|entity|snippet|enumeration|association)[^\n]{0,40}not found' <<< "$out")"
-    if grep -qviE 'does not exist in icon collection' <<< "$refs"; then
+    refs="$(grep -iE 'Reference error|(microflow|nanoflow|page|entity|snippet|enumeration|association)[^\n]{0,40}not found' <<< "$out" | grep -v 'not found for index on entity')"
+    if [ -n "$refs" ] && grep -qviE 'does not exist in icon collection' <<< "$refs"; then
       echo "  Not found = not created yet. Order matters, inside a script too: create what is called before"
       echo "  its caller (mxcli refuses a call to a microflow that the same script creates further down)."
       echo "  If another script creates it, exec that one first; if the two need EACH OTHER (a page calls a"
