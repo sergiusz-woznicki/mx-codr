@@ -62,9 +62,15 @@ film_pid="$(cat .mxcli/films/.all.pid 2>/dev/null)"
 case "$film_pid" in ''|*[!0-9]*) ;; *) kill -0 "$film_pid" 2>/dev/null && nothing ;; esac
 output="$(bash tests/gate.sh 2>&1)"
 status_code=$?
-if [ "$status_code" -eq 0 ] && printf '%s\n' "$output" | grep -Fq 'DONE — every check passed'; then
+if [ "$status_code" -eq 0 ] && grep -Fq 'DONE — every check passed' <<< "$output"; then
   rm -f "$marker"
   nothing
+fi
+# Only the person can clear what is left: say so once, then stop sending the agent back.
+owners="$("$NODE" "$HOOK_TOOL" person-only . <<< "$output" 2>/dev/null)"
+if [ -n "$owners" ]; then
+  rm -f "$marker"
+  say "$owners"
 fi
 
 # Gate output contains project text: fence and label it as data, and cap its size.

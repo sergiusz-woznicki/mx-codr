@@ -94,21 +94,18 @@ dbsnap_take() {
   return 0
 }
 
-# dbsnap_restore -- after the session's first full DONE. Needs the gate's stop_project_app and
-# ensure_app. Prints what happened; never leaves the app down when it can be booted.
-dbsnap_restore() {
-  dbsnap_enabled || return 0
-  [ -f "$DBSNAP_DIR/pending.dump" ] || return 0
-  local side="${DBSNAP_DB}_restored" old="${DBSNAP_DB}_before_restore" taken
-  taken="$(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null)"
-  echo "== putting the data back to the snapshot of ${taken:-?}: what the tests created goes (MDL_DB_RESET=${DBSNAP_MODE})"
+# dbsnap_swap -- the snapshot becomes the live database: restored beside it while the app still
+# runs, the app stopped, the two swapped by renaming, the app booted on it. True when the app runs
+# on the snapshot; otherwise says why and leaves the data (and the pending snapshot) as they were.
+dbsnap_swap() {
+  local side="${DBSNAP_DB}_restored" old="${DBSNAP_DB}_before_restore"
   # 1. The snapshot into a database beside the live one, while the app still runs.
   dbsnap_sql "DROP DATABASE IF EXISTS \"$side\"" >/dev/null
   if ! dbsnap_sql "CREATE DATABASE \"$side\"" >/dev/null \
      || ! dbsnap_pg pg_restore --no-owner -d "$side" "$DBSNAP_DIR/pending.dump" 2>"$DBSNAP_DIR/restore.err"; then
     dbsnap_sql "DROP DATABASE IF EXISTS \"$side\"" >/dev/null
     echo "   !! the snapshot could not be restored ($(tail -1 "$DBSNAP_DIR/restore.err" 2>/dev/null)); the data stays as the tests left it"
-    return 0
+    return 1
   fi
   # 2. Swap: the app holds connections, so it stops first; the rename itself is instant.
   stop_project_app >/dev/null 2>&1
@@ -119,13 +116,13 @@ dbsnap_restore() {
     echo "   !! the database could not be renamed; the data stays as the tests left it"
     dbsnap_sql "DROP DATABASE IF EXISTS \"$side\"" >/dev/null
     dbsnap_boot
-    return 0
+    return 1
   fi
   if ! dbsnap_sql "ALTER DATABASE \"$side\" RENAME TO \"$DBSNAP_DB\"" >/dev/null; then
     dbsnap_sql "ALTER DATABASE \"$old\" RENAME TO \"$DBSNAP_DB\"" >/dev/null
     echo "   !! the restored database could not take the name; the data stays as the tests left it"
     dbsnap_boot
-    return 0
+    return 1
   fi
   # 3. Boot on it. If the app does not come up, the swap is undone and it boots on the old data.
   if ! dbsnap_boot; then
@@ -135,8 +132,21 @@ dbsnap_restore() {
     dbsnap_sql "ALTER DATABASE \"$DBSNAP_DB\" RENAME TO \"$side\"" >/dev/null
     dbsnap_sql "ALTER DATABASE \"$old\" RENAME TO \"$DBSNAP_DB\"" >/dev/null
     dbsnap_boot
-    return 0
+    return 1
   fi
+  rm -f "$DBSNAP_DIR/dirty"
+  return 0
+}
+
+# dbsnap_restore -- after the session's first full DONE. Needs the gate's stop_project_app and
+# ensure_app. Prints what happened; never leaves the app down when it can be booted.
+dbsnap_restore() {
+  dbsnap_enabled || return 0
+  [ -f "$DBSNAP_DIR/pending.dump" ] || return 0
+  local old="${DBSNAP_DB}_before_restore" taken
+  taken="$(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null)"
+  echo "== putting the data back to the snapshot of ${taken:-?}: what the tests created goes (MDL_DB_RESET=${DBSNAP_MODE})"
+  dbsnap_swap || return 0
   # 4. Done: the previous database stays as <name>_before_restore until the next rollback, and the
   # last three snapshots stay in .mxcli/db-snapshot/ for a rollback by hand.
   mv "$DBSNAP_DIR/pending.dump" "$DBSNAP_DIR/restored-$(date '+%Y%m%d-%H%M%S').dump"
@@ -149,6 +159,30 @@ dbsnap_restore() {
   echo "   the data is back to ${taken:-the snapshot}, and the app runs on it; what the tests created is gone"
   echo "   (the previous data is kept as the database ${old})"
   dbsnap_empty_note
+  return 0
+}
+
+# dbsnap_refresh [force] -- before the suite: an earlier run that did not end in DONE left the rows
+# its tests created, and tests that need a free time slot or an empty list then clash with their own
+# leftovers (a room-booking run deleted them by hand, 2026-10-13). The gate calls it at the start of a
+# full run, `--reset-data` with force at any run. The snapshot stays pending: the next DONE restores
+# it again. Costs one stop and boot (about 30 s), so only when a suite ran since the last restore.
+dbsnap_refresh() {
+  dbsnap_enabled || return 0
+  if [ ! -f "$DBSNAP_DIR/pending.dump" ]; then
+    [ "${1:-}" = "force" ] && echo "   --reset-data: no snapshot is pending, so there is nothing to put back (one is taken at this gate)"
+    return 0
+  fi
+  [ "${1:-}" = "force" ] || [ -f "$DBSNAP_DIR/dirty" ] || return 0
+  echo "== putting the data back to the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null) before the tests: an earlier run left its test rows"
+  dbsnap_swap && echo "   the tests start on the snapshot's data; the next DONE puts it back again"
+  return 0
+}
+
+# dbsnap_mark_dirty -- after a suite ran: its rows stay until a restore.
+dbsnap_mark_dirty() {
+  dbsnap_enabled || return 0
+  [ -f "$DBSNAP_DIR/pending.dump" ] && : > "$DBSNAP_DIR/dirty"
   return 0
 }
 

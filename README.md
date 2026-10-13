@@ -77,7 +77,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 106 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 107 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -244,7 +244,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `VAR01` | No variables named like $Int1, $tmp or $x. A name says what the variable holds, like $OpenInvoiceCount. | Blocks |
 | `VAR02` | No variable names ending in _List, _Object or _Obj: $OverdueInvoices, not $Invoice_List. | Blocks |
 
-**Screens and navigation** (43 rules)
+**Screens and navigation** (44 rules)
 
 What makes the app look and behave like a proper Mendix app.
 
@@ -258,6 +258,7 @@ What makes the app look and behave like a proper Mendix app.
 | `EDGE01` | Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window. | Blocks |
 | `GRID01` | A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing. | Blocks |
 | `GRID02` | A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page. | Blocks |
+| `DATE01` | A data grid column on a date and time shows the time of day too, when a form of the app edits that time (a date-and-time picker, or a format of its own with hours) (Data grid 2 shows a DateTime as a date only). The finding prints the column. | Blocks |
 | `STATUS01` | A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged. | Warning |
 | `HEAD01` | Points out a page without a heading. | Warning |
 | `HOME01` | With login: administrators start on a page of the app itself, not on a template page. | Blocks |
@@ -316,7 +317,7 @@ except: Orders.Approval_Task   # opened only from the task inbox; a URL would sk
 The gate then judges with your level and skips the excepted documents, and says so in its output
 (`rulebook: 1 excepted (URL01 Orders.Approval_Task)`). On a rule that only warns about what existed
 before the install (the paths cards), `level: block` makes those old findings block too.
-`bash tests/rules.sh check` validates the cards. The agent may read them and propose a line, but a hook stops it from writing one.
+A card marked `owner: person` in its header (OFFLINE01, ADMIN01, PWD01) is one only you can clear, in Studio Pro. When nothing else blocks DONE, the hooks stop sending the agent back to the gate: it ends its report with what you have to do. `bash tests/rules.sh check` validates the cards. The agent may read them and propose a line, but a hook stops it from writing one.
 
 **The project's settings: `tests/harness.env`.** Written by the installer, yours to edit; the agent
 cannot change it.
@@ -330,7 +331,7 @@ The default is in bold. A key you leave out takes its default.
 | `MDL_DB_HOST`, `MDL_DB_NAME`, `MDL_DB_USER`, `MDL_DB_PASSWORD` | set by the installer | The app's PostgreSQL database. |
 | `MDL_PSQL` | a path to `psql` | Which PostgreSQL client to use when it is not on the `PATH`. |
 | `MDL_MXBUILD_PATH`, `JAVA_HOME`, `MDL_BOOT_COMMAND`, `MX_VERSION` | set by the installer | How the app is built and booted, and which Studio Pro version to use when there are several. |
-| `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data. `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
+| `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data; a full gate after a red one also starts its tests on the saved data (`--reset-data` does it for `--only`). `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
 | `MDL_CLOSE_BROWSER` | **`0`** · `1` | `0`: the test browser stays open, so the next run starts faster. `1`: it closes after each gate run. |
 | `MDL_REQUIREMENTS` | **`ask`** · `assume` · `off` | `ask`: before the first feature the agent asks you what the app must do and waits. `assume`: nobody answers (a benchmark); it takes its recommended answers as assumptions, listed at DONE. `off`: no interview. |
 | `MDL_COMPACTION` | `on` · **`off`** | `on`: the installer gives Pi a compaction threshold of 70% of each model's window (`.pi/settings.json`, only for models you have not set yourself). `off`: Pi's own default. Read by the installer only; re-run it after a change. Measured on one prompt: a shorter context each turn, but more turns in two of three runs. Claude Code and Codex are not set: their threshold is a token count, not a share of the window. |
@@ -354,6 +355,7 @@ bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
 bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE)
 bash tests/gate.sh --changed          # the tests a model change touched
 bash tests/gate.sh --restart          # stop this project's app and boot it again
+bash tests/gate.sh --only <feature> --reset-data  # first put back the rows earlier runs left
 bash tests/rules.sh                   # every rule, its level and your exceptions
 bash tests/orient.sh                  # what is in this project, and its state
 bash tests/diagnose.sh                # why the app does not answer

@@ -315,8 +315,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">109</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">63</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">110</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">64</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
@@ -437,6 +437,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>SPACE04</code></td><td>A button or text never touches a grid, list or card right above or below it.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>GRID01</code></td><td>A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>GRID02</code></td><td>A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>DATE01</code></td><td>A data grid column on a date and time shows the time of day too, when a form of the app edits that time (a date-and-time picker, or a format of its own with hours) (Data grid 2 shows a DateTime as a date only). The finding prints the column.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>UI001</code></td><td>A data grid is filtered with the filters inside its columns, not with a home-made filter bar of text boxes and checkboxes above it (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>STATUS01</code></td><td>A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>TEXT01</code></td><td>A long text attribute (more than 500 characters, or unlimited) is edited in a multi-line text area, not a one-line text box.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -590,7 +591,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>level: off</code> in <code>TEST01</code></td><td>Turns off test-first in precheck.</td></tr>
       <tr><td><code>level: warn</code> or <code>block</code> in <code>LINT01</code></td><td>Shows mxcli lint's advice under the warnings, or makes lint errors block.</td></tr>
       <tr><td><code>level: block</code> in <code>WAIT01</code></td><td>The coverage step fails on tests that wait for time.</td></tr>
-      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE (default <code>done</code>); <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
+      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
       <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>
       <tr><td><code>MDL_REQUIREMENTS=assume</code> or <code>off</code></td><td>Nobody answers the requirements interview: the agent takes its recommended answers as assumptions, listed at DONE. <code>off</code>: no interview.</td></tr>
     </tbody>

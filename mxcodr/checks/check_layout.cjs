@@ -34,6 +34,8 @@
 //   GRID02   FAIL  a button outside a data grid changes the rows it shows (creates its entity, acts
 //                  on its selection, or calls a flow that writes its entity): it goes in the grid's
 //                  header, `controlbar` inside the datagrid
+//   DATE01   FAIL  a data grid column bound to a DateTime shows the date only, while a datepicker
+//                  of the app edits that attribute with DateFormat: DateTime or Time
 //   LAYOUT01 FAIL  the app's pages (pop-ups, login and phone/tablet pages aside) use more than one
 //                  layout: the menu and its open/closed state change from page to page
 //   ICON01   FAIL  a button (actionbutton, linkbutton) without an icon; the message suggests one
@@ -74,7 +76,7 @@
 // Where each rule lives, in layout_rules/ next to this file (this file only reads the arguments
 // and runs them): mdl1.cjs rewrites an mxcli v0.25 (`mdl 1`) describe into the v0.24 spelling the
 // rules read; pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
-// GRID01, ICON01; grids.cjs GRID02; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
+// GRID01, ICON01; grids.cjs GRID02; dates.cjs DATE01; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
 // navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01;
 // inputs.cjs TEXT01-02; vertical.cjs SPACE04; names.cjs NAME01-02. --port-parity runs only the rules check_layout.py
 // had (SPACE04 is newer), for the test that compares the two.
@@ -90,6 +92,7 @@ const { rawLabelFindings } = require('./layout_rules/labels.cjs');
 const { edgeFindings } = require('./layout_rules/edges.cjs');
 const { headerButtonFindings } = require('./layout_rules/grids.cjs');
 const { textInputFindings, stringLengths } = require('./layout_rules/inputs.cjs');
+const { dateColumnFindings } = require('./layout_rules/dates.cjs');
 const { verticalFindings } = require('./layout_rules/vertical.cjs');
 const { nameFindings, documentHashes } = require('./layout_rules/names.cjs');
 const { urlFindings } = require('./layout_rules/urls.cjs');
@@ -360,6 +363,8 @@ function main() {
   if (!args.port_parity) failures = failures.concat(rawLabelFindings(lines.concat(py.splitlines(snippets))));
   failures = failures.concat(backButtonFindings(lines, flows, navigation));
   failures = failures.concat(headerButtonFindings(lines, flows));
+  // DATE01: a grid column shows the date only of a DateTime whose time a form edits.
+  if (!args.port_parity) failures = failures.concat(dateColumnFindings(lines.concat(py.splitlines(snippets)))[0]);
   failures = failures.concat(edgeFindings(lines, snippets, navigation));
   // LIST01: a list view item shows its texts on the left and its buttons on the right, in one row.
   failures = failures.concat(listItemFindings(lines.concat(py.splitlines(snippets))));

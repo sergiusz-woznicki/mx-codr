@@ -141,6 +141,14 @@ step_tests() {
   fi
   record_red_first "$out" "$environment"
   record_suite_result "$out" "$status" "$environment"
+  # The rows this suite created stay until a restore (tests/db-snapshot.sh).
+  if declare -F dbsnap_mark_dirty >/dev/null; then
+    dbsnap_mark_dirty
+    if [ "$status" != "0" ] && { [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ]; } && [ -f "${DBSNAP_DIR:-.mxcli/db-snapshot}/pending.dump" ]; then
+      echo "   the rows these tests created stay until DONE; if a test failed on rows an earlier run left"
+      echo "   (a slot already taken, a list not empty), add --reset-data: the tests then start on the snapshot's data"
+    fi
+  fi
   # Only a run on the current model counts as having exercised it.
   if [ -z "$environment" ] && [ ! -s "$WORK/stale.note" ]; then
     record_tests_seen "${targets[@]}"

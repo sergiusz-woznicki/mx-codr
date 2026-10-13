@@ -11,7 +11,7 @@ key: none
 Spacing uses only the Atlas sizes None, S, M or L. Other values make the Mendix build fail.
 
 ## Fix
-`margin-`/`padding-` + `top|right|bottom|left`, `None S M L`; no `Class:`.
+Atlas `margin-`/`padding-` sides, `None S M L`; no `Class:`.
 
 ## Local
 # level: block

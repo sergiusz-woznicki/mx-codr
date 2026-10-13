@@ -11,7 +11,7 @@ key: none
 With login: the user can log out, through a Log out menu item or button.
 
 ## Fix
-`menu item 'Log out' ( OnClick: sign out, Icon: Atlas_Core.Atlas_Filled.logout )` last.
+`menu item 'Log out' (OnClick: sign out)` last, icon `logout`.
 
 ## Local
 # level: block

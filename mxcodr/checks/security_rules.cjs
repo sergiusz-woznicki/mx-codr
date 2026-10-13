@@ -294,6 +294,8 @@ function findings(model, modules) {
     const kept = keep[key] || [];
     add('WRITE01', false, `${role} may write ${entity}'s ${attrs.slice(0, 6).join(', ')}${attrs.length > 6 ? ', ...' : ''}, which no page lets it edit ` +
       'and only server-side flows set: through the client API it can set them itself. Leave them out of the rule\'s write list' +
+      // A grant only adds: a session re-ran its grant without the attributes and WRITE01 stayed (2026-10-13).
+      ` -- a grant only adds rights, so take these away: revoke write (${attrs.join(', ')}) on entity ${entity} from ${role};` +
       (kept.length ? ` -- and a write (...) list drops what it does not name, so keep in it the associations ${kept.join(', ')}: ` +
         'a picker or a "new" button that sets one turns read-only without it (a B2B session broke nine tests that way)' : ''));
   }

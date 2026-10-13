@@ -13,6 +13,7 @@
 //     key: document
 //     baseline: names                                        (optional: captions | names | paths)
 //     fixed: yes                                             (optional: no level to set)
+//     owner: person                                          (optional: only the person can clear it)
 //     ---
 //     # URL01 — every page that can have a URL has one      (then the code and title)
 //
@@ -47,7 +48,7 @@ const crypto = require('crypto');
 
 const LEVELS = new Set(['block', 'warn', 'info', 'off']);
 const STEPS = new Set(['precheck', 'tests', 'mx', 'catalog', 'coverage', 'naming', 'layout', 'security', 'scope', 'paths', 'folders', 'unused']);
-const HEADER_KEYS = new Set(['step', 'level', 'check', 'key', 'baseline', 'fixed', 'scope', 'match', 'message']);
+const HEADER_KEYS = new Set(['step', 'level', 'check', 'key', 'baseline', 'fixed', 'owner', 'scope', 'match', 'message']);
 const LOCAL_KEYS = new Set(['level', 'except']);
 const CODE_RE = /^[A-Za-z][A-Za-z0-9-]*$/;
 
@@ -73,7 +74,7 @@ function parseCard(file) {
     if (!lines[i].trim()) continue;
     const kv = /^([a-z]+):\s*(.*)$/.exec(lines[i]);
     if (!kv) fail(i + 1, 'a header line is `key: value`');
-    if (!HEADER_KEYS.has(kv[1])) fail(i + 1, `unknown header key "${kv[1]}" (step, level, check, key, baseline, fixed)`);
+    if (!HEADER_KEYS.has(kv[1])) fail(i + 1, `unknown header key "${kv[1]}" (step, level, check, key, baseline, fixed, owner)`);
     header[kv[1]] = kv[1] === 'match' ? kv[2].trim() : stripComment(kv[2]);
     at[kv[1]] = i + 1;
   }
@@ -92,6 +93,7 @@ function parseCard(file) {
   checkLevel(header.level, at.level, fail);
   if (!['document', 'none'].includes(header.key)) fail(at.key, 'key: is document or none');
   if (header.baseline && !['captions', 'names', 'paths'].includes(header.baseline)) fail(at.baseline, 'baseline: is captions, names or paths');
+  if (header.owner && header.owner !== 'person') fail(at.owner, 'owner: is person (a finding only the person can clear)');
   const local = { level: null, except: [] };
   const localAt = lines.findIndex(l => /^##\s+Local\s*$/.test(l));
   if (localAt >= 0) {

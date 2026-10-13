@@ -3,6 +3,7 @@ step: layout
 level: block
 check: layout_rules/offline.cjs#offlineFindings
 key: none
+owner: person
 ---
 
 # OFFLINE01 — an offline profile has a service worker

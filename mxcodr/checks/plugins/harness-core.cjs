@@ -85,6 +85,23 @@ function isSleepBeforeGate(command) {
     && /tests\/gate\.sh|gate-boot\.log|runtime\.log/.test(command)
 }
 
+// `grep -a 'parseDateTime' ./mxcli`: the binary is over 100 MB, and a room-booking session (2026-10-13)
+// spent 13 of its 37 minutes in two such greps, looking for what a function and `show message` take.
+const BINARY_SEARCH =
+  "Blocked: that searches the mxcli binary (over 100 MB, minutes per search, and what it finds is not documentation). " +
+  "What MDL accepts: `./mxcli syntax <topic>` and tools/mdl-checks/syntax-digest.md. Whether a function or a statement " +
+  "works: write it into a two-line script and run `./mxcli check <script>.mdl -p <App>.mpr --references`; " +
+  "what it does at runtime: a test of the feature, `bash tests/gate.sh --only <feature>`."
+
+// The command searches or dumps the mxcli program file itself: the file is the search's last
+// argument (`grep mxcli tests/x.sh` looks for the word, and passes).
+function isBinarySearch(command) {
+  if (typeof command !== "string") return false
+  return command.split(/\|\||&&|[|;&\n]/).some((part) =>
+    /^\s*(?:\S*\/)?(?:grep|egrep|fgrep|rg|ugrep|ag|strings|xxd|hexdump|od)\s/.test(part)
+      && /\s["']?(?:\.\/|\S*\/)?mxcli(?:\.exe)?["']?\s*$/.test(part))
+}
+
 // `for f in a b; do mxcli exec mdlsource/$f.mdl`: the scripts are a variable, so precheck sees none.
 // A blocked command runs none of its steps: GLM sent `python3 <edit> ... ; ./mxcli exec` seven
 // times, was blocked before the edit ran, and debugged an edit that was never applied.
@@ -207,6 +224,62 @@ function mdlScripts(command) {
 }
 
 // Gate output contains project text: fence and label it as data, and cap its size.
+// The codes only the person can clear: rule cards with `owner: person` in tests/rulebook/ (an offline
+// profile re-added in Studio Pro, the administrator's name, the password policy).
+function personCodes(root) {
+  const codes = new Set()
+  const dir = join(root, "tests", "rulebook")
+  let groups = []
+  try { groups = require("node:fs").readdirSync(dir) } catch { return codes }
+  for (const group of groups) {
+    let files = []
+    try { files = require("node:fs").readdirSync(join(dir, group)) } catch { continue }
+    for (const file of files) {
+      if (!file.endsWith(".md")) continue
+      try {
+        const head = readFileSync(join(dir, group, file), "utf8").split("\n---")[0]
+        if (/^owner:\s*person\s*$/m.test(head)) codes.add(file.slice(0, -3))
+      } catch {}
+    }
+  }
+  return codes
+}
+
+// The person-only codes behind a red gate, or null when the agent still has work. Every finding
+// under "still blocking DONE" must name one of them -- a failed test counts when its message does
+// (an offline test fails with "... (OFFLINE01: delete and re-add the profile in Studio Pro)"). Then
+// sending the agent back to the gate only repeats it: a field-service session ran the same gate
+// three more times, byte for byte, after saying it could not fix it (2026-10-12).
+function personOnly(root, out) {
+  const codes = personCodes(root)
+  if (!codes.size) return null
+  const at = String(out).lastIndexOf("== still blocking DONE")
+  if (at < 0) return null
+  const section = String(out).slice(at).split("\n").slice(1)
+  // Findings the section leaves out ("... 7 more under == layout above") may be the agent's own.
+  if (section.some(line => /^\s+\.\.\. \d+ more/.test(line))) return null
+  // A test's own line ("- FAIL  verify-offline-jobs (25.5s)") names no reason: the line above it does.
+  const lines = section.filter(line => /^\s+- /.test(line) && !/^\s+- FAIL\s+verify-\S+ \([\d.]+s\)\s*$/.test(line))
+  if (!lines.length) return null
+  const named = new Set()
+  for (const line of lines) {
+    const hit = [...codes].find(code => new RegExp("\\b" + code + "\\b").test(line))
+    if (!hit) return null
+    named.add(hit)
+  }
+  return [...named]
+}
+
+// What the agent is told when only the person can clear what still blocks DONE: one last turn to
+// say so in its report, then the hosts stop sending it back to the gate.
+function personOnlyMessage(codes) {
+  return (
+    "What still blocks DONE only the person can clear: " + codes.join(", ") + " (tests/checks/<step>.md " +
+    "says what each one needs). Do not run the gate again for it and do not work around it: end your " +
+    "report with what the person has to do, in one short list, and what you built."
+  )
+}
+
 function gateFailureMessage(out) {
   return (
     "The project gate has not passed, so this feature is not done. " +
@@ -228,6 +301,7 @@ function blockReason(root, tool, args) {
   if (tool !== "bash") return null
   const command = args && args.command
   if (isSleepBeforeGate(command)) return SLEEP_BEFORE_GATE
+  if (isBinarySearch(command)) return BINARY_SEARCH
   const waiting = marketplaceWait(root, command)
   if (waiting) return waiting
   const inline = inlineMdl(command)
@@ -284,7 +358,7 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
-  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, stepsBeforeExec, STEPS_BEFORE_EXEC,
+  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, stepsBeforeExec, STEPS_BEFORE_EXEC,
   EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
-  blockReason, afterExecText, reminder,
+  blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }
