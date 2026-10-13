@@ -6,6 +6,10 @@ set -uo pipefail
 
 # Cheap substring test first: almost no event is an `mxcli exec`.
 input="$(cat)"
+# A new tests/verify-*.test.sh written from the shell: run it now (after-test-written.sh).
+case "$input" in *verify-*.test.sh*)
+  printf '%s' "$input" | bash "$(dirname "${BASH_SOURCE[0]}")/after-test-written.sh" codex && : || exit 2 ;;
+esac
 case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*) ;; *) exit 0 ;; esac
 
 # NODE and HOOK_TOOL (hook_tool.cjs, the small jobs: read a field, wrap a message).

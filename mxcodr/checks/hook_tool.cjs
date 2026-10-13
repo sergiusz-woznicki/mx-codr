@@ -99,13 +99,21 @@ const tools = {
     const line = py.strip(py.readStdin());
     if (line) py.print(py.jsonDumps({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: line } }));
   },
-  // Cursor's deny for a failed precheck.
+  // The Claude PostToolUse context: what the model reads after the tool's own result.
+  'post-context'() {
+    const text = py.strip(py.readStdin());
+    if (text) py.print(py.jsonDumps({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text } }));
+  },
+  // Cursor's deny: the agent reads the whole message, the person a line saying what was blocked.
+  // Every deny used to tell the person "the script would break the build" -- also for a grep of the
+  // mxcli binary or a read of the gate's code, which have nothing to do with a build (2026-10-13).
   deny() {
-    py.print(py.jsonDumps({
-      permission: 'deny',
-      userMessage: 'mxcli exec blocked: the script would break the build (see the agent message).',
-      agentMessage: py.readStdin(),
-    }));
+    const message = py.readStdin();
+    const head = /^Blocked: (that [^(.]*?)(?: \(|\.)/.exec(message);
+    const userMessage = /precheck/i.test(message.split('\n')[0])
+      ? 'mxcli exec blocked: the script would break the build (see the agent message).'
+      : head ? `Command blocked: ${head[1].trim()} (see the agent message).` : 'Command blocked (see the agent message).';
+    py.print(py.jsonDumps({ permission: 'deny', userMessage, agentMessage: message }));
   },
   // Cursor's deny for the guard.
   'guard-deny'() {
@@ -219,6 +227,17 @@ const tools = {
   'binary-search'() {
     const core = require('./plugins/harness-core.cjs');
     if (core.isBinarySearch(py.readStdin())) py.print(core.BINARY_SEARCH);
+  },
+  // After a tool call (stdin: a Claude-shaped payload, or Cursor's): "run this new test now" when the
+  // call wrote a tests/verify-*.test.sh that has never run (harness-core newTestNote). Run from the project.
+  'new-test'() {
+    const core = require('./plugins/harness-core.cjs');
+    let payload;
+    try { payload = JSON.parse(py.readStdin() || '{}'); } catch (e) { return; }
+    const input = (payload && (payload.tool_input || payload.input || payload.arguments)) || {};
+    const tool = String((payload && (payload.tool_name || payload.tool)) || (input.command ? 'bash' : 'write'));
+    const note = core.newTestNote(process.cwd(), tool, input);
+    if (note) py.print(note);
   },
   // The block message when the command (stdin) reads the harness's own code (harness-core readsHarnessSource).
   'harness-source'() {

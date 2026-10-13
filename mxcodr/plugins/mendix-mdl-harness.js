@@ -101,6 +101,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
 
     "tool.execute.after": async (input, output) => {
       if (!installed) return
+      const note = core.newTestNote(root, input.tool, input.args)
+      if (note) { output.output = `${output.output || ""}\n\n${note}`; return }
       if (input.tool !== "bash") return
       const command = input.args?.command
       if (!core.isMxcliExec(command)) return

@@ -119,9 +119,11 @@ export default function mendixMdlHarness(pi) {
   })
 
   pi.on("tool_result", (event, ctx) => {
-    if (event.toolName !== "bash") return
     const root = harnessRoot(ctx)
     if (!root) return
+    const note = core.newTestNote(root, event.toolName, event.input)
+    if (note) return { content: [...(event.content || []), { type: "text", text: note }] }
+    if (event.toolName !== "bash") return
     const command = event.input && event.input.command
     if (!core.isMxcliExec(command)) return
 
