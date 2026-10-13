@@ -315,8 +315,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">110</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">64</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">111</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">65</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
@@ -500,6 +500,7 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>MX01</code></td><td>Mendix's own consistency check finds no errors: the same red errors Studio Pro would show in its Errors pane.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>STARTUP01</code></td><td>The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 

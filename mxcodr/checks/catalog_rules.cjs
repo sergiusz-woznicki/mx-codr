@@ -8,6 +8,8 @@
 //           sec_unconstrained_anon_read.star)
 //   STATUS01 a button whose flow always sets one status, and that stays on the page once the object
 //           has it: a second click sets the same status again (a warning; the fix is a Visible: condition)
+//   STARTUP01 the after-startup microflow returns false on a path: Mendix stops the app then, so a seed
+//           that returns false once its rows exist boots once and fails every restart after
 //   LINT01  mxcli's own lint advice: off unless the rulebook says warn or block, then
 //           `mxcli lint --format json` runs here and its findings are listed at that level
 //
@@ -203,6 +205,22 @@ function parseLint(text) {
   });
 }
 
+// STARTUP01: [{code, key, message}] when the after-startup microflow (DESCRIBE SETTINGS) returns false
+// on some path. Mendix fails the start on false ("The after-startup-action failed with an exception or
+// returned false"). A room-booking app's seed returned false when its rooms were already there: it
+// passed DONE on the running app and failed every restart after (2026-10-13).
+function startupReturnsFalse(settingsText, describeFlow) {
+  const m = /AfterStartupMicroflow:\s*'([^']+)'/.exec(settingsText || '');
+  if (!m) return [];
+  const flow = m[1];
+  const text = describeFlow(flow) || '';
+  if (!/\breturns\s+Boolean\b/i.test(text) || !/\breturn\s+false\s*;/i.test(text)) return [];
+  return [{ code: 'STARTUP01', key: flow,
+    message: `the after-startup microflow ${flow} returns false on a path: Mendix stops the app when it does, so the app ` +
+      'starts once and fails the next restart (a seed that returns false once its rows exist). Return true on every path that is ' +
+      `not a real failure -- \`else return true;\` -- and keep it idempotent: alter microflow ${flow} or its script, then exec it again.` }];
+}
+
 function main() {
   const { levels, excepts, rest: argv } = levelArgs(process.argv.slice(2));
   const args = catalogArgs(argv);
@@ -225,6 +243,9 @@ function main() {
       const enumerations = new Set(mxcli(appDir, mpr, 'SELECT QualifiedName FROM CATALOG.ENUMERATIONS', true).map(e => e.QualifiedName));
       found.push(...repeatStatusButtons(sources.filter(d => modules.has(d.ModuleName)), enumerations));
     }
+    if (level('STARTUP01') !== 'off') {
+      found.push(...startupReturnsFalse(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), flow => mxcli(appDir, mpr, `DESCRIBE MICROFLOW ${flow}`)));
+    }
     if (level('LINT01') !== 'off') found.push(...lintFindings(appDir, mpr));
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
@@ -243,4 +264,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons };
+module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons, startupReturnsFalse };
