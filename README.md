@@ -258,7 +258,7 @@ What makes the app look and behave like a proper Mendix app.
 | `EDGE01` | Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window. | Blocks |
 | `GRID01` | A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing. | Blocks |
 | `GRID02` | A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page. | Blocks |
-| `DATE01` | A data grid column on a date and time shows the time of day too, when a form of the app edits that time (Data grid 2 shows a DateTime as a date only). The finding prints the column. | Blocks |
+| `DATE01` | A data grid column on a date and time shows the time of day too, when a form of the app edits that time (a date-and-time picker, or a format of its own with hours) (Data grid 2 shows a DateTime as a date only). The finding prints the column. | Blocks |
 | `STATUS01` | A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged. | Warning |
 | `HEAD01` | Points out a page without a heading. | Warning |
 | `HOME01` | With login: administrators start on a page of the app itself, not on a template page. | Blocks |
