@@ -278,7 +278,12 @@ find_running_app() {
   local candidate port other
   if [ -z "${BASE_URL:-}" ]; then
     for candidate in "http://localhost:$APP_PORT" http://localhost:8080; do
-      answers "$candidate" && { BASE_URL="$candidate"; break; }
+      answers "$candidate" || continue
+      # 8080 is only where `mxcli run` puts an app by default: another project's runtime there is
+      # not this app, so the gate goes on to boot its own (a VM with a real project on 8080 refused
+      # every --boot-if-needed, and the database reset's boot with it, 2026-10-13).
+      [ "$candidate" != "http://localhost:$APP_PORT" ] && [ -n "$(foreign_runtime 8080)" ] && continue
+      BASE_URL="$candidate"; break
     done
   fi
   [ -n "${BASE_URL:-}" ] && answers "$BASE_URL" || return 1
