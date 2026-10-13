@@ -115,3 +115,11 @@ again -- or it was only passing on leftovers. So:
   creates in its after-startup microflow, idempotently -- never a `.sql` file or a `psql` insert run
   by hand: a new database, a colleague's machine or a CI run will not have it;
 - a fixture repaired by hand to make a red test green is the bug, not the fix.
+
+## Dates and times
+
+A form shows and takes local time; the database and OQL hold UTC. 09:00 typed in Central Europe in
+winter is stored as 08:00, so `Start = '2026-11-15T09:00:00'` in `oql_count` finds nothing. Find the
+row a test made by its own unique text (a title, a name), never by its time, and check a time where
+the person sees it: on the page, in the browser, which shows local time again. A time compared in
+OQL is written `'2026-11-15T08:00:00'`, in UTC.

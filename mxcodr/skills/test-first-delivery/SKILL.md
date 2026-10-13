@@ -142,7 +142,7 @@ grows without a big-bang backfill.
 |---|---|
 | Wanting a step of the loop in prose, with its worked example | [reference/loop.md](reference/loop.md) |
 | Writing the scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
-| Hitting sign-in failures, "Maximum number of sessions", startup or idempotence regressions, planning subagents, or wanting facts about the app in one call | [reference/facts.md](reference/facts.md) |
+| Hitting sign-in failures, "Maximum number of sessions", startup or idempotence regressions, a date or time in a check, planning subagents, or wanting facts about the app in one call | [reference/facts.md](reference/facts.md) |
 | Listing a feature's paths, or reading a `paths` finding | [reference/paths.md](reference/paths.md) |
 | A phone, tablet or offline profile, or an OFFLINE / PHONE finding | [reference/offline.md](reference/offline.md) |
 | Debugging a suite that fails but `--only` passes, reading the gate's verdict, the coverage checker, red-first records and mutation testing | [reference/gate-and-suite.md](reference/gate-and-suite.md) |

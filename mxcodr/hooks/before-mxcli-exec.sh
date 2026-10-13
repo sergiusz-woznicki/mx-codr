@@ -7,7 +7,7 @@
 
 # Cheap substring test first: almost no Bash call is an `mxcli exec`.
 input="$(cat)"
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot.log"*|*"runtime.log"*|*mxcli*-c*|*grep*mxcli*|*rg\ *mxcli*|*strings*mxcli*|*xxd*mxcli*|*hexdump*mxcli*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) exit 0 ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*mdl-checks*|*tests/gate/*|*precheck.sh*|*"gate-boot.log"*|*"runtime.log"*|*mxcli*-c*|*grep*mxcli*|*rg\ *mxcli*|*strings*mxcli*|*xxd*mxcli*|*hexdump*mxcli*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) exit 0 ;; esac
 
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"
@@ -15,6 +15,7 @@ case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*"tests/gate.sh"*|*"gate-boot
 command="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" command 2>/dev/null)"
 message="$(hook_sleep_message "$command")"
 [ -n "$message" ] || message="$(hook_binary_message "$command")"
+[ -n "$message" ] || message="$(hook_source_message "$command")"
 if [ -n "$message" ]; then
   echo "$message" >&2
   exit 2

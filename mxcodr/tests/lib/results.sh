@@ -32,6 +32,9 @@ oql() {
     local how='write an entity as Module."Entity", e.g. '"${MODULE:-MyModule}"'."Order"; reach an association with
    JOIN o/Module.Assoc/Module.Entity AS x; or count with oql_count <Entity> "<where>"'
     case "$output" in
+      *"could not be parsed"*) how='a date in OQL is UTC, written '"'"'2026-11-15T08:00:00'"'"' -- the form shows local time, so 09:00 typed in
+   Central Europe in winter is 08:00 here; better find the row by its own unique text, not its time (skill
+   test-first-delivery, reference/facts.md "Dates and times")' ;;
       *"columns must have a name"*) how='name every column: SELECT COUNT(*) AS Total, SUM(o.TotalGross) AS Gross FROM ... -- then field "$json" Gross' ;;
     esac
     fail "OQL failed: $(printf '%s' "$output" | grep -v '^$' | grep -v 'vibe-coded PoC' | head -2 | tr '\n' ' ')

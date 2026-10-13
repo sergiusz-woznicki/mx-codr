@@ -23,6 +23,12 @@ hook_binary_message() {
   printf '%s' "$1" | "$NODE" "$HOOK_TOOL" binary-search 2>/dev/null
 }
 
+# hook_source_message <command> -- prints the block message when the command reads the gate's, a
+# checker's or a hook's code (harness-core readsHarnessSource): tests/checks/<step>.md says what each wants.
+hook_source_message() {
+  printf '%s' "$1" | "$NODE" "$HOOK_TOOL" harness-source 2>/dev/null
+}
+
 # MDL given to mxcli with -c that changes the model (CREATE, ALTER, DROP, GRANT, REVOKE, MOVE,
 # RENAME), NUL-separated. It went round the precheck: one broken access rule written that way
 # blocked every later exec with an error that was not in its script.
