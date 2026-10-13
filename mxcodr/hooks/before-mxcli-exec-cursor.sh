@@ -8,7 +8,7 @@
 
 input="$(cat)"
 allow() { printf '{"permission":"allow"}\n'; exit 0; }
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*paths-baseline*|*mxcli/applied*|*write-baseline*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) allow ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*paths-baseline*|*mxcli/applied*|*write-baseline*|*tests/*|*mdl-checks*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*grep*mxcli*|*rg\ *mxcli*|*strings*mxcli*|*xxd*mxcli*|*hexdump*mxcli*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*) ;; *) allow ;; esac
 
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"
@@ -34,6 +34,7 @@ if [ -f "$guard" ]; then
 fi
 # The same two rules the Claude Code hook has; this copy had lost them (audit of 2026-10-04).
 message="$(hook_sleep_message "$command")"
+[ -n "$message" ] || message="$(hook_binary_message "$command")"
 [ -z "$message" ] || deny "$message"
 # The app needs a Marketplace module and mxcli is not logged in: wait for the person's login.
 hook_marketplace_wait "$command" || deny "$HOOK_MARKETPLACE_OUT"

@@ -208,7 +208,6 @@ const tools = {
       }
     }
   },
-  // The block message when a step before the exec writes one of its scripts.
   // The person-only codes behind a red gate (output on stdin), as the agent is told them; nothing
   // when the agent still has work (harness-core personOnly).
   'person-only'(root) {
@@ -216,6 +215,12 @@ const tools = {
     const codes = core.personOnly(root || '.', py.readStdin());
     if (codes) py.print(core.personOnlyMessage(codes));
   },
+  // The block message when the command (stdin) searches the mxcli binary (harness-core isBinarySearch).
+  'binary-search'() {
+    const core = require('./plugins/harness-core.cjs');
+    if (core.isBinarySearch(py.readStdin())) py.print(core.BINARY_SEARCH);
+  },
+  // The block message when a step before the exec writes one of its scripts.
   'script-written'(...scripts) {
     const text = py.readStdin();
     const m = re.search(EXEC, text);
