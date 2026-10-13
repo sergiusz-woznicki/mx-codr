@@ -77,7 +77,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 106 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 107 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -244,7 +244,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `VAR01` | No variables named like $Int1, $tmp or $x. A name says what the variable holds, like $OpenInvoiceCount. | Blocks |
 | `VAR02` | No variable names ending in _List, _Object or _Obj: $OverdueInvoices, not $Invoice_List. | Blocks |
 
-**Screens and navigation** (43 rules)
+**Screens and navigation** (44 rules)
 
 What makes the app look and behave like a proper Mendix app.
 
@@ -258,6 +258,7 @@ What makes the app look and behave like a proper Mendix app.
 | `EDGE01` | Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window. | Blocks |
 | `GRID01` | A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing. | Blocks |
 | `GRID02` | A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page. | Blocks |
+| `DATE01` | A data grid column on a date and time shows the time of day too, when a form of the app edits that time (Data grid 2 shows a DateTime as a date only). The finding prints the column. | Blocks |
 | `STATUS01` | A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged. | Warning |
 | `HEAD01` | Points out a page without a heading. | Warning |
 | `HOME01` | With login: administrators start on a page of the app itself, not on a template page. | Blocks |
