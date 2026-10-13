@@ -235,4 +235,21 @@ function lowerCaseMessageTypes(scripts) {
   if (out.length) process.stdout.write(out.join('\n') + '\n');
 }
 
-module.exports = { DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes };
+// NAME02 before the exec: the widgets of each page or snippet a script creates are named
+// <Page>_<What><Type> (layout_rules/names.cjs, the gate's own rule). After the first DONE a page
+// changed later had to have all of its names put right at once -- eleven renames and three test
+// fixes for one grid column (room booking r3, 2026-10-13); named right when written, nothing cascades.
+function widgetNameFindings(scripts) {
+  const { nameFindings } = require('./layout_rules/names.cjs');
+  const out = [];
+  for (const script of scripts) {
+    let text;
+    try { text = fs.readFileSync(script, 'utf8'); } catch { continue; }
+    for (const f of nameFindings(text.split(/\r?\n/))) {
+      if (f.check === 'NAME02') out.push(`  ${script}:${f.line}: ${f.message}`);
+    }
+  }
+  if (out.length) process.stdout.write(out.join('\n') + '\n');
+}
+
+module.exports = { DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings };

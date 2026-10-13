@@ -271,7 +271,7 @@ What makes the app look and behave like a proper Mendix app.
 | `LIST01` | A list view item with buttons is one row that does not wrap: its texts in a box on the left, its buttons in a box on the right; the finding prints the row. | Blocks |
 | `MODULE01` | The empty MyFirstModule from the Mendix template is deleted once the app has its own module. The finding lists what still uses it. | Blocks |
 | `NAME01` | Points out a widget name used on more than one page. | Warning |
-| `NAME02` | Every widget is named after its page, what it is for and its type, in full words, like OrderDetail_GenerateInvoiceButton. Tests find widgets by these names. | Warning until the first DONE; then blocks a new or changed page |
+| `NAME02` | Every widget is named after its page, what it is for and its type, in full words, like OrderDetail_GenerateInvoiceButton. Tests find widgets by these names. Checked before each exec. | Blocks a page added after the install; warns on one the app already had |
 | `NAV01` | With login: the user can log out, through a Log out menu item or button. | Blocks |
 | `NAV02` | With login: Log out is the last item in the menu. | Warning |
 | `NAV03` | With login: every role's home page is also in the menu, so users can get back to it. | Blocks |

@@ -112,6 +112,20 @@ if [ "$(mdl_rule_level MSG01 block)" != "off" ] && [ -f tools/mdl-checks/gate_he
   fi
 fi
 
+# NAME02: the widgets of a page or snippet these scripts create are named <Page>_<What><Type> now,
+# not after a later change makes the whole page need them at once (gate_scripts.cjs widgetNameFindings).
+# NAME02 `off` in tests/rulebook/layout/NAME02.md turns it off.
+if [ "$(mdl_rule_level NAME02 warn)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
+  misnamed="$("$NODE" tools/mdl-checks/gate_helpers.cjs widget-names "$@" 2>/dev/null)"
+  if [ -n "$misnamed" ]; then
+    echo "precheck: NAME02 -- widget names that do not read <Page>_<What><Type> (the real model is untouched):"
+    printf '%s\n' "$misnamed" | head -12
+    [ "$(printf '%s\n' "$misnamed" | wc -l)" -gt 12 ] && echo "  ... and $(( $(printf '%s\n' "$misnamed" | wc -l) - 12 )) more"
+    echo "  Name each widget in the script before it runs: renamed later, every test that finds it changes too."
+    exit 1
+  fi
+fi
+
 # REQ01: requirements before the first feature. With MDL_REQUIREMENTS ask or assume (tests/harness.env),
 # the first pages and ACT_ microflows of an app (it has no page of its own yet) wait while
 # docs/brain/plan/ holds no requirement, recorded or waiting for the person's yes; an app that grew

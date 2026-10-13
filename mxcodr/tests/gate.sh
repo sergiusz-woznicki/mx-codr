@@ -194,14 +194,6 @@ captions_after_done() {
   return 0
 }
 
-# Widget names likewise: each full DONE keeps a hash of every page and snippet; from then on a new
-# or changed one needs <Page>_<What><Type> names (check_layout --names, NAME02).
-names_after_done() {
-  [ -f "$CACHE_DIR/layout.pages.json" ] || return 0
-  cp "$CACHE_DIR/layout.pages.json" "$CACHE_DIR/names-baseline.json" 2>/dev/null
-  return 0
-}
-
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -240,7 +232,6 @@ print_verdict_and_exit() {
   echo "   DONE — every check passed"
   done_repeat_note
   captions_after_done
-  names_after_done
   declare -F dbsnap_restore >/dev/null && dbsnap_restore
   if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
     echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."

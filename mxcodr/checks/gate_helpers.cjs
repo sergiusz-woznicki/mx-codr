@@ -48,7 +48,7 @@ const path = require('path');
 const py = require('./py_compat.cjs');
 const { re } = py;
 const { PyError, isDict, typeName, truthy, or, head, get, joinStr, strRepr, str, loads, dict, readStrict, stdinText, statOf, walk, pyInt, naive, nowNaive } = require('./gate_values.cjs');
-const { definitions, testFirst, newFeaturesCommand, nearIconsCommand, errorSourcesCommand, duplicateDefinitions, lowerCaseMessageTypes } = require('./gate_scripts.cjs');
+const { definitions, testFirst, newFeaturesCommand, nearIconsCommand, errorSourcesCommand, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings } = require('./gate_scripts.cjs');
 const { deploymentAge, runtimeAge, watchState, runtimeErrors } = require('./gate_runtime.cjs');
 const { fdOpen, visualReport } = require('./gate_visual.cjs');
 const { docMap, recordTestsSeen, changedTests } = require('./gate_changed.cjs');
@@ -182,6 +182,20 @@ function main(argv) {
   if (command === 'runtime-age' && args.length === 2) return runtimeAge(...args);
   if (command === 'duplicate-definitions') return duplicateDefinitions(args);
   if (command === 'message-types') return lowerCaseMessageTypes(args);
+  if (command === 'widget-names') return widgetNameFindings(args);
+  // names-baseline <app_dir> <mpr> <out> <Module>...: the pages and snippets the app has now (install).
+  if (command === 'names-baseline' && args.length >= 3) {
+    const { mxcli } = require('./mxcli_client.cjs');
+    const [appDir, mpr, out, ...modules] = args;
+    const known = {};
+    for (const module of modules) {
+      for (const kind of ['PAGES', 'SNIPPETS']) {
+        for (const row of mxcli(appDir, mpr, `SHOW ${kind} IN ${module}`, true)) known[row['Qualified Name']] = 'installed';
+      }
+    }
+    fs.writeFileSync(out, JSON.stringify(known));
+    return 0;
+  }
   if (command === 'test-first' && args.length >= 3) return testFirst(args);
   if (command === 'new-features' && args.length >= 3) return newFeaturesCommand(args);
   if (command === 'near-icons' && args.length === 1) return nearIconsCommand(args);

@@ -135,7 +135,8 @@ check_layout() {
   # The entities say how long the text a textbox edits may be (TEXT01, TEXT02).
   describe_entities_into "$WORK/layout-entities" || layout_unread entities "TEXT01, TEXT02"
   ls "$WORK"/layout-entities/*.mdl >/dev/null 2>&1 && nav_args+=(--entities "$WORK/layout-entities")
-  # Widget names (NAME01/02): warnings until the first DONE, then a new or changed page needs them.
+  # Widget names (NAME01/02): a page new since the install needs them (names-baseline.json, written by the
+  # installer); a page the app already had keeps them as warnings. The precheck asks for them at each exec.
   # tests/rulebook/layout/NAME02.md at `block`: every page needs them; NAME01 and NAME02 `off`: not checked.
   local names_levels names_mode=warn
   names_levels="$(mdl_rulebook levels layout 2>/dev/null)"

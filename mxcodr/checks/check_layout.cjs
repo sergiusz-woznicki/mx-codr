@@ -19,7 +19,7 @@
 //   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
 //   NAME01   WARN  (--names) a widget name used on more than one page or snippet
 //   NAME02   WARN  (--names) a widget name that does not read <Page>_<What><Type>; FAIL with
-//                  --names error, and for a page new or changed since --names-baseline
+//                  --names error, and for a page not in --names-baseline (the pages at install)
 //   SPACE04  FAIL  a button or text right on top of, or right under, a box (data grid, list, gallery,
 //                  group box, tab container, a card or a coloured container) with no margin between
 //                  them; a button in a grid's controlbar without margin-bottom
@@ -379,8 +379,10 @@ function main() {
   if (args.phone_layouts.length) failures = failures.concat(loginWidthFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
   if (args.phone_layouts.length) failures = failures.concat(phoneTopFindings(lines, collect(args.phone_layouts)[0], snippets));
   if (args.phone_layouts.length) warnings = warnings.concat(tabsFindings(lines, collect(args.phone_layouts)[0]));
-  // Widget names: warnings while the app is built; a page new or changed since the last DONE
-  // (the hashes the gate kept then) needs them, and --names error makes every one block.
+  // Widget names: a page or snippet that was not in the app when the harness was installed (the
+  // --names-baseline the installer wrote) needs them; one that was keeps them as warnings, so an app
+  // that grew in Studio Pro is not renamed wholesale. --names error makes every one block. The
+  // precheck asks for them before each exec already; this is the backstop.
   if (args.names === 'warn' || args.names === 'error') {
     const all = lines.concat(py.splitlines(snippets));
     const hashes = documentHashes(all);
@@ -390,8 +392,8 @@ function main() {
       try { baseline = JSON.parse(fs.readFileSync(fsPath(args.names_baseline), 'utf8')); } catch { baseline = null; }
     }
     for (const f of nameFindings(all)) {
-      const fresh = baseline && f.check === 'NAME02' && baseline[f.document] !== hashes[f.document];
-      const finding = { check: f.check, line: f.line, message: f.message + (fresh ? ` -- ${f.document} is new or changed since the last DONE, so its names are required now` : ''), document: f.document };
+      const fresh = baseline && f.check === 'NAME02' && !Object.prototype.hasOwnProperty.call(baseline, f.document);
+      const finding = { check: f.check, line: f.line, message: f.message + (fresh ? ` -- ${f.document} is new since the harness was installed, so its names are required` : ''), document: f.document };
       (args.names === 'error' || fresh ? failures : warnings).push(finding);
     }
   }
