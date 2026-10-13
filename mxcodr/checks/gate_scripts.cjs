@@ -214,4 +214,25 @@ function errorSourcesCommand(args) {
   return 0;
 }
 
-module.exports = { DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions };
+// MSG01: `show message ... type warning` (or error, information) in lower case. mxcli v0.26 stores the word
+// as written, and the first tool that saves the model again -- `mxcli fix widgets`, which the after-exec
+// hook runs for a data grid, or Studio Pro -- reads an unknown type and makes it Information: the
+// warning is shown as plain information, and the script no longer matches the model (STALE01 refused
+// three re-runs of an untouched script, room booking 2026-10-13). Warning and Error with a capital stay.
+const MESSAGE_TYPE_RE = /\bshow\s+message\b[^;]*?\btype\s+(information|warning|error)\b/g;
+function lowerCaseMessageTypes(scripts) {
+  const out = [];
+  for (const script of scripts) {
+    let text;
+    try { text = fs.readFileSync(script, 'utf8'); } catch { continue; }
+    text.split(/\r?\n/).forEach((line, i) => {
+      for (const m of line.matchAll(MESSAGE_TYPE_RE)) {
+        const fixed = m[1][0].toUpperCase() + m[1].slice(1);
+        out.push(`  ${script}:${i + 1}: \`type ${m[1]}\` -> \`type ${fixed}\``);
+      }
+    });
+  }
+  if (out.length) process.stdout.write(out.join('\n') + '\n');
+}
+
+module.exports = { DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes };

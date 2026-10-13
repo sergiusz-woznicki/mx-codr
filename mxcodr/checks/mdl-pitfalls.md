@@ -55,7 +55,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   handler that can return false needs `raise error`, or the save is skipped in silence (EVENT02):
   `alter entity Shop.Order add event handler on before commit call Shop.BCO_Order($currentObject) raise error;`.
   A bare `commit $X;` runs the handlers; `without events` skips them (EVENT03 warns).
-- **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142).
+- **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142). Return true on every path: false stops the app, so a seed that returns false once its rows exist fails the next restart (gate STARTUP01).
+- **A message type takes a capital**: `show message 'Pick a room first.' type Warning;` -- `type warning` becomes Information at the next save of the model (gate MSG01).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
   `grant create, delete, read *, write * on entity Mod.Entity to Mod.Role;`.
 - **A user filling in an object a microflow created needs `write`, not `create`**: the
