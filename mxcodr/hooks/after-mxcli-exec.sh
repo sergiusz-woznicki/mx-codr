@@ -33,12 +33,13 @@ HOOK_APPLIED
 fi
 # CE0463: mxcli writes a data grid in an older widget definition on every exec of its page, so the
 # next precheck blocks on errors no script holds -- each InvoiceChase run lost rounds to it
-# (2026-10-12). Update the widgets right after such an exec (about 6 s), as Studio Pro's
+# (2026-10-12). A File Uploader the same (file-image session, 2026-10-13). Update the widgets
+# right after such an exec (about 6 s), as Studio Pro's
 # "Update all widgets" would.
 widgets_refresh() {
   local _word _grid="" _mpr _mxcli
   while IFS= read -r _word; do
-    case "$_word" in *.mdl) [ -f "$_word" ] && grep -qiE '^[[:space:]]*datagrid[[:space:]]' "$_word" && _grid=1 ;; esac
+    case "$_word" in *.mdl) [ -f "$_word" ] && grep -qiE '^[[:space:]]*(datagrid|fileuploader)[[:space:]]' "$_word" && _grid=1 ;; esac
   done <<HOOK_GRID
 $(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" words 2>/dev/null)
 HOOK_GRID
@@ -47,7 +48,7 @@ HOOK_GRID
   _mxcli="./mxcli"; [ -x "$_mxcli" ] || { [ -x "./mxcli.exe" ] && _mxcli="./mxcli.exe"; }
   [ -x "$_mxcli" ] || return 0
   if "$_mxcli" fix widgets -p "$_mpr" >/dev/null 2>&1; then
-    echo "Data grids updated to the installed widget definition (mxcli fix widgets), so CE0463 does not come back."
+    echo "Data grids and file uploaders updated to the installed widget definition (mxcli fix widgets), so CE0463 does not come back."
   fi
 }
 widgets_refresh

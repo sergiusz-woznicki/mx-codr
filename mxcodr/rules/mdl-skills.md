@@ -5,7 +5,7 @@ Read **one** up front: `test-first-delivery`, before the first feature. The othe
 by the check that needs them -- a `layout` finding says `spacing-and-layout`, a `folders` finding
 `module-structure` or `reuse-and-snippets`, a `naming` finding `naming-and-captions` -- and
 each finding already carries its fix, so read a skill when a finding names it, one file per
-command, not all of them at the start.
+command, not all of them at the start. Uploads, photos or documents: `files-and-images` first.
 
 Facts about this app come from one call, not from exploring by hand:
 
