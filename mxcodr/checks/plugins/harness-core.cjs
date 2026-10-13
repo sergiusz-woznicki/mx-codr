@@ -93,13 +93,36 @@ const BINARY_SEARCH =
   "works: write it into a two-line script and run `./mxcli check <script>.mdl -p <App>.mpr --references`; " +
   "what it does at runtime: a test of the feature, `bash tests/gate.sh --only <feature>`."
 
-// The command searches or dumps the mxcli program file itself: the file is the search's last
-// argument (`grep mxcli tests/x.sh` looks for the word, and passes).
+// The command searches or dumps the mxcli program file itself: one of the files it reads is mxcli.
+// For grep and its kin the first word that is not an option is the pattern (`grep mxcli tests/x.sh`
+// looks for the word, and passes), unless -e or -f gives it; strings, xxd, hexdump and od read every
+// word. Redirections are not files: `strings -a mxcli 2>/dev/null | grep ...` went through when only
+// the last word was looked at (file-image session, 2026-10-13).
+const BINARY_TOOLS = /^(?:\S*\/)?(grep|egrep|fgrep|rg|ugrep|ag|strings|xxd|hexdump|od)$/
+const MXCLI_FILE = /^(?:\.\/|\S*\/)?mxcli(?:\.exe)?$/
 function isBinarySearch(command) {
   if (typeof command !== "string") return false
-  return command.split(/\|\||&&|[|;&\n]/).some((part) =>
-    /^\s*(?:\S*\/)?(?:grep|egrep|fgrep|rg|ugrep|ag|strings|xxd|hexdump|od)\s/.test(part)
-      && /\s["']?(?:\.\/|\S*\/)?mxcli(?:\.exe)?["']?\s*$/.test(part))
+  // `2>&1`, `>&2` first, so the split on `&` below does not cut them in two.
+  const text = command.replace(/\d*>&\d*/g, " ")
+  return text.split(/\|\||&&|[|;&\n]/).some((part) => {
+    const words = (part.match(/"[^"]*"|'[^']*'|\S+/g) || []).map((w) => w.replace(/^["']|["']$/g, ""))
+    const tool = BINARY_TOOLS.exec(words[0] || "")
+    if (!tool) return false
+    const args = []
+    for (let i = 1; i < words.length; i++) {
+      const w = words[i]
+      if (/^\d*[<>]{1,2}$/.test(w)) { i++; continue }   // `> file`, `2> file`: the next word is the target
+      if (/^\d*[<>]{1,2}\S/.test(w)) continue           // `2>/dev/null`, `>out.txt`
+      args.push(w)
+      // An option that takes a value (`-A 3`, `-m 1`, `--context 2`): the value is no file and no pattern.
+      if (/^(?:-[ABCmd]|--(?:after|before)?-?context|--max-count)$/.test(w) && i + 1 < words.length) args.push("-" + words[++i])
+    }
+    const grepLike = !/^(strings|xxd|hexdump|od)$/.test(tool[1])
+    const patternGiven = args.some((w) => /^-(?:[A-Za-z]*[ef]|-regexp|-file)/.test(w))
+    let positional = args.filter((w) => !w.startsWith("-"))
+    if (grepLike && !patternGiven) positional = positional.slice(1)
+    return positional.some((w) => MXCLI_FILE.test(w))
+  })
 }
 
 // The harness's own code: the gate, its checkers and hooks. A room-booking session (2026-10-13) read
