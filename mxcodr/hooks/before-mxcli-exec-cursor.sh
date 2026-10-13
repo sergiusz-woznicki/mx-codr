@@ -35,6 +35,7 @@ fi
 # The same two rules the Claude Code hook has; this copy had lost them (audit of 2026-10-04).
 message="$(hook_sleep_message "$command")"
 [ -n "$message" ] || message="$(hook_binary_message "$command")"
+[ -n "$message" ] || message="$(hook_source_message "$command")"
 [ -z "$message" ] || deny "$message"
 # The app needs a Marketplace module and mxcli is not logged in: wait for the person's login.
 hook_marketplace_wait "$command" || deny "$HOOK_MARKETPLACE_OUT"

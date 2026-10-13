@@ -102,6 +102,36 @@ function isBinarySearch(command) {
       && /\s["']?(?:\.\/|\S*\/)?mxcli(?:\.exe)?["']?\s*$/.test(part))
 }
 
+// The harness's own code: the gate, its checkers and hooks. A room-booking session (2026-10-13) read
+// 21 of those files, 170 kB, "so the pages pass on the first try" -- context resent every turn, while
+// what each check wants is written for it in tests/checks/<step>.md and every finding carries its fix.
+const HARNESS_SOURCE =
+  "Blocked: that reads the harness's own code (the gate, its checkers, its hooks). It is not the spec, and every " +
+  "line read is resent with each turn. What a check wants and how to fix it: tests/checks/<step>.md, or " +
+  "`bash tests/rules.sh explain <CODE>`; a finding of the gate names its fix. Build the feature, then run the gate."
+
+const SOURCE_PATH = /(?:^|[\s"'=(\/])(?:tools\/mdl-checks\/(?:[^\s"';|&)]*\.(?:cjs|js|sh)\b|layout_rules\b|hooks\b|plugins\b)|tests\/gate(?:\.sh\b|\/)|tests\/precheck\.sh\b)/
+const READERS = /^(?:\S*\/)?(?:cat|head|tail|sed|awk|less|more|nl|bat|grep|egrep|fgrep|rg|ag|ugrep|wc|cut|strings|python3?|node)$/
+
+// True when the call reads that code: a read tool on one of its files, or a shell step whose first
+// word reads files (cat, sed, grep, ...) and names one. Running it (`bash tests/gate.sh`,
+// `node tools/mdl-checks/x.cjs` with arguments that are not a read) passes.
+function readsHarnessSource(tool, args) {
+  if (!args) return false
+  if (tool === "read" || tool === "Read" || tool === "view") {
+    const path = String(args.path || args.filePath || args.file_path || "").replace(/\\/g, "/")
+    return SOURCE_PATH.test(" " + path)
+  }
+  if (tool !== "bash" || typeof args.command !== "string") return false
+  return args.command.split(/\|\||&&|[|;&\n]/).some((part) => {
+    const words = part.trim().replace(/^(?:do|then|else|\{|\()\s+/, "").split(/\s+/)
+    if (!READERS.test(words[0] || "")) return false
+    // `node tools/mdl-checks/x.cjs ...` runs a checker; `node -e "...readFileSync(...)"` reads one.
+    if (/^(?:\S*\/)?(?:node|python3?)$/.test(words[0]) && !/^-[ec]$/.test(words[1] || "")) return false
+    return SOURCE_PATH.test(" " + words.slice(1).join(" "))
+  })
+}
+
 // `for f in a b; do mxcli exec mdlsource/$f.mdl`: the scripts are a variable, so precheck sees none.
 // A blocked command runs none of its steps: GLM sent `python3 <edit> ... ; ./mxcli exec` seven
 // times, was blocked before the edit ran, and debugged an edit that was never applied.
@@ -298,6 +328,7 @@ function gateFailureMessage(out) {
 function blockReason(root, tool, args) {
   const blocked = harnessEnvBlocked(root, tool, args)
   if (blocked) return blocked
+  if (readsHarnessSource(tool, args)) return HARNESS_SOURCE
   if (tool !== "bash") return null
   const command = args && args.command
   if (isSleepBeforeGate(command)) return SLEEP_BEFORE_GATE
@@ -358,7 +389,7 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
-  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, stepsBeforeExec, STEPS_BEFORE_EXEC,
+  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, stepsBeforeExec, STEPS_BEFORE_EXEC,
   EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }

@@ -220,6 +220,11 @@ const tools = {
     const core = require('./plugins/harness-core.cjs');
     if (core.isBinarySearch(py.readStdin())) py.print(core.BINARY_SEARCH);
   },
+  // The block message when the command (stdin) reads the harness's own code (harness-core readsHarnessSource).
+  'harness-source'() {
+    const core = require('./plugins/harness-core.cjs');
+    if (core.readsHarnessSource('bash', { command: py.readStdin() })) py.print(core.HARNESS_SOURCE);
+  },
   // The block message when a step before the exec writes one of its scripts.
   'script-written'(...scripts) {
     const text = py.readStdin();
