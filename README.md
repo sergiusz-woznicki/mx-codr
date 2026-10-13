@@ -77,7 +77,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 109 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 112 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -246,7 +246,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `VAR01` | No variables named like $Int1, $tmp or $x. A name says what the variable holds, like $OpenInvoiceCount. | Blocks |
 | `VAR02` | No variable names ending in _List, _Object or _Obj: $OverdueInvoices, not $Invoice_List. | Blocks |
 
-**Screens and navigation** (44 rules)
+**Screens and navigation** (47 rules)
 
 What makes the app look and behave like a proper Mendix app.
 
@@ -260,6 +260,9 @@ What makes the app look and behave like a proper Mendix app.
 | `EDGE01` | Everything on a page sits inside a layout grid, so nothing is glued to the edge of the window. | Blocks |
 | `GRID01` | A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing. | Blocks |
 | `GRID02` | A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page. | Blocks |
+| `GRID03` | Every data grid column bound to an attribute has the filter its type wants (text, number, date, drop-down; over an association a drop-down with its association), on every grid: the rows grow with the app. | Blocks |
+| `TABS02` | Two or more lists (data grid, list view, gallery) one under another on a page go in tabs, one list a tab, so nobody scrolls past one list to find the next. Lists side by side, or already in tabs, pass. | Blocks |
+| `KPI01` | A list over a view that always holds one row (totals with no group by) shows its figures as tiles, one card a figure, not as a table with one row. | Blocks |
 | `DATE01` | A data grid column on a date and time shows the time of day too, when a form of the app edits that time (a date-and-time picker, or a format of its own with hours) (Data grid 2 shows a DateTime as a date only). The finding prints the column. | Blocks |
 | `STATUS01` | A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged. | Warning |
 | `HEAD01` | Points out a page without a heading. | Warning |
@@ -271,7 +274,7 @@ What makes the app look and behave like a proper Mendix app.
 | `LIST01` | A list view item with buttons is one row that does not wrap: its texts in a box on the left, its buttons in a box on the right; the finding prints the row. | Blocks |
 | `MODULE01` | The empty MyFirstModule from the Mendix template is deleted once the app has its own module. The finding lists what still uses it. | Blocks |
 | `NAME01` | Points out a widget name used on more than one page. | Warning |
-| `NAME02` | Every widget is named after its page, what it is for and its type, in full words, like OrderDetail_GenerateInvoiceButton. Tests find widgets by these names. | Warning until the first DONE; then blocks a new or changed page |
+| `NAME02` | Every widget is named after its page, what it is for and its type, in full words, like OrderDetail_GenerateInvoiceButton. Tests find widgets by these names. Checked before each exec. | Blocks a page added after the install; warns on one the app already had |
 | `NAV01` | With login: the user can log out, through a Log out menu item or button. | Blocks |
 | `NAV02` | With login: Log out is the last item in the menu. | Warning |
 | `NAV03` | With login: every role's home page is also in the menu, so users can get back to it. | Blocks |

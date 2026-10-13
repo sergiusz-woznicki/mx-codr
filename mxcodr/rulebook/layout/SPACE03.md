@@ -11,7 +11,7 @@ key: none
 Widgets on the same line have the same spacing above and below them, so they line up.
 
 ## Fix
-Give them the same `margin-top`/`margin-bottom`.
+The same `margin-top`/`margin-bottom`.
 
 ## Local
 # level: block

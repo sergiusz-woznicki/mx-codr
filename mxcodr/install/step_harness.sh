@@ -85,6 +85,17 @@ if [ -x "$APP/mxcli$EXE" ] && [ -f "$APP/tests/portable.sh" ] && [ ! -f "$APP/.m
     rm -rf "$copy" ) >/dev/null 2>&1 || true
 fi
 
+# The widget-names baseline (NAME02): the pages and snippets the app has now. One that is not in it
+# needs <Page>_<What><Type> names before DONE; one that is keeps them as warnings, so a grown app is
+# not renamed wholesale. Written once, never overwritten; a new app gets an empty one.
+if [ -x "$APP/mxcli$EXE" ] && [ -f "$APP/tests/portable.sh" ] && [ ! -f "$APP/.mxcli/gate-cache/names-baseline.json" ]; then
+  ( cd "$APP" && MXCLI="./mxcli$EXE" && . tests/portable.sh && mdl_find_mpr 2>/dev/null \
+    && modules="$(mdl_user_modules "$MPR")" && mkdir -p .mxcli/gate-cache \
+    && { [ -z "$modules" ] && echo '{}' > .mxcli/gate-cache/names-baseline.json \
+         || "$NODE" tools/mdl-checks/gate_helpers.cjs names-baseline . "$MPR" .mxcli/gate-cache/names-baseline.json $modules; } \
+  ) >/dev/null 2>&1 || true
+fi
+
 # --- 16. Step: record the install, then check the environment ---
 # INSTALL.json lets the gate detect stale or locally edited harness files.
 ui_begin "recording the install"

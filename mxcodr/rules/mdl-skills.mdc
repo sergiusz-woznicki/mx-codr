@@ -66,6 +66,7 @@ datagrid dg (...) { column colStatus (attribute: "Status") { dropdownfilter fltS
   --   dropdownfilter on an enumeration or over an association (dropdownfilter fltCustomer
   --   (Association: Mod.Order_Customer, datasource: database Mod.Customer, CaptionAttribute: Name)).
   --   Never a filter bar of your own over a helper entity (UI001); the column keeps its Attribute (GRID01)
+  --   Every column bound to an attribute has a filter, on every grid (GRID03); Boolean takes a dropdownfilter too
 show message '{1}' type info objects [$Obj/Name + ' saved'];   validation feedback $Obj/Attr message 'Name is required';
 ```
 
