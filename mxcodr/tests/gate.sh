@@ -9,13 +9,13 @@
 #   bash tests/gate.sh --restart          # stop this project's runtime, boot it again, then gate
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
+#   bash tests/gate.sh --reset-data       # with any of the above: tests start on the snapshot's data
 #
 # Eleven verdicts: the suite (tests/verify-*.test.sh) and ten model checks that need no app -- mx check,
 # catalog, coverage, naming, layout, security, scope, paths, folders, unused. Each runs; a pass replays while its inputs hold.
 #   DONE — every check passed               exit 0 (--only/--tests-only print PASSED, never DONE)
 #   NOT DONE — failed: <checks>             exit 1
-#   NOT DONE — could not run: <checks>      exit 2
-# Exit 2 also: stopped early (no .mpr, bad argument, no app, a failed boot, sessions refused).
+#   NOT DONE — could not run: <checks>      exit 2 (also: no .mpr, no app, a failed boot, sessions refused)
 # Env: BASE_URL (else 8081 then 8080), APP_PORT (8081), SCRIPT_TIMEOUT (90s),
 #      BOOT_TIMEOUT (180s), RUNTIME_LOG, ADMIN_PORT, ADMIN_PASSWORD, SERVE_PORT,
 #      ALLOW_BUSY_SESSION=1, MDL_GATE_CACHE=0, MDL_BOOT_COMMAND (replaces mxcli run),
@@ -50,7 +50,7 @@ gate_helper() {
   "$NODE" tools/mdl-checks/gate_helpers.cjs "$@"
 }
 
-# Sets ONLY, TESTS_ONLY, BOOT, RESTART, STOP and USE_CACHE; --help prints lines 2-24 and exits.
+# Sets ONLY, TESTS_ONLY, BOOT, RESTART, STOP, USE_CACHE and RESET_DATA; --help prints lines 2-24 and exits.
 parse_arguments() {
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -61,6 +61,7 @@ parse_arguments() {
       --restart) RESTART=1; BOOT=1; shift ;;
       --stop) STOP=1; shift ;;
       --no-cache) USE_CACHE=0; shift ;;
+      --reset-data) RESET_DATA=1; shift ;;
       -h|--help) sed -n '2,24p' "$HARNESS_DIR/gate.sh"; exit 0 ;;
       *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
@@ -303,7 +304,7 @@ print_failure_details() {
 }
 
 main() {
-  ONLY=""; CHANGED=0; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; USE_CACHE="${MDL_GATE_CACHE:-1}"; targets_ran=()
+  ONLY=""; CHANGED=0; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; RESET_DATA=0; USE_CACHE="${MDL_GATE_CACHE:-1}"; targets_ran=()
   parse_arguments "$@"
   if [ "$CHANGED" = "1" ] && [ -n "$ONLY" ]; then
     echo "--changed picks the tests itself; it cannot be combined with --only" >&2; exit 2
@@ -355,6 +356,13 @@ main() {
   fi
   # 2. The app: restart it if asked, then find it or boot it.
   [ "$RESTART" = "1" ] && restart_app
+  # Rows an earlier run that did not end in DONE left behind: a full gate starts its tests on the
+  # snapshot's data (a stop and boot); a partial run only with --reset-data.
+  if declare -F dbsnap_refresh >/dev/null; then
+    if [ "$RESET_DATA" = "1" ]; then dbsnap_refresh force
+    elif [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then dbsnap_refresh
+    fi
+  fi
   # Warn about drifted checkers before any verdict, and before the no-app exit.
   mdl_check_install_freshness
   ensure_app

@@ -591,7 +591,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>level: off</code> in <code>TEST01</code></td><td>Turns off test-first in precheck.</td></tr>
       <tr><td><code>level: warn</code> or <code>block</code> in <code>LINT01</code></td><td>Shows mxcli lint's advice under the warnings, or makes lint errors block.</td></tr>
       <tr><td><code>level: block</code> in <code>WAIT01</code></td><td>The coverage step fails on tests that wait for time.</td></tr>
-      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE (default <code>done</code>); <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
+      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
       <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>
       <tr><td><code>MDL_REQUIREMENTS=assume</code> or <code>off</code></td><td>Nobody answers the requirements interview: the agent takes its recommended answers as assumptions, listed at DONE. <code>off</code>: no interview.</td></tr>
     </tbody>

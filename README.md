@@ -331,7 +331,7 @@ The default is in bold. A key you leave out takes its default.
 | `MDL_DB_HOST`, `MDL_DB_NAME`, `MDL_DB_USER`, `MDL_DB_PASSWORD` | set by the installer | The app's PostgreSQL database. |
 | `MDL_PSQL` | a path to `psql` | Which PostgreSQL client to use when it is not on the `PATH`. |
 | `MDL_MXBUILD_PATH`, `JAVA_HOME`, `MDL_BOOT_COMMAND`, `MX_VERSION` | set by the installer | How the app is built and booted, and which Studio Pro version to use when there are several. |
-| `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data. `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
+| `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data; a full gate after a red one also starts its tests on the saved data (`--reset-data` does it for `--only`). `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
 | `MDL_CLOSE_BROWSER` | **`0`** · `1` | `0`: the test browser stays open, so the next run starts faster. `1`: it closes after each gate run. |
 | `MDL_REQUIREMENTS` | **`ask`** · `assume` · `off` | `ask`: before the first feature the agent asks you what the app must do and waits. `assume`: nobody answers (a benchmark); it takes its recommended answers as assumptions, listed at DONE. `off`: no interview. |
 | `MDL_COMPACTION` | `on` · **`off`** | `on`: the installer gives Pi a compaction threshold of 70% of each model's window (`.pi/settings.json`, only for models you have not set yourself). `off`: Pi's own default. Read by the installer only; re-run it after a change. Measured on one prompt: a shorter context each turn, but more turns in two of three runs. Claude Code and Codex are not set: their threshold is a token count, not a share of the window. |
@@ -355,6 +355,7 @@ bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
 bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE)
 bash tests/gate.sh --changed          # the tests a model change touched
 bash tests/gate.sh --restart          # stop this project's app and boot it again
+bash tests/gate.sh --only <feature> --reset-data  # first put back the rows earlier runs left
 bash tests/rules.sh                   # every rule, its level and your exceptions
 bash tests/orient.sh                  # what is in this project, and its state
 bash tests/diagnose.sh                # why the app does not answer
