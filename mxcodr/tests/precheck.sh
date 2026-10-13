@@ -98,6 +98,20 @@ if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
   fi
 fi
 
+# MSG01: a message type in lower case is stored as written and turned into Information by the next tool
+# that saves the model (gate_scripts.cjs lowerCaseMessageTypes) -- the warning is lost, and STALE01 then
+# sees a change nobody made. MSG01 `off` in tests/rulebook/app/MSG01.md turns it off.
+if [ "$(mdl_rule_level MSG01 block)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
+  lowered="$("$NODE" tools/mdl-checks/gate_helpers.cjs message-types "$@" 2>/dev/null)"
+  if [ -n "$lowered" ]; then
+    echo "precheck: MSG01 -- a message type in lower case (the real model is untouched):"
+    printf '%s\n' "$lowered"
+    echo "  Write it with a capital: Information, Warning, Error. In lower case mxcli stores it as written, and the"
+    echo "  next save of the model (mxcli fix widgets, Studio Pro) turns it into Information: the warning is lost."
+    exit 1
+  fi
+fi
+
 # REQ01: requirements before the first feature. With MDL_REQUIREMENTS ask or assume (tests/harness.env),
 # the first pages and ACT_ microflows of an app (it has no page of its own yet) wait while
 # docs/brain/plan/ holds no requirement, recorded or waiting for the person's yes; an app that grew

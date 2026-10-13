@@ -77,7 +77,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 108 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 109 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -154,7 +154,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (20 rules)
+**Done means tested and building** (21 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -168,6 +168,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
 | `SCRIPT01` | Each page, microflow, entity or constant is created in only one script in mdlsource/. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared. | Blocks |
+| `MSG01` | A message in a microflow has its type written with a capital (Warning, Error). In lower case mxcli stores it as written, and the next save of the model turns it into Information: the person sees a warning as plain information. | Blocks |
 | `STALE01` | An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change. | Blocks |
 | `TEST01` | Test first: before a new page or a new ACT_ microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine. | Blocks |
 | `REQ01` | Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead. | Blocks |

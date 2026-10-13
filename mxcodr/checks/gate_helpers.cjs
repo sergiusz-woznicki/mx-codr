@@ -48,7 +48,7 @@ const path = require('path');
 const py = require('./py_compat.cjs');
 const { re } = py;
 const { PyError, isDict, typeName, truthy, or, head, get, joinStr, strRepr, str, loads, dict, readStrict, stdinText, statOf, walk, pyInt, naive, nowNaive } = require('./gate_values.cjs');
-const { definitions, testFirst, newFeaturesCommand, nearIconsCommand, errorSourcesCommand, duplicateDefinitions } = require('./gate_scripts.cjs');
+const { definitions, testFirst, newFeaturesCommand, nearIconsCommand, errorSourcesCommand, duplicateDefinitions, lowerCaseMessageTypes } = require('./gate_scripts.cjs');
 const { deploymentAge, runtimeAge, watchState, runtimeErrors } = require('./gate_runtime.cjs');
 const { fdOpen, visualReport } = require('./gate_visual.cjs');
 const { docMap, recordTestsSeen, changedTests } = require('./gate_changed.cjs');
@@ -181,6 +181,7 @@ function main(argv) {
   if (command === 'deployment-age' && args.length === 2) return deploymentAge(...args);
   if (command === 'runtime-age' && args.length === 2) return runtimeAge(...args);
   if (command === 'duplicate-definitions') return duplicateDefinitions(args);
+  if (command === 'message-types') return lowerCaseMessageTypes(args);
   if (command === 'test-first' && args.length >= 3) return testFirst(args);
   if (command === 'new-features' && args.length >= 3) return newFeaturesCommand(args);
   if (command === 'near-icons' && args.length === 1) return nearIconsCommand(args);
