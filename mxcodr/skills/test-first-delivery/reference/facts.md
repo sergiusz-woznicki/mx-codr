@@ -101,7 +101,7 @@ Every click commits: a browser test's data stays in the database. The gate snaps
 before the tests and puts it back after every DONE (`MDL_DB_RESET` in `tests/harness.env` is the
 person's switch; `bash tests/db-snapshot.sh status` says what is pending). A full gate after a red
 run starts its tests on the snapshot's data too; `--only` and `--tests-only` do not, unless you add
-`--reset-data`. Everything written since the snapshot goes back with it, so data the app itself
+`--reset-data` -- a restart, so once after a test clashed with leftovers, never on every run. Everything written since the snapshot goes back with it, so data the app itself
 needs belongs in its after-startup seed microflow, never in a one-off `exec` or a test. A test still
 makes its own rows and asserts on them, and one that needs a free slot or an empty list makes its
 own room for it (a time far from now, a name of its own): between DONEs the data piles up.

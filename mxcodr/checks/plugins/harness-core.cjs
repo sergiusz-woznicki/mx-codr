@@ -132,6 +132,29 @@ function readsHarnessSource(tool, args) {
   })
 }
 
+// After a new test file is written: run it now, while the feature it checks does not exist yet.
+// Two room-booking sessions (2026-10-13) wrote five to seven tests at once, built every feature,
+// and only then ran them -- green; proving each red afterwards took a break-and-undo per test, 5 and
+// 19 minutes. A red run before the feature costs one gate run for all of them.
+function newTestNote(root, tool, args) {
+  if (!args) return ""
+  let path = ""
+  if (/^(write|Write|create|edit|Edit|MultiEdit|edit_file|write_file)$/.test(String(tool))) {
+    path = String(args.path || args.filePath || args.file_path || args.target_file || "")
+  } else if (/^(bash|Bash|shell|run_terminal_cmd)$/.test(String(tool)) && typeof args.command === "string") {
+    // `cat > tests/verify-x.test.sh <<'EOF'`, `tee tests/verify-x.test.sh`: a test written from the shell.
+    const w = /(?:>|\btee\s+(?:-a\s+)?)\s*["']?((?:[^\s"';|&<>]*\/)?tests\/verify-[^\s"';|&<>/]+\.test\.sh)/.exec(args.command)
+    path = w ? w[1] : ""
+  }
+  const m = /(?:^|\/)tests\/(verify-[^/]+)\.test\.sh$/.exec(path.replace(/\\/g, "/"))
+  if (!m) return ""
+  const red = join(root, ".mxcli", "red-first", m[1])
+  if (existsSync(red) || existsSync(red + ".green")) return ""
+  return `${m[1]} has not run yet: run it now, before building what it checks -- ` +
+    `\`bash tests/gate.sh --only ${m[1].replace(/^verify-/, "")}\` (several new tests: one \`bash tests/gate.sh --tests-only\`) ` +
+    "records its red run in seconds. Once the feature exists, proving a test red takes a break-and-undo of the feature."
+}
+
 // `for f in a b; do mxcli exec mdlsource/$f.mdl`: the scripts are a variable, so precheck sees none.
 // A blocked command runs none of its steps: GLM sent `python3 <edit> ... ; ./mxcli exec` seven
 // times, was blocked before the edit ran, and debugged an edit that was never applied.
@@ -389,7 +412,7 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
-  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, stepsBeforeExec, STEPS_BEFORE_EXEC,
+  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC,
   EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }

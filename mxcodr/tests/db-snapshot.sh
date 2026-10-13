@@ -175,7 +175,11 @@ dbsnap_refresh() {
   fi
   [ "${1:-}" = "force" ] || [ -f "$DBSNAP_DIR/dirty" ] || return 0
   echo "== putting the data back to the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null) before the tests: an earlier run left its test rows"
+  local started=$SECONDS
   dbsnap_swap && echo "   the tests start on the snapshot's data; the next DONE puts it back again"
+  # A room-booking session added --reset-data to every --only run, passing ones too: 13 restarts,
+  # 17 s each, after one test had clashed with leftovers (2026-10-13). The cost, where it is paid.
+  [ "${1:-}" = "force" ] && echo "   --reset-data took $((SECONDS - started))s (a restart): add it once, after a test failed on rows an earlier run left -- not to every run"
   return 0
 }
 

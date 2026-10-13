@@ -9,7 +9,7 @@ cp "$SRC"/hooks/*.sh "$APP/tools/mdl-checks/hooks/"
 chmod +x "$APP/tools/mdl-checks/hooks/"*.sh
 # Each merge adds only missing entries; unparseable JSON stops the install rather than being overwritten.
 "$NODE" "$SRC/install/hosts/claude_settings.cjs" "$APP/.claude/settings.local.json"
-ui_done "Claude hooks" "4 $I_ARROW .claude/settings.local.json"
+ui_done "Claude hooks" "5 $I_ARROW .claude/settings.local.json"
 ignore_credential_files
 
 # Codex: PostToolUse ignores plain stdout, so it gets an adapter.
