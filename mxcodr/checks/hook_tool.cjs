@@ -104,13 +104,16 @@ const tools = {
     const text = py.strip(py.readStdin());
     if (text) py.print(py.jsonDumps({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text } }));
   },
-  // Cursor's deny for a failed precheck.
+  // Cursor's deny: the agent reads the whole message, the person a line saying what was blocked.
+  // Every deny used to tell the person "the script would break the build" -- also for a grep of the
+  // mxcli binary or a read of the gate's code, which have nothing to do with a build (2026-10-13).
   deny() {
-    py.print(py.jsonDumps({
-      permission: 'deny',
-      userMessage: 'mxcli exec blocked: the script would break the build (see the agent message).',
-      agentMessage: py.readStdin(),
-    }));
+    const message = py.readStdin();
+    const head = /^Blocked: (that [^(.]*?)(?: \(|\.)/.exec(message);
+    const userMessage = /precheck/i.test(message.split('\n')[0])
+      ? 'mxcli exec blocked: the script would break the build (see the agent message).'
+      : head ? `Command blocked: ${head[1].trim()} (see the agent message).` : 'Command blocked (see the agent message).';
+    py.print(py.jsonDumps({ permission: 'deny', userMessage, agentMessage: message }));
   },
   // Cursor's deny for the guard.
   'guard-deny'() {
