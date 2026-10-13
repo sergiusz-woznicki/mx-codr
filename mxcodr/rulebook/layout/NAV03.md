@@ -11,7 +11,7 @@ key: none
 With login: every role's home page is also in the menu, so users can get back to it.
 
 ## Fix
-`menu item '<caption>' ( OnClick: show page <Page> )` before Log out.
+A menu item showing it, before Log out.
 
 ## Local
 # level: block

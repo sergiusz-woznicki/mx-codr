@@ -110,7 +110,9 @@ const HARNESS_SOURCE =
   "line read is resent with each turn. What a check wants and how to fix it: tests/checks/<step>.md, or " +
   "`bash tests/rules.sh explain <CODE>`; a finding of the gate names its fix. Build the feature, then run the gate."
 
-const SOURCE_PATH = /(?:^|[\s"'=(\/])(?:tools\/mdl-checks\/(?:[^\s"';|&)]*\.(?:cjs|js|sh)\b|layout_rules\b|hooks\b|plugins\b)|tests\/gate(?:\.sh\b|\/)|tests\/precheck\.sh\b)/
+// mxcodr/ is the bundle the installer leaves in the app: the same code, read there by a stock-catalog
+// session after tools/mdl-checks/ was blocked (2026-10-13). Its cards and skills (.md) stay readable.
+const SOURCE_PATH = /(?:^|[\s"'=(\/])(?:tools\/mdl-checks\/(?:[^\s"';|&)]*\.(?:cjs|js|sh)\b|layout_rules\b|hooks\b|plugins\b)|mxcodr\/(?:checks|hooks|plugins|install|tests)\/(?:[^\s"';|&)]*\.(?:cjs|js|sh|py)\b|layout_rules\b)|tests\/gate(?:\.sh\b|\/)|tests\/precheck\.sh\b)/
 const READERS = /^(?:\S*\/)?(?:cat|head|tail|sed|awk|less|more|nl|bat|grep|egrep|fgrep|rg|ag|ugrep|wc|cut|strings|python3?|node)$/
 
 // True when the call reads that code: a read tool on one of its files, or a shell step whose first

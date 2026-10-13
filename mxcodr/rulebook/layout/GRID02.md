@@ -11,7 +11,7 @@ key: none
 A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page.
 
 ## Fix
-`controlbar` in the datagrid; `$dgX` or a page parameter.
+`controlbar` in the datagrid.
 
 ## Local
 # level: block

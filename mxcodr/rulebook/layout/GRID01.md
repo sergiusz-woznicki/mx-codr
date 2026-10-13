@@ -11,7 +11,7 @@ key: none
 A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing.
 
 ## Fix
-`column colX (Attribute: X) { textfilter fltX (Attribute: X) }`.
+`column (Attribute: X) { textfilter ... }`.
 
 ## Local
 # level: block

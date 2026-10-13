@@ -316,10 +316,10 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">112</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">66</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">115</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">70</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
-    <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
+    <div class="count b"><span class="n">6</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
   </div>
@@ -439,6 +439,9 @@ html { scroll-behavior: smooth; }
       <tr><td><code>SPACE04</code></td><td>A button or text never touches a grid, list or card right above or below it.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>GRID01</code></td><td>A data grid column that has a filter is still bound to its attribute. Without it the filter shows "Unable to get filter store" and does nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>GRID02</code></td><td>A button that changes what a grid shows (New, Delete selected…) sits in the grid's own header, not somewhere else on the page.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>GRID03</code></td><td>Every data grid column bound to an attribute has the filter its type wants (text, number, date, drop-down; over an association a drop-down with its association), on every grid: the rows grow with the app.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TABS02</code></td><td>Two or more lists (data grid, list view, gallery) one under another on a page go in tabs, one list a tab, so nobody scrolls past one list to find the next. Lists side by side, or already in tabs, pass.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>KPI01</code></td><td>A list over a view that always holds one row (totals with no group by) shows its figures as tiles, one card a figure, not as a table with one row.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>DATE01</code></td><td>A data grid column on a date and time shows the time of day too, when a form of the app edits that time (a date-and-time picker, or a format of its own with hours) (Data grid 2 shows a DateTime as a date only). The finding prints the column.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>UI001</code></td><td>A data grid is filtered with the filters inside its columns, not with a home-made filter bar of text boxes and checkboxes above it (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>STATUS01</code></td><td>A button whose flow always sets one status (Send invoice, Finish job) is hidden once the object has that status, so nobody sets it twice. A button that walks through several statuses is not judged (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
