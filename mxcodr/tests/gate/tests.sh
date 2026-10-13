@@ -144,7 +144,7 @@ step_tests() {
   # The rows this suite created stay until a restore (tests/db-snapshot.sh).
   if declare -F dbsnap_mark_dirty >/dev/null; then
     dbsnap_mark_dirty
-    if [ "$status" != "0" ] && { [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ]; } && [ -f "${DBSNAP_DIR:-.mxcli/db-snapshot}/pending.dump" ]; then
+    if [ "$status" != "0" ] && [ "${RESET_DATA:-0}" != "1" ] && { [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ]; } && [ -f "${DBSNAP_DIR:-.mxcli/db-snapshot}/pending.dump" ]; then
       echo "   the rows these tests created stay until DONE; if a test failed on rows an earlier run left"
       echo "   (a slot already taken, a list not empty), add --reset-data: the tests then start on the snapshot's data"
     fi
