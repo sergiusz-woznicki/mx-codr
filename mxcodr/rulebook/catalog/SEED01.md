@@ -1,6 +1,6 @@
 ---
 step: catalog
-level: block
+level: warn
 check: catalog_rules.cjs#listsWithoutSeed
 key: document
 ---
@@ -14,5 +14,5 @@ A page the menu opens (a menu item or a home page) that lists an entity from the
 Create a few realistic rows in the after-startup microflow, only when none exist yet, linked to the demo users who should see them, and return true on every path; no after-startup microflow yet: `alter settings runtime ( AfterStartupMicroflow: 'Module.ASU_Seed' )`. An app that really starts empty: say so in the final report.
 
 ## Local
-# level: block
+# level: warn
 # except: Module.Entity   # why

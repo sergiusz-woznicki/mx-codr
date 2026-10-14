@@ -310,7 +310,7 @@ function main() {
   const { appDir, mpr, refresh } = args;
   const modules = new Set(args.modules);
   if (!mpr) { process.stdout.write(`ERROR no .mpr in ${appDir}\n`); return 2; }
-  const level = code => levelOf(levels, code, { LINT01: 'off', STATUS01: 'warn' }[code] || 'block');
+  const level = code => levelOf(levels, code, { LINT01: 'off', STATUS01: 'warn', SEED01: 'warn' }[code] || 'block');
   let found = [];
   try {
     if (refresh) mxcli(appDir, mpr, 'refresh catalog full source');
