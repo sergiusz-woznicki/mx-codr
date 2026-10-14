@@ -10,6 +10,9 @@
 //           has it: a second click sets the same status again (a warning; the fix is a Visible: condition)
 //   STARTUP01 the after-startup microflow returns false on a path: Mendix stops the app then, so a seed
 //           that returns false once its rows exist boots once and fails every restart after
+//   SEED01  a page the menu opens lists an entity from the database for a role that cannot create it,
+//           and no after-startup seed creates it: the tests' rows are rolled back at DONE, so that role
+//           signs in to an empty list
 //   LINT01  mxcli's own lint advice: off unless the rulebook says warn or block, then
 //           `mxcli lint --format json` runs here and its findings are listed at that level
 //
@@ -210,7 +213,7 @@ function parseLint(text) {
 // returned false"). A room-booking app's seed returned false when its rooms were already there: it
 // passed DONE on the running app and failed every restart after (2026-10-13).
 function startupReturnsFalse(settingsText, describeFlow) {
-  const m = /AfterStartupMicroflow:\s*'([^']+)'/.exec(settingsText || '');
+  const m = /AfterStartupMicroflow\s*[:=]\s*'([^']+)'/.exec(settingsText || '');
   if (!m) return [];
   const flow = m[1];
   const text = describeFlow(flow) || '';
@@ -219,6 +222,85 @@ function startupReturnsFalse(settingsText, describeFlow) {
     message: `the after-startup microflow ${flow} returns false on a path: Mendix stops the app when it does, so the app ` +
       'starts once and fails the next restart (a seed that returns false once its rows exist). Return true on every path that is ' +
       `not a real failure -- \`else return true;\` -- and keep it idempotent: alter microflow ${flow} or its script, then exec it again.` }];
+}
+
+// A qualified name as DESCRIBE writes it, quotes dropped: "Shop"."Order" -> Shop.Order.
+const QNAME = '"?\\w+"?\\."?\\w+"?';
+const unquote = name => String(name || '').replace(/"/g, '');
+
+// SEED01: [{code, key, message}] -- one per entity that a page the menu opens (a menu item or a home
+// page) lists from the database for a role that cannot create it -- no create access, no microflow it may
+// run that creates one -- and that neither the after-startup microflow nor a microflow it calls creates.
+// The gate rolls the tests' rows back at DONE (tests/db-snapshot.sh), so what such a role meets is the
+// seed: an invoice-chasing app built with no seed handed over customer logins whose invoice lists were
+// empty, and a customer cannot make an invoice (2026-10-14). A list the role fills itself (my bookings)
+// is not judged. A created specialization counts for its generalization. Accounts (System.User) come
+// from demo users and files from uploads, so those are not judged; a seed that calls a Java action, a
+// REST service or an import may create anything, and then nothing is judged.
+function listsWithoutSeed(settingsText, navigationText, sources, entities, permissions, modules) {
+  const byName = {};
+  for (const e of entities) byName[e.QualifiedName] = e;
+  const lineage = name => {
+    const out = [name];
+    for (let e = byName[name], guard = 0; e && e.Generalization && guard < 20; e = byName[e.Generalization], guard++) out.push(e.Generalization);
+    return out;
+  };
+  const source = {};
+  for (const d of sources) source[d.QualifiedName] = d.SourceText || '';
+  // What a microflow creates, with every microflow it calls; null when it calls out (Java, REST, an import).
+  const createdBy = {};
+  const creates = flow => {
+    if (flow in createdBy) return createdBy[flow];
+    createdBy[flow] = new Set();
+    const text = source[flow] || '';
+    if (/\bcall\s+(?:java\s+action|rest|web\s+service)\b|\bsend\s+rest\b|\bimport\s+(?:from|with)\b/i.test(text)) return (createdBy[flow] = null);
+    const out = new Set();
+    for (const m of text.matchAll(new RegExp(`\\bcreate\\s+(${QNAME})\\s*\\(`, 'gi'))) for (const a of lineage(unquote(m[1]))) out.add(a);
+    for (const m of text.matchAll(new RegExp(`\\bcall\\s+microflow\\s+(${QNAME})`, 'gi'))) {
+      const inner = creates(unquote(m[1]));
+      if (inner === null) return (createdBy[flow] = null);
+      for (const a of inner) out.add(a);
+    }
+    return (createdBy[flow] = out);
+  };
+  const viewers = {}, creators = {};
+  const add = (map, key, role) => (map[key] = map[key] || new Set()).add(role);
+  for (const p of permissions) {
+    if (p.ElementType === 'PAGE' && p.AccessType === 'VIEW') add(viewers, p.ElementName, p.ModuleRoleName);
+    else if (p.ElementType === 'ENTITY' && p.AccessType === 'CREATE') for (const a of lineage(p.ElementName)) add(creators, a, p.ModuleRoleName);
+    else if (p.ElementType === 'MICROFLOW' && p.AccessType === 'EXECUTE') for (const a of creates(p.ElementName) || []) add(creators, a, p.ModuleRoleName);
+  }
+  // The pages, and the snippets they place, whose lists the person meets first: {entity: [page, role]}.
+  const shown = new Set();
+  for (const m of (navigationText || '').matchAll(new RegExp(`\\b(?:home\\s+page|show\\s+page|page)\\s+(${QNAME})`, 'gi'))) shown.add(unquote(m[1]));
+  const listed = {};
+  const visit = (doc, page, seen) => {
+    if (seen.has(doc) || !(doc in source)) return;
+    seen.add(doc);
+    const text = source[doc];
+    for (const m of text.matchAll(new RegExp(`\\b(?:datagrid|gallery|listview)\\s+\\w+\\s*\\([^{;]*?DataSource:\\s*database\\s+(?:from\\s+)?(${QNAME})`, 'gi'))) {
+      const entity = unquote(m[1]);
+      const e = byName[entity];
+      if (entity in listed || !e || !modules.has(e.ModuleName) || !/^persistent$/i.test(e.EntityType || '') || String(e.IsExternal) === '1') continue;
+      if (lineage(entity).some(a => a === 'System.User' || a === 'System.FileDocument')) continue;
+      const reader = [...(viewers[page] || [])].sort().find(role => !(creators[entity] || new Set()).has(role));
+      if (reader) listed[entity] = [page, reader];
+    }
+    for (const m of text.matchAll(new RegExp(`\\bSnippet:\\s*(${QNAME})`, 'gi'))) visit(unquote(m[1]), page, seen);
+  };
+  for (const page of [...shown].sort()) visit(page, page, new Set());
+  if (!Object.keys(listed).length) return [];
+  const startup = (/AfterStartupMicroflow\s*[:=]\s*'([^']+)'/.exec(settingsText || '') || [])[1] || '';
+  const seeded = startup ? creates(startup) : new Set();
+  if (seeded === null) return [];
+  return Object.entries(listed).filter(([name]) => !seeded.has(name)).map(([name, [page, role]]) => ({ code: 'SEED01', key: name,
+    message: `${page} lists ${name} from the database for ${role}, which cannot create one, and ` +
+      `${startup ? `the after-startup microflow ${startup} never creates one` : 'the app has no after-startup microflow'}: the gate rolls the ` +
+      'tests\' rows back at DONE, so that role signs in to an empty list. ' +
+      (startup ? `Create a few realistic ${name.split('.').pop()} rows in ${startup} (or a microflow it calls)`
+        : `Write a seed microflow that creates a few realistic ${name.split('.').pop()} rows, and set it: alter settings runtime ( AfterStartupMicroflow: '<Module>.ASU_Seed' )`) +
+      ' -- only when none exist yet, linked to the demo users who should see them, returning true on every path. ' +
+      `An app that really starts empty: say so in the final report; the person adds \`except: ${name}\` under ## Local in tests/rulebook/catalog/SEED01.md` }));
 }
 
 function main() {
@@ -232,7 +314,7 @@ function main() {
   let found = [];
   try {
     if (refresh) mxcli(appDir, mpr, 'refresh catalog full source');
-    const entities = mxcli(appDir, mpr, 'SELECT QualifiedName, ModuleName, EntityType FROM CATALOG.ENTITIES', true);
+    const entities = mxcli(appDir, mpr, 'SELECT QualifiedName, ModuleName, EntityType, Generalization, IsExternal FROM CATALOG.ENTITIES', true);
     if (level('UI001') !== 'off') {
       const widgets = mxcli(appDir, mpr, 'SELECT Name, WidgetType, AttributeRef, ContainerQualifiedName, ContainerType, ModuleName FROM CATALOG.WIDGETS', true);
       found.push(...handRolledGridFilter(widgets.filter(w => modules.has(w.ModuleName)), entities));
@@ -245,6 +327,11 @@ function main() {
     }
     if (level('STARTUP01') !== 'off') {
       found.push(...startupReturnsFalse(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), flow => mxcli(appDir, mpr, `DESCRIBE MICROFLOW ${flow}`)));
+    }
+    if (level('SEED01') !== 'off') {
+      const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('MICROFLOW', 'PAGE', 'SNIPPET')", true);
+      const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType IN ('PAGE', 'ENTITY', 'MICROFLOW')", true);
+      found.push(...listsWithoutSeed(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), mxcli(appDir, mpr, 'DESCRIBE NAVIGATION'), sources, entities, permissions, modules));
     }
     if (level('LINT01') !== 'off') found.push(...lintFindings(appDir, mpr));
   } catch (error) {
@@ -264,4 +351,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons, startupReturnsFalse };
+module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };

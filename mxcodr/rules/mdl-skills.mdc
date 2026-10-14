@@ -12,6 +12,8 @@ by the check that needs them -- a `layout` finding says `spacing-and-layout`, a 
 each finding already carries its fix, so read a skill when a finding names it, one file per
 command, not all of them at the start. Uploads, photos or documents: `files-and-images` first.
 
+`requirements: assume` in `orient.sh`: nobody answers, so never end a turn on a plan or question.
+
 Facts about this app come from one call, not from exploring by hand:
 
 ```bash
@@ -35,8 +37,8 @@ The gate boots, restarts and waits by itself: never boot the app or run `mxcli t
 Never wrap a harness command in `timeout`. Never hand-roll a wait for the app. Microflow tests (`*.test.mdl`) are not run by
 the gate and do not count for DONE; only `tests/verify-*.test.sh` do.
 
-**What each check code wants, and its fix: `tests/checks/<step>.md`**, the file the gate names for the step that failed; `tests/CHECKS.md` says which file holds a code (layout codes such
-as `USER01`, `NAV01`, `EDGE01`, catalog `UI001`, precheck `SCRIPT01`, `RUNTIME01`, `VIS01`). Each
+**What each check code wants, and its fix: `tests/checks/<step>.md`**, the file the gate names for the step that failed; `tests/CHECKS.md` says which file holds a code (`USER01`,
+`UI001`, `SCRIPT01`, `VIS01`). Each
 rule is a card, `tests/rulebook/<group>/<CODE>.md`; its level and exceptions are the person's. Read
 that, never `tests/gate/*.sh` or the checkers: the page says in one line what a code requires.
 

@@ -79,7 +79,7 @@ requirements_line() {
   slices="$(ls docs/brain/plan/*.md 2>/dev/null | wc -l | tr -d ' ')"
   case "${MDL_REQUIREMENTS:-ask}" in
     off) echo "   requirements: off -- no interview before building" ;;
-    assume) echo "   requirements: assume -- nobody answers: before the first feature, take your recommended answers as assumptions (skill requirements-interview); $slices slice(s) in docs/brain/plan" ;;
+    assume) echo "   requirements: assume -- nobody answers: before the first feature, take your recommended answers as assumptions (skill requirements-interview) and build on; never end a turn on a plan or a question, only at DONE or at a step only the person can take; $slices slice(s) in docs/brain/plan" ;;
     *) echo "   requirements: ask -- before the first feature, ask the person and wait (skill requirements-interview); $slices slice(s) in docs/brain/plan" ;;
   esac
 }
