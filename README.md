@@ -332,7 +332,7 @@ The default is in bold. A key you leave out takes its default.
 | Key | Options | What it does |
 |---|---|---|
 | `MDL_RUN_MODE` | **`local`** · `docker` | `local`: the Mendix runtime and PostgreSQL run on this machine, a model change is live in about a second. `docker`: the app runs in Docker, nothing else installed, about 40 s per change. |
-| `APP_PORT`, `ADMIN_PORT` | a port number; **8081** and its admin port | The ports the app answers on. A second project running beside the first needs its own, e.g. 8082. |
+| `APP_PORT`, `ADMIN_PORT`, `SERVE_PORT` | a port number; **8081**, its admin port and mxbuild's 6543 | The ports the app answers on. A second project running beside the first needs its own, e.g. 8082; the admin and mxbuild ports then follow (8091, 6544). |
 | `MDL_DB_HOST`, `MDL_DB_NAME`, `MDL_DB_USER`, `MDL_DB_PASSWORD` | set by the installer | The app's PostgreSQL database. |
 | `MDL_PSQL` | a path to `psql` | Which PostgreSQL client to use when it is not on the `PATH`. |
 | `MDL_MXBUILD_PATH`, `JAVA_HOME`, `MDL_BOOT_COMMAND`, `MX_VERSION` | set by the installer | How the app is built and booted, and which Studio Pro version to use when there are several. |
@@ -372,8 +372,8 @@ bash tests/film.sh <test>             # a video of one test
 
 - **The app is created but does not build on Windows.** Studio Pro must be installed in the version
   the app uses; the installer reports a missing one, it never installs Studio Pro.
-- **Ports.** Studio Pro running an app holds 8080 and 8090; set `APP_PORT` (and `ADMIN_PORT`) in
-  `tests/harness.env` when both run at once.
+- **Ports.** Studio Pro running an app holds 8080 and 8090; set `APP_PORT` in `tests/harness.env`
+  when both run at once (the admin and mxbuild ports follow it).
 - **Microflow tests on Windows** (`mxcli test --local`) need a patched mxcli until the fix is upstream.
 - **After a failed `mxcli test` run** the project's after-startup microflow may still point at
   `MxTest.RegisterEndpoint`; check with `./mxcli -p <app>.mpr -c 'SHOW SETTINGS'`.
