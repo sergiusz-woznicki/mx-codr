@@ -100,7 +100,7 @@ returns String
 as $$
     if (!photo) { return Promise.resolve(""); }
     return window.mx.data
-        .getDocumentUrl(photo.getGuid(), photo.get("changedDate"), true)
+        .getDocumentUrl(photo.getGuid(), photo.get("changedDate"), false)
         .then(function (documentUrl) {
             return new Promise(function (resolve, reject) {
                 window.mx.data.getImageUrl(documentUrl, resolve, reject);
@@ -109,7 +109,9 @@ as $$
 $$;
 ```
 
-The parameter is lower-case inside the body (`photo`), whatever its MDL name.
+The parameter is lower-case inside the body (`photo`), whatever its MDL name. The last argument
+of `getDocumentUrl` asks for the thumbnail: keep it `false`. With `true` the URL is a 120 px
+thumbnail, and the product page stretches it to 320 px, blurred.
 
 **`ImageType` takes `image`, `imageUrl` or `icon` only.** Another value, such as
 `dynamicImage`, is stored without a warning and shows nothing.
