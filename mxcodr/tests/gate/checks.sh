@@ -249,21 +249,68 @@ rulebook_fingerprint() { printf 'env:RULEBOOK_%s=%s\n' "$1" "$(mdl_rulebook dige
 
 # Starts the model checks in the background, each through the cache.
 start_model_checks() {
+  # With step names, only those (the early checks of --only); without, all ten.
+  local only=" $* "
+  wants() { [ "$only" = "  " ] || case "$only" in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
   rulebook_prepare
   # Upgrading the gate, its config or mxcli must not replay an old pass.
   local -a cache_inputs=(tests/gate.sh tests/gate tools/mdl-checks/gate_helpers.cjs tools/mdl-checks/gate_values.cjs tools/mdl-checks/gate_scripts.cjs tools/mdl-checks/gate_runtime.cjs tools/mdl-checks/gate_visual.cjs tools/mdl-checks/gate_changed.cjs tools/mdl-checks/py_compat.cjs tools/mdl-checks/rulebook.cjs tools/mdl-checks/mxcli_client.cjs tests/harness.env "meta:$MXCLI")
-  ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
+  wants mx && ( run_cached mx       check_mx       "${cache_inputs[@]}" "env:MDL_MXBUILD_PATH=${MDL_MXBUILD_PATH:-}" \
       meta:widgets meta:theme meta:themesource meta:javasource ) &
-  ( run_cached catalog  check_catalog  "${cache_inputs[@]}" tools/mdl-checks/catalog_rules.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint catalog)" ) &
-  ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs tools/mdl-checks/test_rules.cjs "$(rulebook_fingerprint coverage)" ) &
-  ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs tools/mdl-checks/event_rules.cjs tools/mdl-checks/datasource_rules.cjs "$CACHE_DIR/captions-baseline.json" "$(rulebook_fingerprint naming)" ) &
-  ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_OFFLINE_INPUTS=$(offline_inputs)" "$(rulebook_fingerprint layout)" ) &
-  ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint security)" ) &
-  ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "$(rulebook_fingerprint scope)" ) &
-  ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests docs/brain "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
-  ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint folders)" ) &
-  ( run_cached unused   check_unused   "${cache_inputs[@]}" tools/mdl-checks/check_unused.cjs javasource javascriptsource meta:theme meta:themesource tests "$(rulebook_fingerprint unused)" ) &
-  echo "== mx check, catalog, coverage, naming, layout, security, scope, paths, folders and unused started (they need no app; running while the suite does)"
+  wants catalog && ( run_cached catalog  check_catalog  "${cache_inputs[@]}" tools/mdl-checks/catalog_rules.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint catalog)" ) &
+  wants coverage && ( run_cached coverage check_coverage "${cache_inputs[@]}" tests tools/mdl-checks/check_test_coverage.cjs tools/mdl-checks/test_rules.cjs "$(rulebook_fingerprint coverage)" ) &
+  wants naming && ( run_cached naming   check_naming   "${cache_inputs[@]}" tools/mdl-checks/check_mdl.cjs tools/mdl-checks/perf_rules.cjs tools/mdl-checks/index_rules.cjs tools/mdl-checks/event_rules.cjs tools/mdl-checks/datasource_rules.cjs "$CACHE_DIR/captions-baseline.json" "$(rulebook_fingerprint naming)" ) &
+  wants layout && ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_OFFLINE_INPUTS=$(offline_inputs)" "$(rulebook_fingerprint layout)" ) &
+  wants security && ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint security)" ) &
+  wants scope && ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "$(rulebook_fingerprint scope)" ) &
+  wants paths && ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests docs/brain .mxcli/brain tests/harness.env "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
+  wants folders && ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint folders)" ) &
+  wants unused && ( run_cached unused   check_unused   "${cache_inputs[@]}" javasource javascriptsource meta:theme meta:themesource tests "$(rulebook_fingerprint unused)" ) &
+  if [ "$only" = "  " ]; then
+    echo "== mx check, catalog, coverage, naming, layout, security, scope, paths, folders and unused started (they need no app; running while the suite does)"
+  fi
+}
+
+# The checks `--only` runs beside its test (they need no app, and a pass is kept for the full gate):
+# what the full gate would refuse in the app's shape, its names, folders, access and the test's own
+# requirement, while the script and the test are still open. Sessions met FOLDER01, ACCOUNT03,
+# NAME02, GRID03 and REQ02 only at the first full gate, after every document existed, and spent one
+# to three rounds of the full gate on them in each of five runs (Sonnet and Opus, 2026-10-14).
+# Left out: mx check (the precheck ran it at the exec), and coverage, scope, unused and the other
+# paths codes, which only judge the app once every feature has its test.
+EARLY_CHECKS="catalog naming layout security paths folders"
+
+# early_blockers -- after `wait`: the blocking findings of the early checks, as "== before DONE" lines;
+# nothing when they all pass. Paths shows only the findings that name a test --only ran (REQ02).
+print_early_blockers() {
+  local name detail lines out="" test base
+  local pattern='^[[:space:]]*- \[|^[[:space:]]+- '
+  for name in $EARLY_CHECKS; do
+    [ -f "$WORK/$name.status" ] || continue
+    case "$(cat "$WORK/$name.status")" in 0|2) continue ;; esac
+    detail="$WORK/$name.detail"
+    [ -s "$detail" ] || continue
+    lines="$(grep -E "$pattern" "$detail")"
+    if [ "$name" = "paths" ]; then
+      local kept=""
+      for test in ${targets_ran[@]+"${targets_ran[@]}"}; do
+        base="$(basename "$test")"
+        kept="$kept$(grep -F "$base" <<< "$lines")"$'\n'
+      done
+      lines="$(grep -v '^$' <<< "$kept" | sort -u)"
+    fi
+    [ -n "$lines" ] || continue
+    out="$out   $name: $(grep -c . <<< "$lines")"$'\n'
+    out="$out$(head -"$BLOCKERS_SHOWN" <<< "$lines" | sed -E 's/^[[:space:]]*(- )?//' | cut -c1-260 | sed 's/^/     - /')"$'\n'
+    [ "$(grep -c . <<< "$lines")" -gt "$BLOCKERS_SHOWN" ] && out="$out     ... all of them: bash tests/gate.sh"$'\n'
+  done
+  [ -n "$out" ] || return 0
+  echo "== before DONE: the full gate refuses these too -- fix them now, in the script you have open"
+  printf '%s' "$out"
+  echo "   what each code wants and its fix: tests/checks/<step>.md"
+  # For the verdict line: sessions read --only through `tail -3` or `grep PASS`, and a block above it
+  # never reached them -- GRID03 then came back at the full gate three times (room-booking n1).
+  EARLY_CODES="$(grep -oE '^     - \[[A-Z]+[0-9]+\]' <<< "$out" | sed -E 's/.*\[([A-Z]+[0-9]+)\]/\1/' | sort | uniq -c | awk '{printf "%s%s x%s", (NR>1?", ":""), $2, $1}')"
 }
 
 # Reads one background check's files into summary, failures or cannot_run, and details.

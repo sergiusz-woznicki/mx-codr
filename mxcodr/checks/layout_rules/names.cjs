@@ -29,7 +29,9 @@ const TYPE_WORD = {
 // Words an older name or a type already says: dropped from the business part.
 const OLD_PREFIX = /^(btn|lnk|txt|ta|dt|cmb|dp|cb|rb|img|dg|dv|lv|gal|ct|lg|gb|tc|tp|sc|flt|nl|tb|lbl|cbx|ddl|chk|tabs?)(?=[A-Z0-9])/;
 const TYPE_ECHO = { layoutgrid: /Grid$/, tabcontainer: /^Tabs?|Tabs?$/, snippetcall: /^Snippet|Snippet$/, datagrid: /Grid$/ };
-const DOCUMENT = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(page|snippet)\s+([\w.]+)/i;
+// The name may be quoted, whole or in part ("Rooms"."SNIPPET_CurrentUser", Rooms."X"): read as
+// `Rooms.`, the widget's page part came out empty and the suggestion wrong (room-booking n1, 2026-10-14).
+const DOCUMENT = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(page|snippet)\s+(["\w.]+)/i;
 const WIDGET = /^\s*([a-z]+)\s+([A-Za-z_]\w*)\s*([({].*)?$/;
 
 // A code in place of a word: K1, A0 (one capital and a number), Kpi3, Box2 (a generic word and a
@@ -98,7 +100,7 @@ function documentsOf(lines) {
   let doc = null;
   lines.forEach((line, i) => {
     const head = DOCUMENT.exec(line);
-    if (head) { doc = { kind: head[1].toLowerCase(), name: head[2], start: i + 1, lines: [], widgets: [] }; docs.push(doc); }
+    if (head) { doc = { kind: head[1].toLowerCase(), name: head[2].replace(/"/g, ''), start: i + 1, lines: [], widgets: [] }; docs.push(doc); }
     if (!doc) return;
     doc.lines.push(line);
     const w = WIDGET.exec(line);

@@ -46,7 +46,7 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `SPACE04` | a gap above a grid, list or card | `'margin-bottom': 'S'` on the upper one; each `controlbar` button too |
 | `TABS01` | warning: a phone page tabs its object and its list | In the finding. |
 | `TABS02` | stacked lists go in tabs | In the finding. |
-| `TEXT01` | a text area for a long String | `replace txtX with { textarea txtX (...) }`. |
+| `TEXT01` | a text area for a long String | `replace X with { textarea X (...) }`. |
 | `TEXT02` | warning: a text area for a prose-named attribute | A textarea if people write more than a line. |
 | `URL01` | every page that can have a URL has one | In the finding; the same `Url:` in the page's create. |
 | `USER01` | who is signed in, top right, on every page | The finding prints it. |

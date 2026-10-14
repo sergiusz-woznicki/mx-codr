@@ -29,8 +29,8 @@ end;
 grant execute on microflow Shop.DS_SignedInUser to Shop.User;
 
 create or modify snippet Shop.SNIPPET_CurrentUser {
-  dataview dvCurrentUser (DataSource: microflow Shop.DS_SignedInUser) {
-    linkbutton lnkCurrentUser (Caption: '{1}', CaptionParams: ({1} = Label),
+  dataview CurrentUserSnippet_SignedInUserForm (DataSource: microflow Shop.DS_SignedInUser) {
+    linkbutton CurrentUserSnippet_MyAccountLink (Caption: '{1}', CaptionParams: ({1} = Label),
       Icon: 'Atlas_Core.Atlas_Filled.user', Action: call microflow Administration.ManageMyAccount)
   }
 }
@@ -40,24 +40,24 @@ Then every page opens with one row. The row, not the snippet, decides where the 
 
 ```sql
   -- a page opened from another page: Back on the left, the user on the right
-  layoutgrid pageGrid {
+  layoutgrid OrderDetail_PageLayout {
     row rowTop {
       column colTop (DesktopWidth: 12) {
-        container ctPageTop (DesignProperties: ('Flex container': 'Horizontal (row)',
+        container OrderDetail_PageTopBox (DesignProperties: ('Flex container': 'Horizontal (row)',
             'Align items X': 'Space between (only for horizontal containers)', 'Align items Y': 'Center', 'Spacing': ('margin-bottom': 'M'))) {
-          actionbutton btnBack (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
-          snippetcall scCurrentUser (Snippet: Shop.SNIPPET_CurrentUser)
+          actionbutton OrderDetail_BackButton (Caption: 'Back', Action: close page, Icon: 'Atlas_Core.Atlas_Filled.chevron-left')
+          snippetcall OrderDetail_CurrentUserSnippet (Snippet: Shop.SNIPPET_CurrentUser)
         }
-        dynamictext heading (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
+        dynamictext OrderDetail_HeadingText (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
       }
     }
     -- the page's other rows follow here, in the same grid
   }
 
   -- any other page: the user on the right, the same way inside the grid
-        container ctPageTop (DesignProperties: ('Flex container': 'Horizontal (row)',
+        container OrderOverview_PageTopBox (DesignProperties: ('Flex container': 'Horizontal (row)',
             'Align items X': 'Right', 'Align items Y': 'Center', 'Spacing': ('margin-bottom': 'M'))) {
-          snippetcall scCurrentUser (Snippet: Shop.SNIPPET_CurrentUser)
+          snippetcall OrderOverview_CurrentUserSnippet (Snippet: Shop.SNIPPET_CurrentUser)
         }
 ```
 

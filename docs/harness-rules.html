@@ -184,7 +184,7 @@ html { scroll-behavior: smooth; }
       <li><strong>Test</strong><span>The agent writes <code>tests/verify-&lt;feature&gt;.test.sh</code>.</span></li>
       <li><strong>Red</strong><span>The test fails: the feature is not there yet.</span></li>
       <li><strong>Build</strong><span>An MDL script, checked on a copy, then applied.</span></li>
-      <li><strong>Green</strong><span>The test passes (<code>--only</code> says PASSED).</span></li>
+      <li><strong>Green</strong><span>The test passes (<code>--only</code> says PASSED, and names what the full gate would still refuse).</span></li>
       <li><strong>Gate</strong><span>Eleven verdicts; only the full run says DONE.</span></li>
     </ol>
   </div>
@@ -370,7 +370,7 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>OUTCOME01</code></td><td>Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested. Another form of the word counts (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>WF01</code></td><td>A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>WF02</code></td><td>Every outcome of every workflow task (approve, reject…) is chosen in a test, and the test logs in as both people: the one who starts the workflow and the one who decides.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ISO01</code></td><td>When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not.</td><td><span class="lvl b">Blocks</span></td></tr>

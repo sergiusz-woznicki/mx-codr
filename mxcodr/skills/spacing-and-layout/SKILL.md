@@ -18,9 +18,9 @@ images, checkboxes — Atlas puts them on one line, and that line *wraps* when t
 window narrows.
 
 ```
-actionbutton btnEdit   (Caption: 'Edit',   Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
-actionbutton btnDelete (Caption: 'Delete', Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
-actionbutton btnSend   (Caption: 'Send',   Action: ..., DesignProperties: ('Spacing': ('margin-bottom': 'S')))
+actionbutton InvoiceDetail_EditButton   (Caption: 'Edit',   Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+actionbutton InvoiceDetail_DeleteButton (Caption: 'Delete', Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+actionbutton InvoiceDetail_SendButton   (Caption: 'Send',   Action: ..., DesignProperties: ('Spacing': ('margin-bottom': 'S')))
 ```
 
 Three measured failures, each from leaving part of that out:
@@ -74,15 +74,15 @@ left and the window on the right. Everything on a page, the top row and the head
 included, goes inside one `layoutgrid` (`EDGE01`). Pop-ups are framed by their own padding.
 
 ```
-layoutgrid pageGrid {
+layoutgrid InvoiceOverview_PageLayout {
   row headerRow {
-    column colTitle  (DesktopWidth: 8) { dynamictext heading (Content: 'Invoices', RenderMode: H2) }
+    column colTitle  (DesktopWidth: 8) { dynamictext InvoiceOverview_HeadingText (Content: 'Invoices', RenderMode: H2) }
     column colActions (DesktopWidth: 4) {
-      actionbutton btnNew   (Caption: 'New invoice',     Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
-      actionbutton btnReset (Caption: 'Reset demo data', Action: ..., DesignProperties: ('Spacing': ('margin-bottom': 'S')))
+      actionbutton InvoiceOverview_NewInvoiceButton   (Caption: 'New invoice',     Action: ..., DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
+      actionbutton InvoiceOverview_ResetDemoDataButton (Caption: 'Reset demo data', Action: ..., DesignProperties: ('Spacing': ('margin-bottom': 'S')))
     }
   }
-  row gridRow { column col1 (DesktopWidth: 12) { datagrid invoiceGrid (...) { ... } } }
+  row gridRow { column col1 (DesktopWidth: 12) { datagrid InvoiceOverview_InvoicesGrid (...) { ... } } }
 }
 ```
 
@@ -123,15 +123,15 @@ create or modify page Module.Entity_NewEdit
   PopupWidth: 600, PopupResizable: true
 )
 {
-  layoutgrid formGrid {
+  layoutgrid EntityNewEdit_FormLayout {
     row {
       column (DesktopWidth: AutoFill) {
-        dataview dvEntity (DataSource: $Entity) {
+        dataview EntityNewEdit_EntityForm (DataSource: $Entity) {
           -- the entity's own inputs, one per line
           footer {
-            actionbutton btnSave (Caption: 'Save', Action: SAVE CHANGES CLOSE PAGE, ButtonStyle: Primary,
+            actionbutton EntityNewEdit_SaveButton (Caption: 'Save', Action: SAVE CHANGES CLOSE PAGE, ButtonStyle: Primary,
               DesignProperties: ('Spacing': ('margin-right': 'S')))
-            actionbutton btnCancel (Caption: 'Cancel', Action: CANCEL CHANGES CLOSE PAGE)
+            actionbutton EntityNewEdit_CancelButton (Caption: 'Cancel', Action: CANCEL CHANGES CLOSE PAGE)
           }
         }
       }
@@ -169,7 +169,7 @@ An attribute longer than 500 characters, or unlimited (a bare `String` is unlimi
 edited in a `textarea`:
 
 ```sql
-textarea txtNotes (Label: 'Notes', Attribute: Notes)
+textarea EntityNewEdit_NotesInput (Label: 'Notes', Attribute: Notes)
 ```
 
 The gate fails `TEXT01` for a textbox on such an attribute and warns (`TEXT02`) when the
@@ -181,7 +181,7 @@ Every `actionbutton` and `linkbutton`, on a page or in a snippet, carries an ico
 shows what it does, from `Atlas_Core.Atlas_Filled`:
 
 ```sql
-actionbutton btnSave (Caption: 'Save', Action: save changes close page,
+actionbutton EntityNewEdit_SaveButton (Caption: 'Save', Action: save changes close page,
   Icon: 'Atlas_Core.Atlas_Filled.floppy-disk', ButtonStyle: Primary)
 ```
 
@@ -243,13 +243,13 @@ microflow shows it again after an action: the menu is its way back.
 ```sql
 create or modify page Sales.Order_Detail (Title: 'Order', Layout: Atlas_Core.Atlas_Default,
   Params: ( $Order: Sales.Order ), Url: 'order-detail/{Order/Id}') {
-  layoutgrid pageGrid {
+  layoutgrid OrderDetail_PageLayout {
     row {
       column (DesktopWidth: 12) {
-        actionbutton btnBack (Caption: 'Back', Action: CLOSE PAGE,
+        actionbutton OrderDetail_BackButton (Caption: 'Back', Action: CLOSE PAGE,
           Icon: 'Atlas_Core.Atlas_Filled.chevron-left',
           DesignProperties: ('Spacing': ('margin-bottom': 'M')))
-        dynamictext h (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
+        dynamictext OrderDetail_HeadingText (Content: 'Order', RenderMode: H1, DesignProperties: ('Spacing': ('margin-bottom': 'M')))
       }
     }
   }
@@ -295,12 +295,12 @@ overdue check -- goes in the grid's own header, above its rows, where the grid-w
 In MDL that is a `controlbar` inside the `datagrid`, after the columns:
 
 ```sql
-datagrid dgOrders (DataSource: database from Sales.Order, Selection: single) {
+datagrid OrderOverview_OrdersGrid (DataSource: database from Sales.Order, Selection: single) {
   column (Attribute: Number, Caption: 'Number')
   controlbar {
-    actionbutton btnNew (Caption: 'New order', Action: call microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add',
+    actionbutton OrderOverview_NewOrderButton (Caption: 'New order', Action: call microflow Sales.ACT_Order_New, ButtonStyle: Primary, Icon: 'Atlas_Core.Atlas_Filled.add',
       DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S')))
-    actionbutton btnPaid (Caption: 'Mark paid', Action: call microflow Sales.ACT_Order_MarkPaid(Order = $dgOrders), Icon: 'Atlas_Core.Atlas_Filled.checkmark',
+    actionbutton OrderOverview_MarkPaidButton (Caption: 'Mark paid', Action: call microflow Sales.ACT_Order_MarkPaid(Order = $OrderOverview_OrdersGrid), Icon: 'Atlas_Core.Atlas_Filled.checkmark',
       DesignProperties: ('Spacing': ('margin-bottom': 'S')))
   }
 }
@@ -324,10 +324,10 @@ notice did exactly that over an order's summary. Put the class on a container an
 inside it:
 
 ```sql
-container ctCancelNotice (Class: 'alert alert-danger',
+container OrderDetail_CancelNoticeBox (Class: 'alert alert-danger',
   Visible: [$currentObject/Status = Sales.OrderStatus.Cancelled],
   DesignProperties: ('Spacing': ('margin-bottom': 'M'))) {
-  dynamictext txtCancelNotice (Content: 'This order was cancelled. Reason: {1}',
+  dynamictext OrderDetail_CancelNoticeText (Content: 'This order was cancelled. Reason: {1}',
     ContentParams: ({1} = CancelReason))
 }
 ```

@@ -16,7 +16,7 @@ const LOGIN_PAGE_RE = re.compile(String.raw`^\s*login\s+page\s+(?P<page>[\w.]+)`
 const FRAMED_LAYOUT_RE = re.compile('popup|login', 'i');
 // Widgets that only hold others: safe when everything inside them is.
 const WRAPPERS = new Set(['container', 'dataview', 'scrollcontainer', 'groupbox']);
-const GRID_WRAPPER = 'layoutgrid pageGrid { row row1 { column col1 (DesktopWidth: 12) { ... } } }';
+const gridWrapper = page => `layoutgrid ${require('./names.cjs').documentKey('page', String(page || 'Page'))}_PageLayout { row row1 { column col1 (DesktopWidth: 12) { ... } } }`;
 
 // [[kind, name], [line number of its first line, its lines]] for every page and snippet; a later
 // document with the same kind and name takes the place of the first.
@@ -93,7 +93,7 @@ function edgeFindings(lines, snippetText, navigation) {
       line: start + loose[0].line - 1,
       message: `${page}: ${names} sit outside a layout grid, so they touch the edge of the window` +
         ' (Atlas layouts add no side margin; a layoutgrid does) -- put the page\'s widgets,' +
-        ` the Back / signed-in row and the heading too, inside ${GRID_WRAPPER}` +
+        ` the Back / signed-in row and the heading too, inside ${gridWrapper(page)}` +
         " (skill spacing-and-layout, 'Structure')",
     });
   }

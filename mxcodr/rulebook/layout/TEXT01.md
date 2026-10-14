@@ -11,7 +11,7 @@ key: none
 A long text attribute (more than 500 characters, or unlimited) is edited in a multi-line text area, not a one-line text box.
 
 ## Fix
-`replace txtX with { textarea txtX (...) }`.
+`replace X with { textarea X (...) }`.
 
 ## Local
 # level: block

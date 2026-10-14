@@ -189,20 +189,62 @@ const STOP = new Set(['that', 'this', 'with', 'from', 'when', 'than', 'then', 't
   'only', 'into', 'onto', 'must', 'have', 'shows', 'show', 'sees', 'user', 'users', 'page', 'pages', 'list', 'can', 'cannot',
   'which', 'what', 'where', 'while', 'after', 'before', 'other', 'others', 'same', 'also', 'more', 'less', 'least', 'most',
   'never', 'always', 'should', 'will', 'would', 'does', 'done', 'checked', 'check', 'test', 'tests', 'button', 'screen']);
+// The forms of a requirement's word a test may write instead: its stem (places -> place, coloured ->
+// colour) and the American spelling (colour -> color). Two Mastermind runs wrote "coloured" in the
+// requirement and "color" in the test, and went round REQ02 three times each (2026-10-14).
+function spellings(word) {
+  const out = new Set([word]);
+  for (const end of ['ing', 'ed', 'es', 'd', 's']) {
+    if (word.endsWith(end) && !word.endsWith('ss') && word.length - end.length >= 4) out.add(word.slice(0, -end.length));
+  }
+  for (const w of [...out]) if (/our/.test(w)) out.add(w.replace(/our/g, 'or'));
+  for (const w of [...out]) if (/is(e|ed|ing)?$/.test(w)) out.add(w.replace(/is(e|ed|ing)?$/, 'iz$1'));
+  return [...out];
+}
+
+// The brain's queue (.mxcli/brain/staged.jsonl): [{id, title}], [] when none.
+function stagedEntries(appDir) {
+  let text = '';
+  try { text = fs.readFileSync(path.join(appDir, '.mxcli', 'brain', 'staged.jsonl'), 'utf8'); } catch { return []; }
+  return text.split(/\r?\n/).filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } })
+    .filter(e => e && /^[0-9a-f]{4,}$/.test(String(e.id || '')));
+}
+
+// MDL_REQUIREMENTS from tests/harness.env (the last line wins), else the environment, else ask.
+function requirementsMode(appDir) {
+  let mode = process.env.MDL_REQUIREMENTS || 'ask';
+  try {
+    for (const m of fs.readFileSync(path.join(appDir, 'tests', 'harness.env'), 'utf8').matchAll(/^\s*MDL_REQUIREMENTS="?(\w+)"?\s*$/gm)) mode = m[1];
+  } catch { /* no harness.env: the environment's */ }
+  return mode;
+}
+
 function requirementFindings(appDir, testFiles) {
   const dir = path.join(appDir, 'docs', 'brain', 'plan');
   let names = [];
-  try { names = fs.readdirSync(dir).filter(n => n.endsWith('.md')).sort(); } catch { return []; }
-  const requirements = [];
+  try { names = fs.readdirSync(dir).filter(n => n.endsWith('.md')).sort(); } catch { names = []; }
+  const requirements = [], open = new Set();
   for (const name of names) {
     const text = fs.readFileSync(path.join(dir, name), 'utf8');
     for (const m of text.matchAll(PLAN_ENTRY_RE)) {
       const id = (m[2].match(/id `([0-9a-f]+)`/) || [])[1];
+      if (id && /OPEN\s*$/.test(m[2])) open.add(id);
       if (!id || /OPEN\s*$/.test(m[2])) continue;
       requirements.push({ id, text: m[1].trim(), slice: name });
     }
   }
-  if (!requirements.length) return [];
+  // At `requirements: assume` nobody else promotes what waits in the queue: two Sonnet runs
+  // (invoice-chase c2 and n4, 2026-10-14) captured their requirements, left them staged, and
+  // reached DONE with no requirement tied to a test -- REQ02 reads only the plan.
+  const out = [];
+  const staged = stagedEntries(appDir);
+  if (staged.length && requirementsMode(appDir) === 'assume') {
+    out.push({ code: 'REQ02', key: 'staged', version: staged.map(e => e.id).join(','),
+      message: `${staged.length} requirement(s) wait in the brain's queue (${staged.map(e => e.id).join(', ')}), where no check ` +
+        'reads them: at requirements: assume nobody else promotes them -- ' +
+        `${staged.map(e => `./mxcli brain promote ${e.id}`).join('; ')} (skill requirements-interview), then name each in a test` });
+  }
+  if (!requirements.length) return out;
   // Where each id is named, and the test code under it: from its `# requirement:` line (or a run of
   // them) to the next one, comments left out. A test that names an id but checks nothing of it passed:
   // one B2B test named thirteen requirements on one line, the date and amount formats among them, and
@@ -239,7 +281,6 @@ function requirementFindings(appDir, testFiles) {
   for (const r of requirements) for (const w of words(r.text)) df.set(w, (df.get(w) || 0) + 1);
   const rare = Math.max(1, Math.floor(requirements.length / 3));
   const known = new Set(requirements.map(r => r.id));
-  const out = [];
   for (const r of requirements) {
     const where = named.get(r.id);
     if (!where) {
@@ -249,13 +290,15 @@ function requirementFindings(appDir, testFiles) {
       continue;
     }
     const own = [...words(r.text)].filter(w => df.get(w) <= rare).slice(0, 8);
-    if (!own.length || own.some(w => where.code.includes(w))) continue;
+    if (!own.length || own.some(w => spellings(w).some(v => where.code.includes(v)))) continue;
     out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
       message: `${where.file} names requirement ${r.id} but its code checks none of it: "${r.text}" -- under ` +
         `\`# requirement: ${r.id}\`, assert what it says, with a fail message in its words (one of: ${own.join(', ')})` });
   }
   for (const [id, { file }] of named) {
-    if (known.has(id)) continue;
+    // An assumption (open, in assume mode) a test checks is welcome, not a stale link: Opus named
+    // three and was sent back to drop them (mastermind, 2026-10-14).
+    if (known.has(id) || open.has(id)) continue;
     out.push({ code: 'REQ02', key: `stale:${id}`, version: id,
       message: `${file} names requirement ${id}, which docs/brain/plan does not have (an open question, dropped, or a typo) -- name an id ./mxcli brain plan lists, or drop the line` });
   }
@@ -347,4 +390,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { tokens, readModel, readTests, userTasks, findings, requirementFindings, example, baselineOf, hash };
+module.exports = { spellings, tokens, readModel, readTests, userTasks, findings, requirementFindings, example, baselineOf, hash };

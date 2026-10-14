@@ -192,7 +192,7 @@ mx-codr reads the app and lists everything a user can run into; each needs a tes
 |---|---|---|
 | `ISO01` | When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not. | Blocks (warning for paths that existed before the install) |
 | `OUTCOME01` | Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute. | Blocks (warning for paths that existed before the install) |
-| `REQ02` | Every requirement the person agreed to (a promoted entry in the project brain) is named by a test: the test carries the line `# requirement: <id>`. A requirement no test proves is not built. | Blocks |
+| `REQ02` | Every requirement the person agreed to (a promoted entry in the project brain) is named by a test: the test carries the line `# requirement: <id>`. A requirement no test proves is not built. A word may appear in another form (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue. | Blocks |
 | `ROLE01` | Every demo user's role is used by at least one test. | Blocks (warning for paths that existed before the install) |
 | `SVC01` | Every published REST or OData service is called by a test. | Blocks (warning for paths that existed before the install) |
 | `WF01` | A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task. | Blocks |
@@ -359,9 +359,9 @@ in as.
 ```bash
 bash tests/gate.sh                    # the done gate
 bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
-bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE)
+bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE), plus what the full gate would refuse
 bash tests/gate.sh --changed          # the tests a model change touched
-bash tests/gate.sh --restart          # stop this project's app and boot it again
+bash tests/gate.sh --restart          # stop this project's app and boot it again (add --only to run a test)
 bash tests/gate.sh --only <feature> --reset-data  # first put back the rows earlier runs left
 bash tests/rules.sh                   # every rule, its level and your exceptions
 bash tests/orient.sh                  # what is in this project, and its state
