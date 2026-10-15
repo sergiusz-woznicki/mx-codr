@@ -13,8 +13,9 @@
 //   SEED01  a page the menu opens lists an entity from the database for a role that cannot create it,
 //           and no after-startup seed creates it: the tests' rows are rolled back at DONE, so that role
 //           signs in to an empty list
-//   LINT01  mxcli's own lint advice: off unless the rulebook says warn or block, then
-//           `mxcli lint --format json` runs here and its findings are listed at that level
+//   mxcli's own lint rules, each under its own code at the level of its card (tests/rulebook/lint/,
+//           passed in --levels): `mxcli lint --format json` runs here when one of them, or LINT01 (every
+//           lint rule without a card), is not off. UI001 and SEC007 are ours, so lint's copies are dropped.
 //
 // Usage: catalog_rules.cjs <app_dir> <Module>... [--mpr <copy.mpr>] [--no-refresh] [--levels json] [--except json]
 // Prints `FAIL|WARN|PASS <summary>`, `  - [CODE] ...` blocking lines, `  ~ [CODE] ...` warnings.
@@ -31,6 +32,8 @@ const FILTER_MARKERS = ['datagriddropdownfilter', 'datagriddatefilter', 'datagri
 const INPUT_TYPES = new Set(['Forms$CheckBox', 'Forms$DatePicker', 'Forms$TextBox', 'Forms$DropDown', 'Forms$RadioButtonGroup',
   'com.mendix.widget.web.combobox.Combobox']);
 const MIN_INPUTS = 2;
+// The codes this file checks itself; mxcli lint reports UI001 and SEC007 too (they began as lint rules).
+const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'LINT01']);
 
 const entityOfAttribute = ref => { const parts = String(ref || '').split('.'); return parts.length < 3 ? '' : parts.slice(0, -1).join('.'); };
 
@@ -203,9 +206,29 @@ function parseLint(text) {
   const list = Array.isArray(parsed) ? parsed : (parsed && parsed.violations) || [];
   return list.map(v => {
     const where = v.module ? `${v.module}.${v.document || ''}` : (v.document || '');
-    return { code: 'LINT01', key: where, severity: String(v.severity || '').toLowerCase(),
+    return { code: 'LINT01', rule: v.ruleId || '?', key: where, module: v.module || '', severity: String(v.severity || '').toLowerCase(),
       message: `[${v.ruleId || '?'}] ${v.message || ''}${where ? ` (at ${where})` : ''}${v.suggestion ? ` -- ${v.suggestion}` : ''}` };
   });
+}
+
+// Whether mxcli lint has to run: a lint rule's card (in --levels) or LINT01 is not off.
+function lintWanted(levels, lint01) {
+  return lint01 !== 'off' || Object.keys(levels).some(code => !OUR_CODES.has(code) && levels[code] !== 'off');
+}
+
+// Lint's findings at the rulebook's levels. A rule with a card (its level in --levels) reports under its
+// own code; one without (a newer mxcli's) stays LINT01 at LINT01's level. Off and info drop out, and so
+// do UI001 and SEC007 (ours) and findings in modules that are not the app's own (Marketplace ones).
+function lintAtLevels(findings, levels, lint01, modules) {
+  const out = [];
+  for (const f of findings) {
+    if (OUR_CODES.has(f.rule) || (f.module && !modules.has(f.module))) continue;
+    const own = Object.prototype.hasOwnProperty.call(levels, f.rule);
+    const at = own ? levels[f.rule] : lint01;
+    if (at === 'off' || at === 'info') continue;
+    out.push(own ? { ...f, code: f.rule, message: f.message.replace(/^\[[^\]]*\] /, '') } : f);
+  }
+  return out;
 }
 
 // STARTUP01: [{code, key, message}] when the after-startup microflow (DESCRIBE SETTINGS) returns false
@@ -339,14 +362,14 @@ function main() {
       const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType IN ('PAGE', 'ENTITY', 'MICROFLOW')", true);
       found.push(...listsWithoutSeed(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), mxcli(appDir, mpr, 'DESCRIBE NAVIGATION'), sources, entities, permissions, modules));
     }
-    if (level('LINT01') !== 'off') found.push(...lintFindings(appDir, mpr));
+    if (lintWanted(levels, level('LINT01'))) found.push(...lintAtLevels(lintFindings(appDir, mpr), levels, level('LINT01'), modules));
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
     process.stdout.write(`ERROR could not read the model -- ${error.message}\n`);
     return 2;
   }
   found = found.filter(f => !(excepts[f.code] || []).includes(f.key || ''));
-  // LINT01 at `warn` lists every lint finding as a warning; at `block` lint's own errors block.
+  // A lint rule's own card at `block` blocks every finding of it; LINT01 at `block` only lint's errors.
   const blocking = found.filter(f => level(f.code) === 'block' && (f.code !== 'LINT01' || f.severity === 'error'));
   const warnings = found.filter(f => !blocking.includes(f) && level(f.code) !== 'info');
   const lines = [`${blocking.length ? 'FAIL' : warnings.length ? 'WARN' : 'PASS'}  ${blocking.length} catalog finding(s) block, ${warnings.length} warning(s)`];
@@ -357,4 +380,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };
+module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };

@@ -138,6 +138,10 @@ const DOC_FILES = [
 ];
 // The folder a card of <step> belongs in.
 const groupOf = step => (DOC_FILES.find(([, steps]) => steps.includes(step)) || ['app'])[0];
+// mxcli's own lint rules: one card each in lint/ (`check: mxcli`), run by the catalog step. LINT01, in
+// catalog/, is every lint rule that has no card yet (one a newer mxcli brought).
+const isLintRule = card => card.header.check === 'mxcli' && card.code !== 'LINT01';
+const folderOf = card => (isLintRule(card) ? 'lint' : groupOf(card.header.step));
 
 // The card files of a rulebook: <dir>/<group>/<CODE>.md (and, from before the groups, <dir>/<CODE>.md).
 function cardFiles(dir) {
@@ -162,8 +166,8 @@ function load(dir) {
     const card = parseCard(file);
     if (cards[card.code]) throw new RulebookError(`${file}:1: ${card.code} is also ${cards[card.code].file}; a rule has one card`);
     const folder = path.basename(path.dirname(file));
-    if (path.resolve(path.dirname(file)) !== path.resolve(dir) && folder !== groupOf(card.header.step)) {
-      throw new RulebookError(`${file}:1: ${card.code} is a ${card.header.step} rule; its card goes in ${groupOf(card.header.step)}/`);
+    if (path.resolve(path.dirname(file)) !== path.resolve(dir) && folder !== folderOf(card)) {
+      throw new RulebookError(`${file}:1: ${card.code} is a ${isLintRule(card) ? 'mxcli lint' : card.header.step} rule; its card goes in ${folderOf(card)}/`);
     }
     cards[card.code] = card;
   }
@@ -190,9 +194,15 @@ function excepts(cards, step) {
 // `baseline: paths`) blocks only what is new since the baseline; an explicit `level: block` in its
 // ## Local means every finding blocks, as MDL_PATHS=error did, so it is passed on too.
 const overridden = c => c.local.level && (c.local.level !== c.header.level || (c.header.baseline && c.local.level === 'block'));
+// A lint rule's level is always passed on, changed or not: the catalog checker knows no lint rule's
+// default, only LINT01's (off) for a rule without a card.
 function overrides(cards, step) {
   const out = {};
-  for (const c of Object.values(cards)) if ((!step || c.header.step === step) && overridden(c)) out[c.code] = c.local.level;
+  for (const c of Object.values(cards)) {
+    if (step && c.header.step !== step) continue;
+    if (overridden(c)) out[c.code] = c.local.level;
+    else if (isLintRule(c)) out[c.code] = effective(c);
+  }
   return out;
 }
 
@@ -354,7 +364,10 @@ function docs(cards, dir, testsDir) {
   fs.mkdirSync(checksDir, { recursive: true });
   const index = [];
   for (const [file, steps, what] of DOC_FILES) {
-    const rows = Object.values(cards).filter(c => steps.includes(c.header.step));
+    const all = Object.values(cards).filter(c => steps.includes(c.header.step));
+    const rows = all.filter(c => !isLintRule(c));
+    // mxcli's lint rules: one line naming those that report, not a row each (fifty of them, mostly off).
+    const lint = all.filter(isLintRule).filter(c => effective(c) !== 'off');
     // app.md also carries the hints (checks/docs/hints.md): what the gate says in a situation that
     // is not a rule -- a CE error's fix, a stale client bundle, Studio Pro holding the model. Ours,
     // kept beside this generator, never in the person's rulebook.
@@ -364,9 +377,13 @@ function docs(cards, dir, testsDir) {
       `One line per code of the \`${steps.join('`, `')}\` step${steps.length > 1 ? 's' : ''}; every code blocks DONE unless marked warning. The card: \`tests/rulebook/${file}/<CODE>.md\`.`,
       '', '| Code | Wants | Fix |', '|---|---|---|'];
     for (const c of rows) lines.push(`| \`${c.code}\` | ${levelNote(c)}${c.title} | ${section(c, 'Fix')} |`);
+    if (lint.length) {
+      lines.push('', `mxcli lint rules this app reports (cards in \`tests/rulebook/lint/\`; the finding carries mxcli's own fix): ` +
+        lint.map(c => `\`${c.code}\`${effective(c) === 'block' ? '' : ' (warning)'}`).join(', ') + '.');
+    }
     if (extra) lines.push('', '## Hints: what the gate says when...', '', '| Situation | Wants | Fix |', '|---|---|---|', ...extra.split('\n'));
     fs.writeFileSync(path.join(checksDir, `${file}.md`), lines.join('\n') + '\n');
-    const codes = rows.map(c => c.code).concat(extra ? [...new Set(extra.match(/`(CE\d{4})`/g) || [])].map(c => c.replace(/`/g, '')) : []);
+    const codes = rows.map(c => c.code).concat(lint.map(c => c.code)).concat(extra ? [...new Set(extra.match(/`(CE\d{4})`/g) || [])].map(c => c.replace(/`/g, '')) : []);
     index.push(`| ${steps.join(', ')} | \`tests/checks/${file}.md\` | ${codes.join(', ')} |`);
   }
   const head = ['# What each check code wants, and its fix', '',

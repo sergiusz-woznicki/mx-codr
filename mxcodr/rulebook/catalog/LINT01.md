@@ -5,13 +5,13 @@ check: mxcli
 key: none
 ---
 
-# LINT01 — mxcli's own lint advice, on request
+# LINT01 — an mxcli lint rule that has no card yet
 
 ## What it checks
-mxcli's own lint rules (./mxcli lint --list-rules names them). Advice, so the gate does not run them unless asked: set level: warn below to see their findings under the gate's warnings, block to make lint errors block.
+Every mxcli lint rule has its own card in lint/, with its level. This card is for a rule a newer mxcli brought that has no card yet: off, so a new rule never changes the gate unnoticed. Set level: warn below to see such findings under the warnings, block to make their errors block.
 
 ## Fix
-Set `level: warn` below to see them under the gate's warnings, `block` to make lint errors block.
+Give the rule its own card in lint/ (what mx-codr does when it moves to that mxcli).
 
 ## Local
 # level: off

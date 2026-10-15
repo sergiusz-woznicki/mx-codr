@@ -315,7 +315,7 @@ html { scroll-behavior: smooth; }
 
 <section id="gate">
   <h2><span class="num">6</span>The rule catalogue</h2>
-  <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and shows mxcli's lint advice only on request. Each rule is described in plain words: what it looks at, and why it matters.</p>
+  <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
     <div class="count"><span class="n">115</span><span class="t">mx-codr rules</span></div>
     <div class="count b"><span class="n">70</span><span class="t">always stop DONE</span></div>
@@ -324,7 +324,7 @@ html { scroll-behavior: smooth; }
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
   </div>
-  <p class="intro">The mxcli lint list in part B is advice, shown on request.</p>
+  <p class="intro">Part B lists mxcli's lint rules with the level each one's card gives it.</p>
   <div class="legend"><span class="lvl b">Blocks</span> the gate says NOT DONE <span class="lvl a">After DONE</span> only a warning while you build; once the app has reached DONE, it blocks pages and flows you add or change <span class="lvl w">Warning</span> shown, never blocks <span class="lvl i">Info</span> a hint</div>
 
   <h2 class="part" id="part-harness">Part A · mx-codr's own rules</h2>
@@ -471,7 +471,7 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>FOLDER01</code></td><td>Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: <code>UI</code> for pages and snippets, <code>FNC</code> for microflows and nanoflows, <code>ENV</code> for everything else. The finding prints the moves to make. A business event service is left alone: mxcli moves it but cannot read its folder back.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>LINT01</code></td><td>mxcli's own lint advice (part B). Off unless <code>level: warn</code> or <code>block</code> is set in its card.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>LINT01</code></td><td>A lint rule of a newer mxcli that has no card in <code>tests/rulebook/lint/</code> yet (part B lists the ones that have). Off unless <code>level: warn</code> or <code>block</code> is set in its card.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>UNUSED01</code></td><td>No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
@@ -512,62 +512,62 @@ html { scroll-behavior: smooth; }
   </table></div>
 
   <h3 id="g-mxcli-lint">Advice from mxcli's linter</h3>
-  <p class="intro">Shown by <code>./mxcli lint</code>. The gate shows them only when LINT01 is set to <code>warn</code> (or <code>block</code>) in <code>tests/rulebook/catalog/LINT01.md</code>. MOD001 and REU001 are lint rules mx-codr ships.</p>
+  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the nine that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
   <div class="table-wrap"><table class="rules compact">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
-      <tr><td><code>MOD001</code></td><td>Nothing lies at the top of a module, and no folder is named after a document type ("Microflows", "Pages"). FOLDER01 checks the same more strictly.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>REU001</code></td><td>Shows snippets used on several pages and sub-microflows called from several places: reuse that is working.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>MPR009</code></td><td>A gallery that feeds a data view through its selection allows selecting one item at a time (Studio Pro error CE3637).</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>QUAL006</code></td><td>Every caption Mendix requires, like a tab's title, has text in the app's default language (error CE4899).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MOD001</code></td><td>Nothing lies at the top of a module, and no folder is named after a document type ("Microflows", "Pages"). FOLDER01 checks the same more strictly.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>REU001</code></td><td>Shows snippets used on several pages and sub-microflows called from several places: reuse that is working.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR009</code></td><td>A gallery that feeds a data view through its selection allows selecting one item at a time (Studio Pro error CE3637).</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>QUAL006</code></td><td>Every caption Mendix requires, like a tab's title, has text in the app's default language (error CE4899).</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>CONV011</code></td><td>No commit inside a loop: commit the list once after the loop.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR001</code></td><td>Entities, microflows, pages and enumerations follow the naming conventions.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR001</code></td><td>Entities, microflows, pages and enumerations follow the naming conventions.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR002</code></td><td>No empty microflows or nanoflows.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR003</code></td><td>A module has at most 15 stored entities.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR004</code></td><td>No validation message left empty.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR005</code></td><td>No image widget without an image (it crashes).</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR006</code></td><td>No empty containers left on pages.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>MPR007</code></td><td>A page in the menu can be opened by at least one role.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR008</code></td><td>No microflow activities on top of each other on the canvas.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR010</code></td><td>A form inside a data view is wrapped in a layout grid.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR011</code></td><td>No activity drawn outside the loop it belongs to.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MPR012</code></td><td>No old image widgets the modern React client cannot show.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>SEC001</code></td><td>Every stored entity has at least one access rule.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>SEC002</code></td><td>Passwords must be at least 8 characters.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>SEC004</code></td><td>Anonymous access is on: check every rule of the anonymous role.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>SEC005</code></td><td>Strict mode is off.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR003</code></td><td>A module has at most 15 stored entities.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR004</code></td><td>No validation message left empty.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR005</code></td><td>No image widget without an image (it crashes).</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR006</code></td><td>No empty containers left on pages.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR007</code></td><td>A page in the menu can be opened by at least one role.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR008</code></td><td>No microflow activities on top of each other on the canvas.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR010</code></td><td>A form inside a data view is wrapped in a layout grid.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR011</code></td><td>No activity drawn outside the loop it belongs to.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>MPR012</code></td><td>No old image widgets the modern React client cannot show.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC001</code></td><td>Every stored entity has at least one access rule.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC002</code></td><td>Passwords must be at least 8 characters.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC004</code></td><td>Anonymous access is on: check every rule of the anonymous role.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC005</code></td><td>Strict mode is off.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC006</code></td><td>Entities with personal data have access rules.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>SEC008</code></td><td>No role reads every record of an entity with personal data.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>SEC009</code></td><td>Large entities limit which attributes each role may read.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV001</code></td><td>Boolean attributes start with Is, Has, Can, Should, Was or Will.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV002</code></td><td>No default values on attributes; set them in a microflow.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV003</code></td><td>Page names end in _NewEdit, _View, _Overview, _Select, _Details or _Dashboard.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV004</code></td><td>Enumerations start with <code>ENUM_</code>.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV005</code></td><td>Snippets start with <code>SNIPPET_</code>.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV006</code></td><td>Access rules don't allow create or delete directly; microflows do that.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>CONV007</code></td><td>Read and write access rules have XPath constraints.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV008</code></td><td>Each module role belongs to exactly one user role.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV009</code></td><td>A microflow has at most 15 activities.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>SEC009</code></td><td>Large entities limit which attributes each role may read.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV001</code></td><td>Boolean attributes start with Is, Has, Can, Should, Was or Will.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV002</code></td><td>No default values on attributes; set them in a microflow.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV003</code></td><td>Page names end in _NewEdit, _View, _Overview, _Select, _Details or _Dashboard.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV004</code></td><td>Enumerations start with <code>ENUM_</code>.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV005</code></td><td>Snippets start with <code>SNIPPET_</code>.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV006</code></td><td>Access rules don't allow create or delete directly; microflows do that.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV007</code></td><td>Read and write access rules have XPath constraints.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV008</code></td><td>Each module role belongs to exactly one user role.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV009</code></td><td>A microflow has at most 15 activities.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>CONV010</code></td><td><code>ACT_</code> microflows only do UI work and call sub-microflows.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>CONV012</code></td><td>Decisions have a meaningful caption.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV012</code></td><td>Decisions have a meaningful caption.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>CONV013</code></td><td>Calls to REST, web services and Java actions have error handling.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>CONV014</code></td><td>No "Continue" error handling, which hides errors.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>CONV015</code></td><td>No validation rules on entities; use <code>VAL_</code> microflows.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV016</code></td><td>No event handlers on entities; call microflows explicitly.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV017</code></td><td>No calculated attributes; store the value and update it in a microflow.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV018</code></td><td>Large modules use folders.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CONV019</code></td><td>Pages in the menu have a URL.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>ARCH001</code></td><td>Pages use entities from their own module.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>ARCH002</code></td><td>Stored entities have microflows that create and update them.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>ARCH003</code></td><td>Stored entities have a unique, required business key.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>DESIGN001</code></td><td>An entity has at most 10 attributes.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>QUAL001</code></td><td>A microflow is not too complex (cyclomatic complexity under 10).</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>QUAL002</code></td><td>Documents have a description of their purpose.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>QUAL003</code></td><td>A microflow has at most 25 activities.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>QUAL004</code></td><td>Every document is used somewhere or is an entry point.</td><td><span class="lvl i">Info</span></td></tr>
-      <tr><td><code>CUSTOM001</code></td><td>Entity names are PascalCase.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>CUSTOM002</code></td><td>Microflow names start with ACT_, SUB_, DS_, VAL_ or SCH_.</td><td><span class="lvl i">Info</span></td></tr>
+      <tr><td><code>CONV015</code></td><td>No validation rules on entities; use <code>VAL_</code> microflows.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV016</code></td><td>No event handlers on entities; call microflows explicitly.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV017</code></td><td>No calculated attributes; store the value and update it in a microflow.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV018</code></td><td>Large modules use folders.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CONV019</code></td><td>Pages in the menu have a URL.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>ARCH001</code></td><td>Pages use entities from their own module.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>ARCH002</code></td><td>Stored entities have microflows that create and update them.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>ARCH003</code></td><td>Stored entities have a unique, required business key.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>DESIGN001</code></td><td>An entity has at most 10 attributes.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>QUAL001</code></td><td>A microflow is not too complex (cyclomatic complexity under 10).</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>QUAL002</code></td><td>Documents have a description of their purpose.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>QUAL003</code></td><td>A microflow has at most 25 activities.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>QUAL004</code></td><td>Every document is used somewhere or is an entry point.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CUSTOM001</code></td><td>Entity names are PascalCase.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>CUSTOM002</code></td><td>Microflow names start with ACT_, SUB_, DS_, VAL_ or SCH_.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MDL-FLOW01</code></td><td>A microflow's branches can be written as nested if/else.</td><td><span class="lvl i">Info</span></td></tr>
     </tbody>
   </table></div>
@@ -597,7 +597,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>except:</code> in a paths card</td><td>A path deliberately left without a test.</td></tr>
       <tr><td><code>except:</code> in <code>UNUSED01</code></td><td>A document kept on purpose though nothing uses it.</td></tr>
       <tr><td><code>level: off</code> in <code>TEST01</code></td><td>Turns off test-first in precheck.</td></tr>
-      <tr><td><code>level: warn</code> or <code>block</code> in <code>LINT01</code></td><td>Shows mxcli lint's advice under the warnings, or makes lint errors block.</td></tr>
+      <tr><td><code>level: warn</code>, <code>block</code> or <code>off</code> in a card of <code>tests/rulebook/lint/</code></td><td>Shows that mxcli lint rule's findings under the warnings, makes them block, or hides them.</td></tr>
       <tr><td><code>level: block</code> in <code>WAIT01</code></td><td>The coverage step fails on tests that wait for time.</td></tr>
       <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
       <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>

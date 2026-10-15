@@ -64,6 +64,19 @@ To add a layout rule:
 Other steps follow the same pattern with their own checker: `security_rules.cjs`, `catalog_rules.cjs`,
 `check_paths.cjs`, `check_folders.cjs`, `check_unused.cjs`, `check_mdl.cjs` (naming).
 
+## When mxcli changes
+
+Raising `MXCLI_TESTED` is more than a version number:
+
+1. In an app installed with the new mxcli, record its lint rules:
+   `./mxcli lint -p <app>.mpr --list-rules | grep -E '^\s+[A-Z]+[0-9]+ ' | sed 's/^ *//'` into
+   `tests/performance/fixtures/lint/rules-<version>.txt` (development repository).
+2. `test_every_mxcli_lint_rule_has_a_card_with_its_level` then names every new rule without a card and
+   every card whose rule is gone. Decide each new rule: a card in `rulebook/lint/` at `warn` when it adds
+   something the harness does not check, `off` with the reason when not. Never leave one to LINT01.
+3. Regenerate the syntax digest, review `checks/mdl-pitfalls.md`, run the audit, and record the describe
+   fixture of the new version (`tests/performance/fixtures/describe-<version>/`).
+
 ## Things that bite
 
 - **Bash 3.2.** macOS ships it, so no `mapfile`, `${x,,}` or associative arrays. Under `set -u`, write

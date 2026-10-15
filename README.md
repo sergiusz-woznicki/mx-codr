@@ -309,6 +309,17 @@ Where documents live.
 |---|---|---|
 | `FOLDER01` | Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: UI for pages and snippets, FNC for microflows and nanoflows, ENV for everything else. The finding prints the moves to make. A business event service is left alone: mxcli moves it but cannot read its folder back. | Blocks |
 
+**mxcli's lint rules** (52 cards in `tests/rulebook/lint/`)
+
+Each of mxcli's own lint rules has a card with a level decided once for all of them: a warning for the
+nine that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
+ones and UI actions, `CONV011` no commit in a loop, `CONV013` and `CONV014` error handling on calls,
+`SEC006`, `SEC008` and `SEC009` personal data, `MPR002` and `MPR006` empty microflows and containers),
+off for the rest, each card saying why: another rule checks it, mx check blocks it, or it does not fit
+how these apps are built. The catalog step runs `mxcli lint` and lists the findings in the app's own
+modules; Marketplace modules are left alone. A rule a newer mxcli adds falls under `LINT01` (off) until
+it has a card, and every mxcli upgrade of mx-codr adds the cards first.
+
 ## Where you can change things
 
 **The rules: `tests/rulebook/`.** Each card ends with a `## Local` section that is yours; the
