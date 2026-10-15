@@ -286,6 +286,30 @@ function markSession(root, id) {
   } catch { /* not ours to fail on */ }
 }
 
+// Each request the person makes, word for word, in docs/brain/requests/NN.md: a session per request
+// sees only the model and the plan, and the details an agent did not record as requirements -- one
+// Employee, one Manager and two customers; a filter bar above the table -- were lost between sessions
+// in two B2B runs (2026-10-15). A short reply ("go ahead") is not a request; a repeat is not saved twice.
+const REQUEST_MIN_CHARS = 80
+function saveRequest(root, text) {
+  const body = String(text || "").trim()
+  if (!root || body.length < REQUEST_MIN_CHARS) return null
+  try {
+    if (!require("node:fs").readdirSync(root).some((n) => n.endsWith(".mpr"))) return null
+    const dir = join(root, "docs", "brain", "requests")
+    mkdirSync(dir, { recursive: true })
+    const files = require("node:fs").readdirSync(dir).filter((n) => /^\d+\.md$/.test(n)).sort()
+    const last = files.length ? readFileSync(join(dir, files[files.length - 1]), "utf8") : ""
+    if (last.split("\n\n").slice(1).join("\n\n").trim() === body) return null
+    const n = String(files.length + 1).padStart(2, "0")
+    const file = join(dir, n + ".md")
+    writeFileSync(file, "# Request " + n + " -- " + new Date().toISOString().slice(0, 10) + "\n\n" + body + "\n")
+    return file
+  } catch {
+    return null
+  }
+}
+
 function filmsRecording(root) {
   let pid = ""
   try { pid = readFileSync(join(root, ".mxcli", "films", ".all.pid"), "utf8").trim() } catch { return false }
@@ -480,6 +504,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, readOnlyStep, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript, writeHeredocScript, HEREDOC_UNQUOTED, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript, writeHeredocScript, HEREDOC_UNQUOTED, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, saveRequest, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }

@@ -260,6 +260,15 @@ const tools = {
   'unquoted-heredoc-message'(path) {
     py.print(require('./plugins/harness-core.cjs').HEREDOC_UNQUOTED(path));
   },
+  // save-request: the prompt in the hook's JSON on stdin (prompt, user_prompt or text) saved word for
+  // word to docs/brain/requests/NN.md of the project (harness-core saveRequest); prints the file.
+  'save-request'() {
+    const data = load();
+    const text = get(data, 'prompt', '') || get(data, 'user_prompt', '') || get(data, 'text', '');
+    const root = process.env.CLAUDE_PROJECT_DIR || process.env.CURSOR_PROJECT_DIR || process.cwd();
+    const file = require('./plugins/harness-core.cjs').saveRequest(root, typeof text === 'string' ? text : '');
+    if (file) py.print(file);
+  },
   'script-written'(...scripts) {
     const text = py.readStdin();
     const m = re.search(EXEC, text);

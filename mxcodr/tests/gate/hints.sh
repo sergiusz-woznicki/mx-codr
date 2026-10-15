@@ -23,6 +23,19 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
               if grep -q 'CE1613.*Access rule' "$1" 2>/dev/null; then
                 echo "   hint CE1613 in an access rule: an XPath path alternates association and entity, ending on the association to the user, and the token is quoted whole: where '[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Account = ''[%CurrentUser%]'']' -- 'selected entity Mod.X_Y no longer exists' means an association stands where an entity step belongs. Skill: xpath-constraints"
               fi ;;
+      # Three B2B runs in a row lost the OrderShipped publish and the AI agent call to this (2026-10-15):
+      # mxcli 0.26 writes a StringTemplate argument and an agent-document argument as plain expressions.
+      CE0115)
+        local known=""
+        if grep -q "CE0115.*Java action 'BusinessEvents\.PublishBusinessEvent" "$1" 2>/dev/null; then known=1
+          echo "   hint CE0115 BusinessEvents.PublishBusinessEvent_V2: its Subject is a text template, which mxcli cannot write yet -- do not drop the publish for a log line: call a small Java action of your own that publishes (pitfalls: 'A business event is published through a Java action of your own')"
+        fi
+        if grep -q "CE0115.*Java action 'AgentEditorCommons\.Agent_CallDocument" "$1" 2>/dev/null; then known=1
+          echo "   hint CE0115 AgentEditorCommons.Agent_CallDocument_*: its Agent argument picks a document, which mxcli cannot write yet -- retrieve the agent object and call AgentCommons.Agent_Call_WithoutHistory(Agent = \$Agent, OptionalContextObject = \$Context) (pitfalls: 'An agent is called through AgentCommons')"
+        fi
+        if [ -z "$known" ]; then
+          echo "   hint CE0115: the call's arguments do not match the action's parameters -- DESCRIBE the action and pass exactly its parameter names; a text-template or document parameter cannot be written by mxcli 0.26 (wrap the action in one of your own)"
+        fi ;;
       CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
       CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;
       CE2729) echo "   hint CE2729: a page reaches something a role that can open it may not use. First ask whether that role should open the page at all: a page meant for one role is opened by another through the navigation's single home page or a shared menu item -- give each role its own home in the navigation (home page Mod.Page for UserRole) and keep the page's view grant to its own role; never grant a role data it should not see to silence this. When the role does belong on the page, grant what the message names: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant read * on entity Mod.Entity to Mod.Role;' (a non-persistent entity behind a data view needs it too). Skill: manage-security" ;;

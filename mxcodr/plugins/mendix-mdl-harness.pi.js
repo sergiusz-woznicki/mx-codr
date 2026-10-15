@@ -77,6 +77,8 @@ export default function mendixMdlHarness(pi) {
     markSession(ctx)
     const root = harnessRoot(ctx)
     if (!root) return
+    // The request, word for word, for the next session's orient.sh (docs/brain/requests/).
+    core.saveRequest(root, event && event.prompt)
     if (rulesText === null) rulesText = readOr(join(root, ".claude", "rules", "mdl-skills.md"), "")
     // The syntax digest appears once orient.sh or the installer has written it; until then it is
     // looked for again on every run. A file to read was not enough: a session listed its table

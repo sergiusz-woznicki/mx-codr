@@ -94,6 +94,17 @@ last_gate_lines() {
   [ "${staged:-0}" -gt 0 ] && echo "   $staged requirement(s) staged in .mxcli/brain/staged.jsonl, not yet recorded"
   echo "   this app is built: read only the scripts and tests this request changes; == tests below says what each one covers"
   open_requirements_lines
+  requests_line
+}
+
+# The person's earlier requests, word for word (the prompt hook saves each one): every number, limit
+# and placement they asked for, not only what an agent recorded as a requirement. Two B2B runs with a
+# session per request lost "one Employee, one Manager, two customers" between sessions (2026-10-15).
+requests_line() {
+  local count
+  count="$(ls docs/brain/requests/[0-9]*.md 2>/dev/null | wc -l | tr -d ' ')"
+  [ "${count:-0}" -gt 1 ] || return 0
+  echo "   earlier requests, word for word: docs/brain/requests/ ($count) -- what this one builds on; check what they asked (numbers, limits, where things go) still holds"
 }
 
 # What earlier requests asked for and the model does not have yet: requirements whose anchors do not

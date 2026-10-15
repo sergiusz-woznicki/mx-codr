@@ -5,6 +5,7 @@ One line per code of the `catalog` step; every code blocks DONE unless marked wa
 | Code | Wants | Fix |
 |---|---|---|
 | `LINT01` | off unless the rulebook turns it on: an mxcli lint rule that has no card yet | Give the rule its own card in lint/ (what mx-codr does when it moves to that mxcli). |
+| `PUBLISH01` | a business event the app publishes is really published | mxcli 0.26 cannot write `BusinessEvents.PublishBusinessEvent_V2` (CE0115): a Java action of your own that publishes (pitfalls); test that it ran. |
 | `SEC007` | anonymous users cannot read every row of an entity (DIVD-2022-00019) | An XPath constraint on the anonymous role's read rule, or revoke the grant if the data is not public. |
 | `SEED01` | warning: a role that only reads a list finds rows in it | Create a few realistic rows in the after-startup microflow, only when none exist yet, linked to the demo users who should see them, and return true on every path; no after-startup microflow yet: `alter settings runtime ( AfterStartupMicroflow: 'Module.ASU_Seed' )`. An app that really starts empty: say so in the final report. |
 | `STARTUP01` | the after-startup microflow returns true on every path | In the flow, `else return true;` where its work was already done; return false only for a real failure. `alter microflow` the flow, or change its script and exec it again. |

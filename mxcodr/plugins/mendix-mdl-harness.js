@@ -85,6 +85,8 @@ export const MendixMdlHarness = async ({ client, directory, worktree }) => {
       if (!installed) return
       const text = (output.parts || []).find((part) => part.type === "text" && typeof part.text === "string")
       if (!text || text.text.includes("bash tests/orient.sh")) return
+      // The request, word for word, for the next session's orient.sh (docs/brain/requests/).
+      core.saveRequest(root, text.text)
       text.text = `${text.text}\n\n${RULES}`
     },
 

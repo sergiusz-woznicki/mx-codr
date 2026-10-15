@@ -186,7 +186,8 @@ if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ03 block)" 
     echo "  each anchored at the document that will build it:"
     echo "    ./mxcli brain capture \"<requirement>\" --slice <NN>-<this request> -a @<Module.Doc> -p $MPR"
     echo "  A part of the request you will not build now gets its requirement too, anchored at the document it"
-    echo "  will be: the next session's orient.sh lists it as open. Promote each (./mxcli brain promote <id>), then exec again."
+    echo "  will be: the next session's orient.sh lists it as open. A part that needs a key or an outside service is"
+    echo "  built with a stand-in, not deferred. Promote each (./mxcli brain promote <id>), then exec again."
     exit 1
   fi
 fi

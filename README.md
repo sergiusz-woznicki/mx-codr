@@ -154,7 +154,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (22 rules)
+**Done means tested and building** (23 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -165,6 +165,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `LOOK02` | Only when switched on: none of those screenshots was judged to look wrong. | Warning |
 | `MX01` | Mendix's own consistency check finds no errors: the same red errors Studio Pro would show in its Errors pane. | Blocks |
 | `STARTUP01` | The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after. | Blocks |
+| `PUBLISH01` | A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing. | Blocks |
 | `SEED01` | A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. | Warning |
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
@@ -366,7 +367,8 @@ in as.
 
 **The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 
-**A long build: one request per agent session.** Each gate run writes where it left the app to
+**A long build: one request per agent session.** Each request is kept word for word in
+`docs/brain/requests/`, and each gate run writes where it left the app to
 `.mxcli/last-gate.txt`, and `tests/orient.sh` prints it at the start of the next session, with the
 requirements still staged. Give each request of a long project (a new screen, the next part of a
 spec) its own session in the same folder instead of resuming one: measured on the B2B prompt with
