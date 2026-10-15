@@ -103,15 +103,38 @@ function projectSecurity(text) {
 // ElementType, ElementName, MemberName, AccessType, XPathConstraint}], constants: [{QualifiedName,
 // ModuleName, DataType, DefaultValue, ExposedToClient}], security: projectSecurity(...),
 // associations: [{QualifiedName}], moduleRoles: {UserRole: [Module.Role]}}
-// -> [{code, blocking, message}]
+// -> [{code, blocking, message}], one rule after another in the order below.
 function findings(model, modules) {
   const own = new Set(modules);
-  const mine = name => own.has(String(name).split('.')[0]);
   const out = [];
-  const add = (code, blocking, message, key = '') => out.push({ code, blocking, message, key });
-  const sec = model.security;
+  const ctx = {
+    model, sec: model.security, own,
+    mine: name => own.has(String(name).split('.')[0]),
+    add: (code, blocking, message, key = '') => out.push({ code, blocking, message, key }),
+    persistent: persistentEntities(model),
+    pageRoles: pageViewers(model),
+  };
+  for (const rule of RULES) rule(ctx);
+  return out;
+}
 
-  // CRED01
+// The persistent entities of the model, by qualified name.
+function persistentEntities(model) {
+  return new Set(model.sources.filter(d => d.ObjectType === 'ENTITY' && /\bpersistent\s+entity\b/i.test(d.SourceText || '') &&
+    !/\bnon-persistent\s+entity\b/i.test(d.SourceText || '')).map(d => d.QualifiedName));
+}
+
+// Who may view each page: {Module.Page: Set(Module.Role)}.
+function pageViewers(model) {
+  const pageRoles = {};
+  for (const p of model.permissions) {
+    if (p.ElementType === 'PAGE' && p.AccessType === 'VIEW') (pageRoles[p.ElementName] = pageRoles[p.ElementName] || new Set()).add(p.ModuleRoleName);
+  }
+  return pageRoles;
+}
+
+// CRED01: no secret in a constant's default value.
+function cred01({ model, own, add }) {
   for (const c of model.constants) {
     if (!own.has(c.ModuleName) || !/string/i.test(c.DataType || 'String') || !secretName(c.QualifiedName)) continue;
     if (!String(c.DefaultValue || '').length) continue;
@@ -123,8 +146,10 @@ function findings(model, modules) {
       `environment: locally in a script of its own, alter settings constant @${c.QualifiedName} value '...' in configuration 'Default'; ` +
       '(a run configuration stays out of the deployment package), on a server at deployment');
   }
+}
 
-  // STRICT01
+// STRICT01: strict mode is on.
+function strict01({ model, sec, add }) {
   if (sec.level && !/^off/i.test(sec.level) && !sec.strict) {
     const offline = model.offline || [];
     if (offline.length && strictBreaksOffline(model.version)) {
@@ -136,11 +161,10 @@ function findings(model, modules) {
         'Turn it on: alter app security ( StrictMode: TRUE );');
     }
   }
+}
 
-  const persistent = new Set(model.sources.filter(d => d.ObjectType === 'ENTITY' && /\bpersistent\s+entity\b/i.test(d.SourceText || '') &&
-    !/\bnon-persistent\s+entity\b/i.test(d.SourceText || '')).map(d => d.QualifiedName));
-
-  // ANON01
+// ANON01: the guest role creates or writes no persistent entity.
+function anon01({ model, sec, mine, add, persistent }) {
   if (sec.guest && sec.guestRole) {
     const roles = new Set(model.moduleRoles[sec.guestRole] || []);
     const seen = new Set();
@@ -155,12 +179,10 @@ function findings(model, modules) {
         'non-persistent entity and a microflow that validates it');
     }
   }
+}
 
-  // FILTER01
-  const pageRoles = {};
-  for (const p of model.permissions) {
-    if (p.ElementType === 'PAGE' && p.AccessType === 'VIEW') (pageRoles[p.ElementName] = pageRoles[p.ElementName] || new Set()).add(p.ModuleRoleName);
-  }
+// FILTER01: an own-rows page filter is backed by the access rule.
+function filter01({ model, own, add, pageRoles }) {
   const reads = {};
   for (const p of model.permissions) {
     if (p.ElementType !== 'ENTITY' || p.AccessType !== 'READ') continue;
@@ -196,8 +218,10 @@ function findings(model, modules) {
       }
     }
   }
+}
 
-  // SQL01
+// SQL01: no query built by joining text and a variable.
+function sql01({ model, own, add }) {
   for (const d of model.sources) {
     if (!/^(MICROFLOW|NANOFLOW)$/.test(d.ObjectType) || !own.has(d.ModuleName)) continue;
     const m = /'\s*(select|insert|update|delete|merge)\b[^']*'\s*\+\s*\$[\w/.]+/i.exec(d.SourceText || '');
@@ -205,22 +229,28 @@ function findings(model, modules) {
     add('SQL01', true, `${d.QualifiedName} builds a query by joining text and a variable (${m[0].slice(0, 60)}...): whoever controls that ` +
       'value controls the query. Use a database connection query with parameters, or OQL parameters, never concatenation', d.QualifiedName);
   }
+}
 
-  // EXTENDS01
+// EXTENDS01: no entity specialises System.User or Administration.Account.
+function extends01({ model, own, add }) {
   for (const d of model.sources) {
     if (d.ObjectType !== 'ENTITY' || !own.has(d.ModuleName)) continue;
     const m = /\bextends\s+(System\.User|Administration\.Account)\b/i.exec(d.SourceText || '');
     if (m) add('EXTENDS01', false, `${d.QualifiedName} specialises ${m[1]}: business data and the login account in one object. ` +
       'Mendix: keep them apart, a 1-1 association from your entity to the account', d.QualifiedName);
   }
+}
 
-  // ADMIN01
+// ADMIN01: the administrator is not called MxAdmin.
+function admin01({ sec, add }) {
   if (sec.admin && /^MxAdmin$/i.test(sec.admin)) {
     add('ADMIN01', false, 'the administrator is still called MxAdmin, the name every attacker tries first. For the person, before ' +
       'the app goes live: rename it in Studio Pro (App Security > Administrator). mxcli cannot change it -- leave it');
   }
+}
 
-  // XSS01: an HTML Element in innerHTML mode whose template takes an attribute a user can type into.
+// XSS01: an HTML Element in innerHTML mode whose template takes an attribute a user can type into.
+function xss01({ model, own, add }) {
   const typed = new Set();
   for (const d of model.sources) {
     if (!/^(PAGE|SNIPPET)$/.test(d.ObjectType) || !own.has(d.ModuleName)) continue;
@@ -246,8 +276,10 @@ function findings(model, modules) {
         (loosened ? ' and drop sanitizationConfigFull' : ''), d.QualifiedName);
     }
   }
+}
 
-  // WRITE01
+// WRITE01: a role does not write what only server-side flows set.
+function write01({ model, own, mine, add, persistent, pageRoles }) {
   // Set by a flow that runs without the user's rights: a microflow without @applyentityaccess. A
   // nanoflow runs in the browser and a microflow with @applyentityaccess applies the user's rules:
   // what they set needs the write right, so it is never this finding.
@@ -299,15 +331,18 @@ function findings(model, modules) {
       (kept.length ? ` -- and a write (...) list drops what it does not name, so keep in it the associations ${kept.join(', ')}: ` +
         'a picker or a "new" button that sets one turns read-only without it (a B2B session broke nine tests that way)' : ''));
   }
+}
 
-  // PWD01
+// PWD01: a strong password policy.
+function pwd01({ sec, add }) {
   if (sec.minLength && (sec.minLength < 8 || !sec.digit || !sec.mixed || !sec.symbol)) {
     const missing = [sec.minLength < 8 ? 'at least 8 characters' : '', sec.digit ? '' : 'a digit', sec.mixed ? '' : 'mixed case', sec.symbol ? '' : 'a symbol'].filter(Boolean);
     add('PWD01', false, `the password policy does not require ${missing.join(', ')}: Mendix recommends its strong policy, the same in ` +
       'every environment. For the person: Studio Pro, App Security > Password policy. mxcli cannot change it -- leave it');
   }
-  return out;
 }
+
+const RULES = [cred01, strict01, anon01, filter01, sql01, extends01, admin01, xss01, write01, pwd01];
 
 // Mendix before 11.12.5 sends an offline app's client commits through mx.data, which strict mode
 // disables (release notes 11.12.5: "Strict mode did not work correctly with certain Client APIs and

@@ -393,7 +393,7 @@ main() {
     :
   elif [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     start_model_checks
-  elif [ "$TESTS_ONLY" = "0" ] && [ "${MDL_EARLY_CHECKS:-1}" != "0" ]; then
+  elif [ "$TESTS_ONLY" = "0" ]; then
     # shellcheck disable=SC2086
     start_model_checks $EARLY_CHECKS
   fi

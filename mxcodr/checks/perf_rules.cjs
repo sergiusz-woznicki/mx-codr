@@ -18,10 +18,7 @@
 'use strict';
 const py = require('./py_compat.cjs');
 
-// A pattern with Python's meaning (py_compat translates it).
-function rx(pattern, flags = '') {
-  return py.re.compile(pattern, flags);
-}
+const { rx } = py;
 
 const FLOW_HEAD = rx(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)`, 'i');
 const RETRIEVE = rx(String.raw`^\s*retrieve\s+\$(?P<var>\w+)\s+from\s+(?:database\s+)?(?P<src>[^\s;]+)(?P<rest>.*)$`, 'i');

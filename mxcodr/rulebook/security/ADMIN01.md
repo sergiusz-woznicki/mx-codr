@@ -1,7 +1,7 @@
 ---
 step: security
 level: warn
-check: security_rules.cjs#findings
+check: security_rules.cjs#admin01
 key: none
 owner: person
 ---

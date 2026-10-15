@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Check that page widgets are spaced with Atlas Spacing design properties.
+// The layout step: the rules for pages, snippets, the menu and the layouts of an app.
 //
 // Input: `describe page` dumps (.mdl files or directories), normally from tests/gate.sh;
 // optionally `DESCRIBE NAVIGATION` output (--navigation), snippet dumps (--sign-out-sources),
@@ -13,78 +13,12 @@
 //
 // The Node port of check_layout.py (2026-10-05): the same output, byte for byte, on the same input.
 //
-// Rule codes:
-//   SPACE01  FAIL  inline sibling (not last) without margin-right, or H1-H3 heading with a sibling below and no margin-bottom
-//   SPACE02  FAIL  margin/padding value other than None, S, M, L (mxcli check accepts it; mx check fails with CE6083)
-//   SPACE03  FAIL  inline widgets on one line with different top/bottom margins, or none with margin-bottom
-//   NAME01   WARN  (--names) a widget name used on more than one page or snippet
-//   NAME02   WARN  (--names) a widget name that does not read <Page>_<What><Type>; FAIL with
-//                  --names error, and for a page not in --names-baseline (the pages at install)
-//   SPACE04  FAIL  a button or text right on top of, or right under, a box (data grid, list, gallery,
-//                  group box, tab container, a card or a coloured container) with no margin between
-//                  them; a button in a grid's controlbar without margin-bottom
-//   HEAD01   WARN  page with no H1-H3 text, no header widget and no header/title/masthead snippet
-//   NAV01    FAIL  users sign in (--users-sign-in), but a navigation menu has no sign_out item
-//                  and no page or snippet has a sign-out button
-//   NAV02    WARN  the sign_out item is not the last item of its menu
-//   NAV03    FAIL  users sign in, and a role's home page (`home page X for Role`) is not in that
-//                  profile's menu
-//   GRID01   FAIL  a grid filter in a column with no Attribute (and none of its own): it renders
-//                  "Unable to get filter store" and filters nothing
-//   GRID02   FAIL  a button outside a data grid changes the rows it shows (creates its entity, acts
-//                  on its selection, or calls a flow that writes its entity): it goes in the grid's
-//                  header, `controlbar` inside the datagrid
-//   TABS02   FAIL  two or more lists on a page one under another, outside tabs
-//   KPI01    FAIL  a data grid or list over a view that always holds one row (totals): tiles
-//   DATE01   FAIL  a data grid column bound to a DateTime shows the date only, while a datepicker
-//                  of the app edits that attribute with DateFormat: DateTime or Time
-//   GRID03   FAIL  a data grid column bound to an attribute has no filter, on any grid whatever its
-//                  rows; the message gives the filter for the attribute's type (--entities), Boolean
-//                  and Enumeration a dropdownfilter, a path over an association one with Association
-//   LAYOUT01 FAIL  the app's pages (pop-ups, login and phone/tablet pages aside) use more than one
-//                  layout: the menu and its open/closed state change from page to page
-//   ICON01   FAIL  a button (actionbutton, linkbutton) without an icon; the message suggests one
-//   HIDDEN01 FAIL  a widget with Visible: [false] -- never shown, so no feature and no proof for a test
-//   LABEL01  FAIL  a column caption or field label that is an attribute name (DueDate) -- write words
-//                  from its action and caption
-//   USER01   FAIL  users sign in, and a page (pop-ups and the login page aside) does not open with
-//                  the "who is signed in" snippet, <Module>.SNIPPET_CurrentUser, on the right of its top
-//                  row -- first, or right after the Back button in the same container
-//   BACK01   FAIL  a page another page or a flow opens (show_page) does not start with a Back
-//                  button: close_page, icon chevron-left, top left. Pop-ups are exempt (they have X)
-//   ACCOUNT01 FAIL users sign in, the Administration module is there, and the menu has no item for
-//                  Administration.Account_Overview (user management; only administrators see it)
-//   ACCOUNT02 FAIL ... and no item for microflow Administration.ManageMyAccount (every user's own
-//                  account and password; it opens Administration.MyAccount, which needs an account)
-//   ACCOUNT03 FAIL a user role that signs in lacks Administration.User, or no role has
-//                  Administration.Administrator
-//   MODULE01 FAIL  the app has its own module with pages, and the template's MyFirstModule is still
-//                  there; lists everything that still uses it and how to remove it
-//   HOME01   FAIL  the administrators' role does not open on a page of the app's own modules
-//   NAV05    FAIL  a menu item or sub-menu with no icon (the message suggests one for its caption)
-//   NAV06    FAIL  two menu entries one user role sees (Mendix hides those whose page or microflow
-//                  the role may not open) show the same icon; with security off, any two entries
-//   NAV04    FAIL  one of the project's own layouts opens two or more pages from buttons: a menu
-//                  built by hand, with no hamburger, no active item and no phone view
-//   URL01    FAIL  a page of the app's own modules that is not a pop-up or login page has no URL,
-//                  though Mendix allows one (no non-persistent parameter); suggests one with a
-//                  segment per parameter
-//   ALERT01  WARN  a block class (alert, alert-*, card, well) on a dynamictext or text: it renders
-//                  as an inline <span>, so its padding and border overlap the widgets around it
-//   EDGE01   FAIL  a page on an Atlas_Core layout (pop-ups and the login page aside) has a widget at
-//                  its top level outside a layoutgrid: it touches the edge of the window
-//   TEXT01   FAIL  (--entities) a textbox edits a String longer than 500 characters or unlimited:
-//                  a one-line box for a long text; the message gives the textarea that replaces it
-//   TEXT02   WARN  (--entities) a textbox edits an attribute named like prose (Description, Notes,
-//                  Comment, Reason ...) of 100 characters or more, or of unknown length
-//
-// Where each rule lives, in layout_rules/ next to this file (this file only reads the arguments
-// and runs them): mdl1.cjs rewrites an mxcli v0.25 (`mdl 1`) describe into the v0.24 spelling the
-// rules read; pages.cjs parses the dumps; spacing.cjs SPACE01-03, HEAD01, ALERT01; controls.cjs
-// GRID01, ICON01; grids.cjs GRID02; grid_filters.cjs GRID03; dates.cjs DATE01; page_top.cjs BACK01, USER01; layouts.cjs LAYOUT01, NAV04;
-// navigation.cjs NAV01-03, NAV05-06; accounts.cjs ACCOUNT01-03, MODULE01, HOME01; edges.cjs EDGE01;
-// inputs.cjs TEXT01-02; vertical.cjs SPACE04; names.cjs NAME01-02. --port-parity runs only the rules check_layout.py
-// had (SPACE04 is newer), for the test that compares the two.
+// What each code checks, its level and its fix: its card, rulebook/layout/<CODE>.md (and
+// rulebook/naming/ for NAME01-02). The rules live in layout_rules/, one file per topic; this file
+// reads the arguments, runs check() from spacing.cjs and verticalFindings(), then LAYOUT_RULES in
+// order. mdl1.cjs rewrites an mxcli v0.25 (`mdl 1`) describe into the v0.24 spelling the rules read.
+// --port-parity leaves out the rules newer than the port, for the test that compares this file with
+// its frozen copy.
 'use strict';
 const fs = require('fs');
 const path = require('path');
@@ -299,6 +233,65 @@ function parseArgs(argv) {
   return args;
 }
 
+// The layout rules after check() and verticalFindings(), in the order their findings print. Each runs
+// when `when` holds; `into` is where its findings go (failures by default; 'both' for a rule that
+// returns [failures, warnings]). `newerThanPort`: left out under --port-parity, which compares the
+// checkers with their frozen copy from before the rule existed.
+const LAYOUT_RULES = [
+  { when: c => c.args.users_sign_in && c.hasNavigation, into: 'both', run: c => signOutFindings(c.navigation, c.text + '\n' + c.snippets) },
+  { when: c => c.args.users_sign_in && c.hasNavigation, run: c => roleHomeFindings(c.navigation) },
+  { when: c => c.args.template_module, run: c => templateModuleFindings(c.ownModules, Boolean(pageBlocks(c.lines).size), c.navigation, c.roles, c.text + '\n' + c.flows) },
+  { when: c => c.args.users_sign_in && c.ownModules.length && c.navigation, run: c => adminHomeFindings(c.navigation, c.roles, c.ownModules) },
+  { when: c => c.args.users_sign_in, run: c => currentUserFindings(c.lines, c.snippets, c.navigation, c.layouts, c.phone) },
+  { when: c => c.args.users_sign_in && c.args.admin_module && c.hasNavigation, run: c => accountFindings(c.navigation, c.roles, c.args.guest_role) },
+  { when: c => c.hasNavigation, run: c => menuIconFindings(c.navigation) },
+  // NAV06 per user role when security is on and who may open what is known; else for everyone.
+  { when: c => c.hasNavigation, run: c => duplicateIconFindings(c.navigation, userRoles(c.roles),
+    c.args.users_sign_in && c.args.menu_access ? readMenuAccess(readOptional(c.args.menu_access)) : null) },
+  { run: c => oneLayoutFindings(c.lines, c.navigation, c.layouts) },
+  { run: c => buttonIconFindings(c.withSnippets) },
+  { newerThanPort: true, run: c => hiddenWidgetFindings(c.withSnippets) },        // HIDDEN01
+  { newerThanPort: true, run: c => rawLabelFindings(c.withSnippets) },            // LABEL01
+  { run: c => backButtonFindings(c.lines, c.flows, c.navigation) },
+  { run: c => headerButtonFindings(c.lines, c.flows) },
+  { newerThanPort: true, run: c => missingFilterFindings(c.withSnippets, c.entityText) },  // GRID03
+  { newerThanPort: true, run: c => dateColumnFindings(c.withSnippets)[0] },               // DATE01
+  { newerThanPort: true, run: c => listTabsFindings(c.lines, c.entityText) },             // TABS02, KPI01
+  { run: c => edgeFindings(c.lines, c.snippets, c.navigation) },
+  { run: c => listItemFindings(c.withSnippets) },                                         // LIST01
+  { when: c => c.args.layouts.length, run: c => layoutMenuFindings(c.layouts) },
+  // Offline and phone: OFFLINE01-03, PHONE01-06, TABS01 (a warning).
+  { when: c => c.hasNavigation, run: c => offlineFindings(c.navigation, readOptional(c.args.web_index), c.args.tests_dir ? fsPath(c.args.tests_dir) : '') },
+  { when: c => c.args.phone_layouts.length, run: c => phoneMenuFindings(c.lines, c.phone) },
+  { when: c => c.args.phone_layouts.length && c.hasNavigation, run: c => webPhoneLayoutFindings(c.navigation, c.lines, c.phone) },
+  { when: c => c.args.phone_layouts.length, run: c => phoneGridFindings(c.lines, c.phone) },
+  { when: c => c.args.phone_layouts.length, run: c => stickyBarFindings(c.lines, c.phone, readOptional(c.args.theme_css)) },
+  { when: c => c.args.phone_layouts.length, run: c => loginWidthFindings(c.lines, c.phone, readOptional(c.args.theme_css)) },
+  { when: c => c.args.phone_layouts.length, run: c => phoneTopFindings(c.lines, c.phone, c.snippets) },
+  { when: c => c.args.phone_layouts.length, into: 'warnings', run: c => tabsFindings(c.lines, c.phone) },
+];
+
+// Widget names: a page or snippet that was not in the app when the harness was installed (the
+// --names-baseline the installer wrote) needs them; one that was keeps them as warnings, so an app
+// that grew in Studio Pro is not renamed wholesale. --names error makes every one block. The
+// precheck asks for them before each exec already; this is the backstop.
+function nameFindingsInto(ctx, failures, warnings) {
+  const { args } = ctx;
+  if (args.names !== 'warn' && args.names !== 'error') return;
+  const all = ctx.withSnippets;
+  const hashes = documentHashes(all);
+  if (args.page_hashes) fs.writeFileSync(fsPath(args.page_hashes), JSON.stringify(hashes));
+  let baseline = null;
+  if (args.names_baseline && exists(fsPath(args.names_baseline))) {
+    try { baseline = JSON.parse(fs.readFileSync(fsPath(args.names_baseline), 'utf8')); } catch { baseline = null; }
+  }
+  for (const f of nameFindings(all)) {
+    const fresh = baseline && f.check === 'NAME02' && !Object.prototype.hasOwnProperty.call(baseline, f.document);
+    const finding = { check: f.check, line: f.line, message: f.message + (fresh ? ` -- ${f.document} is new since the harness was installed, so its names are required` : ''), document: f.document };
+    (args.names === 'error' || fresh ? failures : warnings).push(finding);
+  }
+}
+
 function main() {
   // --levels / --except: what the person changed in the rulebook (tests/rulebook/): a code's level
   // when it differs from the card's default, and the documents excepted. Every other code keeps
@@ -344,72 +337,27 @@ function main() {
     py.print('could not run -- ' + unread.join('; ') + ": this mxcli's describe format is not one check_layout.py reads");
     return 2;
   }
-  if (args.users_sign_in && hasNavigation) {
-    const [navFailures, navWarnings] = signOutFindings(navigation, text + '\n' + snippets);
-    failures = failures.concat(navFailures);
-    warnings = warnings.concat(navWarnings);
-    failures = failures.concat(roleHomeFindings(navigation));
-  }
-  if (args.template_module) {
-    failures = failures.concat(templateModuleFindings(ownModules, Boolean(pageBlocks(lines).size), navigation, roles, text + '\n' + flows));
-  }
-  if (args.users_sign_in && ownModules.length && navigation) failures = failures.concat(adminHomeFindings(navigation, roles, ownModules));
-  if (args.users_sign_in) failures = failures.concat(currentUserFindings(lines, snippets, navigation, layouts, args.phone_layouts.length ? collect(args.phone_layouts)[0] : ''));
-  if (args.users_sign_in && args.admin_module && hasNavigation) failures = failures.concat(accountFindings(navigation, roles, args.guest_role));
-  if (hasNavigation) {
-    failures = failures.concat(menuIconFindings(navigation));
-    // NAV06 per user role when security is on and who may open what is known; else for everyone.
-    const access = args.users_sign_in && args.menu_access ? readMenuAccess(readOptional(args.menu_access)) : null;
-    failures = failures.concat(duplicateIconFindings(navigation, userRoles(roles), access));
-  }
-  failures = failures.concat(oneLayoutFindings(lines, navigation, layouts));
-  failures = failures.concat(buttonIconFindings(lines.concat(py.splitlines(snippets))));
-  // HIDDEN01: a widget with Visible: [false] is never shown.
-  if (!args.port_parity) failures = failures.concat(hiddenWidgetFindings(lines.concat(py.splitlines(snippets))));
-  // LABEL01: a caption or label that is an attribute's name.
-  if (!args.port_parity) failures = failures.concat(rawLabelFindings(lines.concat(py.splitlines(snippets))));
-  failures = failures.concat(backButtonFindings(lines, flows, navigation));
-  failures = failures.concat(headerButtonFindings(lines, flows));
-  // GRID03: every data grid column bound to an attribute has the filter its type wants.
-  if (!args.port_parity) failures = failures.concat(missingFilterFindings(lines.concat(py.splitlines(snippets)), entityText));
-  // DATE01: a grid column shows the date only of a DateTime whose time a form edits.
-  if (!args.port_parity) failures = failures.concat(dateColumnFindings(lines.concat(py.splitlines(snippets)))[0]);
-  // TABS02 (lists stacked on a page go in tabs) and KPI01 (a one-row view's grid is tiles).
-  if (!args.port_parity) failures = failures.concat(listTabsFindings(lines, entityText));
-  failures = failures.concat(edgeFindings(lines, snippets, navigation));
-  // LIST01: a list view item shows its texts on the left and its buttons on the right, in one row.
-  failures = failures.concat(listItemFindings(lines.concat(py.splitlines(snippets))));
-  if (args.layouts.length) failures = failures.concat(layoutMenuFindings(layouts));
-  // Offline profiles (OFFLINE01-03), the menus phone and tablet layouts show (PHONE01) and the
-  // browser profile's pages on a phone layout (PHONE02), data grids on a phone layout (PHONE03), a theme whose content region never scrolls (PHONE04), a login form wider than a phone (PHONE05), a phone page whose Back, title and signed-in user are not one row (PHONE06), a phone page's object and its list not in tabs (TABS01, a warning).
-  if (hasNavigation) failures = failures.concat(offlineFindings(navigation, readOptional(args.web_index), args.tests_dir ? fsPath(args.tests_dir) : ''));
-  if (args.phone_layouts.length) failures = failures.concat(phoneMenuFindings(lines, collect(args.phone_layouts)[0]));
-  if (args.phone_layouts.length && hasNavigation) failures = failures.concat(webPhoneLayoutFindings(navigation, lines, collect(args.phone_layouts)[0]));
-  if (args.phone_layouts.length) failures = failures.concat(phoneGridFindings(lines, collect(args.phone_layouts)[0]));
-  if (args.phone_layouts.length) failures = failures.concat(stickyBarFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
-  if (args.phone_layouts.length) failures = failures.concat(loginWidthFindings(lines, collect(args.phone_layouts)[0], readOptional(args.theme_css)));
-  if (args.phone_layouts.length) failures = failures.concat(phoneTopFindings(lines, collect(args.phone_layouts)[0], snippets));
-  if (args.phone_layouts.length) warnings = warnings.concat(tabsFindings(lines, collect(args.phone_layouts)[0]));
-  // Widget names: a page or snippet that was not in the app when the harness was installed (the
-  // --names-baseline the installer wrote) needs them; one that was keeps them as warnings, so an app
-  // that grew in Studio Pro is not renamed wholesale. --names error makes every one block. The
-  // precheck asks for them before each exec already; this is the backstop.
-  if (args.names === 'warn' || args.names === 'error') {
-    const all = lines.concat(py.splitlines(snippets));
-    const hashes = documentHashes(all);
-    if (args.page_hashes) fs.writeFileSync(fsPath(args.page_hashes), JSON.stringify(hashes));
-    let baseline = null;
-    if (args.names_baseline && exists(fsPath(args.names_baseline))) {
-      try { baseline = JSON.parse(fs.readFileSync(fsPath(args.names_baseline), 'utf8')); } catch { baseline = null; }
-    }
-    for (const f of nameFindings(all)) {
-      const fresh = baseline && f.check === 'NAME02' && !Object.prototype.hasOwnProperty.call(baseline, f.document);
-      const finding = { check: f.check, line: f.line, message: f.message + (fresh ? ` -- ${f.document} is new since the harness was installed, so its names are required` : ''), document: f.document };
-      (args.names === 'error' || fresh ? failures : warnings).push(finding);
+  const ctx = {
+    args, lines, text, navigation, roles, snippets, layouts, flows, entityText, ownModules, hasNavigation,
+    withSnippets: lines.concat(py.splitlines(snippets)),
+    phone: args.phone_layouts.length ? collect(args.phone_layouts)[0] : '',
+  };
+  for (const rule of LAYOUT_RULES) {
+    if (args.port_parity && rule.newerThanPort) continue;
+    if (rule.when && !rule.when(ctx)) continue;
+    const found = rule.run(ctx);
+    if (rule.into === 'both') {
+      failures = failures.concat(found[0]);
+      warnings = warnings.concat(found[1]);
+    } else if (rule.into === 'warnings') {
+      warnings = warnings.concat(found);
+    } else {
+      failures = failures.concat(found);
     }
   }
+  nameFindingsInto(ctx, failures, warnings);
   if (args.entities.length) {
-    const [textFailures, textWarnings] = textInputFindings(lines.concat(py.splitlines(snippets)), entityText);
+    const [textFailures, textWarnings] = textInputFindings(ctx.withSnippets, entityText);
     failures = failures.concat(textFailures);
     warnings = warnings.concat(textWarnings);
   }
@@ -462,6 +410,5 @@ module.exports = {
     const [text, used] = collect(sources.map(pathParts));
     return [text, used.map(pathStr)];
   },
-  read_optional: p => readOptional(p ? pathParts(p) : null),
   main,
 };

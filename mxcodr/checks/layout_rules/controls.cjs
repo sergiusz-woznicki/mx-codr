@@ -13,7 +13,7 @@ const FILTER_RE = re.compile(String.raw`^\s*(?P<type>textfilter|numberfilter|dat
 // A filter's own target: `Attribute:`, `attributes: [...]` or `Association:`.
 const FILTER_TARGET_RE = re.compile(String.raw`\b(attributes?|association)\s*:`, 'i');
 
-const count = (s, sub) => s.split(sub).length - 1;
+const { count } = require('./mdl_text.cjs');
 
 // GRID01: a filter only works on the column's attribute; with none, Data Grid 2 shows an error box.
 function columnFilterFindings(lines) {
