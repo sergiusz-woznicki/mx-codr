@@ -105,6 +105,38 @@ function newFeaturesCommand(args) {
   return 0;
 }
 
+// REQ03: a later request's new page or ACT_ microflow is anchored by one of its requirements. The
+// first build records its requirements (REQ01); a later request did not, so what it asked for and did
+// not build left no trace for the next session: a B2B run with a fresh session per part skipped the
+// payment-reminder agent of part 4 and nothing showed it as open (2026-10-15). Prints the new pages and
+// ACT_ microflows that no requirement in docs/brain/plan/ (or the staged queue) names with @, once the
+// app has pages of its own and its plan has requirements; the caller blocks on any line.
+function unanchoredFeaturesCommand(args) {
+  const [app, mpr, ...scripts] = args;
+  const coverage = require('./check_test_coverage.cjs');
+  const plan = py.join(app, 'docs', 'brain', 'plan');
+  let anchors = '';
+  try {
+    for (const file of fs.readdirSync(plan)) if (file.endsWith('.md')) anchors += fs.readFileSync(py.join(plan, file), 'utf8') + '\n';
+  } catch {
+    return 0;
+  }
+  if (!/^## /m.test(anchors)) return 0;
+  try { anchors += fs.readFileSync(py.join(app, '.mxcli', 'brain', 'staged.jsonl'), 'utf8'); } catch { /* no queue */ }
+  const fresh = newFeatures(app, mpr, scripts, coverage);
+  if (!fresh || !fresh.length) return 0;
+  try {
+    const own = coverage.projectModules(app, mpr)[1];
+    const pages = coverage.qualifiedNames(coverage.mxcliJson(app, mpr, 'SHOW PAGES'));
+    if (![...pages].some(name => own.includes(name.split('.')[0]))) return 0;   // the first build: REQ01's
+  } catch {
+    return 0;
+  }
+  const named = name => new RegExp('@' + name.replace(/\./g, '\\.') + '(?![\\w.])').test(anchors);
+  for (const [kind, name] of fresh) if (!named(name)) py.print(`  - ${kind} ${name}`);
+  return 0;
+}
+
 
 // SCRIPT01: a document two scripts create is whatever the last one run says.
 // The kinds mxcli 0.25 can patch with `alter <kind>`; a constant or a menu it cannot.
@@ -252,4 +284,4 @@ function widgetNameFindings(scripts) {
   if (out.length) process.stdout.write(out.join('\n') + '\n');
 }
 
-module.exports = { DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings };
+module.exports = { unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings };

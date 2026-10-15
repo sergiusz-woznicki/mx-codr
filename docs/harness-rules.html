@@ -317,8 +317,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">115</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">70</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">116</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">71</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">6</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
@@ -340,6 +340,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>STALE01</code></td><td>An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TEST01</code></td><td>Test first: before a new page or a new <code>ACT_</code> microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REQ01</code></td><td>Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ03</code></td><td>A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What is not built yet is recorded as well, so the next session's orient.sh lists it as open.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 

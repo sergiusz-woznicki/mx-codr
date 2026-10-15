@@ -158,6 +158,25 @@ if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ01 block)" 
   fi
 fi
 
+# REQ03: a later request's new page or ACT_ microflow waits for a requirement that anchors it, so
+# every request leaves its requirements in docs/brain/plan/ -- built or not -- and the next session's
+# orient.sh shows what is still open (a fresh session per part skipped a whole feature of part 4 and
+# nothing said so, B2B 2026-10-15). Only once the app has pages and its plan has requirements.
+if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ03 block)" = "block" ] \
+   && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1; then
+  unanchored="$("$NODE" tools/mdl-checks/gate_helpers.cjs unanchored-features . "$MPR" "$@" 2>/dev/null)"
+  if [ -n "$unanchored" ]; then
+    echo "precheck: REQ03 -- no requirement of this request names these new documents (the real model is untouched):"
+    printf '%s\n' "$unanchored"
+    echo "  Record this request's requirements first, one per testable statement of it, in a slice of its own,"
+    echo "  each anchored at the document that will build it:"
+    echo "    ./mxcli brain capture \"<requirement>\" --slice <NN>-<this request> -a @<Module.Doc> -p $MPR"
+    echo "  A part of the request you will not build now gets its requirement too, anchored at the document it"
+    echo "  will be: the next session's orient.sh lists it as open. Promote each (./mxcli brain promote <id>), then exec again."
+    exit 1
+  fi
+fi
+
 # TEST01: test first. A page or ACT_ microflow new to the model, named by no `# covers:` line of
 # tests/verify-*.test.sh, waits for its test. Then the test is red until the exec (red-first comes
 # by itself) and the tests do not pile up at the end. TEST01 `off` in tests/rulebook/app/TEST01.md turns it off.

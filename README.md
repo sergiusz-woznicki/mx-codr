@@ -154,7 +154,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (21 rules)
+**Done means tested and building** (22 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -173,6 +173,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `STALE01` | An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change. | Blocks |
 | `TEST01` | Test first: before a new page or a new ACT_ microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine. | Blocks |
 | `REQ01` | Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead. | Blocks |
+| `REQ03` | A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What the request asks for and is not built yet is recorded as well, so the next session's `orient.sh` lists it as open. | Blocks |
 | `TESTS01` | Every browser test passes. Microflow unit tests (*.test.mdl) are not run by the gate; it shows the command that runs them. | Blocks |
 | `UNUSED01` | No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it. | Blocks |
 | `VIS01` | On the page a test ends on, no two widgets lie on top of each other. | Warning |
