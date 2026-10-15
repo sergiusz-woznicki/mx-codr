@@ -256,7 +256,13 @@ function listsWithoutSeed(settingsText, navigationText, sources, entities, permi
     if (/\bcall\s+(?:java\s+action|rest|web\s+service)\b|\bsend\s+rest\b|\bimport\s+(?:from|with)\b/i.test(text)) return (createdBy[flow] = null);
     const out = new Set();
     for (const m of text.matchAll(new RegExp(`\\bcreate\\s+(${QNAME})\\s*\\(`, 'gi'))) for (const a of lineage(unquote(m[1]))) out.add(a);
-    for (const m of text.matchAll(new RegExp(`\\bcall\\s+microflow\\s+(${QNAME})`, 'gi'))) {
+    // A workflow the seed starts creates rows through the microflows its activities name (`on created
+    // microflow`, `call microflow`): an approval task list filled by the workflow is seeded (B2B, 2026-10-15).
+    const callees = [...text.matchAll(new RegExp(`\\bcall\\s+(?:microflow|workflow)\\s+(${QNAME})`, 'gi'))].map(m => m[1]);
+    if (/^\s*create\s+(?:or\s+modify\s+)?workflow\b/im.test(text)) {
+      for (const m of text.matchAll(new RegExp(`\\bmicroflow\\s+(${QNAME})`, 'gi'))) callees.push(m[1]);
+    }
+    for (const m of callees.map(c => [null, c])) {
       const inner = creates(unquote(m[1]));
       if (inner === null) return (createdBy[flow] = null);
       for (const a of inner) out.add(a);
@@ -329,7 +335,7 @@ function main() {
       found.push(...startupReturnsFalse(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), flow => mxcli(appDir, mpr, `DESCRIBE MICROFLOW ${flow}`)));
     }
     if (level('SEED01') !== 'off') {
-      const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('MICROFLOW', 'PAGE', 'SNIPPET')", true);
+      const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('MICROFLOW', 'PAGE', 'SNIPPET', 'WORKFLOW')", true);
       const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType IN ('PAGE', 'ENTITY', 'MICROFLOW')", true);
       found.push(...listsWithoutSeed(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), mxcli(appDir, mpr, 'DESCRIBE NAVIGATION'), sources, entities, permissions, modules));
     }

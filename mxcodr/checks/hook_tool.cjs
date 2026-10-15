@@ -210,7 +210,7 @@ const tools = {
     if (!m) return;
     const trivial = re.compile(String.raw`^((export\s+)?[A-Za-z_]\w*=("[^"]*"|'[^']*'|\S*)\s*)*$|^cd\s+\S+$`);
     for (const step of re.split(String.raw`&&|\|\||[;|\n]`, text.slice(0, m.start()))) {
-      if (!trivial.match(py.strip(step))) {
+      if (!trivial.match(py.strip(step)) && !require('./plugins/harness-core.cjs').readOnlyStep(py.strip(step))) {
         py.print('Nothing in this command ran, the steps before the exec included (an edit there never happened): the script was checked as it is on disk. Run those steps on their own, then the exec as its own command.');
         break;
       }

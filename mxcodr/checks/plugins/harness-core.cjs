@@ -185,11 +185,18 @@ function newTestNote(root, tool, args) {
 // times, was blocked before the edit ran, and debugged an edit that was never applied.
 const STEPS_BEFORE_EXEC =
   "Nothing in this command ran, the steps before the exec included (an edit there never happened): the script was checked as it is on disk. Run those steps on their own, then the exec as its own command.\n"
+// A step that reads and writes nothing -- `./mxcli check`, head, tail, grep, wc, ls, cat or echo with
+// no redirection into a file: "an edit there never happened" sent Qwen 3.6 after an edit it had
+// never made when only `./mxcli check ... | head` stood before the exec (2026-10-15).
+function readOnlyStep(step) {
+  if (/(^|[^0-9&])>/.test(step.replace(/[12]?>&[12]/g, ""))) return false
+  return /^((\.\/)?mxcli(\.exe)?\s+(check|syntax)\b|(head|tail|grep|wc|ls|cat|echo)\b|sed\s+-n\b)/.test(step)
+}
 function stepsBeforeExec(command) {
   const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
   if (!m) return false
   const trivial = /^((export\s+)?[A-Za-z_]\w*=("[^"]*"|'[^']*'|\S*)\s*)*$|^cd\s+\S+$/
-  return command.slice(0, m.index).split(/&&|\|\||[;|\n]/).some((step) => !trivial.test(step.trim()))
+  return command.slice(0, m.index).split(/&&|\|\||[;|\n]/).some((step) => !trivial.test(step.trim()) && !readOnlyStep(step.trim()))
 }
 
 // A step before the exec that writes one of its scripts (an edit, a move, a new file): the precheck
@@ -437,7 +444,7 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
-  run, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC,
+  run, readOnlyStep, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC,
   EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }
