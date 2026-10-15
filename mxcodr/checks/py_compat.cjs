@@ -54,11 +54,6 @@ function split(s, sep, maxsplit = -1) {
   if (maxsplit < 0 || parts.length <= maxsplit + 1) return parts;
   return [...parts.slice(0, maxsplit), parts.slice(maxsplit).join(sep)];
 }
-function rsplit(s, sep, maxsplit = -1) {
-  const parts = s.split(sep);
-  if (maxsplit < 0 || parts.length <= maxsplit + 1) return parts;
-  return [parts.slice(0, parts.length - maxsplit).join(sep), ...parts.slice(parts.length - maxsplit)];
-}
 
 // str.splitlines(): every line boundary Python knows, no trailing empty line.
 function splitlines(s, keepends = false) {
@@ -738,10 +733,15 @@ function write(text) {
     }
   }
 }
+// A pattern with Python's meaning: shorthand for re.compile, used by the rule files.
+function rx(pattern, flags = '') {
+  return re.compile(pattern, flags);
+}
+
 function print(...items) { write(items.map(pyStr).join(' ') + '\n'); }
 
 module.exports = {
-  WIN, strip, lstrip, rstrip, split, rsplit, splitlines, isSpace, readText, readStdin, readStdinBytes,
-  pyStr, pyRepr, jsonDumps, compare, compareTuples, sorted, re, translate, Shlex, shlexSplit,
+  WIN, strip, lstrip, rstrip, split, splitlines, isSpace, readText, readStdin, readStdinBytes,
+  pyStr, pyRepr, jsonDumps, compare, compareTuples, sorted, re, rx, translate, Shlex, shlexSplit,
   basename, dirname, join, exists, lexists, isdir, isfile, glob, iglob, fnmatchRegex, normpath, print, write, setOutputFilter,
 };

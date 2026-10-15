@@ -9,7 +9,7 @@
 // or a CustomDateFormat with hours or minutes in it ('dd-MM-yyyy HH:mm', room-booking r3), edits it. Every grid column bound to such an attribute then shows the time too, as a dynamic
 // text; the column keeps its Attribute, so it still sorts and filters.
 'use strict';
-const py = require('../py_compat.cjs');
+const { propsOf } = require('./mdl_text.cjs');
 
 const DOCUMENT = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(?:page|snippet)\s+([\w.]+)/i;
 const DATEPICKER = /^\s*datepicker\s+("[^"]*"|[\w.]+)\s*\(/i;
@@ -21,15 +21,6 @@ const CUSTOM = /\bCustomDateFormat:\s*'((?:[^']|'')*)'/i;
 // Hours (H h k K), minutes (m) or AM/PM (a) outside quoted literal text.
 const TIME_LETTERS = /[HhkKma]/;
 const SHOWN_AS = /\bShowContentAs:\s*(dynamicText|customContent)\b/i;
-
-// A widget's properties: its line, and the lines below while it is still open with `(`.
-function propsOf(lines, index) {
-  let props = lines[index];
-  if (/\(\s*$/.test(props)) {
-    for (let look = index + 1; look < lines.length && !/^\s*\)/.test(lines[look]); look++) props += ' ' + py.strip(lines[look]);
-  }
-  return props;
-}
 
 // [failures, warnings] for the pages and snippets in <lines>.
 function dateColumnFindings(lines) {

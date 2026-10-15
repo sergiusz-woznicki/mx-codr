@@ -82,6 +82,8 @@ printf '     %s\n' "An agent's skill list is fixed when its session starts, so t
 printf '     %s\n' "just wrote are invisible to the session that ran it. Measured: a session that installed"
 printf '     %s\n' "and then built without restarting read twelve SKILL.md files by hand -- 216k characters,"
 printf '     %s\n' "36 commands, 6.5 minutes -- before its first real command. After a restart: 8 commands."
+printf '     %s\n' "A long project: one request per session. The next session's orient.sh starts where the"
+printf '     %s\n' "last gate left the app; one session resumed for every request re-reads it all each turn."
 printf '     %s\n' "Codex will not fire its hooks until you open ${C_BOLD}/hooks${C_RESET} once and trust them."
 printf '     %s\n' "Cursor needs hooks enabled for this workspace before ${C_BOLD}.cursor/hooks.json${C_RESET} runs."
 printf '     %s\n' "OpenCode loads ${C_BOLD}.opencode/plugin/${C_RESET} at startup; restart an open session to pick it up."

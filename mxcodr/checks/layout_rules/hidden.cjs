@@ -24,10 +24,13 @@ function hiddenWidgetFindings(lines) {
     const widget = WIDGET_LINE_RE.match(lines[index]);
     if (!widget) continue;
     // The widget's properties run to the line that opens its body or closes them.
-    let header = lines[index], look = index;
+    // Brackets counted outside quotes: a `formatDateTime(...))` line inside a multi-line header is not its end.
+    let header = lines[index], look = index, parens = 0;
     while (look < lines.length - 1) {
+      const bare = lines[look].replace(/'(?:[^']|'')*'/g, "''");
+      parens += (bare.split('(').length - 1) - (bare.split(')').length - 1);
       const r = py.rstrip(lines[look]);
-      if (r.endsWith('{') || r.endsWith(')') || r.endsWith(';')) break;
+      if (parens <= 0 && (r.endsWith('{') || r.endsWith(')') || r.endsWith(';'))) break;
       look++;
       header += ' ' + lines[look];
     }

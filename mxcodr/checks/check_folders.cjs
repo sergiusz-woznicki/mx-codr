@@ -23,8 +23,15 @@ const KIND = {
   MICROFLOW: 'FNC', NANOFLOW: 'FNC',
 };
 // Not documents in a folder: the domain model's own, and what a module carries without a place.
-const NO_FOLDER = new Set(['ENTITY', 'ASSOCIATION', 'MODULE', 'MENU', 'JAR_DEPENDENCY', 'NAVIGATION_PROFILE']);
+// A business event is a message inside its service document, not a document of its own.
+const NO_FOLDER = new Set(['ENTITY', 'ASSOCIATION', 'MODULE', 'MENU', 'JAR_DEPENDENCY', 'NAVIGATION_PROFILE', 'BUSINESS_EVENT']);
 const KINDS = ['UI', 'FNC', 'ENV'];
+// Where the catalog leaves the folder empty, DESCRIBE may print it.
+const DESCRIBED_FOLDER = { ODATA_SERVICE: 'published odata service', BUSINESS_EVENT_SERVICE: 'business event service' };
+// mxcli 0.26 moves a business event service into a folder, but neither the catalog nor DESCRIBE says
+// which: the rule could never pass, and a session dropped the service to reach DONE (B2B, 2026-10-14).
+// Such a document is not judged until mxcli can read where it is.
+const UNREADABLE_FOLDER = new Set(['BUSINESS_EVENT_SERVICE']);
 const kindOf = type => KIND[type] || 'ENV';
 // How `move` spells each document type (mxcli syntax move).
 const spelled = type => (type === 'ODATA_SERVICE' ? 'published odata service' : type.toLowerCase().replace(/_/g, ' '));
@@ -54,7 +61,7 @@ function findings(objects, modules) {
     if (top && !KINDS.includes(top) && !top.startsWith('_')) (folders[o.ModuleName] = folders[o.ModuleName] || new Set()).add(top);
   }
   for (const o of objects) {
-    if (!own.has(o.ModuleName) || NO_FOLDER.has(o.ObjectType)) continue;
+    if (!own.has(o.ModuleName) || NO_FOLDER.has(o.ObjectType) || o.unreadable) continue;
     const want = kindOf(o.ObjectType);
     const folder = String(o.Folder || '').replace(/^\/+|\/+$/g, '');
     const segments = folder ? folder.split('/') : [];
@@ -119,12 +126,13 @@ function main() {
   // after a move that DESCRIBE shows took effect): its folder is read from DESCRIBE instead.
   const own = new Set(modules);
   for (const o of objects) {
-    if (o.ObjectType !== 'ODATA_SERVICE' || o.Folder || !own.has(o.ModuleName)) continue;
+    if (!(o.ObjectType in DESCRIBED_FOLDER) || o.Folder || !own.has(o.ModuleName)) continue;
     try {
-      const text = mxcli(appDir, mpr, `describe published odata service ${o.QualifiedName}`);
+      const text = mxcli(appDir, mpr, `describe ${DESCRIBED_FOLDER[o.ObjectType]} ${o.QualifiedName}`);
       const m = /\bfolder\s+'((?:[^']|'')*)'/i.exec(text);
       if (m) o.Folder = m[1].replace(/''/g, "'");
-    } catch { /* left as the catalog says */ }
+      else if (UNREADABLE_FOLDER.has(o.ObjectType)) o.unreadable = true;
+    } catch { if (UNREADABLE_FOLDER.has(o.ObjectType)) o.unreadable = true; }
   }
   const found = level === 'off' ? [] : findings(objects, modules).filter(f => !left.has(f.name));
   if (!found.length) { process.stdout.write('PASS  every document is in <business folder>/UI, FNC or ENV\n'); return 0; }
@@ -136,4 +144,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { KIND, NO_FOLDER, kindOf, guessFolder, findings, moveStatement };
+module.exports = { KIND, NO_FOLDER, UNREADABLE_FOLDER, DESCRIBED_FOLDER, kindOf, guessFolder, findings, moveStatement };

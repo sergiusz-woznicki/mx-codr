@@ -1,7 +1,7 @@
 ---
 step: security
 level: block
-check: security_rules.cjs#findings
+check: security_rules.cjs#anon01
 key: none
 ---
 

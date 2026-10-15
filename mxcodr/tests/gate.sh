@@ -6,7 +6,7 @@
 #   bash tests/gate.sh --changed          # the tests a model change touched since they last ran
 #   bash tests/gate.sh --tests-only       # the suite alone
 #   bash tests/gate.sh --boot-if-needed   # start the app first if nothing answers
-#   bash tests/gate.sh --restart          # stop this project's runtime, boot it again, then gate
+#   bash tests/gate.sh --restart          # stop this project's runtime and boot it again (add --only to test)
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
 #   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
 #   bash tests/gate.sh --reset-data       # with any of the above: tests start on the snapshot's data
@@ -194,6 +194,36 @@ captions_after_done() {
   return 0
 }
 
+# .mxcli/last-gate.txt: where the gate stood, for the next session's tests/orient.sh. A long build
+# done one request per session (B2B, 2026-10-15: a fresh session finished a follow-up in 6 min and
+# 0.7M tokens, against 650-800k tokens a turn late in one long session) starts from it instead of a
+# gate run of its own. `full:` is the last full gate, `last:` the last run of any kind.
+# The codes behind a red run, most frequent first: "NAME02 x3, URL01 x1"; "tests" for a red suite.
+blocking_codes() {
+  local name codes=""
+  for name in ${failures[@]+"${failures[@]}"}; do
+    [ -s "$WORK/$name.detail" ] || continue
+    codes="$codes$(grep -E '^[[:space:]]*- \[' "$WORK/$name.detail" | grep -oE '\[[A-Z]+[0-9]+\]' | tr -d '[]')
+"
+  done
+  codes="$(printf '%s' "$codes" | grep . | sort | uniq -c | sort -k1,1nr -k2,2 | awk '{printf "%s%s x%s", (NR > 1 ? ", " : ""), $2, $1}')"
+  printf '%s' "${codes:-see the gate output}"
+}
+
+record_last_gate() {
+  local verdict="$1" when full=""
+  when="$(date '+%Y-%m-%d %H:%M')"
+  mkdir -p .mxcli 2>/dev/null || return 0
+  if [ -n "${ONLY:-}" ] || [ "${TESTS_ONLY:-0}" = "1" ]; then
+    full="$(grep '^full:' .mxcli/last-gate.txt 2>/dev/null)"
+    verdict="${ONLY:+--only $ONLY }$verdict"
+  else
+    full="full: $when $verdict"
+  fi
+  printf '%s\nlast: %s %s\n' "${full:-full: never run}" "$when" "$verdict" > .mxcli/last-gate.txt 2>/dev/null
+  return 0
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -209,13 +239,18 @@ print_verdict_and_exit() {
     echo "   NOT DONE — failed: ${failures[*]}"
     [ ${#cannot_run[@]} -eq 0 ] || echo "   and could not run: ${cannot_run[*]}"
     print_failure_details
+    EARLY_CODES=""
+    [ -n "${ONLY:-}" ] && print_early_blockers
     print_blockers
+    [ -n "$EARLY_CODES" ] && echo "   and the full gate would refuse $EARLY_CODES (== before DONE above)"
+    record_last_gate "NOT DONE -- failed: ${failures[*]} ($(blocking_codes))"
     exit 1
   fi
   if [ ${#cannot_run[@]} -gt 0 ]; then
     echo "   NOT DONE — could not run: ${cannot_run[*]}"
     echo "   A check that did not run has not passed. Fix what stopped it, then run the gate again."
     print_failure_details
+    record_last_gate "NOT DONE -- could not run: ${cannot_run[*]}"
     exit 2
   fi
   # A partial run passing is not the gate passing: `--only 000` once ended in the same DONE line
@@ -224,12 +259,20 @@ print_verdict_and_exit() {
     local scope="tests only"
     [ -n "${ONLY:-}" ] && scope="--only $ONLY"
     [ "${CHANGED:-0}" = "1" ] && scope="--changed (${#targets_ran[@]} of $(ls tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ') tests)"
-    echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
+    EARLY_CODES=""
+    [ -n "${ONLY:-}" ] && print_early_blockers
+    if [ -n "$EARLY_CODES" ]; then
+      echo "   PASSED — $scope -- not DONE: the full gate would refuse $EARLY_CODES (== before DONE above); fix them before the full gate"
+    else
+      echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
+    fi
     only_coverage_note
+    record_last_gate "PASSED${EARLY_CODES:+ -- the full gate would refuse $EARLY_CODES}"
     exit 0
   fi
   print_for_the_person
   echo "   DONE — every check passed"
+  record_last_gate "DONE$( [ -s .mxcli/warnings.txt ] && printf ' (%s warnings in .mxcli/warnings.txt)' "$(grep -cE '^[[:space:]]*- ' .mxcli/warnings.txt)")"
   done_repeat_note
   captions_after_done
   declare -F dbsnap_restore >/dev/null && dbsnap_restore
@@ -318,7 +361,7 @@ main() {
 
   # USER_MODULES_READ=0 tells a failed SHOW MODULES apart from a project with no module.
   USER_MODULES=""; USER_MODULES_READ=1
-  if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
+  if [ "$TESTS_ONLY" = "0" ]; then
     USER_MODULES="$(mdl_user_modules "$MPR")" || USER_MODULES_READ=0
   fi
 
@@ -342,8 +385,17 @@ main() {
   fi
   declare -F dbsnap_take >/dev/null && dbsnap_take
   # 1. The model checks need no app: start them now, they run while the suite does.
-  if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
+  # `--restart` on its own restarts and stops: sessions ran `gate.sh --restart; gate.sh`, and the
+  # restart's own full gate ran the suite a second time, a minute or two per pair (2026-10-14).
+  RESTART_ALONE=0
+  [ "$RESTART" = "1" ] && [ -z "$ONLY" ] && [ "$TESTS_ONLY" = "0" ] && RESTART_ALONE=1
+  if [ "$RESTART_ALONE" = "1" ]; then
+    :
+  elif [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     start_model_checks
+  elif [ "$TESTS_ONLY" = "0" ]; then
+    # shellcheck disable=SC2086
+    start_model_checks $EARLY_CHECKS
   fi
   # 2. The app: restart it if asked, then find it or boot it.
   [ "$RESTART" = "1" ] && restart_app
@@ -351,7 +403,7 @@ main() {
   # snapshot's data (a stop and boot); a partial run only with --reset-data.
   if declare -F dbsnap_refresh >/dev/null; then
     if [ "$RESET_DATA" = "1" ]; then dbsnap_refresh force
-    elif [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then dbsnap_refresh
+    elif [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ] && [ "$RESTART_ALONE" = "0" ]; then dbsnap_refresh
     fi
   fi
   # Warn about drifted checkers before any verdict, and before the no-app exit.
@@ -360,6 +412,11 @@ main() {
   keep_offline_caching
   # A new app's database appears with its first boot: the snapshot is taken now, before any test writes.
   declare -F dbsnap_take >/dev/null && dbsnap_take
+  if [ "$RESTART_ALONE" = "1" ]; then
+    echo "== restarted: the app runs the current model. --restart on its own stops here -- next:"
+    echo "   bash tests/gate.sh --only <feature>   or the full gate: bash tests/gate.sh"
+    exit 0
+  fi
   # 3. Preflights, then the suite.
   failures=(); cannot_run=(); summary=(); details=()
   preflight_session
@@ -379,6 +436,7 @@ main() {
     wait
     collect_model_checks
   fi
+  [ -n "$ONLY" ] && wait
   print_verdict_and_exit
 }
 

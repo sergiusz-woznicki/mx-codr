@@ -34,8 +34,9 @@ Three things decide how long the loop takes:
   where the installer had to choose another way, `tests/harness.env` records it in
   `MDL_BOOT_COMMAND` (the file exists only on such machines; do not go looking for
   it elsewhere). When the gate says the model changed after the runtime started,
-  `bash tests/gate.sh --restart` stops this project's runtime, boots it again and
-  runs the gate -- one command, not a pgrep-and-kill improvisation. To only stop it
+  `bash tests/gate.sh --restart --only <feature>` stops this project's runtime, boots it
+  again and runs that test -- one command, not a pgrep-and-kill improvisation; `--restart`
+  alone only restarts. To only stop it
   (before `mxcli fix widgets`, say): `bash tests/gate.sh --stop`.
 
   **Check which loop you are in before planning around it.** With `--watch` and a

@@ -68,10 +68,10 @@ source "$(dirname "$0")/lib.sh"      # after the `# covers:` header
 #         values into the body: SV_PW="$pw" scenario '... vars.PW ...'  (never splice '"$pw"')
 #         oql "SELECT ..."   oql_count Entity ["where"]   oql_value Entity Attr "where"
 #         await_row Entity "where" [seconds]            (entity names without module)
-# inside a scenario body: await open_app()  menu('Invoices', 'invoiceGrid')
-#         fill('txtName', 'x')  pick_combo('cmbCustomer', 'Northwind')
-#         row_action('invoiceGrid', 'INV-1', 'btnSend')  await_message(/sent/i)
-#         filter_list('invoiceGrid', 'fltNo', 'INV-1')  dismiss_dialog()  page_text()
+# inside a scenario body: await open_app()  menu('Invoices', 'Invoices_InvoiceGrid')
+#         fill('Customer_NameInput', 'x')  pick_combo('Invoice_CustomerPicker', 'Northwind')
+#         row_action('Invoices_InvoiceGrid', 'INV-1', 'Invoices_SendButton')  await_message(/sent/i)
+#         filter_list('Invoices_InvoiceGrid', 'Invoices_NumberFilter', 'INV-1')  dismiss_dialog()  page_text()
 #         reopen_app()  -- plus Playwright's `page`; never waitForTimeout
 # just looking, not asserting: bash tests/peek.sh 'Invoices' [widget] (no test file, no record)
 # every helper: the headers of tests/scenario-helpers.js and tests/lib.sh
@@ -140,12 +140,12 @@ grows without a big-bang backfill.
 
 | You are | Read |
 |---|---|
-| Wanting a step of the loop in prose, with its worked example | [reference/loop.md](reference/loop.md) |
-| Writing the scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
-| Hitting sign-in failures, "Maximum number of sessions", startup or idempotence regressions, a date or time in a check, planning subagents, or wanting facts about the app in one call | [reference/facts.md](reference/facts.md) |
+| A step of the loop in prose, with a worked example | [reference/loop.md](reference/loop.md) |
+| The scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
+| Sign-in failures, "Maximum number of sessions", startup or idempotence regressions, a date or time in a check, subagents, facts about the app in one call | [reference/facts.md](reference/facts.md) |
 | Listing a feature's paths, or reading a `paths` finding | [reference/paths.md](reference/paths.md) |
 | A phone, tablet or offline profile, or an OFFLINE / PHONE finding | [reference/offline.md](reference/offline.md) |
-| Debugging a suite that fails but `--only` passes, reading the gate's verdict, the coverage checker, red-first records and mutation testing | [reference/gate-and-suite.md](reference/gate-and-suite.md) |
+| A suite that fails while `--only` passes, the gate's verdict, coverage, red-first records, mutation testing | [reference/gate-and-suite.md](reference/gate-and-suite.md) |
 
 ## Validation checklist
 

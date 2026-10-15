@@ -79,9 +79,20 @@ requirements_line() {
   slices="$(ls docs/brain/plan/*.md 2>/dev/null | wc -l | tr -d ' ')"
   case "${MDL_REQUIREMENTS:-ask}" in
     off) echo "   requirements: off -- no interview before building" ;;
-    assume) echo "   requirements: assume -- nobody answers: before the first feature, take your recommended answers as assumptions (skill requirements-interview); $slices slice(s) in docs/brain/plan" ;;
+    assume) echo "   requirements: assume -- nobody answers: before the first feature, take your recommended answers as assumptions (skill requirements-interview) and build on; never end a turn on a plan or a question, only at DONE or at a step only the person can take; $slices slice(s) in docs/brain/plan" ;;
     *) echo "   requirements: ask -- before the first feature, ask the person and wait (skill requirements-interview); $slices slice(s) in docs/brain/plan" ;;
   esac
+}
+
+# Where the last session left the app (.mxcli/last-gate.txt, written by tests/gate.sh): a session
+# that starts on a built app picks up from here instead of a gate run, or a read of every script, of its own.
+last_gate_lines() {
+  local staged
+  [ -f .mxcli/last-gate.txt ] || return 0
+  sed 's/^full:/   gate, last full run:/; s/^last:/   gate, last run:     /' .mxcli/last-gate.txt
+  staged="$(grep -c . .mxcli/brain/staged.jsonl 2>/dev/null)"
+  [ "${staged:-0}" -gt 0 ] && echo "   $staged requirement(s) staged in .mxcli/brain/staged.jsonl, not yet recorded"
+  echo "   this app is built: read only the scripts and tests this request changes; == tests below says what each one covers"
 }
 
 app_section() {
@@ -94,6 +105,7 @@ app_section() {
   [ -f tests/credentials.env ] && echo "   tests/credentials.env present (test sign-in configured)"
   [ -d docs/brain ] && echo "   docs/brain/ present -- read project.md before building"
   requirements_line
+  last_gate_lines
   [ -f tools/mdl-checks/VERSION ] && echo "   harness $(cat tools/mdl-checks/VERSION)"
   mdl_check_mxcli_freshness
   mdl_check_install_freshness

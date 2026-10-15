@@ -146,7 +146,7 @@ mdl_load_harness_env() {
       MDL_NO_DOCKER|MDL_MXBUILD_PATH|MDL_DB_HOST|MDL_DB_NAME|MDL_DB_USER|MDL_DB_PASSWORD| \
       MDL_PSQL|MDL_BOOT_COMMAND|MDL_PRECHECK|MDL_ALLOW_GREEN_FIRST|JAVA_HOME|MX_VERSION| \
       GRADLE_HOME| \
-      MDL_GATE_CACHE|MDL_VISUAL_REVIEW|MDL_RUN_MODE|APP_PORT|ADMIN_PORT|MDL_CLOSE_BROWSER| \
+      MDL_GATE_CACHE|MDL_VISUAL_REVIEW|MDL_RUN_MODE|APP_PORT|ADMIN_PORT|SERVE_PORT|MDL_CLOSE_BROWSER| \
       MDL_MARKETPLACE_LOGIN|MDL_DB_RESET|MDL_REQUIREMENTS) ;;
       # A rule's level and exceptions moved to its card in tests/rulebook/ (bundle 2026.10.10.3); the
       # installer moves these keys there. Left in the file, they are not read and the gate says so.
@@ -175,7 +175,7 @@ unset _mdl_harness_env
 # APP_PORT=x[$(command)] in tests/harness.env ran that command in every script that sources this
 # file, and APP_PORT=1@host sent the test password to that host (audit of 2026-10-04). A value
 # that is not a port is dropped, and said so, wherever it came from.
-for _mdl_port in APP_PORT ADMIN_PORT; do
+for _mdl_port in APP_PORT ADMIN_PORT SERVE_PORT; do
   case "${!_mdl_port:-}" in
     '') ;;
     *[!0-9]*|??????*)
@@ -189,6 +189,12 @@ unset _mdl_port
 # admin API follows, APP_PORT+9 (8081 and 8090 by default).
 if [ "${MDL_RUN_MODE:-}" != "docker" ] && [ -n "${APP_PORT:-}" ] && [ -z "${ADMIN_PORT:-}" ]; then
   ADMIN_PORT=$(( APP_PORT + 9 ))
+fi
+# mxbuild's serve port follows as well, 6543 beside 8081: two apps at once both asked for 6543 and
+# the second never booted ("port 6543 (mxbuild serve) is already in use", 2026-10-14).
+if [ "${MDL_RUN_MODE:-}" != "docker" ] && [ -n "${APP_PORT:-}" ] && [ -z "${SERVE_PORT:-}" ] && [ "$APP_PORT" != 8081 ] \
+   && [ $(( 6543 + APP_PORT - 8081 )) -gt 1024 ] && [ $(( 6543 + APP_PORT - 8081 )) -lt 65536 ]; then
+  SERVE_PORT=$(( 6543 + APP_PORT - 8081 ))
 fi
 
 # Docker mode (MDL_RUN_MODE=docker, tests/run-docker.sh): every port is shifted by APP_PORT-8080,

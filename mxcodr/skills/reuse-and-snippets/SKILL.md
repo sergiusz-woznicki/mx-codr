@@ -105,10 +105,10 @@ create snippet Sales.SNIPPET_OrderHeader
   params: ( $Order: Sales.Order )
 )
 {
-  layoutgrid headerGrid {
+  layoutgrid OrderHeaderSnippet_HeaderLayout {
     row {
       column (desktopwidth: 12) {
-        dynamictext txtHeading (content: 'Order', rendermode: H3)
+        dynamictext OrderHeaderSnippet_HeadingText (content: 'Order', rendermode: H3)
       }
     }
   }
@@ -118,7 +118,7 @@ create snippet Sales.SNIPPET_OrderHeader
 Used from every page that needs it:
 
 ```mdl
-snippetcall snpHeader (snippet: Sales.SNIPPET_OrderHeader, params: {Order: $Order})
+snippetcall OrderDetail_OrderHeaderSnippet (snippet: Sales.SNIPPET_OrderHeader, params: {Order: $Order})
 ```
 
 A snippet with a parameter is what lets the same block render different data on

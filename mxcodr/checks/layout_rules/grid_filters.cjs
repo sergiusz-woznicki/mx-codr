@@ -12,6 +12,7 @@
 // mx check on Mendix 11.12.1).
 'use strict';
 const py = require('../py_compat.cjs');
+const { depthChange } = require('./mdl_text.cjs');
 
 const DOCUMENT = /^\s*create\s+(?:or\s+(?:replace|modify)\s+)?(page|snippet)\s+([\w.]+)/i;
 const GRID = /^\s*datagrid\s+("[^"]*"|\w+)/i;
@@ -58,18 +59,17 @@ function attributeTypes(entityText) {
   return entities;
 }
 
-// Braces that open or close a block: not inside a quoted caption, not `{1}` of ContentParams.
-function depthChange(line) {
-  const bare = line.replace(/'(?:[^']|'')*'/g, "''").replace(/\{\d+\}/g, '');
-  return (bare.split('{').length - 1) - (bare.split('}').length - 1);
-}
-
 // A widget's header: its line and the lines below until it opens a body (`{`) or closes (`)`).
+// Brackets are counted outside quotes: a multi-line column whose ContentParams line ends in
+// `formatDateTime(...))` closed the header there, so its body's datefilter went unseen and GRID03
+// blocked a column that had one (room-booking m1, 2026-10-14, after the DATE01 fix).
 function headerOf(lines, index) {
-  let end = index;
+  let end = index, parens = 0;
   while (end < lines.length - 1) {
+    const bare = lines[end].replace(/'(?:[^']|'')*'/g, "''");
+    parens += (bare.split('(').length - 1) - (bare.split(')').length - 1);
     const r = py.rstrip(lines[end]);
-    if (r.endsWith('{') || r.endsWith(')') || r.endsWith(');')) break;
+    if (parens <= 0 && (r.endsWith('{') || r.endsWith(')') || r.endsWith(');'))) break;
     end++;
   }
   return { text: lines.slice(index, end + 1).join(' '), end, opens: py.rstrip(lines[end]).endsWith('{') };

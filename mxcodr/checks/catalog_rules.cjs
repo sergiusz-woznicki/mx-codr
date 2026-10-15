@@ -10,8 +10,12 @@
 //           has it: a second click sets the same status again (a warning; the fix is a Visible: condition)
 //   STARTUP01 the after-startup microflow returns false on a path: Mendix stops the app then, so a seed
 //           that returns false once its rows exist boots once and fails every restart after
-//   LINT01  mxcli's own lint advice: off unless the rulebook says warn or block, then
-//           `mxcli lint --format json` runs here and its findings are listed at that level
+//   SEED01  a page the menu opens lists an entity from the database for a role that cannot create it,
+//           and no after-startup seed creates it: the tests' rows are rolled back at DONE, so that role
+//           signs in to an empty list
+//   mxcli's own lint rules, each under its own code at the level of its card (tests/rulebook/lint/,
+//           passed in --levels): `mxcli lint --format json` runs here when one of them, or LINT01 (every
+//           lint rule without a card), is not off. UI001 and SEC007 are ours, so lint's copies are dropped.
 //
 // Usage: catalog_rules.cjs <app_dir> <Module>... [--mpr <copy.mpr>] [--no-refresh] [--levels json] [--except json]
 // Prints `FAIL|WARN|PASS <summary>`, `  - [CODE] ...` blocking lines, `  ~ [CODE] ...` warnings.
@@ -28,6 +32,8 @@ const FILTER_MARKERS = ['datagriddropdownfilter', 'datagriddatefilter', 'datagri
 const INPUT_TYPES = new Set(['Forms$CheckBox', 'Forms$DatePicker', 'Forms$TextBox', 'Forms$DropDown', 'Forms$RadioButtonGroup',
   'com.mendix.widget.web.combobox.Combobox']);
 const MIN_INPUTS = 2;
+// The codes this file checks itself; mxcli lint reports UI001 and SEC007 too (they began as lint rules).
+const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'LINT01']);
 
 const entityOfAttribute = ref => { const parts = String(ref || '').split('.'); return parts.length < 3 ? '' : parts.slice(0, -1).join('.'); };
 
@@ -200,9 +206,29 @@ function parseLint(text) {
   const list = Array.isArray(parsed) ? parsed : (parsed && parsed.violations) || [];
   return list.map(v => {
     const where = v.module ? `${v.module}.${v.document || ''}` : (v.document || '');
-    return { code: 'LINT01', key: where, severity: String(v.severity || '').toLowerCase(),
+    return { code: 'LINT01', rule: v.ruleId || '?', key: where, module: v.module || '', severity: String(v.severity || '').toLowerCase(),
       message: `[${v.ruleId || '?'}] ${v.message || ''}${where ? ` (at ${where})` : ''}${v.suggestion ? ` -- ${v.suggestion}` : ''}` };
   });
+}
+
+// Whether mxcli lint has to run: a lint rule's card (in --levels) or LINT01 is not off.
+function lintWanted(levels, lint01) {
+  return lint01 !== 'off' || Object.keys(levels).some(code => !OUR_CODES.has(code) && levels[code] !== 'off');
+}
+
+// Lint's findings at the rulebook's levels. A rule with a card (its level in --levels) reports under its
+// own code; one without (a newer mxcli's) stays LINT01 at LINT01's level. Off and info drop out, and so
+// do UI001 and SEC007 (ours) and findings in modules that are not the app's own (Marketplace ones).
+function lintAtLevels(findings, levels, lint01, modules) {
+  const out = [];
+  for (const f of findings) {
+    if (OUR_CODES.has(f.rule) || (f.module && !modules.has(f.module))) continue;
+    const own = Object.prototype.hasOwnProperty.call(levels, f.rule);
+    const at = own ? levels[f.rule] : lint01;
+    if (at === 'off' || at === 'info') continue;
+    out.push(own ? { ...f, code: f.rule, message: f.message.replace(/^\[[^\]]*\] /, '') } : f);
+  }
+  return out;
 }
 
 // STARTUP01: [{code, key, message}] when the after-startup microflow (DESCRIBE SETTINGS) returns false
@@ -210,7 +236,7 @@ function parseLint(text) {
 // returned false"). A room-booking app's seed returned false when its rooms were already there: it
 // passed DONE on the running app and failed every restart after (2026-10-13).
 function startupReturnsFalse(settingsText, describeFlow) {
-  const m = /AfterStartupMicroflow:\s*'([^']+)'/.exec(settingsText || '');
+  const m = /AfterStartupMicroflow\s*[:=]\s*'([^']+)'/.exec(settingsText || '');
   if (!m) return [];
   const flow = m[1];
   const text = describeFlow(flow) || '';
@@ -221,6 +247,91 @@ function startupReturnsFalse(settingsText, describeFlow) {
       `not a real failure -- \`else return true;\` -- and keep it idempotent: alter microflow ${flow} or its script, then exec it again.` }];
 }
 
+// A qualified name as DESCRIBE writes it, quotes dropped: "Shop"."Order" -> Shop.Order.
+const QNAME = '"?\\w+"?\\."?\\w+"?';
+const unquote = name => String(name || '').replace(/"/g, '');
+
+// SEED01: [{code, key, message}] -- one per entity that a page the menu opens (a menu item or a home
+// page) lists from the database for a role that cannot create it -- no create access, no microflow it may
+// run that creates one -- and that neither the after-startup microflow nor a microflow it calls creates.
+// The gate rolls the tests' rows back at DONE (tests/db-snapshot.sh), so what such a role meets is the
+// seed: an invoice-chasing app built with no seed handed over customer logins whose invoice lists were
+// empty, and a customer cannot make an invoice (2026-10-14). A list the role fills itself (my bookings)
+// is not judged. A created specialization counts for its generalization. Accounts (System.User) come
+// from demo users and files from uploads, so those are not judged; a seed that calls a Java action, a
+// REST service or an import may create anything, and then nothing is judged.
+function listsWithoutSeed(settingsText, navigationText, sources, entities, permissions, modules) {
+  const byName = {};
+  for (const e of entities) byName[e.QualifiedName] = e;
+  const lineage = name => {
+    const out = [name];
+    for (let e = byName[name], guard = 0; e && e.Generalization && guard < 20; e = byName[e.Generalization], guard++) out.push(e.Generalization);
+    return out;
+  };
+  const source = {};
+  for (const d of sources) source[d.QualifiedName] = d.SourceText || '';
+  // What a microflow creates, with every microflow it calls; null when it calls out (Java, REST, an import).
+  const createdBy = {};
+  const creates = flow => {
+    if (flow in createdBy) return createdBy[flow];
+    createdBy[flow] = new Set();
+    const text = source[flow] || '';
+    if (/\bcall\s+(?:java\s+action|rest|web\s+service)\b|\bsend\s+rest\b|\bimport\s+(?:from|with)\b/i.test(text)) return (createdBy[flow] = null);
+    const out = new Set();
+    for (const m of text.matchAll(new RegExp(`\\bcreate\\s+(${QNAME})\\s*\\(`, 'gi'))) for (const a of lineage(unquote(m[1]))) out.add(a);
+    // A workflow the seed starts creates rows through the microflows its activities name (`on created
+    // microflow`, `call microflow`): an approval task list filled by the workflow is seeded (B2B, 2026-10-15).
+    const callees = [...text.matchAll(new RegExp(`\\bcall\\s+(?:microflow|workflow)\\s+(${QNAME})`, 'gi'))].map(m => m[1]);
+    if (/^\s*create\s+(?:or\s+modify\s+)?workflow\b/im.test(text)) {
+      for (const m of text.matchAll(new RegExp(`\\bmicroflow\\s+(${QNAME})`, 'gi'))) callees.push(m[1]);
+    }
+    for (const m of callees.map(c => [null, c])) {
+      const inner = creates(unquote(m[1]));
+      if (inner === null) return (createdBy[flow] = null);
+      for (const a of inner) out.add(a);
+    }
+    return (createdBy[flow] = out);
+  };
+  const viewers = {}, creators = {};
+  const add = (map, key, role) => (map[key] = map[key] || new Set()).add(role);
+  for (const p of permissions) {
+    if (p.ElementType === 'PAGE' && p.AccessType === 'VIEW') add(viewers, p.ElementName, p.ModuleRoleName);
+    else if (p.ElementType === 'ENTITY' && p.AccessType === 'CREATE') for (const a of lineage(p.ElementName)) add(creators, a, p.ModuleRoleName);
+    else if (p.ElementType === 'MICROFLOW' && p.AccessType === 'EXECUTE') for (const a of creates(p.ElementName) || []) add(creators, a, p.ModuleRoleName);
+  }
+  // The pages, and the snippets they place, whose lists the person meets first: {entity: [page, role]}.
+  const shown = new Set();
+  for (const m of (navigationText || '').matchAll(new RegExp(`\\b(?:home\\s+page|show\\s+page|page)\\s+(${QNAME})`, 'gi'))) shown.add(unquote(m[1]));
+  const listed = {};
+  const visit = (doc, page, seen) => {
+    if (seen.has(doc) || !(doc in source)) return;
+    seen.add(doc);
+    const text = source[doc];
+    for (const m of text.matchAll(new RegExp(`\\b(?:datagrid|gallery|listview)\\s+\\w+\\s*\\([^{;]*?DataSource:\\s*database\\s+(?:from\\s+)?(${QNAME})`, 'gi'))) {
+      const entity = unquote(m[1]);
+      const e = byName[entity];
+      if (entity in listed || !e || !modules.has(e.ModuleName) || !/^persistent$/i.test(e.EntityType || '') || String(e.IsExternal) === '1') continue;
+      if (lineage(entity).some(a => a === 'System.User' || a === 'System.FileDocument')) continue;
+      const reader = [...(viewers[page] || [])].sort().find(role => !(creators[entity] || new Set()).has(role));
+      if (reader) listed[entity] = [page, reader];
+    }
+    for (const m of text.matchAll(new RegExp(`\\bSnippet:\\s*(${QNAME})`, 'gi'))) visit(unquote(m[1]), page, seen);
+  };
+  for (const page of [...shown].sort()) visit(page, page, new Set());
+  if (!Object.keys(listed).length) return [];
+  const startup = (/AfterStartupMicroflow\s*[:=]\s*'([^']+)'/.exec(settingsText || '') || [])[1] || '';
+  const seeded = startup ? creates(startup) : new Set();
+  if (seeded === null) return [];
+  return Object.entries(listed).filter(([name]) => !seeded.has(name)).map(([name, [page, role]]) => ({ code: 'SEED01', key: name,
+    message: `${page} lists ${name} from the database for ${role}, which cannot create one, and ` +
+      `${startup ? `the after-startup microflow ${startup} never creates one` : 'the app has no after-startup microflow'}: the gate rolls the ` +
+      'tests\' rows back at DONE, so that role signs in to an empty list. ' +
+      (startup ? `Create a few realistic ${name.split('.').pop()} rows in ${startup} (or a microflow it calls)`
+        : `Write a seed microflow that creates a few realistic ${name.split('.').pop()} rows, and set it: alter settings runtime ( AfterStartupMicroflow: '<Module>.ASU_Seed' )`) +
+      ' -- only when none exist yet, linked to the demo users who should see them, returning true on every path. ' +
+      `An app that really starts empty: say so in the final report; the person adds \`except: ${name}\` under ## Local in tests/rulebook/catalog/SEED01.md` }));
+}
+
 function main() {
   const { levels, excepts, rest: argv } = levelArgs(process.argv.slice(2));
   const args = catalogArgs(argv);
@@ -228,11 +339,11 @@ function main() {
   const { appDir, mpr, refresh } = args;
   const modules = new Set(args.modules);
   if (!mpr) { process.stdout.write(`ERROR no .mpr in ${appDir}\n`); return 2; }
-  const level = code => levelOf(levels, code, { LINT01: 'off', STATUS01: 'warn' }[code] || 'block');
+  const level = code => levelOf(levels, code, { LINT01: 'off', STATUS01: 'warn', SEED01: 'warn' }[code] || 'block');
   let found = [];
   try {
     if (refresh) mxcli(appDir, mpr, 'refresh catalog full source');
-    const entities = mxcli(appDir, mpr, 'SELECT QualifiedName, ModuleName, EntityType FROM CATALOG.ENTITIES', true);
+    const entities = mxcli(appDir, mpr, 'SELECT QualifiedName, ModuleName, EntityType, Generalization, IsExternal FROM CATALOG.ENTITIES', true);
     if (level('UI001') !== 'off') {
       const widgets = mxcli(appDir, mpr, 'SELECT Name, WidgetType, AttributeRef, ContainerQualifiedName, ContainerType, ModuleName FROM CATALOG.WIDGETS', true);
       found.push(...handRolledGridFilter(widgets.filter(w => modules.has(w.ModuleName)), entities));
@@ -246,14 +357,19 @@ function main() {
     if (level('STARTUP01') !== 'off') {
       found.push(...startupReturnsFalse(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), flow => mxcli(appDir, mpr, `DESCRIBE MICROFLOW ${flow}`)));
     }
-    if (level('LINT01') !== 'off') found.push(...lintFindings(appDir, mpr));
+    if (level('SEED01') !== 'off') {
+      const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('MICROFLOW', 'PAGE', 'SNIPPET', 'WORKFLOW')", true);
+      const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType IN ('PAGE', 'ENTITY', 'MICROFLOW')", true);
+      found.push(...listsWithoutSeed(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), mxcli(appDir, mpr, 'DESCRIBE NAVIGATION'), sources, entities, permissions, modules));
+    }
+    if (lintWanted(levels, level('LINT01'))) found.push(...lintAtLevels(lintFindings(appDir, mpr), levels, level('LINT01'), modules));
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
     process.stdout.write(`ERROR could not read the model -- ${error.message}\n`);
     return 2;
   }
   found = found.filter(f => !(excepts[f.code] || []).includes(f.key || ''));
-  // LINT01 at `warn` lists every lint finding as a warning; at `block` lint's own errors block.
+  // A lint rule's own card at `block` blocks every finding of it; LINT01 at `block` only lint's errors.
   const blocking = found.filter(f => level(f.code) === 'block' && (f.code !== 'LINT01' || f.severity === 'error'));
   const warnings = found.filter(f => !blocking.includes(f) && level(f.code) !== 'info');
   const lines = [`${blocking.length ? 'FAIL' : warnings.length ? 'WARN' : 'PASS'}  ${blocking.length} catalog finding(s) block, ${warnings.length} warning(s)`];
@@ -264,4 +380,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, singleStatusTargets, repeatStatusButtons, startupReturnsFalse };
+module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };

@@ -19,7 +19,8 @@
 // index_rules.py that gives the same findings.
 'use strict';
 const py = require('./py_compat.cjs');
-const { ONE_TIME, rx } = require('./perf_rules.cjs');
+const { ONE_TIME } = require('./perf_rules.cjs');
+const { rx } = require('./py_compat.cjs');
 
 // A dict: no prototype, so an attribute named `constructor` is only itself.
 const dict = () => Object.create(null);

@@ -11,6 +11,7 @@
 // line on purpose -- so it is a warning, and a short attribute (under SHORT) is left alone.
 'use strict';
 const py = require('../py_compat.cjs');
+const { propsOf, depthChange } = require('./mdl_text.cjs');
 
 const LONG = 500;
 const SHORT = 100;
@@ -55,21 +56,6 @@ function stringLengths(entityText) {
     if (/^\s*\)/.test(line)) current = null;
   }
   return entities;
-}
-
-// A widget's properties: its line, and the lines below while it is still open with `(`.
-function propsOf(lines, index) {
-  let props = lines[index];
-  if (/\(\s*$/.test(props)) {
-    for (let look = index + 1; look < lines.length && !/^\s*\)/.test(lines[look]); look++) props += ' ' + py.strip(lines[look]);
-  }
-  return props;
-}
-
-// Braces that open or close a block: not inside a quoted caption, not `{1}` of ContentParams.
-function depthChange(line) {
-  const bare = line.replace(/'(?:[^']|'')*'/g, "''").replace(/\{\d+\}/g, '');
-  return (bare.split('{').length - 1) - (bare.split('}').length - 1);
 }
 
 // The entity a data widget gives the widgets inside it, or '' when it cannot be told.

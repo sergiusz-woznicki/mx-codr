@@ -11,7 +11,7 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   `[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Login = '[%CurrentUser%]']`. "The selected
   entity Mod.X_Y no longer exists" means an association stands where an entity step belongs.
 - **A combo box for a reference** takes `Association:`, a data source and a caption, not
-  `Attribute:`: `combobox cmbCustomer (Label: 'Customer', Association: Invoice_Customer,
+  `Attribute:`: `combobox InvoiceNewEdit_CustomerPicker (Label: 'Customer', Association: Invoice_Customer,
   DataSource: database Mod.Customer, CaptionAttribute: Name)`.
 - **A data grid column across an association** binds the attribute at the end of the path:
   `column (Attribute: Invoice_Customer/Name)`, not the association itself. A data grid column has no
@@ -44,7 +44,7 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   Not booleans, `!=` or `contains()`; each index costs a little on commit.
 - **A popup's Save commits with `refresh`**: `commit $Invoice refresh;` then `close page;`.
 - **A text's `{1}` takes an attribute of the widget's own object**: inside `dataview ... (DataSource: $Invoice)`,
-  `dynamictext X (Content: 'Invoice {1}', ContentParams: ({1} = Number))` -- never `$Invoice/Number` (refused).
+  `dynamictext InvoiceDetail_NumberText (Content: 'Invoice {1}', ContentParams: ({1} = Number))` -- never `$Invoice/Number` (refused).
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
 - **A list takes its rows from the database, not from a flow that only retrieves them** (gate DS01):
   `datagrid OrderDetail_LinesGrid (DataSource: database Shop.OrderLine where [Shop.OrderLine_Order = $Order])`;

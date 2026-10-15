@@ -5,7 +5,9 @@ Read **one** up front: `test-first-delivery`, before the first feature. The othe
 by the check that needs them -- a `layout` finding says `spacing-and-layout`, a `folders` finding
 `module-structure` or `reuse-and-snippets`, a `naming` finding `naming-and-captions` -- and
 each finding already carries its fix, so read a skill when a finding names it, one file per
-command, not all of them at the start.
+command, not all of them at the start. Uploads, photos or documents: `files-and-images` first.
+
+`requirements: assume` in `orient.sh`: nobody answers, so never end a turn on a plan or question.
 
 Facts about this app come from one call, not from exploring by hand:
 
@@ -30,23 +32,23 @@ The gate boots, restarts and waits by itself: never boot the app or run `mxcli t
 Never wrap a harness command in `timeout`. Never hand-roll a wait for the app. Microflow tests (`*.test.mdl`) are not run by
 the gate and do not count for DONE; only `tests/verify-*.test.sh` do.
 
-**What each check code wants, and its fix: `tests/checks/<step>.md`**, the file the gate names for the step that failed; `tests/CHECKS.md` says which file holds a code (layout codes such
-as `USER01`, `NAV01`, `EDGE01`, catalog `UI001`, precheck `SCRIPT01`, `RUNTIME01`, `VIS01`). Each
+**What each check code wants, and its fix: `tests/checks/<step>.md`**, named by the gate for the failed step; `tests/CHECKS.md` says which file holds a code (`USER01`,
+`UI001`, `SCRIPT01`, `VIS01`). Each
 rule is a card, `tests/rulebook/<group>/<CODE>.md`; its level and exceptions are the person's. Read
 that, never `tests/gate/*.sh` or the checkers: the page says in one line what a code requires.
 
 **The syntax digest is already in your context** under Claude Code, Cursor, OpenCode and Pi
-(anywhere else: `cat tools/mdl-checks/syntax-digest.md` once, after orient.sh). It holds the
-topic indexes -- what `./mxcli syntax`, `syntax microflow`, `syntax page` list -- and the
-pitfalls that cost sessions the most time, so go straight to the leaf: `./mxcli syntax
-microflow.show-page`, several per command, never the index again.
+(elsewhere: `cat tools/mdl-checks/syntax-digest.md` once). It holds the
+topic indexes and the pitfalls, so go straight to the leaf (`./mxcli syntax
+microflow.show-page`), never the index again.
 **Do not probe syntax by writing variant files** and running precheck on each:
 `./mxcli check <file> -p <app>.mpr --references` answers in 0.4s and writes nothing. Never `exec` a probe into the model. Keep `tests/precheck.sh` for the script you are about to exec:
 under Claude, Cursor, OpenCode and Pi a hook runs it before every `mxcli exec` and blocks a
 failing one -- do not call it by hand there; under Codex call it yourself. It applies the
-script to a scratch copy and runs `mx check`, so build-only errors (reserved names, a broken
-XPath, a missing member) and a script that would stop half-way surface first. Only a Marketplace
-module built for another Mendix version gets past it (CE4271); the boot catches that one.
+script to a scratch copy and runs `mx check`, so build-only errors and a script that would stop
+half-way surface first; a Marketplace module built for another Mendix version (CE4271) only at
+boot. It runs before the whole command: edit a script (`sed -i`, `cat >`, python) and exec it in
+two calls, never one.
 Never run `mx check` yourself while the app is up: it re-saves the `.mpr` under the suite.
 
 What neither the digest nor `./mxcli syntax` says -- this harness's own rules:
@@ -54,11 +56,11 @@ What neither the digest nor `./mxcli syntax` says -- this harness's own rules:
 ```
 DesignProperties: ('Spacing': ('margin-right': 'S', 'margin-bottom': 'S'))
   -- two inline widgets side by side collide without it (layout SPACE01); never Class: or CSS for spacing
-layoutgrid pageGrid { row rowTop { column colTop (DesktopWidth: 12) { ... } } }
+layoutgrid OrderOverview_PageLayout { row rowTop { column colTop (DesktopWidth: 12) { ... } } }
   -- everything on a page goes inside one layoutgrid, the Back / signed-in row too (EDGE01)
-datagrid dg (...) { column colStatus (attribute: "Status") { dropdownfilter fltStatus } }
+datagrid OrderOverview_OrdersGrid (...) { column colStatus (attribute: "Status") { dropdownfilter OrderOverview_StatusFilter } }
   -- a grid filters itself, one filter inside its column: textfilter, numberfilter, datefilter,
-  --   dropdownfilter on an enumeration or over an association (dropdownfilter fltCustomer
+  --   dropdownfilter on an enumeration or over an association (dropdownfilter OrderOverview_CustomerFilter
   --   (Association: Mod.Order_Customer, datasource: database Mod.Customer, CaptionAttribute: Name)).
   --   Never a filter bar of your own over a helper entity (UI001); the column keeps its Attribute (GRID01)
   --   Every column bound to an attribute has a filter, on every grid (GRID03); Boolean takes a dropdownfilter too
@@ -73,10 +75,10 @@ Users who sign in need no login screen of your own:
   `security` check fails below Production. Every entity a page reads then needs a rule for
   that role, or the page comes up empty.
 - **A user is an `Administration.Account`** with a user role that includes `Administration.User`:
-  `create user role Customer (Invoicing.Customer, Administration.User);`. Accounts are managed
+  `create user role Customer ( ModuleRoles: (Invoicing.Customer, Administration.User, System.User) );`. Accounts are managed
   with the Administration module's own pages; a change to them goes in `AdministrationExt`.
 - **Demo users are the seeded logins**, with a password the policy accepts:
-  `create demo user 'demo_customer' password 'Customer1234!' entity Administration.Account (Customer);`
+  `create demo user 'demo_customer' ( Password: 'Customer1234!', Entity: Administration.Account, UserRoles: (Customer) );`
 - **Never grant your own module roles on `Administration.*` entities** (CE0007). Link your
   entity to `Administration.Account` and constrain *your* rule with XPath on that link, full
   names, the token quoted -- `CurrentUser()` and `$currentUser` pass `mxcli check` and fail the

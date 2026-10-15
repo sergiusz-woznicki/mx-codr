@@ -25,7 +25,7 @@ SV_NUMBER="$number" scenario '
   await page.waitForSelector(".mx-name-txtNumber");
   await fill("txtNumber", vars.NUMBER);
   await pick_combo("cmbCustomer", "Northwind Traders");
-  await page.click(".mx-name-btnSave");
+  await page.click(".mx-name-InvoiceNewEdit_SaveButton");
   await page.waitForSelector(".mx-name-txtNumber", {state: "detached"});
   return {saved: true};
 ' > /dev/null
@@ -91,7 +91,7 @@ Rules that keep it that way:
 
 ## Prove the page arrived; never reload mid-journey
 
-- **Prove the page arrived.** `menu('Invoices', 'invoiceGrid')` waits for the widget that
+- **Prove the page arrived.** `menu('Invoices', 'InvoiceOverview_InvoicesGrid')` waits for the widget that
   proves arrival. A nav click that silently does nothing otherwise leaves every later
   assertion measuring the *previous* page — which reads as a defect that does not exist.
   With one argument, `menu()` still checks that *something* happened (page changed, or a
@@ -163,7 +163,7 @@ for the client rather than sleeping a fixed number of seconds — `open_app` alr
 waits for `.mx-page`, and inside a scenario every wait is Playwright's:
 
 ```js
-await page.waitForSelector('.mx-name-invoiceGrid');
+await page.waitForSelector('.mx-name-InvoiceOverview_InvoicesGrid');
 ```
 
 Check the level before assuming: `./mxcli -p <app>.mpr -c "SHOW PROJECT SECURITY"`.

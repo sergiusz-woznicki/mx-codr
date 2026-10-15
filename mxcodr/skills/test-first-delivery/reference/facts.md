@@ -113,7 +113,9 @@ again -- or it was only passing on leftovers. So:
   there" and fails when it is not;
 - what the app itself needs (a reference table, an external table it reads, a fixed record) the app
   creates in its after-startup microflow, idempotently -- never a `.sql` file or a `psql` insert run
-  by hand: a new database, a colleague's machine or a CI run will not have it;
+  by hand: a new database, a colleague's machine or a CI run will not have it. So does what a role
+  only reads (a customer's invoices, a technician's jobs): without it that role signs in to an
+  empty list after DONE (gate SEED01);
 - a fixture repaired by hand to make a red test green is the bug, not the fix.
 
 ## Dates and times

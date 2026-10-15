@@ -14,7 +14,10 @@ const { PAGE_LAYOUT_RE, SHOW_PAGE_ANY_RE, WIDGET_LINE_RE, firstWidget, leadingWi
 const SNIPPET_DEF_RE = re.compile(String.raw`^\s*create\s+(?:or\s+(?:replace|modify)\s+)?snippet\s+(?P<name>[\w.]+)`, 'i');
 
 const BACK_ICON = 'Atlas_Core.Atlas_Filled.chevron-left';
-const BACK_BUTTON = `actionbutton btnBack (Caption: 'Back', Action: CLOSE_PAGE, Icon: '${BACK_ICON}',` +
+// Widget names in the fixes follow NAME02 (<Page>_<What><Type>): a fix that said btnBack, ctPageTop
+// and scCurrentUser was pasted, and the precheck then refused every one of them (2026-10-14).
+const pageKey = page => require('./names.cjs').documentKey('page', String(page || 'Page'));
+const backButton = page => `actionbutton ${pageKey(page)}_BackButton (Caption: 'Back', Action: CLOSE_PAGE, Icon: '${BACK_ICON}',` +
   " DesignProperties: ['Spacing': ['margin-bottom': 'M']])";
 
 // The "who is signed in" snippet, on the right of every page's top row (USER01).
@@ -96,7 +99,9 @@ function currentUserFindings(lines, snippets, navigation, layouts, phoneLayouts 
     : '';
   return [...failures, { check: 'USER01', line: 0, message:
     `${missing.length} page(s) lack the signed-in user top right: ${shown} -- start each with \`container` +
-    ` ctPageTop (DesignProperties: ${ROW_RIGHT_PROPS}) { snippetcall scCurrentUser (Snippet: ${snippet}) }\`;` +
+    ` ${missing.length === 1 ? pageKey(missing[0]) : '<Page>'}_PageTopBox (DesignProperties: ${ROW_RIGHT_PROPS}) {` +
+    ` snippetcall ${missing.length === 1 ? pageKey(missing[0]) : '<Page>'}_CurrentUserSnippet (Snippet: ${snippet}) }\`;` +
+    (missing.length === 1 ? '' : ' (<Page>: the page\'s name without module and underscores, Order_Detail -> OrderDetail)') +
     ' on a page with Back, Back goes first in that row and \'Right\' becomes \'Space between (only for' +
     ` horizontal containers)'${missingSnippet}. Skill spacing-and-layout, reference/signed-in-user.md.${offline}` }];
 }
@@ -149,7 +154,7 @@ function backButtonFindings(lines, openedFrom, navigation = '') {
     failures.push({
       check: 'BACK01',
       line: 0,
-      message: `${page} (opened from ${where}) ${problem} -- its first widget must be \`${BACK_BUTTON}\`` +
+      message: `${page} (opened from ${where}) ${problem} -- its first widget must be \`${backButton(page)}\`` +
         " (skill spacing-and-layout, 'Back, top left')",
     });
   }

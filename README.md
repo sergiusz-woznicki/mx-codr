@@ -165,6 +165,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `LOOK02` | Only when switched on: none of those screenshots was judged to look wrong. | Warning |
 | `MX01` | Mendix's own consistency check finds no errors: the same red errors Studio Pro would show in its Errors pane. | Blocks |
 | `STARTUP01` | The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after. | Blocks |
+| `SEED01` | A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. | Warning |
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
 | `SCRIPT01` | Each page, microflow, entity or constant is created in only one script in mdlsource/. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared. | Blocks |
@@ -191,7 +192,7 @@ mx-codr reads the app and lists everything a user can run into; each needs a tes
 |---|---|---|
 | `ISO01` | When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not. | Blocks (warning for paths that existed before the install) |
 | `OUTCOME01` | Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute. | Blocks (warning for paths that existed before the install) |
-| `REQ02` | Every requirement the person agreed to (a promoted entry in the project brain) is named by a test: the test carries the line `# requirement: <id>`. A requirement no test proves is not built. | Blocks |
+| `REQ02` | Every requirement the person agreed to (a promoted entry in the project brain) is named by a test: the test carries the line `# requirement: <id>`. A requirement no test proves is not built. A word may appear in another form (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue. | Blocks |
 | `ROLE01` | Every demo user's role is used by at least one test. | Blocks (warning for paths that existed before the install) |
 | `SVC01` | Every published REST or OData service is called by a test. | Blocks (warning for paths that existed before the install) |
 | `WF01` | A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task. | Blocks |
@@ -306,7 +307,18 @@ Where documents live.
 
 | Rule | What it checks | Level |
 |---|---|---|
-| `FOLDER01` | Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: UI for pages and snippets, FNC for microflows and nanoflows, ENV for everything else. The finding prints the moves to make. | Blocks |
+| `FOLDER01` | Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: UI for pages and snippets, FNC for microflows and nanoflows, ENV for everything else. The finding prints the moves to make. A business event service is left alone: mxcli moves it but cannot read its folder back. | Blocks |
+
+**mxcli's lint rules** (52 cards in `tests/rulebook/lint/`)
+
+Each of mxcli's own lint rules has a card with a level decided once for all of them: a warning for the
+nine that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
+ones and UI actions, `CONV011` no commit in a loop, `CONV013` and `CONV014` error handling on calls,
+`SEC006`, `SEC008` and `SEC009` personal data, `MPR002` and `MPR006` empty microflows and containers),
+off for the rest, each card saying why: another rule checks it, mx check blocks it, or it does not fit
+how these apps are built. The catalog step runs `mxcli lint` and lists the findings in the app's own
+modules; Marketplace modules are left alone. A rule a newer mxcli adds falls under `LINT01` (off) until
+it has a card, and every mxcli upgrade of mx-codr adds the cards first.
 
 ## Where you can change things
 
@@ -332,14 +344,14 @@ The default is in bold. A key you leave out takes its default.
 | Key | Options | What it does |
 |---|---|---|
 | `MDL_RUN_MODE` | **`local`** · `docker` | `local`: the Mendix runtime and PostgreSQL run on this machine, a model change is live in about a second. `docker`: the app runs in Docker, nothing else installed, about 40 s per change. |
-| `APP_PORT`, `ADMIN_PORT` | a port number; **8081** and its admin port | The ports the app answers on. A second project running beside the first needs its own, e.g. 8082. |
+| `APP_PORT`, `ADMIN_PORT`, `SERVE_PORT` | a port number; **8081**, its admin port and mxbuild's 6543 | The ports the app answers on. A second project running beside the first needs its own, e.g. 8082; the admin and mxbuild ports then follow (8091, 6544). |
 | `MDL_DB_HOST`, `MDL_DB_NAME`, `MDL_DB_USER`, `MDL_DB_PASSWORD` | set by the installer | The app's PostgreSQL database. |
 | `MDL_PSQL` | a path to `psql` | Which PostgreSQL client to use when it is not on the `PATH`. |
 | `MDL_MXBUILD_PATH`, `JAVA_HOME`, `MDL_BOOT_COMMAND`, `MX_VERSION` | set by the installer | How the app is built and booted, and which Studio Pro version to use when there are several. |
 | `GRADLE_HOME` | the newest `gradle-*` beside mxbuild | The Gradle the Windows boot (`tests/run-app.sh`) builds with, when another one is needed. |
 | `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data; a full gate after a red one also starts its tests on the saved data (`--reset-data` does it for `--only`). `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
 | `MDL_CLOSE_BROWSER` | **`0`** · `1` | `0`: the test browser stays open, so the next run starts faster. `1`: it closes after each gate run. |
-| `MDL_REQUIREMENTS` | **`ask`** · `assume` · `off` | `ask`: before the first feature the agent asks you what the app must do and waits. `assume`: nobody answers (a benchmark); it takes its recommended answers as assumptions, listed at DONE. `off`: no interview. |
+| `MDL_REQUIREMENTS` | **`ask`** · `assume` · `off` | `ask`: before the first feature the agent asks you what the app must do and waits. `assume`: nobody answers (a benchmark); it takes its recommended answers as assumptions, listed at DONE, and builds without stopping on a plan or a question. `off`: no interview. |
 | `MDL_COMPACTION` | `on` · **`off`** | `on`: the installer gives Pi a compaction threshold of 70% of each model's window (`.pi/settings.json`, only for models you have not set yourself). `off`: Pi's own default. Read by the installer only; re-run it after a change. Measured on one prompt: a shorter context each turn, but more turns in two of three runs. Claude Code and Codex are not set: their threshold is a token count, not a share of the window. |
 | `MDL_VISUAL_REVIEW` | **empty** · `agent` | `agent`: a model that reads images also judges a screenshot of each page (`LOOK01`, `LOOK02`). Empty: only the automatic visual checks run. |
 | `MDL_ALLOW_GREEN_FIRST` | test names, separated by spaces | Tests that pass from the start by nature, so the gate does not warn that they never failed first. |
@@ -353,14 +365,21 @@ in as.
 
 **The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 
+**A long build: one request per agent session.** Each gate run writes where it left the app to
+`.mxcli/last-gate.txt`, and `tests/orient.sh` prints it at the start of the next session, with the
+requirements still staged. Give each request of a long project (a new screen, the next part of a
+spec) its own session in the same folder instead of resuming one: measured on the B2B prompt with
+Sonnet 5.5, one long session re-read 650-800k tokens a turn by its fourth part, while a fresh session
+for a follow-up reached DONE in 6 minutes and 0.7M tokens.
+
 **Commands you can run yourself**
 
 ```bash
 bash tests/gate.sh                    # the done gate
 bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
-bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE)
+bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE), plus what the full gate would refuse
 bash tests/gate.sh --changed          # the tests a model change touched
-bash tests/gate.sh --restart          # stop this project's app and boot it again
+bash tests/gate.sh --restart          # stop this project's app and boot it again (add --only to run a test)
 bash tests/gate.sh --only <feature> --reset-data  # first put back the rows earlier runs left
 bash tests/rules.sh                   # every rule, its level and your exceptions
 bash tests/orient.sh                  # what is in this project, and its state
@@ -372,8 +391,8 @@ bash tests/film.sh <test>             # a video of one test
 
 - **The app is created but does not build on Windows.** Studio Pro must be installed in the version
   the app uses; the installer reports a missing one, it never installs Studio Pro.
-- **Ports.** Studio Pro running an app holds 8080 and 8090; set `APP_PORT` (and `ADMIN_PORT`) in
-  `tests/harness.env` when both run at once.
+- **Ports.** Studio Pro running an app holds 8080 and 8090; set `APP_PORT` in `tests/harness.env`
+  when both run at once (the admin and mxbuild ports follow it).
 - **Microflow tests on Windows** (`mxcli test --local`) need a patched mxcli until the fix is upstream.
 - **After a failed `mxcli test` run** the project's after-startup microflow may still point at
   `MxTest.RegisterEndpoint`; check with `./mxcli -p <app>.mpr -c 'SHOW SETTINGS'`.

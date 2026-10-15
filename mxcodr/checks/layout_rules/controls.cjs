@@ -13,7 +13,7 @@ const FILTER_RE = re.compile(String.raw`^\s*(?P<type>textfilter|numberfilter|dat
 // A filter's own target: `Attribute:`, `attributes: [...]` or `Association:`.
 const FILTER_TARGET_RE = re.compile(String.raw`\b(attributes?|association)\s*:`, 'i');
 
-const count = (s, sub) => s.split(sub).length - 1;
+const { count } = require('./mdl_text.cjs');
 
 // GRID01: a filter only works on the column's attribute; with none, Data Grid 2 shows an error box.
 function columnFilterFindings(lines) {
@@ -27,11 +27,15 @@ function columnFilterFindings(lines) {
     const column = COLUMN_RE.match(line);
     if (!column) { index++; continue; }
     // The header runs to the line that opens the body (`{`) or closes without one.
+    // Brackets counted outside quotes: a `formatDateTime(...))` line inside a multi-line header is not its end.
     const header = [], start = index;
+    let parens = 0;
     while (index < lines.length) {
       header.push(lines[index]);
+      const bare = lines[index].replace(/'(?:[^']|'')*'/g, "''");
+      parens += (bare.split('(').length - 1) - (bare.split(')').length - 1);
       const r = py.rstrip(lines[index]);
-      if (r.endsWith('{') || r.endsWith(')')) break;
+      if (parens <= 0 && (r.endsWith('{') || r.endsWith(')'))) break;
       index++;
     }
     const opensBody = py.rstrip(header[header.length - 1]).endsWith('{');

@@ -65,7 +65,7 @@ trust the gate's stale-model warning.
 Scripts run in alphabetical order and every test leaves its rows behind, so:
 `verify-000-reset` runs first and restores the seeded data through the app; anything
 asserting **exact counts** is `verify-001-…`. A test that changes a seeded row owns that row:
-give it its own seeded row or one it creates, never a row another test reads. Two rules the harness enforces: `menu('Invoices', 'invoiceGrid')` proves
+give it its own seeded row or one it creates, never a row another test reads. Two rules the harness enforces: `menu('Invoices', 'InvoiceOverview_InvoicesGrid')` proves
 the page arrived (a silent nav click leaves every later assertion on the previous
 page), and `page.goto` is how a journey starts, never how it recovers (`open_app()`
 does the one goto, `reopen_app()` starts over, any other goto throws). Dismiss a *Show

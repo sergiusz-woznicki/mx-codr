@@ -16,7 +16,9 @@ Run `bash tests/orient.sh` and read its `requirements:` line:
 - `ask` (the default): ask the person, and wait for the answers.
 - `assume`: nobody will answer (a benchmark, an unattended run). Do every step below, but take
   your recommended answers as assumptions and go on without waiting. A request that says not to
-  ask means the same.
+  ask means the same. Never end a turn on a plan, a question or "say go": nobody reads it, and the
+  run stops there with nothing built. Record the assumptions and write the first test in the same
+  turn; the turn ends at DONE, or at a step only the person can take.
 - `off`: skip this skill.
 
 Skip it as well when the request already answers every branch below, or when the change adds no
