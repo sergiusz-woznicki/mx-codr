@@ -207,21 +207,22 @@ function stepsBeforeExec(command) {
 const WRITES_BEFORE_EXEC = /<<|(^|[\s;&|(])(mv|cp|tee|rm|ln|rsync|install|patch|ed|perl|python3?|node|ruby|git)\s|(^|[\s;&|(])sed\s+(-[a-zA-Z]*\s+)*-i/
 // A command that writes one script with a quoted heredoc and execs it, and nothing else:
 //   [mkdir -p d &&] cat > mdlsource/x.mdl <<'EOF' ... EOF [&&|;|newline] ./mxcli exec mdlsource/x.mdl [-p ...] [| tail ...]
+// `cat >>` (an addition to a script, then its exec) is the same shape (room-booking s1, 2026-10-15).
 // The hook writes the file itself (the same bytes the command writes a moment later), prechecks it
 // and lets the command through: one call per script instead of two (27 refusals in two B2B runs,
 // 21 of them this shape, 2026-10-15). An unquoted delimiter is refused: the shell would expand
 // every $Var of the MDL. Only a .mdl outside the harness's own folders, so the guard keeps its say.
 // Returns { path, body } for the shape, { unquoted: path } for the unquoted one, else null.
-const HEREDOC_SCRIPT = /^(?:\s*(?:mkdir\s+-p\s+\S+|cd\s+\S+|(?:export\s+)?[A-Za-z_]\w*=\S*)\s*(?:&&|;|\n)\s*)*cat\s+(?:>\s*(\S+)\s+<<\s*(['"]?)([A-Za-z_]\w*)\2|<<\s*(['"]?)([A-Za-z_]\w*)\4\s+>\s*(\S+))[ \t]*\n([\s\S]*?)\n\3?\5?[ \t]*\n\s*(?:&&|;)?\s*(?:\.\/)?mxcli(?:\.exe)?\s+exec\s+(\S+)(?:\s+-p\s+\S+)?(?:\s+2>&1)?(?:\s*\|\s*(?:tail|head|grep|cut|sed\s+-n)[^\n;&|]*)?\s*$/
+const HEREDOC_SCRIPT = /^(?:\s*(?:mkdir\s+-p\s+\S+|cd\s+\S+|(?:export\s+)?[A-Za-z_]\w*=\S*)\s*(?:&&|;|\n)\s*)*cat\s+(?:(>>?)\s*(\S+)\s+<<\s*(['"]?)([A-Za-z_]\w*)\3|<<\s*(['"]?)([A-Za-z_]\w*)\5\s+(>>?)\s*(\S+))[ \t]*\n([\s\S]*?)\n\4?\6?[ \t]*\n\s*(?:&&|;)?\s*(?:\.\/)?mxcli(?:\.exe)?\s+exec\s+(\S+)(?:\s+-p\s+\S+)?(?:\s+2>&1)?(?:\s*\|\s*(?:tail|head|grep|cut|sed\s+-n)[^\n;&|]*)?\s*$/
 const HARNESS_FOLDERS = /^(tests|tools|mxcodr|\.claude|\.cursor|\.codex|\.opencode|\.pi|\.agents|\.ai-context)(\/|$)/
 function heredocScript(command) {
   const m = HEREDOC_SCRIPT.exec(command || "")
   if (!m) return null
-  const path = m[1] || m[6], quote = m[1] ? m[2] : m[4], execPath = m[8]
+  const path = m[2] || m[8], quote = m[2] ? m[3] : m[5], append = (m[2] ? m[1] : m[7]) === ">>", execPath = m[10]
   if (!path || path !== execPath || !/\.mdl$/.test(path)) return null
   if (path.startsWith("/") || path.split(/[\\/]/).includes("..") || HARNESS_FOLDERS.test(path)) return null
   if (!quote) return { unquoted: path }
-  return { path, body: m[7] + "\n" }
+  return { path, body: m[9] + "\n", append }
 }
 const HEREDOC_UNQUOTED = (path) =>
   "Blocked: the heredoc that writes " + path + " has an unquoted delimiter, so the shell would expand every $Variable of the MDL " +
@@ -230,7 +231,8 @@ const HEREDOC_UNQUOTED = (path) =>
 function writeHeredocScript(root, found) {
   const file = join(root, found.path)
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, found.body)
+  // `cat >>`: the script grows by the heredoc, as the command would grow it.
+  writeFileSync(file, (found.append && existsSync(file) ? readFileSync(file, "utf8") : "") + found.body)
 }
 
 function scriptWrittenBeforeExec(command, scripts) {
