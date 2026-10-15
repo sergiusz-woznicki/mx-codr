@@ -89,6 +89,8 @@ function businessWords(type, name, props) {
 function suggestion(key, type, words) {
   const word = TYPE_WORD[type];
   let what = words;
+  // An old name that already starts with the page (Booking_NewEdit_FormLayout) keeps the page once.
+  if (what.startsWith(key) && what.length > key.length) what = what.slice(key.length);
   if (TYPE_ECHO[type]) what = what.replace(TYPE_ECHO[type], '');
   if (what.endsWith(word)) what = what.slice(0, -word.length);
   return `${key}_${what}${word}`;

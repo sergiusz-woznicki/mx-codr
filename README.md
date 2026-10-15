@@ -354,6 +354,13 @@ in as.
 
 **The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 
+**A long build: one request per agent session.** Each gate run writes where it left the app to
+`.mxcli/last-gate.txt`, and `tests/orient.sh` prints it at the start of the next session, with the
+requirements still staged. Give each request of a long project (a new screen, the next part of a
+spec) its own session in the same folder instead of resuming one: measured on the B2B prompt with
+Sonnet 5.5, one long session re-read 650-800k tokens a turn by its fourth part, while a fresh session
+for a follow-up reached DONE in 6 minutes and 0.7M tokens.
+
 **Commands you can run yourself**
 
 ```bash

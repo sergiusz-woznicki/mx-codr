@@ -194,6 +194,36 @@ captions_after_done() {
   return 0
 }
 
+# .mxcli/last-gate.txt: where the gate stood, for the next session's tests/orient.sh. A long build
+# done one request per session (B2B, 2026-10-15: a fresh session finished a follow-up in 6 min and
+# 0.7M tokens, against 650-800k tokens a turn late in one long session) starts from it instead of a
+# gate run of its own. `full:` is the last full gate, `last:` the last run of any kind.
+# The codes behind a red run, most frequent first: "NAME02 x3, URL01 x1"; "tests" for a red suite.
+blocking_codes() {
+  local name codes=""
+  for name in ${failures[@]+"${failures[@]}"}; do
+    [ -s "$WORK/$name.detail" ] || continue
+    codes="$codes$(grep -E '^[[:space:]]*- \[' "$WORK/$name.detail" | grep -oE '\[[A-Z]+[0-9]+\]' | tr -d '[]')
+"
+  done
+  codes="$(printf '%s' "$codes" | grep . | sort | uniq -c | sort -k1,1nr -k2,2 | awk '{printf "%s%s x%s", (NR > 1 ? ", " : ""), $2, $1}')"
+  printf '%s' "${codes:-see the gate output}"
+}
+
+record_last_gate() {
+  local verdict="$1" when full=""
+  when="$(date '+%Y-%m-%d %H:%M')"
+  mkdir -p .mxcli 2>/dev/null || return 0
+  if [ -n "${ONLY:-}" ] || [ "${TESTS_ONLY:-0}" = "1" ]; then
+    full="$(grep '^full:' .mxcli/last-gate.txt 2>/dev/null)"
+    verdict="${ONLY:+--only $ONLY }$verdict"
+  else
+    full="full: $when $verdict"
+  fi
+  printf '%s\nlast: %s %s\n' "${full:-full: never run}" "$when" "$verdict" > .mxcli/last-gate.txt 2>/dev/null
+  return 0
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -213,12 +243,14 @@ print_verdict_and_exit() {
     [ -n "${ONLY:-}" ] && print_early_blockers
     print_blockers
     [ -n "$EARLY_CODES" ] && echo "   and the full gate would refuse $EARLY_CODES (== before DONE above)"
+    record_last_gate "NOT DONE -- failed: ${failures[*]} ($(blocking_codes))"
     exit 1
   fi
   if [ ${#cannot_run[@]} -gt 0 ]; then
     echo "   NOT DONE — could not run: ${cannot_run[*]}"
     echo "   A check that did not run has not passed. Fix what stopped it, then run the gate again."
     print_failure_details
+    record_last_gate "NOT DONE -- could not run: ${cannot_run[*]}"
     exit 2
   fi
   # A partial run passing is not the gate passing: `--only 000` once ended in the same DONE line
@@ -235,10 +267,12 @@ print_verdict_and_exit() {
       echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
     fi
     only_coverage_note
+    record_last_gate "PASSED${EARLY_CODES:+ -- the full gate would refuse $EARLY_CODES}"
     exit 0
   fi
   print_for_the_person
   echo "   DONE — every check passed"
+  record_last_gate "DONE$( [ -s .mxcli/warnings.txt ] && printf ' (%s warnings in .mxcli/warnings.txt)' "$(grep -cE '^[[:space:]]*- ' .mxcli/warnings.txt)")"
   done_repeat_note
   captions_after_done
   declare -F dbsnap_restore >/dev/null && dbsnap_restore
