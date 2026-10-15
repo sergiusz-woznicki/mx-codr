@@ -50,11 +50,11 @@ microflow.show-page`), never the index again.
 `./mxcli check <file> -p <app>.mpr --references` answers in 0.4s and writes nothing. Never `exec` a probe into the model. Keep `tests/precheck.sh` for the script you are about to exec:
 under Claude, Cursor, OpenCode and Pi a hook runs it before every `mxcli exec` and blocks a
 failing one -- do not call it by hand there; under Codex call it yourself. It applies the
-script to a scratch copy and runs `mx check`, so build-only errors and a script that would stop
-half-way surface first; a Marketplace module built for another Mendix version (CE4271) only at
-boot. It runs before the whole command: edit a script (`sed -i`, `cat >`, python) and exec it in
-two calls, never one.
-Never run `mx check` yourself while the app is up: it re-saves the `.mpr` under the suite.
+script to a scratch copy and runs `mx check`, so build-only errors and a script that would stop half-way
+surface first; a Marketplace module built for another Mendix version (CE4271) only at
+boot. It runs before the whole command: edit (`sed -i`, python) and exec in two calls;
+a quoted `cat > x.mdl <<'EOF'` plus its exec may be one.
+Never run `mx check` while the app is up: it re-saves the `.mpr` under the suite.
 
 What neither the digest nor `./mxcli syntax` says -- this harness's own rules:
 

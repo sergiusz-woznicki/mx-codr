@@ -224,7 +224,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 
 | Rule | What it checks | Level |
 |---|---|---|
-| `CAPTION01` | Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". | Warning until the first DONE; then blocks a new or changed microflow |
+| `CAPTION01` | Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Checked before each exec too, with a suggested caption per line. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION02` | No activity keeps the caption Mendix gives it by default, like "Retrieve Invoice" or "Commit object". | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION03` | Every decision has a caption. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION04` | A decision's caption is a question and ends with "?", like "Is the order approved?". | Warning until the first DONE; then blocks a new or changed microflow |
@@ -378,7 +378,8 @@ for a follow-up reached DONE in 6 minutes and 0.7M tokens.
 ```bash
 bash tests/gate.sh                    # the done gate
 bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
-bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE), plus what the full gate would refuse
+bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE), plus what the full gate would refuse and the coverage still open
+bash tests/gate.sh --force            # the full gate after a red --only (it refuses otherwise: run that --only until PASSED)
 bash tests/gate.sh --changed          # the tests a model change touched
 bash tests/gate.sh --restart          # stop this project's app and boot it again (add --only to run a test)
 bash tests/gate.sh --only <feature> --reset-data  # first put back the rows earlier runs left

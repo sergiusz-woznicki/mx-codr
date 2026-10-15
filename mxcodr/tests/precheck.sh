@@ -112,6 +112,20 @@ if [ "$(mdl_rule_level MSG01 block)" != "off" ] && [ -f tools/mdl-checks/gate_he
   fi
 fi
 
+# CAPTION01-07: the flows these scripts create or modify carry their business captions now, not after
+# the gate names them (gate_scripts.cjs captionFindings): nine to twenty-three --only runs a B2B run
+# ended with "the full gate would refuse CAPTION01". CAPTION01 `off` in tests/rulebook/naming/ turns it off.
+if [ "$(mdl_rule_level CAPTION01 warn)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
+  uncaptioned="$("$NODE" tools/mdl-checks/gate_helpers.cjs captions "$@" 2>/dev/null)"
+  if [ -n "$uncaptioned" ]; then
+    echo "precheck: CAPTION01 -- activities without a business caption (the real model is untouched):"
+    printf '%s\n' "$uncaptioned"
+    echo "  Put @caption '<what it does for the business>' on the line above each action and decision (a question ending in ?),"
+    echo "  @annotation '<why it repeats>' above each loop -- the e.g. is a paste when it fits -- then exec again."
+    exit 1
+  fi
+fi
+
 # NAME02: the widgets of a page or snippet these scripts create are named <Page>_<What><Type> now,
 # not after a later change makes the whole page need them at once (gate_scripts.cjs widgetNameFindings).
 # NAME02 `off` in tests/rulebook/layout/NAME02.md turns it off.

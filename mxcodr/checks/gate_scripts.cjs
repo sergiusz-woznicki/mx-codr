@@ -271,6 +271,51 @@ function lowerCaseMessageTypes(scripts) {
 // <Page>_<What><Type> (layout_rules/names.cjs, the gate's own rule). After the first DONE a page
 // changed later had to have all of its names put right at once -- eleven renames and three test
 // fixes for one grid column (room booking r3, 2026-10-13); named right when written, nothing cascades.
+// CAPTION01-07 at the exec: a microflow or nanoflow a script creates or modifies has its business
+// captions before it reaches the model, as a page has its NAME02 names. Found only at the gate, the
+// captions came back as "the full gate would refuse CAPTION01" on 9-23 --only runs and 3-7 red full
+// gates per B2B run (2026-10-15). A suggestion per action, from what the line does, so the fix is a
+// paste. Prints `  <script>:<line>: <message>` lines; nothing when every flow is captioned.
+const CAPTION_AT_EXEC = /^CAPTION0[1-7]$/;
+const words = name => String(name).split('.').pop().replace(/^(ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF)_/i, '')
+  .replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
+const article = w => (w ? 'the ' + w : '');
+function suggestCaption(line) {
+  const t = line.trim();
+  let m;
+  if ((m = /^retrieve\s+\$\w+\s+from\s+(?:database\s+)?(?:\$\w+\/)?(?:["\w]+\.)*(["\w]+)/i.exec(t))) return `Find ${article(words(m[1]))}`;
+  if ((m = /^\$\w+\s*=\s*create\s+(?:list\s+of\s+)?["\w.]*\.(["\w]+)/i.exec(t))) return `Start a new ${words(m[1])}`;
+  if ((m = /^change\s+\$(\w+)/i.exec(t))) return `Update ${article(words(m[1]))}`;
+  if ((m = /^commit\s+\$(\w+)/i.exec(t))) return `Save ${article(words(m[1]))}`;
+  if ((m = /^delete\s+\$(\w+)/i.exec(t))) return `Remove ${article(words(m[1]))}`;
+  if ((m = /^(?:\$\w+\s*=\s*)?call\s+(?:microflow|nanoflow|java\s+action|javascript\s+action)\s+["\w.]*\.(["\w]+)/i.exec(t))) return words(m[1]).replace(/^./, c => c.toUpperCase());
+  if ((m = /^show\s+page\s+["\w.]*\.(["\w]+)/i.exec(t))) return `Open ${article(words(m[1]).replace(/\s+(new ?edit|overview|detail|view)$/, ''))} page`;
+  if (/^show\s+message/i.test(t)) return 'Tell the user what happened';
+  if (/^close\s+page/i.test(t)) return 'Close the page';
+  if (/^(set|declare)\s+\$/i.test(t)) return 'Work out the value';
+  if (/^(if|case|while)\b/i.test(t)) return 'Is it ...?';
+  if (/^loop\b/i.test(t)) return 'One row at a time';
+  return '';
+}
+function captionFindings(scripts) {
+  const { CHECKS } = require('./check_mdl.cjs');
+  const out = [];
+  for (const script of scripts) {
+    let text;
+    try { text = fs.readFileSync(script, 'utf8'); } catch { continue; }
+    const lines = text.split(/\r?\n/);
+    if (!/^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow)\b/im.test(text)) continue;
+    const [failures] = CHECKS.naming(lines);
+    for (const f of failures) {
+      if (!CAPTION_AT_EXEC.test(f.check)) continue;
+      const hint = /^CAPTION0[1356]$/.test(f.check) ? suggestCaption(lines[f.line - 1] || '') : '';
+      const kind = f.check === 'CAPTION06' ? '@annotation' : '@caption';
+      out.push(`  ${script}:${f.line}: [${f.check}] ${f.message}${hint ? ` -- e.g. ${kind} '${hint.replace(/'/g, "''")}'` : ''}`);
+    }
+  }
+  if (out.length) process.stdout.write(out.join('\n') + '\n');
+}
+
 function widgetNameFindings(scripts) {
   const { nameFindings } = require('./layout_rules/names.cjs');
   const out = [];
@@ -284,4 +329,4 @@ function widgetNameFindings(scripts) {
   if (out.length) process.stdout.write(out.join('\n') + '\n');
 }
 
-module.exports = { unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings };
+module.exports = { unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings, captionFindings, suggestCaption };

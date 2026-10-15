@@ -284,6 +284,7 @@ EARLY_CHECKS="catalog naming layout security paths folders"
 # nothing when they all pass. Paths shows only the findings that name a test --only ran (REQ02).
 print_early_blockers() {
   local name detail lines out="" test base
+  EARLY_COVERAGE=""
   local pattern='^[[:space:]]*- \[|^[[:space:]]+- '
   for name in $EARLY_CHECKS; do
     [ -f "$WORK/$name.status" ] || continue
@@ -297,6 +298,17 @@ print_early_blockers() {
         base="$(basename "$test")"
         kept="$kept$(grep -F "$base" <<< "$lines")"$'\n'
       done
+      # The paths findings on other tests are not this run's to fix, but the full gate refuses them
+      # all: one line with their count per code (and REQ02's ids) says what to test before it. Found
+      # only at a red full gate before, two to four times a B2B run (2026-10-15).
+      local rest
+      rest="$(grep -vxF -f <(grep -v '^$' <<< "$kept") <<< "$lines" | grep -v '^$')"
+      if [ -n "$rest" ]; then
+        EARLY_COVERAGE="$(grep -oE '\[[A-Z]+[0-9]+\]' <<< "$rest" | tr -d '[]' | sort | uniq -c | sort -k1,1nr -k2,2 | awk '{printf "%s%s x%s", (NR>1?", ":""), $2, $1}')"
+        local ids
+        ids="$(grep -oE '\[REQ02\] requirement [0-9a-f]+' <<< "$rest" | awk '{print $3}' | tr '\n' ' ' | sed 's/ $//')"
+        [ -n "$ids" ] && EARLY_COVERAGE="$EARLY_COVERAGE (REQ02: $ids)"
+      fi
       lines="$(grep -v '^$' <<< "$kept" | sort -u)"
     fi
     [ -n "$lines" ] || continue
@@ -304,9 +316,10 @@ print_early_blockers() {
     out="$out$(head -"$BLOCKERS_SHOWN" <<< "$lines" | sed -E 's/^[[:space:]]*(- )?//' | cut -c1-260 | sed 's/^/     - /')"$'\n'
     [ "$(grep -c . <<< "$lines")" -gt "$BLOCKERS_SHOWN" ] && out="$out     ... all of them: bash tests/gate.sh"$'\n'
   done
-  [ -n "$out" ] || return 0
+  [ -n "$out" ] || [ -n "${EARLY_COVERAGE:-}" ] || return 0
   echo "== before DONE: the full gate refuses these too -- fix them now, in the script you have open"
   printf '%s' "$out"
+  [ -z "${EARLY_COVERAGE:-}" ] || echo "   coverage still open on other tests: $EARLY_COVERAGE -- write those tests before the full gate (tests/checks/paths.md)"
   echo "   what each code wants and its fix: tests/checks/<step>.md"
   # For the verdict line: sessions read --only through `tail -3` or `grep PASS`, and a block above it
   # never reached them -- GRID03 then came back at the full gate three times (room-booking n1).

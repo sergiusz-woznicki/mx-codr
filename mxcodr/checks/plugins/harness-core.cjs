@@ -11,7 +11,7 @@
 
 const { spawnSync } = require("node:child_process")
 const { existsSync, readFileSync, writeFileSync, mkdirSync } = require("node:fs")
-const { join } = require("node:path")
+const { join, dirname } = require("node:path")
 
 const MAX_GATE_ROUNDS = 3
 const GATE_DONE = "DONE — every check passed"
@@ -205,6 +205,34 @@ function stepsBeforeExec(command) {
 // 04c.mdl` and a python heredoc edit followed by the exec; the second put four build errors into
 // the model. A step that only reads the script (grep, cat) is fine.
 const WRITES_BEFORE_EXEC = /<<|(^|[\s;&|(])(mv|cp|tee|rm|ln|rsync|install|patch|ed|perl|python3?|node|ruby|git)\s|(^|[\s;&|(])sed\s+(-[a-zA-Z]*\s+)*-i/
+// A command that writes one script with a quoted heredoc and execs it, and nothing else:
+//   [mkdir -p d &&] cat > mdlsource/x.mdl <<'EOF' ... EOF [&&|;|newline] ./mxcli exec mdlsource/x.mdl [-p ...] [| tail ...]
+// The hook writes the file itself (the same bytes the command writes a moment later), prechecks it
+// and lets the command through: one call per script instead of two (27 refusals in two B2B runs,
+// 21 of them this shape, 2026-10-15). An unquoted delimiter is refused: the shell would expand
+// every $Var of the MDL. Only a .mdl outside the harness's own folders, so the guard keeps its say.
+// Returns { path, body } for the shape, { unquoted: path } for the unquoted one, else null.
+const HEREDOC_SCRIPT = /^(?:\s*(?:mkdir\s+-p\s+\S+|cd\s+\S+|(?:export\s+)?[A-Za-z_]\w*=\S*)\s*(?:&&|;|\n)\s*)*cat\s+(?:>\s*(\S+)\s+<<\s*(['"]?)([A-Za-z_]\w*)\2|<<\s*(['"]?)([A-Za-z_]\w*)\4\s+>\s*(\S+))[ \t]*\n([\s\S]*?)\n\3?\5?[ \t]*\n\s*(?:&&|;)?\s*(?:\.\/)?mxcli(?:\.exe)?\s+exec\s+(\S+)(?:\s+-p\s+\S+)?(?:\s+2>&1)?(?:\s*\|\s*(?:tail|head|grep|cut|sed\s+-n)[^\n;&|]*)?\s*$/
+const HARNESS_FOLDERS = /^(tests|tools|mxcodr|\.claude|\.cursor|\.codex|\.opencode|\.pi|\.agents|\.ai-context)(\/|$)/
+function heredocScript(command) {
+  const m = HEREDOC_SCRIPT.exec(command || "")
+  if (!m) return null
+  const path = m[1] || m[6], quote = m[1] ? m[2] : m[4], execPath = m[8]
+  if (!path || path !== execPath || !/\.mdl$/.test(path)) return null
+  if (path.startsWith("/") || path.split(/[\\/]/).includes("..") || HARNESS_FOLDERS.test(path)) return null
+  if (!quote) return { unquoted: path }
+  return { path, body: m[7] + "\n" }
+}
+const HEREDOC_UNQUOTED = (path) =>
+  "Blocked: the heredoc that writes " + path + " has an unquoted delimiter, so the shell would expand every $Variable of the MDL " +
+  "before mxcli saw it. Write it as `cat > " + path + " <<'EOF'` (quoted), then the exec may stay in the same command."
+// Writes the heredoc's script so the precheck checks what the command is about to exec.
+function writeHeredocScript(root, found) {
+  const file = join(root, found.path)
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, found.body)
+}
+
 function scriptWrittenBeforeExec(command, scripts) {
   const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
   if (!m) return null
@@ -397,8 +425,13 @@ function blockReason(root, tool, args) {
   const scripts = (isMxcliExec(command) ? mdlScripts(command) : []).map((script) => resolvePwd(root, script))
   if (scripts.length === 0 && inline.length === 0) return null
   if (scripts.some((script) => script.includes("$"))) return EXEC_THROUGH_VARIABLE
-  const written = scriptWrittenBeforeExec(command, scripts)
-  if (written) return written
+  const heredoc = heredocScript(command)
+  if (heredoc && heredoc.unquoted) return HEREDOC_UNQUOTED(heredoc.unquoted)
+  if (heredoc) writeHeredocScript(root, heredoc)
+  else {
+    const written = scriptWrittenBeforeExec(command, scripts)
+    if (written) return written
+  }
   const inlineArgs = inline.flatMap((text) => ["--inline", text])
   const { status, out } = run([precheck.replace(/\\/g, "/"), "--for-exec", ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
   if (status === 0 || out.includes("precheck: could not run")) return null
@@ -406,7 +439,7 @@ function blockReason(root, tool, args) {
     // The same head as the shell hooks (hooks/before-mxcli-exec-core.sh): a build error, a document
     // created twice (SCRIPT01) and a page with no test yet (TEST01) all land here.
     "Blocked by the precheck (nothing changed in the model). Do what it says below, then exec again:\n" +
-    (stepsBeforeExec(command) ? STEPS_BEFORE_EXEC : "") + out.slice(-OUTPUT_LIMIT)
+    (stepsBeforeExec(command) && !heredoc ? STEPS_BEFORE_EXEC : "") + out.slice(-OUTPUT_LIMIT)
   )
 }
 
@@ -445,6 +478,6 @@ function reminder(root, { rulesFile, loadSkill, precheck }) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS, PRECHECK_TIMEOUT_MS, OUTPUT_LIMIT,
   run, readOnlyStep, harnessEnvBlocked, isSleepBeforeGate, SLEEP_BEFORE_GATE, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE, newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC,
-  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
+  EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript, writeHeredocScript, HEREDOC_UNQUOTED, resolvePwd, marketplaceWait, marketplacePending, filmsRecording, markSession, inlineMdl, isMxcliExec, mdlScripts, gateFailureMessage,
   blockReason, afterExecText, reminder, personCodes, personOnly, personOnlyMessage,
 }

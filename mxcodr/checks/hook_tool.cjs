@@ -245,6 +245,21 @@ const tools = {
     if (core.readsHarnessSource('bash', { command: py.readStdin() })) py.print(core.HARNESS_SOURCE);
   },
   // The block message when a step before the exec writes one of its scripts.
+  // heredoc-script: the command on stdin writes one script with a quoted heredoc and execs it --
+  // writes the file and prints its path (harness-core heredocScript); prints "unquoted <path>" when
+  // the delimiter is bare; nothing for any other command.
+  'heredoc-script'() {
+    const core = require('./plugins/harness-core.cjs');
+    const found = core.heredocScript(py.readStdin());
+    if (!found) return;
+    if (found.unquoted) { py.print('unquoted ' + found.unquoted); return; }
+    core.writeHeredocScript(process.cwd(), found);
+    py.print(found.path);
+  },
+  // unquoted-heredoc-message <path>: the refusal for a bare delimiter.
+  'unquoted-heredoc-message'(path) {
+    py.print(require('./plugins/harness-core.cjs').HEREDOC_UNQUOTED(path));
+  },
   'script-written'(...scripts) {
     const text = py.readStdin();
     const m = re.search(EXEC, text);

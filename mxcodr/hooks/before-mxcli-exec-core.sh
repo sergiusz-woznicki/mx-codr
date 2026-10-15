@@ -3,7 +3,7 @@
 # before-mxcli-exec.sh (Claude Code) and before-mxcli-exec-cursor.sh (Cursor); never run on
 # its own. The two hooks differed only in how they read the call and answer it, and three changes
 # in one day were made twice each. Provides: NODE, HOOK_TOOL, hook_sleep_message, inline_mdl,
-# steps_before_exec, hook_scripts, script_written_before_exec, hook_marketplace_wait, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.
+# steps_before_exec, hook_scripts, hook_heredoc_write, script_written_before_exec, hook_marketplace_wait, HOOK_VARIABLE_MESSAGE, HOOK_BLOCKED_HEAD, hook_precheck.
 
 # NODE and HOOK_TOOL (hook_tool.cjs, the small jobs: read a field, wrap a message).
 . "$(dirname "${BASH_SOURCE[0]}")/hook-env.sh"
@@ -57,6 +57,21 @@ hook_scripts() {
 script_written_before_exec() {
   local command="$1"; shift
   printf '%s' "$command" | "$NODE" "$HOOK_TOOL" script-written "$@" 2>/dev/null
+}
+
+# hook_heredoc_write <command> -- when the command writes one script with a quoted heredoc and execs
+# it (`cat > x.mdl <<'EOF' ... EOF` then `./mxcli exec x.mdl`), writes that file now so the precheck
+# checks what is about to run, and sets HOOK_HEREDOC to its path: one call per script instead of
+# two. A bare delimiter sets HOOK_HEREDOC_MESSAGE (the shell would expand the MDL's $Variables).
+hook_heredoc_write() {
+  local found
+  HOOK_HEREDOC=""; HOOK_HEREDOC_MESSAGE=""
+  found="$(printf '%s' "$1" | "$NODE" "$HOOK_TOOL" heredoc-script 2>/dev/null)" || return 0
+  case "$found" in
+    '') ;;
+    unquoted\ *) HOOK_HEREDOC_MESSAGE="$("$NODE" "$HOOK_TOOL" unquoted-heredoc-message "${found#unquoted }" 2>/dev/null)" ;;
+    *) HOOK_HEREDOC="$found" ;;
+  esac
 }
 
 # hook_marketplace_wait <command> -- prints the login message, and returns 3, while the app needs a

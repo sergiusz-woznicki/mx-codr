@@ -8,7 +8,7 @@
 #   bash tests/gate.sh --boot-if-needed   # start the app first if nothing answers
 #   bash tests/gate.sh --restart          # stop this project's runtime and boot it again (add --only to test)
 #   bash tests/gate.sh --stop             # stop this project's app (and its mxbuild), then exit
-#   bash tests/gate.sh --no-cache         # re-run the model checks even if nothing changed
+#   bash tests/gate.sh --no-cache | --force # re-run cached checks | the full gate after a red --only
 #   bash tests/gate.sh --reset-data       # with any of the above: tests start on the snapshot's data
 #
 # Eleven verdicts: the suite (tests/verify-*.test.sh) and ten model checks that need no app -- mx check,
@@ -61,6 +61,7 @@ parse_arguments() {
       --restart) RESTART=1; BOOT=1; shift ;;
       --stop) STOP=1; shift ;;
       --no-cache) USE_CACHE=0; shift ;;
+      --force) FORCE=1; shift ;;
       --reset-data) RESET_DATA=1; shift ;;
       -h|--help) sed -n '2,24p' "$HARNESS_DIR/gate.sh"; exit 0 ;;
       *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -224,6 +225,20 @@ record_last_gate() {
   return 0
 }
 
+# A full gate while the last --only run of this app was red is a two-minute way to learn what that
+# --only said: four to seven of a B2B run's red full gates were that (2026-10-15). It is refused with
+# the --only to run; --force runs it anyway (a feature given up, a test deleted on purpose).
+refuse_after_red_only() {
+  local red
+  [ -z "$ONLY" ] && [ "$TESTS_ONLY" = "0" ] && [ "$RESTART_ALONE" = "0" ] && [ "${FORCE:-0}" = "0" ] || return 0
+  red="$(sed -n 's/^last: [0-9-]* [0-9:]* --only \(.*\) NOT DONE -- failed.*/\1/p' .mxcli/last-gate.txt 2>/dev/null | head -1)"
+  [ -n "$red" ] || return 0
+  echo "== gate"
+  echo "   NOT DONE — the last \`--only $red\` run was red: run \`bash tests/gate.sh --only $red\` until it says PASSED, then the full gate."
+  echo "   A full gate now would only repeat what that run said, two minutes later. \`--force\` runs it anyway."
+  exit 1
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name timing=""
@@ -261,13 +276,16 @@ print_verdict_and_exit() {
     [ "${CHANGED:-0}" = "1" ] && scope="--changed (${#targets_ran[@]} of $(ls tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ') tests)"
     EARLY_CODES=""
     [ -n "${ONLY:-}" ] && print_early_blockers
+    local coverage="${EARLY_COVERAGE:+; coverage open: $EARLY_COVERAGE}"
     if [ -n "$EARLY_CODES" ]; then
-      echo "   PASSED — $scope -- not DONE: the full gate would refuse $EARLY_CODES (== before DONE above); fix them before the full gate"
+      echo "   PASSED — $scope -- not DONE: the full gate would refuse $EARLY_CODES$coverage (== before DONE above); fix them before the full gate"
+    elif [ -n "$coverage" ]; then
+      echo "   PASSED — $scope -- not DONE: the full gate would refuse what is untested$coverage (== before DONE above); write those tests first"
     else
       echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
     fi
     only_coverage_note
-    record_last_gate "PASSED${EARLY_CODES:+ -- the full gate would refuse $EARLY_CODES}"
+    record_last_gate "PASSED${EARLY_CODES:+ -- the full gate would refuse $EARLY_CODES}$coverage"
     exit 0
   fi
   print_for_the_person
@@ -338,7 +356,7 @@ print_failure_details() {
 }
 
 main() {
-  ONLY=""; CHANGED=0; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; RESET_DATA=0; USE_CACHE="${MDL_GATE_CACHE:-1}"; targets_ran=()
+  ONLY=""; CHANGED=0; TESTS_ONLY=0; BOOT=0; RESTART=0; STOP=0; RESET_DATA=0; FORCE=0; USE_CACHE="${MDL_GATE_CACHE:-1}"; targets_ran=()
   parse_arguments "$@"
   if [ "$CHANGED" = "1" ] && [ -n "$ONLY" ]; then
     echo "--changed picks the tests itself; it cannot be combined with --only" >&2; exit 2
@@ -389,6 +407,7 @@ main() {
   # restart's own full gate ran the suite a second time, a minute or two per pair (2026-10-14).
   RESTART_ALONE=0
   [ "$RESTART" = "1" ] && [ -z "$ONLY" ] && [ "$TESTS_ONLY" = "0" ] && RESTART_ALONE=1
+  refuse_after_red_only
   if [ "$RESTART_ALONE" = "1" ]; then
     :
   elif [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
