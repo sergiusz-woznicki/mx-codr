@@ -22,8 +22,8 @@ behind single lines; read one when its line is the thing you are doing (table at
 # 0. a new app, role, module or channel? skill requirements-interview first; then per
 #    feature, what "working" means: one sentence in the user's words
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call;
-#    a script without `scenario()` hangs for the full timeout. Logic with no screen goes
-#    in tests/*.test.mdl (`mxcli test`, skill test-microflows): extra, the gate skips it.
+#    a script without `scenario()` hangs for the full timeout. Sums, statuses, limits,
+#    dates: ALSO tests/<feature>.test.mdl (reference/microflow-tests.md)
 #    The exec of a new page or ACT_ microflow waits for this header (precheck TEST01)
 # 2. RUN IT AND WATCH IT FAIL, for the right reason; quote the FAIL line and read it --
 #    it names the error, locator, URL and user, so do not rerun or screenshot by hand
@@ -45,8 +45,6 @@ bash tests/gate.sh --changed
 #    exact counts go in verify-001-. A test that changes a seeded row owns that row
 bash tests/gate.sh
 ```
-
-Every step in prose, with a worked example: [reference/loop.md](reference/loop.md).
 
 ```text
 journey: open_app() does the one page.goto; reopen_app() starts over; any other goto
@@ -141,6 +139,7 @@ grows without a big-bang backfill.
 | You are | Read |
 |---|---|
 | A step of the loop in prose, with a worked example | [reference/loop.md](reference/loop.md) |
+| Which logic gets a microflow test | [reference/microflow-tests.md](reference/microflow-tests.md) |
 | The scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
 | Sign-in failures, "Maximum number of sessions", startup or idempotence regressions, a date or time in a check, subagents, facts about the app in one call | [reference/facts.md](reference/facts.md) |
 | Listing a feature's paths, or reading a `paths` finding | [reference/paths.md](reference/paths.md) |

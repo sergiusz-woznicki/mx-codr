@@ -13,8 +13,8 @@ A data grid column bound to a DateTime shows its time of day when a form of the 
 ## Fix
 In the finding.
 
-Full column: `column (Attribute: StartsAt, Caption: 'Starts', ShowContentAs: dynamicText, Content: '{1}', ContentParams: ({1} = formatDateTime($currentObject/StartsAt, 'd MMM yyyy, HH:mm')))`.
-The `$currentObject/` path is required; a bare attribute is CE0117.
+Full column: `column (Attribute: StartsAt, Caption: 'Starts', ShowContentAs: dynamicText, DynamicText: '{1}', DynamicTextParams: ({1} = formatDateTime($currentObject/StartsAt, 'd MMM yyyy, HH:mm')))`.
+The `$currentObject/` path is required; a bare attribute is CE0117. `describe` prints these as Content/ContentParams, and mxcli 0.27 `check` wrongly calls that spelling ignored (MDL-WIDGET10); both are written the same.
 
 ## Local
 # level: block

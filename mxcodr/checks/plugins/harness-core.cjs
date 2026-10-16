@@ -356,12 +356,13 @@ function isMxcliExec(command) {
   return typeof command === "string" && /mxcli(\.exe)? exec/.test(command)
 }
 
-// The .mdl words of a bash command, quotes stripped; a glob passes through unchecked.
+// The .mdl words of a bash command, quotes stripped; a glob passes through unchecked. A microflow
+// test (`*.test.mdl`) is never an exec script.
 function mdlScripts(command) {
   const words = command.match(/"[^"]*"|'[^']*'|\S+/g) || []
   const scripts = words
     .map((word) => word.replace(/^["']|["']$/g, ""))
-    .filter((word) => word.endsWith(".mdl"))
+    .filter((word) => word.endsWith(".mdl") && !word.endsWith(".test.mdl"))
   return [...new Set(scripts)]
 }
 
