@@ -9,7 +9,7 @@ fixed: yes
 # TESTS01 — every browser test passes
 
 ## What it checks
-Every browser test passes. Microflow unit tests (*.test.mdl) are not run by the gate; it shows the command that runs them.
+Every browser test passes. Microflow unit tests (*.test.mdl) are MFTEST01.
 
 ## Fix
 Read the failing scenario's own message; the test names the widget and the page.

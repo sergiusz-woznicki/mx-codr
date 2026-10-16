@@ -23,8 +23,8 @@ A `verify-*.test.sh` is a browser test and only a browser test: the gate hands i
 `mxcli playwright verify`, which waits for a browser result, so a script that never
 calls `scenario()` hangs for the full timeout. Logic with no screen in front of it goes
 in a `tests/*.test.mdl` run with `mxcli test` (skill `test-microflows`) — an extra
-check, not a substitute: the gate does not run those and coverage counts only
-`verify-*.test.sh`.
+check, not a substitute: the gate runs them once the rest of a full gate is green
+(MFTEST01), and coverage counts only `verify-*.test.sh`.
 
 **2. Run it and watch it fail.** `bash tests/gate.sh --only <feature> --boot-if-needed`.
 Quote the failure and read it — the line is self-contained (the Playwright error, the
