@@ -447,13 +447,13 @@ main() {
   step_visual
   step_runtime_errors
   close_browser_if_asked
-  note_microflow_tests
   add_red_first_notes
   note_never_red_tests
   # 4. Wait for the model checks and collect their verdicts.
   if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     wait
     collect_model_checks
+    step_microflow_tests
   fi
   [ -n "$ONLY" ] && wait
   print_verdict_and_exit

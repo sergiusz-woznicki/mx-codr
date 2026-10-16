@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.16.3 · mxcli v0.27.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.16.4 · mxcli v0.27.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -350,6 +350,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>TESTS01</code></td><td>Every browser test passes. Microflow unit tests (<code>*.test.mdl</code>) are not run by the gate; it shows the command that runs them.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>COVERAGE01</code></td><td>Every page and every <code>ACT_</code> microflow has a test. A test says which pages and microflows it tests in a comment at its top, <code># covers: Order_List, ACT_Order_Save</code>. This rule checks that every page and <code>ACT_</code> microflow appears in such a comment, and that every name in those comments really exists in the app (a renamed page leaves an old name behind).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>RUNTIME01</code></td><td>While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MFTEST01</code></td><td>The microflow tests under tests/ pass, and each asserts something. They run once the rest of a full gate is green, on a copy of the project with its own runtime and scratch database.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>VIS01</code></td><td>On the page a test ends on, no two widgets lie on top of each other.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS02</code></td><td>The page does not scroll sideways.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS03</code></td><td>No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included.</td><td><span class="lvl w">Warning</span></td></tr>
