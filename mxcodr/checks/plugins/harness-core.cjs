@@ -294,6 +294,9 @@ const REQUEST_MIN_CHARS = 80
 function saveRequest(root, text) {
   const body = String(text || "").trim()
   if (!root || body.length < REQUEST_MIN_CHARS) return null
+  // A host's own message in the prompt slot is not the person's request: Claude Code hands a finished
+  // background task back as <task-notification>, and b2b-f4 archived two of them (2026-10-16).
+  if (/^<(task-notification|system-reminder|local-command|command-name|bash-|user-prompt-submit)/i.test(body)) return null
   try {
     if (!require("node:fs").readdirSync(root).some((n) => n.endsWith(".mpr"))) return null
     const dir = join(root, "docs", "brain", "requests")
