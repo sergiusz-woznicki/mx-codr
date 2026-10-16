@@ -22,8 +22,8 @@ behind single lines; read one when its line is the thing you are doing (table at
 # 0. a new app, role, module or channel? skill requirements-interview first; then per
 #    feature, what "working" means: one sentence in the user's words
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call;
-#    a script without `scenario()` hangs for the full timeout. Sums, statuses, limits,
-#    dates: ALSO tests/<feature>.test.mdl (reference/microflow-tests.md)
+#    a script without `scenario()` hangs for the full timeout. A scheduled job or the
+#    seed, no screen: tests/<feature>.test.mdl (reference/microflow-tests.md)
 #    The exec of a new page or ACT_ microflow waits for this header (precheck TEST01)
 # 2. RUN IT AND WATCH IT FAIL, for the right reason; quote the FAIL line and read it --
 #    it names the error, locator, URL and user, so do not rerun or screenshot by hand
