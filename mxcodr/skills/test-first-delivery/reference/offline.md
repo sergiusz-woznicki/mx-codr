@@ -21,7 +21,7 @@ the device; a test picks it by name.
 - **Menu items for user management stay on the online profile.** ACCOUNT01/02 do not ask an
   offline profile for them: they would make the Administration pages reachable offline.
 - The profile needs **Progressive web app** settings, or no service worker registers and no page
-  opens offline (OFFLINE01). mxcli (v0.26 and before) creates offline profiles without them, and Studio Pro shows
+  opens offline (OFFLINE01). mxcli (v0.27 and before) creates offline profiles without them, and Studio Pro shows
   them greyed out for an offline profile, so they cannot be set afterwards: stop and ask the person
   to delete the profile in Studio Pro and add it again there, then re-apply its home pages, menu and
   sync with `create or modify navigation` (that leaves the settings alone).

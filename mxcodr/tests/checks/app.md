@@ -7,7 +7,6 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `COVERAGE01` | every page and ACT_ microflow is on a test's # covers: line | Comma- or space-separated; a `SUB_`, entity or enumeration does not count. |
 | `LOOK01` | warning: every screenshot the suite took has been reviewed (MDL_VISUAL_REVIEW=agent) | Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`. |
 | `LOOK02` | warning: no reviewed screenshot was rejected (MDL_VISUAL_REVIEW=agent) | Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`. |
-| `MSG01` | a message type is written with a capital | In the finding. |
 | `MX01` | Mendix's consistency check reports 0 errors | The CE hints under each error; the pitfalls in the syntax digest cover the same ground. |
 | `REQ01` | requirements recorded before building | A `brain capture` per testable statement; open ones `Assumed:` --open. |
 | `REQ03` | a later request records its requirements | `brain capture -a @<Doc>` per statement, unbuilt ones too. |

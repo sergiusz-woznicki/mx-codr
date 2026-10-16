@@ -218,14 +218,15 @@ function lintWanted(levels, lint01) {
 
 // Lint's findings at the rulebook's levels. A rule with a card (its level in --levels) reports under its
 // own code; one without (a newer mxcli's) stays LINT01 at LINT01's level. Off and info drop out, and so
-// do UI001 and SEC007 (ours) and findings in modules that are not the app's own (Marketplace ones).
+// do UI001 and SEC007 (ours), findings in modules that are not the app's own (Marketplace ones), and a
+// carded rule's finding mxcli itself rates info (SEC010 on a row-scoped read: the scoping is intended).
 function lintAtLevels(findings, levels, lint01, modules) {
   const out = [];
   for (const f of findings) {
     if (OUR_CODES.has(f.rule) || (f.module && !modules.has(f.module))) continue;
     const own = Object.prototype.hasOwnProperty.call(levels, f.rule);
     const at = own ? levels[f.rule] : lint01;
-    if (at === 'off' || at === 'info') continue;
+    if (at === 'off' || at === 'info' || (own && f.severity === 'info')) continue;
     out.push(own ? { ...f, code: f.rule, message: f.message.replace(/^\[[^\]]*\] /, '') } : f);
   }
   return out;
@@ -248,7 +249,7 @@ function unpublishedEvents(events, sources, modules) {
     out.push({ code: 'PUBLISH01', key: e.ServiceQualifiedName,
       message: `${e.ServiceQualifiedName} publishes ${e.MessageName} (${entity}), but no microflow hands a ${leaf} to a Java action` +
         (mentions.length ? ` -- ${mentions.map(d => d.QualifiedName).slice(0, 3).join(', ')} create${mentions.length === 1 ? 's' : ''} it and stop${mentions.length === 1 ? 's' : ''} there` : '') +
-        ': consumers never receive it. Publish it -- mxcli 0.26 cannot write BusinessEvents.PublishBusinessEvent_V2 (CE0115), so call a ' +
+        ': consumers never receive it. Publish it -- mxcli (0.26, 0.27) cannot write BusinessEvents.PublishBusinessEvent_V2 (CE0115), so call a ' +
         "Java action of your own that publishes (pitfalls: 'A business event is published through a Java action of your own') -- " +
         'and test that the publish ran, not that a log line was written' });
   }

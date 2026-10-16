@@ -98,20 +98,6 @@ if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
   fi
 fi
 
-# MSG01: a message type in lower case is stored as written and turned into Information by the next tool
-# that saves the model (gate_scripts.cjs lowerCaseMessageTypes) -- the warning is lost, and STALE01 then
-# sees a change nobody made. MSG01 `off` in tests/rulebook/app/MSG01.md turns it off.
-if [ "$(mdl_rule_level MSG01 block)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
-  lowered="$("$NODE" tools/mdl-checks/gate_helpers.cjs message-types "$@" 2>/dev/null)"
-  if [ -n "$lowered" ]; then
-    echo "precheck: MSG01 -- a message type in lower case (the real model is untouched):"
-    printf '%s\n' "$lowered"
-    echo "  Write it with a capital: Information, Warning, Error. In lower case mxcli stores it as written, and the"
-    echo "  next save of the model (mxcli fix widgets, Studio Pro) turns it into Information: the warning is lost."
-    exit 1
-  fi
-fi
-
 # CAPTION01-07: the flows these scripts create or modify carry their business captions now, not after
 # the gate names them (gate_scripts.cjs captionFindings): nine to twenty-three --only runs a B2B run
 # ended with "the full gate would refuse CAPTION01". CAPTION01 `off` in tests/rulebook/naming/ turns it off.

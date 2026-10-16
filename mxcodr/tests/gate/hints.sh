@@ -24,7 +24,7 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
                 echo "   hint CE1613 in an access rule: an XPath path alternates association and entity, ending on the association to the user, and the token is quoted whole: where '[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Account = ''[%CurrentUser%]'']' -- 'selected entity Mod.X_Y no longer exists' means an association stands where an entity step belongs. Skill: xpath-constraints"
               fi ;;
       # Three B2B runs in a row lost the OrderShipped publish and the AI agent call to this (2026-10-15):
-      # mxcli 0.26 writes a StringTemplate argument and an agent-document argument as plain expressions.
+      # mxcli 0.26 and 0.27 write a StringTemplate argument and an agent-document argument as plain expressions.
       CE0115)
         local known=""
         if grep -q "CE0115.*Java action 'BusinessEvents\.PublishBusinessEvent" "$1" 2>/dev/null; then known=1

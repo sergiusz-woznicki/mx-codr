@@ -26,15 +26,19 @@ const KIND = {
 // A business event is a message inside its service document, not a document of its own.
 const NO_FOLDER = new Set(['ENTITY', 'ASSOCIATION', 'MODULE', 'MENU', 'JAR_DEPENDENCY', 'NAVIGATION_PROFILE', 'BUSINESS_EVENT']);
 const KINDS = ['UI', 'FNC', 'ENV'];
+// mxcli 0.27 reports Studio Pro's names in CATALOG.OBJECTS (mendixlabs/mxcli#1395); a query on the old
+// value finds nothing, so the old ones (0.26, a cached catalog) are read as the new.
+const RENAMED = { ODATA_SERVICE: 'PUBLISHED_ODATA_SERVICE', ODATA_CLIENT: 'CONSUMED_ODATA_SERVICE', REST_CLIENT: 'CONSUMED_REST_SERVICE', QUEUE: 'TASK_QUEUE' };
+const typeOf = o => RENAMED[o.ObjectType] || o.ObjectType;
 // Where the catalog leaves the folder empty, DESCRIBE may print it.
-const DESCRIBED_FOLDER = { ODATA_SERVICE: 'published odata service', BUSINESS_EVENT_SERVICE: 'business event service' };
+const DESCRIBED_FOLDER = { PUBLISHED_ODATA_SERVICE: 'published odata service', BUSINESS_EVENT_SERVICE: 'business event service' };
 // mxcli 0.26 moves a business event service into a folder, but neither the catalog nor DESCRIBE says
 // which: the rule could never pass, and a session dropped the service to reach DONE (B2B, 2026-10-14).
 // Such a document is not judged until mxcli can read where it is.
 const UNREADABLE_FOLDER = new Set(['BUSINESS_EVENT_SERVICE']);
 const kindOf = type => KIND[type] || 'ENV';
 // How `move` spells each document type (mxcli syntax move).
-const spelled = type => (type === 'ODATA_SERVICE' ? 'published odata service' : type.toLowerCase().replace(/_/g, ' '));
+const spelled = type => (RENAMED[type] || type).toLowerCase().replace(/_/g, ' ');
 
 const words = text => (String(text).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().match(/[a-z0-9]+/g) || []);
 const stem = w => (w.endsWith('ies') ? w.slice(0, -3) + 'y' : w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w);
@@ -52,6 +56,7 @@ function guessFolder(name, businessFolders) {
 
 // One finding per misplaced document: {name, type, folder, target, message}.
 function findings(objects, modules) {
+  objects = objects.map(o => ({ ...o, ObjectType: typeOf(o) }));
   const own = new Set(modules);
   const out = [];
   // The business folders each module already has: the top segment of its documents' folders.
@@ -116,6 +121,7 @@ function main() {
   try {
     if (refresh) mxcli(appDir, mpr, 'refresh catalog full');
     objects = mxcli(appDir, mpr, 'SELECT QualifiedName, ModuleName, ObjectType, Folder FROM CATALOG.OBJECTS', true);
+    for (const o of objects) o.ObjectType = typeOf(o);
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
     process.stdout.write(`ERROR could not read the model -- ${error.message}\n`);
@@ -144,4 +150,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { KIND, NO_FOLDER, UNREADABLE_FOLDER, DESCRIBED_FOLDER, kindOf, guessFolder, findings, moveStatement };
+module.exports = { RENAMED, KIND, NO_FOLDER, UNREADABLE_FOLDER, DESCRIBED_FOLDER, kindOf, guessFolder, findings, moveStatement };

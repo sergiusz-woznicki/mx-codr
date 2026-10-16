@@ -56,7 +56,7 @@ replaced; your tests, `tests/credentials.env`, `tests/harness.env` and your rule
 |---|---|
 | Your Mendix app | creates one if the folder has none; on a Mac with several Studio Pro versions it asks which, `MX_VERSION` decides without asking |
 | How the app runs | asks: **locally** (default; runtime and PostgreSQL on this machine, a model change is live in about a second) or **in Docker** (nothing else installed, about 40 s per change) |
-| mxcli | downloads the one release the harness is tested with (`mxcodr/MXCLI_TESTED`, now v0.26.0), checksum-verified |
+| mxcli | downloads the one release the harness is tested with (`mxcodr/MXCLI_TESTED`, now v0.27.0), checksum-verified |
 | Node, Playwright, MxBuild, PostgreSQL | installs what is missing; leaves what is there |
 | Skills, hooks, the rulebook, the checkers | puts them where each of the five agents looks |
 | Windows | links what Studio Pro's mxbuild needs (Gradle, the JDK the Mendix version wants, ARM64 tools) and boots the app without `mxcli run`, which cannot boot on Windows |
@@ -154,7 +154,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (23 rules)
+**Done means tested and building** (22 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -170,7 +170,6 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
 | `SCRIPT01` | Each page, microflow, entity or constant is created in only one script in mdlsource/. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared. | Blocks |
-| `MSG01` | A message in a microflow has its type written with a capital (Warning, Error). In lower case mxcli stores it as written, and the next save of the model turns it into Information: the person sees a warning as plain information. | Blocks |
 | `STALE01` | An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change. | Blocks |
 | `TEST01` | Test first: before a new page or a new ACT_ microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine. | Blocks |
 | `REQ01` | Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead. | Blocks |
@@ -284,7 +283,7 @@ What makes the app look and behave like a proper Mendix app.
 | `NAV04` | The menu is a real Mendix navigation menu, not a row of buttons built into a layout (that has no mobile menu and no highlighted item). | Blocks |
 | `NAV05` | Every menu item has an icon. | Blocks |
 | `NAV06` | No two menu items that the same user can see have the same icon. | Blocks |
-| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli (v0.26 and before) writes offline profiles without these settings, and Studio Pro shows them greyed out for an offline profile, so they cannot be set afterwards: the profile has to be deleted and added again in Studio Pro. Judged where the app is built on this machine (local mode). | Blocks |
+| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli (v0.27 and before) writes offline profiles without these settings, and Studio Pro shows them greyed out for an offline profile, so they cannot be set afterwards: the profile has to be deleted and added again in Studio Pro. Judged where the app is built on this machine (local mode). | Blocks |
 | `OFFLINE02` | An offline profile downloads nothing until each entity has a sync mode, and then shows an empty app while every check passes. At least one entity is synchronized with all or where. | Blocks |
 | `OFFLINE03` | An app with an offline profile has a test that cuts the network: it opens the profile, calls go_offline(), does the work the user does without a network, checks the server has nothing yet, then go_online() and sync_now() and checks it arrived. | Blocks |
 | `PHONE01` | Atlas's phone and tablet layouts show a bottom menu from Atlas_Core (Phone_Menu, Tablet_Menu): the template's Home, Layouts, Templates and Widgets, which do nothing. A page whose layout shows a menu whose items all do nothing is reported. | Blocks |
@@ -311,12 +310,12 @@ Where documents live.
 |---|---|---|
 | `FOLDER01` | Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: UI for pages and snippets, FNC for microflows and nanoflows, ENV for everything else. The finding prints the moves to make. A business event service is left alone: mxcli moves it but cannot read its folder back. | Blocks |
 
-**mxcli's lint rules** (52 cards in `tests/rulebook/lint/`)
+**mxcli's lint rules** (53 cards in `tests/rulebook/lint/`)
 
 Each of mxcli's own lint rules has a card with a level decided once for all of them: a warning for the
-nine that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
+ten that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
 ones and UI actions, `CONV011` no commit in a loop, `CONV013` and `CONV014` error handling on calls,
-`SEC006`, `SEC008` and `SEC009` personal data, `MPR002` and `MPR006` empty microflows and containers),
+`SEC006`, `SEC008` and `SEC009` personal data, `SEC010` a page listing an entity its roles cannot read (mxcli 0.27; a row-scoped read mxcli itself rates info is left out), `MPR002` and `MPR006` empty microflows and containers),
 off for the rest, each card saying why: another rule checks it, mx check blocks it, or it does not fit
 how these apps are built. The catalog step runs `mxcli lint` and lists the findings in the app's own
 modules; Marketplace modules are left alone. A rule a newer mxcli adds falls under `LINT01` (off) until

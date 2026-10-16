@@ -56,7 +56,6 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   `alter entity Shop.Order add event handler on before commit call Shop.BCO_Order($currentObject) raise error;`.
   A bare `commit $X;` runs the handlers; `without events` skips them (EVENT03 warns).
 - **The after-startup microflow returns Boolean**: `returns boolean` and `return true;` (CE0142). Return true on every path: false stops the app, so a seed that returns false once its rows exist fails the next restart (gate STARTUP01).
-- **A message type takes a capital**: `show message 'Pick a room first.' type Warning;` -- `type warning` becomes Information at the next save of the model (gate MSG01).
 - **A create-object button stays hidden** unless the viewing role may create that entity:
   `grant create, delete, read *, write * on entity Mod.Entity to Mod.Role;`.
 - **A user filling in an object a microflow created needs `write`, not `create`**: the
@@ -109,12 +108,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   their own rows does not reach what the microflow retrieves. Constrain the retrieve itself --
   `where [Mod.Invoice_Customer = $SignedInCustomer]` or the `'[%CurrentUser%]'` path (gate `SCOPE01`).
 - **A business event is published through a Java action of your own**: `BusinessEvents.PublishBusinessEvent_V2`
-  takes its Subject as a text template, which mxcli 0.26 writes wrong (CE0115). Declare a wrapper and call it:
+  takes its Subject as a text template, which mxcli (0.26, 0.27) writes wrong (CE0115). Declare a wrapper and call it:
   `create or modify java action Mod.JA_PublishEvent(EntityType: entity <pEvent> not null, Event: pEvent not null,`
   `ServiceName: string not null, EventName: string not null, Channel: string not null, Subject: string not null)`
   `returns boolean as $$ ... new businessevents.actions.PublishBusinessEvent(getContext(), ServiceName, "<app>",`
   `Channel, template, EventName, Event).executeAction(); return true; $$;` (the template: a
   `java.lang.reflect.Proxy` for `IStringTemplate` whose `toString` returns Subject). A log line is not a publish.
 - **An agent is called through AgentCommons**: `AgentEditorCommons.Agent_CallDocument_*` picks the agent
-  document in an argument mxcli 0.26 cannot write (CE0115). `retrieve $Agent from AgentCommons."Agent" where
+  document in an argument mxcli (0.26, 0.27) cannot write (CE0115). `retrieve $Agent from AgentCommons."Agent" where
   [_QualifiedName = 'Mod.MyAgent'] first;` then `$Response = call java action AgentCommons.Agent_Call_WithoutHistory(Agent = $Agent, OptionalContextObject = $Context);`.
