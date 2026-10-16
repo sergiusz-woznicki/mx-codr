@@ -326,9 +326,11 @@
     await input.press('Tab');
     const picker = page.locator('.mx-name-' + widget + '.mx-datepicker').first();
     if (String(value) !== '' && await picker.count()) {
+      // Only a refused date has a message: read it when it appeared, never wait on a missing one
+      // (innerText on no element waited the 8 s action timeout on every valid date, room-booking-t3).
       const invalid = picker.locator('.mx-validation-message').first();
-      await invalid.waitFor({timeout: 500}).catch(() => {});
-      const msg = await invalid.innerText().catch(() => '');
+      const shown = await invalid.waitFor({timeout: 500}).then(() => true, () => false);
+      const msg = shown ? await invalid.innerText({timeout: 1000}).catch(() => '') : '';
       if (/invalid/i.test(msg)) {
         const format = await input.getAttribute('placeholder').catch(() => '');
         throw new Error("fill('" + widget + "', '" + value + "'): the date picker refused it (" + msg.trim() + ')'
