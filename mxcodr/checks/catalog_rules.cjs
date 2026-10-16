@@ -33,7 +33,7 @@ const INPUT_TYPES = new Set(['Forms$CheckBox', 'Forms$DatePicker', 'Forms$TextBo
   'com.mendix.widget.web.combobox.Combobox']);
 const MIN_INPUTS = 2;
 // The codes this file checks itself; mxcli lint reports UI001 and SEC007 too (they began as lint rules).
-const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'LINT01']);
+const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'LINT01']);
 
 const entityOfAttribute = ref => { const parts = String(ref || '').split('.'); return parts.length < 3 ? '' : parts.slice(0, -1).join('.'); };
 
@@ -218,15 +218,40 @@ function lintWanted(levels, lint01) {
 
 // Lint's findings at the rulebook's levels. A rule with a card (its level in --levels) reports under its
 // own code; one without (a newer mxcli's) stays LINT01 at LINT01's level. Off and info drop out, and so
-// do UI001 and SEC007 (ours) and findings in modules that are not the app's own (Marketplace ones).
+// do UI001 and SEC007 (ours), findings in modules that are not the app's own (Marketplace ones), and a
+// carded rule's finding mxcli itself rates info (SEC010 on a row-scoped read: the scoping is intended).
 function lintAtLevels(findings, levels, lint01, modules) {
   const out = [];
   for (const f of findings) {
     if (OUR_CODES.has(f.rule) || (f.module && !modules.has(f.module))) continue;
     const own = Object.prototype.hasOwnProperty.call(levels, f.rule);
     const at = own ? levels[f.rule] : lint01;
-    if (at === 'off' || at === 'info') continue;
+    if (at === 'off' || at === 'info' || (own && f.severity === 'info')) continue;
     out.push(own ? { ...f, code: f.rule, message: f.message.replace(/^\[[^\]]*\] /, '') } : f);
+  }
+  return out;
+}
+
+// PUBLISH01: [{code, key, message}] -- a business event the app's own service publishes (the
+// consumers subscribe to it: CanSubscribe) whose entity no microflow hands to a Java action. Three
+// B2B runs (2026-10-15) could not write the module's publish call (CE0115), created the event object,
+// logged it and reached DONE: the service promised OrderShipped and nothing ever sent it. The publish
+// may go through a wrapper of the app's own (pitfalls), so any Java action call in a microflow that
+// names the entity counts; a log line or a commit does not.
+function unpublishedEvents(events, sources, modules) {
+  const out = [];
+  for (const e of events) {
+    if (!modules.has(e.ModuleName) || String(e.CanSubscribe) !== '1' || !e.Entity) continue;
+    const entity = String(e.Entity);
+    const leaf = entity.split('.').pop();
+    const mentions = sources.filter(d => d.ObjectType === 'MICROFLOW' && new RegExp('\\b' + leaf + '\\b').test(d.SourceText || ''));
+    if (mentions.some(d => /\bcall\s+java\s+action\b/i.test(d.SourceText || ''))) continue;
+    out.push({ code: 'PUBLISH01', key: e.ServiceQualifiedName,
+      message: `${e.ServiceQualifiedName} publishes ${e.MessageName} (${entity}), but no microflow hands a ${leaf} to a Java action` +
+        (mentions.length ? ` -- ${mentions.map(d => d.QualifiedName).slice(0, 3).join(', ')} create${mentions.length === 1 ? 's' : ''} it and stop${mentions.length === 1 ? 's' : ''} there` : '') +
+        ': consumers never receive it. Publish it -- mxcli (0.26, 0.27) cannot write BusinessEvents.PublishBusinessEvent_V2 (CE0115), so call a ' +
+        "Java action of your own that publishes (pitfalls: 'A business event is published through a Java action of your own') -- " +
+        'and test that the publish ran, not that a log line was written' });
   }
   return out;
 }
@@ -357,6 +382,13 @@ function main() {
     if (level('STARTUP01') !== 'off') {
       found.push(...startupReturnsFalse(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), flow => mxcli(appDir, mpr, `DESCRIBE MICROFLOW ${flow}`)));
     }
+    if (level('PUBLISH01') !== 'off') {
+      const events = mxcli(appDir, mpr, 'SELECT ServiceQualifiedName, MessageName, CanSubscribe, Entity, ModuleName FROM CATALOG.BUSINESS_EVENTS', true);
+      if (events.length) {
+        const flows = mxcli(appDir, mpr, "SELECT QualifiedName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType = 'MICROFLOW'", true);
+        found.push(...unpublishedEvents(events, flows, modules));
+      }
+    }
     if (level('SEED01') !== 'off') {
       const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('MICROFLOW', 'PAGE', 'SNIPPET', 'WORKFLOW')", true);
       const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType IN ('PAGE', 'ENTITY', 'MICROFLOW')", true);
@@ -380,4 +412,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };
+module.exports = { unpublishedEvents, handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };

@@ -69,6 +69,12 @@ over after the second round becomes an assumption with its recommended answer.
   the request's own words (a sign-in where it asks to pick a user from a list) -- captured as an open question:
   `./mxcli brain capture "Assumed: one currency, EUR" --open --slice <slice> -p <app>.mpr`.
   An answer the person gave or accepted ("all as recommended" included) is a requirement, never `--open`.
+- **A feature that needs a key, an account or an outside service is built, not deferred**: build it to
+  work with a stand-in when the key is missing (a template text for an AI draft, a mock for a service),
+  read the key from a constant left empty, and record the key as an open question for the person.
+  Two B2B runs skipped a whole AI feature for want of a key; a third built it with a template and kept it.
+- **Every number, limit and place the request names is its own requirement** ("one Employee, one Manager,
+  two customers"; "a filter bar above the table"): what is not in the plan is lost to the next session.
 - **A slice in one command:** chain its captures with `&&`, one `./mxcli brain capture ... -p <app>.mpr`
   per requirement or assumption -- not one tool call each, and not a script file of your own.
 

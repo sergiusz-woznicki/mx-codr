@@ -105,6 +105,38 @@ function newFeaturesCommand(args) {
   return 0;
 }
 
+// REQ03: a later request's new page or ACT_ microflow is anchored by one of its requirements. The
+// first build records its requirements (REQ01); a later request did not, so what it asked for and did
+// not build left no trace for the next session: a B2B run with a fresh session per part skipped the
+// payment-reminder agent of part 4 and nothing showed it as open (2026-10-15). Prints the new pages and
+// ACT_ microflows that no requirement in docs/brain/plan/ (or the staged queue) names with @, once the
+// app has pages of its own and its plan has requirements; the caller blocks on any line.
+function unanchoredFeaturesCommand(args) {
+  const [app, mpr, ...scripts] = args;
+  const coverage = require('./check_test_coverage.cjs');
+  const plan = py.join(app, 'docs', 'brain', 'plan');
+  let anchors = '';
+  try {
+    for (const file of fs.readdirSync(plan)) if (file.endsWith('.md')) anchors += fs.readFileSync(py.join(plan, file), 'utf8') + '\n';
+  } catch {
+    return 0;
+  }
+  if (!/^## /m.test(anchors)) return 0;
+  try { anchors += fs.readFileSync(py.join(app, '.mxcli', 'brain', 'staged.jsonl'), 'utf8'); } catch { /* no queue */ }
+  const fresh = newFeatures(app, mpr, scripts, coverage);
+  if (!fresh || !fresh.length) return 0;
+  try {
+    const own = coverage.projectModules(app, mpr)[1];
+    const pages = coverage.qualifiedNames(coverage.mxcliJson(app, mpr, 'SHOW PAGES'));
+    if (![...pages].some(name => own.includes(name.split('.')[0]))) return 0;   // the first build: REQ01's
+  } catch {
+    return 0;
+  }
+  const named = name => new RegExp('@' + name.replace(/\./g, '\\.') + '(?![\\w.])').test(anchors);
+  for (const [kind, name] of fresh) if (!named(name)) py.print(`  - ${kind} ${name}`);
+  return 0;
+}
+
 
 // SCRIPT01: a document two scripts create is whatever the last one run says.
 // The kinds mxcli 0.25 can patch with `alter <kind>`; a constant or a menu it cannot.
@@ -214,31 +246,55 @@ function errorSourcesCommand(args) {
   return 0;
 }
 
-// MSG01: `show message ... type warning` (or error, information) in lower case. mxcli v0.26 stores the word
-// as written, and the first tool that saves the model again -- `mxcli fix widgets`, which the after-exec
-// hook runs for a data grid, or Studio Pro -- reads an unknown type and makes it Information: the
-// warning is shown as plain information, and the script no longer matches the model (STALE01 refused
-// three re-runs of an untouched script, room booking 2026-10-13). Warning and Error with a capital stay.
-const MESSAGE_TYPE_RE = /\bshow\s+message\b[^;]*?\btype\s+(information|warning|error)\b/g;
-function lowerCaseMessageTypes(scripts) {
-  const out = [];
-  for (const script of scripts) {
-    let text;
-    try { text = fs.readFileSync(script, 'utf8'); } catch { continue; }
-    text.split(/\r?\n/).forEach((line, i) => {
-      for (const m of line.matchAll(MESSAGE_TYPE_RE)) {
-        const fixed = m[1][0].toUpperCase() + m[1].slice(1);
-        out.push(`  ${script}:${i + 1}: \`type ${m[1]}\` -> \`type ${fixed}\``);
-      }
-    });
-  }
-  if (out.length) process.stdout.write(out.join('\n') + '\n');
-}
-
 // NAME02 before the exec: the widgets of each page or snippet a script creates are named
 // <Page>_<What><Type> (layout_rules/names.cjs, the gate's own rule). After the first DONE a page
 // changed later had to have all of its names put right at once -- eleven renames and three test
 // fixes for one grid column (room booking r3, 2026-10-13); named right when written, nothing cascades.
+// CAPTION01-07 at the exec: a microflow or nanoflow a script creates or modifies has its business
+// captions before it reaches the model, as a page has its NAME02 names. Found only at the gate, the
+// captions came back as "the full gate would refuse CAPTION01" on 9-23 --only runs and 3-7 red full
+// gates per B2B run (2026-10-15). A suggestion per action, from what the line does, so the fix is a
+// paste. Prints `  <script>:<line>: <message>` lines; nothing when every flow is captioned.
+const CAPTION_AT_EXEC = /^CAPTION0[1-7]$/;
+const words = name => String(name).split('.').pop().replace(/^(ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF)_/i, '')
+  .replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
+const article = w => (w ? 'the ' + w : '');
+function suggestCaption(line) {
+  const t = line.trim();
+  let m;
+  if ((m = /^retrieve\s+\$\w+\s+from\s+(?:database\s+)?(?:\$\w+\/)?(?:["\w]+\.)*(["\w]+)/i.exec(t))) return `Find ${article(words(m[1]))}`;
+  if ((m = /^\$\w+\s*=\s*create\s+(?:list\s+of\s+)?["\w.]*\.(["\w]+)/i.exec(t))) return `Start a new ${words(m[1])}`;
+  if ((m = /^change\s+\$(\w+)/i.exec(t))) return `Update ${article(words(m[1]))}`;
+  if ((m = /^commit\s+\$(\w+)/i.exec(t))) return `Save ${article(words(m[1]))}`;
+  if ((m = /^delete\s+\$(\w+)/i.exec(t))) return `Remove ${article(words(m[1]))}`;
+  if ((m = /^(?:\$\w+\s*=\s*)?call\s+(?:microflow|nanoflow|java\s+action|javascript\s+action)\s+["\w.]*\.(["\w]+)/i.exec(t))) return words(m[1]).replace(/^./, c => c.toUpperCase());
+  if ((m = /^show\s+page\s+["\w.]*\.(["\w]+)/i.exec(t))) return `Open ${article(words(m[1]).replace(/\s+(new ?edit|overview|detail|view)$/, ''))} page`;
+  if (/^show\s+message/i.test(t)) return 'Tell the user what happened';
+  if (/^close\s+page/i.test(t)) return 'Close the page';
+  if (/^(set|declare)\s+\$/i.test(t)) return 'Work out the value';
+  if (/^(if|case|while)\b/i.test(t)) return 'Is it ...?';
+  if (/^loop\b/i.test(t)) return 'One row at a time';
+  return '';
+}
+function captionFindings(scripts) {
+  const { CHECKS } = require('./check_mdl.cjs');
+  const out = [];
+  for (const script of scripts) {
+    let text;
+    try { text = fs.readFileSync(script, 'utf8'); } catch { continue; }
+    const lines = text.split(/\r?\n/);
+    if (!/^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow)\b/im.test(text)) continue;
+    const [failures] = CHECKS.naming(lines);
+    for (const f of failures) {
+      if (!CAPTION_AT_EXEC.test(f.check)) continue;
+      const hint = /^CAPTION0[1356]$/.test(f.check) ? suggestCaption(lines[f.line - 1] || '') : '';
+      const kind = f.check === 'CAPTION06' ? '@annotation' : '@caption';
+      out.push(`  ${script}:${f.line}: [${f.check}] ${f.message}${hint ? ` -- e.g. ${kind} '${hint.replace(/'/g, "''")}'` : ''}`);
+    }
+  }
+  if (out.length) process.stdout.write(out.join('\n') + '\n');
+}
+
 function widgetNameFindings(scripts) {
   const { nameFindings } = require('./layout_rules/names.cjs');
   const out = [];
@@ -252,4 +308,4 @@ function widgetNameFindings(scripts) {
   if (out.length) process.stdout.write(out.join('\n') + '\n');
 }
 
-module.exports = { DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, lowerCaseMessageTypes, widgetNameFindings };
+module.exports = { unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, widgetNameFindings, captionFindings, suggestCaption };

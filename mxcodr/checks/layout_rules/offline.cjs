@@ -1,6 +1,6 @@
 // Offline profiles (PWAs that work without a network) and the menus of phone and tablet layouts.
 //   OFFLINE01  an offline profile in an app whose build registers no service worker: the
-//              profile has no Progressive web app settings (mxcli v0.26 and before write none; Studio
+//              profile has no Progressive web app settings (mxcli v0.27 and before write none; Studio
 //              Pro shows them greyed out and fixed for an offline profile, so the only repair
 //              is deleting and re-adding the profile there), so no page opens without a
 //              network. Read from the built index.js.

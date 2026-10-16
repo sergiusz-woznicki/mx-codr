@@ -6,6 +6,9 @@
 #
 # mdl_reminder <rules file> <how to load test-first-delivery> <the precheck clause>
 
+# NODE and HOOK_TOOL for save-request.
+. "$(dirname "${BASH_SOURCE[0]}")/hook-env.sh"
+
 mdl_reminder_template() {
   local here
   here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -36,6 +39,9 @@ mdl_reminder() {
 mdl_mark_session() {
   local input id root
   input="$(cat 2>/dev/null)"
+  # The request itself, word for word, into docs/brain/requests/ (hook_tool save-request): the next
+  # session's orient.sh lists them, so a detail no requirement recorded is not lost between sessions.
+  printf '%s' "$input" | "$NODE" "$HOOK_TOOL" save-request >/dev/null 2>&1
   id="$(printf '%s' "$input" | grep -oE '"(session_id|conversation_id|sessionId)"[[:space:]]*:[[:space:]]*"[A-Za-z0-9._-]+"' \
     | head -1 | sed -E 's/.*"([A-Za-z0-9._-]+)"$/\1/')"
   [ -n "$id" ] || return 0

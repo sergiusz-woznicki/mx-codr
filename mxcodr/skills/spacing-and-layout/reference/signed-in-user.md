@@ -7,7 +7,7 @@ the Back button (where there is one) on the left of the same row. Clicking it op
 ```sql
 /** Who is signed in, as one line for the page header. */
 create or modify non-persistent entity Shop.SignedInUser ( Label: String(200) );
-grant read * on entity Shop.SignedInUser to Shop.User;      -- every role that signs in
+grant read * on entity Shop.SignedInUser to Shop.User;      -- every module role that signs in (create it: mxcli 0.27 makes none)
 
 /** The signed-in user's e-mail, or their user name when the account has none. */
 create or modify microflow Shop.DS_SignedInUser ()

@@ -83,35 +83,22 @@ leaves the widget stuck ("did not create any objects within 10 seconds").
 
 ## 3. Showing a photo
 
-**Thumbnail and large photo.** mxcli v0.26.0 cannot bind the Image widget to the
-photo object (it writes no entity: "No image selected."), and the legacy
-`dynamicimage` is refused in a React-client app (CE0582). Until mxcli has
-`Image: $currentObject` (mendixlabs/mxcli#1482), show it through its URL:
-
-1. a JavaScript action returns the photo's URL;
-2. the upload's success nanoflow stores it on the owner (`PhotoUrl: String(500)`);
-3. an `image (ImageType: imageUrl, ImageUrl: '{1}', ImageUrlParams: ({1} = PhotoUrl))`
-   shows it, with `Visible: PhotoUrl != ''` (an empty `src` logs a runtime error);
-   size it with `WidthUnit: pixels, Width: 64` for a list, `320` for a page.
+**Thumbnail and large photo.** Since mxcli 0.27 the Image widget binds to the photo object
+in context: put it in a data view, list view or gallery over the `System.Image` specialisation
+(or over a `$currentObject` path to it) and size it with `WidthUnit: pixels, Width: 64` for a
+list, `320` for a page. Outside a data container, or over an entity that does not extend
+`System.Image`, `check` refuses it. The legacy `dynamicimage` is refused in a React-client app (CE0582).
 
 ```sql
-create or modify javascript action Catalogue.JSA_ProductPhotoUrl (Photo: Catalogue.ProductPhoto)
-returns String
-as $$
-    if (!photo) { return Promise.resolve(""); }
-    return window.mx.data
-        .getDocumentUrl(photo.getGuid(), photo.get("changedDate"), false)
-        .then(function (documentUrl) {
-            return new Promise(function (resolve, reject) {
-                window.mx.data.getImageUrl(documentUrl, resolve, reject);
-            });
-        });
-$$;
+-- inside the page's data view over the product
+listview ProductDetail_PhotosList (DataSource: $currentObject/Catalogue.Product_Photos) {
+  image ProductDetail_PhotoImage (Image: $currentObject, WidthUnit: pixels, Width: 64)
+}
 ```
 
-The parameter is lower-case inside the body (`photo`), whatever its MDL name. The last argument
-of `getDocumentUrl` asks for the thumbnail: keep it `false`. With `true` the URL is a 120 px
-thumbnail, and the product page stretches it to 320 px, blurred.
+Measured on mxcli 0.27.0 and Mendix 11.12.1: `exec` writes it and `mx check` reports 0 errors. If the
+page still shows "No image selected." for a photo that is there, a mxcli older than 0.27 wrote it:
+`./mxcli --version`, and the installer's pinned mxcli.
 
 **`ImageType` takes `image`, `imageUrl` or `icon` only.** Another value, such as
 `dynamicImage`, is stored without a warning and shows nothing.

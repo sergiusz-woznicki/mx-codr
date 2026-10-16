@@ -93,6 +93,38 @@ last_gate_lines() {
   staged="$(grep -c . .mxcli/brain/staged.jsonl 2>/dev/null)"
   [ "${staged:-0}" -gt 0 ] && echo "   $staged requirement(s) staged in .mxcli/brain/staged.jsonl, not yet recorded"
   echo "   this app is built: read only the scripts and tests this request changes; == tests below says what each one covers"
+  open_requirements_lines
+  requests_line
+}
+
+# The person's earlier requests, word for word (the prompt hook saves each one): every number, limit
+# and placement they asked for, not only what an agent recorded as a requirement. Two B2B runs with a
+# session per request lost "one Employee, one Manager, two customers" between sessions (2026-10-15).
+requests_line() {
+  local count
+  count="$(ls docs/brain/requests/[0-9]*.md 2>/dev/null | wc -l | tr -d ' ')"
+  [ "${count:-0}" -gt 1 ] || return 0
+  echo "   earlier requests, word for word: docs/brain/requests/ ($count) -- what this one builds on; check what they asked (numbers, limits, where things go) still holds"
+}
+
+# What earlier requests asked for and the model does not have yet: requirements whose anchors do not
+# resolve (`mxcli brain plan` derives it from the model), and open questions. A session per request
+# starts from these: one that only saw the gate's DONE skipped a feature the request before had asked
+# for (B2B, 2026-10-15). Read with `./mxcli brain brief --slice <slice>`.
+open_requirements_lines() {
+  local plan
+  ls docs/brain/plan/*.md >/dev/null 2>&1 || return 0
+  plan="$("$MXCLI" brain plan -p "$MPR" --json 2>/dev/null | "$NODE" -e '
+    let t = require("fs").readFileSync(0, "utf8"); t = t.slice(t.indexOf("{"));
+    let d; try { d = JSON.parse(t); } catch { process.exit(0); }
+    const open = (d.slices || []).filter(s => s.planned > 0 || s.questions > 0)
+      .map(s => s.slice + " (" + [s.planned ? s.planned + " not built" : "", s.questions ? s.questions + " open question(s)" : ""].filter(Boolean).join(", ") + ")");
+    if (open.length) console.log(open.join("; "));' 2>/dev/null)"
+  if [ -n "$plan" ]; then
+    echo "   open from earlier requests: $plan -- ./mxcli brain brief --slice <slice> -p $MPR lists them; build what is not built with this request unless it says otherwise, and keep or settle the open questions"
+  else
+    echo "   every recorded requirement is built (mxcli brain plan)"
+  fi
 }
 
 app_section() {

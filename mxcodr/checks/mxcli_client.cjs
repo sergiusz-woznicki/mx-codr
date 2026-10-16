@@ -16,9 +16,31 @@ function binary(appDir) {
   return './mxcli';
 }
 
+// mxcli caps one statement's output at 10,000 lines. 0.27 refuses a statement past it (exit 1,
+// mendixlabs/mxcli#1425) where 0.26 exited 0: a catalog query over an app with the twelve Marketplace AI
+// modules (2,000 permission rows, ~8 lines each in --json) made security, folders, unused and catalog
+// "could not run". Such a SELECT is read again in pages small enough for the cap.
+const LINE_CAP = /output line limit exceeded/;
+const PAGE_ROWS = 500;
+
 // One MDL command: its text, or with asJson the rows of its --json output ([] for an empty table).
 // MDL_MXCLI_TIMEOUT (seconds, default 120) bounds every call.
 function mxcli(appDir, mpr, command, asJson = false) {
+  try {
+    return mxcliOnce(appDir, mpr, command, asJson);
+  } catch (error) {
+    const pageable = asJson && /^\s*select\b/i.test(command) && !/\b(limit|offset)\b/i.test(command);
+    if (!(error instanceof ModelReadError) || !LINE_CAP.test(error.message) || !pageable) throw error;
+    const rows = [];
+    for (let offset = 0; ; offset += PAGE_ROWS) {
+      const page = mxcliOnce(appDir, mpr, `${command.replace(/;\s*$/, '')} LIMIT ${PAGE_ROWS} OFFSET ${offset}`, true);
+      rows.push(...page);
+      if (page.length < PAGE_ROWS) return rows;
+    }
+  }
+}
+
+function mxcliOnce(appDir, mpr, command, asJson) {
   const args = ['-p', mpr, ...(asJson ? ['--json'] : []), '-c', command];
   const timeout = parseFloat(process.env.MDL_MXCLI_TIMEOUT || '120');
   const result = spawnSync(binary(appDir), args, { cwd: appDir, encoding: 'utf8', timeout: timeout * 1000, maxBuffer: 1 << 30, windowsHide: true });
@@ -26,7 +48,8 @@ function mxcli(appDir, mpr, command, asJson = false) {
   const stdout = (result.stdout || '').replace(/\r\n?/g, '\n');
   if (result.status !== 0) {
     const lines = ((result.stderr || '') + stdout).trim().split('\n');
-    throw new ModelReadError(`\`${command}\` exited ${result.status}: ${lines[lines.length - 1] || 'no output'}`);
+    const capped = (result.stderr || '').split('\n').find(line => LINE_CAP.test(line));
+    throw new ModelReadError(`\`${command}\` exited ${result.status}: ${capped || lines[lines.length - 1] || 'no output'}`);
   }
   if (!asJson) return stdout;
   // `Found N result(s)` may come before the JSON; an empty table prints no list at all.

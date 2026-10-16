@@ -49,17 +49,24 @@ while IFS= read -r script; do
 done <<HOOK_SCRIPTS
 $scripts
 HOOK_SCRIPTS
-written="$(script_written_before_exec "$command" ${args[@]+"${args[@]}"})"
-if [ -n "$written" ]; then
-  echo "$written" >&2
+hook_heredoc_write "$command"
+if [ -n "$HOOK_HEREDOC_MESSAGE" ]; then
+  echo "$HOOK_HEREDOC_MESSAGE" >&2
   exit 2
+fi
+if [ -z "$HOOK_HEREDOC" ]; then
+  written="$(script_written_before_exec "$command" ${args[@]+"${args[@]}"})"
+  if [ -n "$written" ]; then
+    echo "$written" >&2
+    exit 2
+  fi
 fi
 
 hook_precheck ${args[@]+"${args[@]}"} ${inline[@]+"${inline[@]}"}
 if [ "$HOOK_STATUS" -ne 0 ]; then
   {
     echo "$HOOK_BLOCKED_HEAD"
-    steps_before_exec "$command"
+    [ -n "$HOOK_HEREDOC" ] || steps_before_exec "$command"
     printf '%s\n' "$HOOK_OUT"
   } >&2
   exit 2

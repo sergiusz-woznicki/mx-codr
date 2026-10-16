@@ -56,7 +56,7 @@ replaced; your tests, `tests/credentials.env`, `tests/harness.env` and your rule
 |---|---|
 | Your Mendix app | creates one if the folder has none; on a Mac with several Studio Pro versions it asks which, `MX_VERSION` decides without asking |
 | How the app runs | asks: **locally** (default; runtime and PostgreSQL on this machine, a model change is live in about a second) or **in Docker** (nothing else installed, about 40 s per change) |
-| mxcli | downloads the one release the harness is tested with (`mxcodr/MXCLI_TESTED`, now v0.26.0), checksum-verified |
+| mxcli | downloads the one release the harness is tested with (`mxcodr/MXCLI_TESTED`, now v0.27.0), checksum-verified |
 | Node, Playwright, MxBuild, PostgreSQL | installs what is missing; leaves what is there |
 | Skills, hooks, the rulebook, the checkers | puts them where each of the five agents looks |
 | Windows | links what Studio Pro's mxbuild needs (Gradle, the JDK the Mendix version wants, ARM64 tools) and boots the app without `mxcli run`, which cannot boot on Windows |
@@ -154,7 +154,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (21 rules)
+**Done means tested and building** (22 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -165,14 +165,15 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `LOOK02` | Only when switched on: none of those screenshots was judged to look wrong. | Warning |
 | `MX01` | Mendix's own consistency check finds no errors: the same red errors Studio Pro would show in its Errors pane. | Blocks |
 | `STARTUP01` | The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after. | Blocks |
+| `PUBLISH01` | A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing. | Blocks |
 | `SEED01` | A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. | Warning |
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
 | `SCRIPT01` | Each page, microflow, entity or constant is created in only one script in mdlsource/. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared. | Blocks |
-| `MSG01` | A message in a microflow has its type written with a capital (Warning, Error). In lower case mxcli stores it as written, and the next save of the model turns it into Information: the person sees a warning as plain information. | Blocks |
 | `STALE01` | An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change. | Blocks |
 | `TEST01` | Test first: before a new page or a new ACT_ microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine. | Blocks |
 | `REQ01` | Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead. | Blocks |
+| `REQ03` | A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What the request asks for and is not built yet is recorded as well, so the next session's `orient.sh` lists it as open. | Blocks |
 | `TESTS01` | Every browser test passes. Microflow unit tests (*.test.mdl) are not run by the gate; it shows the command that runs them. | Blocks |
 | `UNUSED01` | No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it. | Blocks |
 | `VIS01` | On the page a test ends on, no two widgets lie on top of each other. | Warning |
@@ -223,7 +224,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 
 | Rule | What it checks | Level |
 |---|---|---|
-| `CAPTION01` | Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". | Warning until the first DONE; then blocks a new or changed microflow |
+| `CAPTION01` | Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Checked before each exec too, with a suggested caption per line. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION02` | No activity keeps the caption Mendix gives it by default, like "Retrieve Invoice" or "Commit object". | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION03` | Every decision has a caption. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION04` | A decision's caption is a question and ends with "?", like "Is the order approved?". | Warning until the first DONE; then blocks a new or changed microflow |
@@ -282,7 +283,7 @@ What makes the app look and behave like a proper Mendix app.
 | `NAV04` | The menu is a real Mendix navigation menu, not a row of buttons built into a layout (that has no mobile menu and no highlighted item). | Blocks |
 | `NAV05` | Every menu item has an icon. | Blocks |
 | `NAV06` | No two menu items that the same user can see have the same icon. | Blocks |
-| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli (v0.26 and before) writes offline profiles without these settings, and Studio Pro shows them greyed out for an offline profile, so they cannot be set afterwards: the profile has to be deleted and added again in Studio Pro. Judged where the app is built on this machine (local mode). | Blocks |
+| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli (v0.27 and before) writes offline profiles without these settings, and Studio Pro shows them greyed out for an offline profile, so they cannot be set afterwards: the profile has to be deleted and added again in Studio Pro. Judged where the app is built on this machine (local mode). | Blocks |
 | `OFFLINE02` | An offline profile downloads nothing until each entity has a sync mode, and then shows an empty app while every check passes. At least one entity is synchronized with all or where. | Blocks |
 | `OFFLINE03` | An app with an offline profile has a test that cuts the network: it opens the profile, calls go_offline(), does the work the user does without a network, checks the server has nothing yet, then go_online() and sync_now() and checks it arrived. | Blocks |
 | `PHONE01` | Atlas's phone and tablet layouts show a bottom menu from Atlas_Core (Phone_Menu, Tablet_Menu): the template's Home, Layouts, Templates and Widgets, which do nothing. A page whose layout shows a menu whose items all do nothing is reported. | Blocks |
@@ -309,12 +310,12 @@ Where documents live.
 |---|---|---|
 | `FOLDER01` | Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: UI for pages and snippets, FNC for microflows and nanoflows, ENV for everything else. The finding prints the moves to make. A business event service is left alone: mxcli moves it but cannot read its folder back. | Blocks |
 
-**mxcli's lint rules** (52 cards in `tests/rulebook/lint/`)
+**mxcli's lint rules** (53 cards in `tests/rulebook/lint/`)
 
 Each of mxcli's own lint rules has a card with a level decided once for all of them: a warning for the
-nine that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
+ten that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
 ones and UI actions, `CONV011` no commit in a loop, `CONV013` and `CONV014` error handling on calls,
-`SEC006`, `SEC008` and `SEC009` personal data, `MPR002` and `MPR006` empty microflows and containers),
+`SEC006`, `SEC008` and `SEC009` personal data, `SEC010` a page listing an entity its roles cannot read (mxcli 0.27; a row-scoped read mxcli itself rates info is left out), `MPR002` and `MPR006` empty microflows and containers),
 off for the rest, each card saying why: another rule checks it, mx check blocks it, or it does not fit
 how these apps are built. The catalog step runs `mxcli lint` and lists the findings in the app's own
 modules; Marketplace modules are left alone. A rule a newer mxcli adds falls under `LINT01` (off) until
@@ -365,7 +366,8 @@ in as.
 
 **The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 
-**A long build: one request per agent session.** Each gate run writes where it left the app to
+**A long build: one request per agent session.** Each request is kept word for word in
+`docs/brain/requests/`, and each gate run writes where it left the app to
 `.mxcli/last-gate.txt`, and `tests/orient.sh` prints it at the start of the next session, with the
 requirements still staged. Give each request of a long project (a new screen, the next part of a
 spec) its own session in the same folder instead of resuming one: measured on the B2B prompt with
@@ -377,7 +379,8 @@ for a follow-up reached DONE in 6 minutes and 0.7M tokens.
 ```bash
 bash tests/gate.sh                    # the done gate
 bash tests/gate.sh --boot-if-needed   # boot the app first if nothing answers
-bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE), plus what the full gate would refuse
+bash tests/gate.sh --only <feature>   # one test, warm browser (ends PASSED, never DONE), plus what the full gate would refuse and the coverage still open
+bash tests/gate.sh --force            # the full gate after a red --only (it refuses otherwise: run that --only until PASSED)
 bash tests/gate.sh --changed          # the tests a model change touched
 bash tests/gate.sh --restart          # stop this project's app and boot it again (add --only to run a test)
 bash tests/gate.sh --only <feature> --reset-data  # first put back the rows earlier runs left

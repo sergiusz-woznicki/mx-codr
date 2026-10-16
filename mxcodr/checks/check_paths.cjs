@@ -15,7 +15,8 @@
 //
 // Only the tests the gate runs count (tests/verify-*.test.sh), and only outside comment lines: a `# covers:` line, or a comment
 // quoting a message, walks nothing. A test signs in as a demo user when its text names that user
-// (TEST_USER=, sign_in_as('...'), a login form fill).
+// (TEST_USER=, sign_in_as('...'), a login form fill); with no demo users, the TEST_USER= and
+// sign_in_as() names alone.
 //
 // Old documents do not block: --baseline names a file of {key: hash} from the model as it was when
 // the harness was installed (--write-baseline writes it). A finding on a key that is new or changed
@@ -62,6 +63,10 @@ function readTests(files, demoUsers) {
   return files.map(([name, raw]) => {
     const kept = raw.split(/\r?\n/).filter(line => { const t = line.trim(); return !(/^(#|--|\/\/)/.test(t) && !t.startsWith('#!')); }).join('\n');
     const users = new Set(demoUsers.filter(u => new RegExp(`(^|[^\\w])${u.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\w])`).test(kept)).map(u => u.name));
+    // The sign-ins the test itself names: an app at Production security has no demo users (its seed
+    // creates the accounts), and WF02 then saw no user at all in a test that signed in as two
+    // (b2b-f4, 2026-10-16: TEST_USER=demo_anna, then sign_in_as("demo_manager")).
+    for (const m of kept.matchAll(/\bTEST_USER=["']?([\w.@-]+)|\bsign_in_as\(\s*["'`]([\w.@-]+)["'`]/g)) users.add(m[1] || m[2]);
     return { name, raw: kept, text: kept.toLowerCase(), tokens: tokens(kept), corpus: rules.testCorpus([[name, kept]]), users };
   });
 }

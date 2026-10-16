@@ -98,16 +98,16 @@ if [ -f tools/mdl-checks/gate_helpers.cjs ]; then
   fi
 fi
 
-# MSG01: a message type in lower case is stored as written and turned into Information by the next tool
-# that saves the model (gate_scripts.cjs lowerCaseMessageTypes) -- the warning is lost, and STALE01 then
-# sees a change nobody made. MSG01 `off` in tests/rulebook/app/MSG01.md turns it off.
-if [ "$(mdl_rule_level MSG01 block)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
-  lowered="$("$NODE" tools/mdl-checks/gate_helpers.cjs message-types "$@" 2>/dev/null)"
-  if [ -n "$lowered" ]; then
-    echo "precheck: MSG01 -- a message type in lower case (the real model is untouched):"
-    printf '%s\n' "$lowered"
-    echo "  Write it with a capital: Information, Warning, Error. In lower case mxcli stores it as written, and the"
-    echo "  next save of the model (mxcli fix widgets, Studio Pro) turns it into Information: the warning is lost."
+# CAPTION01-07: the flows these scripts create or modify carry their business captions now, not after
+# the gate names them (gate_scripts.cjs captionFindings): nine to twenty-three --only runs a B2B run
+# ended with "the full gate would refuse CAPTION01". CAPTION01 `off` in tests/rulebook/naming/ turns it off.
+if [ "$(mdl_rule_level CAPTION01 warn)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
+  uncaptioned="$("$NODE" tools/mdl-checks/gate_helpers.cjs captions "$@" 2>/dev/null)"
+  if [ -n "$uncaptioned" ]; then
+    echo "precheck: CAPTION01 -- activities without a business caption (the real model is untouched):"
+    printf '%s\n' "$uncaptioned"
+    echo "  Put @caption '<what it does for the business>' on the line above each action and decision (a question ending in ?),"
+    echo "  @annotation '<why it repeats>' above each loop -- the e.g. is a paste when it fits -- then exec again."
     exit 1
   fi
 fi
@@ -154,6 +154,29 @@ if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ01 block)" 
     echo "  - then ./mxcli brain promote <id> for each (assume mode promotes its own; ask mode waits for the person)."
     echo "  Each requirement then needs a test that names it (# requirement: <id>, gate REQ02), one test file per"
     echo "  slice so --only <slice> runs a short one. Then exec again."
+    exit 1
+  fi
+fi
+
+# REQ03: a later request's new page or ACT_ microflow waits for a requirement that anchors it, so
+# every request leaves its requirements in docs/brain/plan/ -- built or not -- and the next session's
+# orient.sh shows what is still open (a fresh session per part skipped a whole feature of part 4 and
+# nothing said so, B2B 2026-10-15). Only once the app has pages and its plan has requirements.
+# Only after the app's first DONE (.mxcli/last-gate.txt): during the first build its new pages are
+# that request's, recorded by REQ01 -- REQ03 blocked twice inside the first part of b2b-f4 (2026-10-16).
+if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ03 block)" = "block" ] \
+   && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1 \
+   && grep -q '^full: .* DONE' .mxcli/last-gate.txt 2>/dev/null; then
+  unanchored="$("$NODE" tools/mdl-checks/gate_helpers.cjs unanchored-features . "$MPR" "$@" 2>/dev/null)"
+  if [ -n "$unanchored" ]; then
+    echo "precheck: REQ03 -- no requirement of this request names these new documents (the real model is untouched):"
+    printf '%s\n' "$unanchored"
+    echo "  Record this request's requirements first, one per testable statement of it, in a slice of its own,"
+    echo "  each anchored at the document that will build it:"
+    echo "    ./mxcli brain capture \"<requirement>\" --slice <NN>-<this request> -a @<Module.Doc> -p $MPR"
+    echo "  A part of the request you will not build now gets its requirement too, anchored at the document it"
+    echo "  will be: the next session's orient.sh lists it as open. A part that needs a key or an outside service is"
+    echo "  built with a stand-in, not deferred. Promote each (./mxcli brain promote <id>), then exec again."
     exit 1
   fi
 fi

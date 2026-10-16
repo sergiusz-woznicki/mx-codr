@@ -245,6 +245,30 @@ const tools = {
     if (core.readsHarnessSource('bash', { command: py.readStdin() })) py.print(core.HARNESS_SOURCE);
   },
   // The block message when a step before the exec writes one of its scripts.
+  // heredoc-script: the command on stdin writes one script with a quoted heredoc and execs it --
+  // writes the file and prints its path (harness-core heredocScript); prints "unquoted <path>" when
+  // the delimiter is bare; nothing for any other command.
+  'heredoc-script'() {
+    const core = require('./plugins/harness-core.cjs');
+    const found = core.heredocScript(py.readStdin());
+    if (!found) return;
+    if (found.unquoted) { py.print('unquoted ' + found.unquoted); return; }
+    core.writeHeredocScript(process.cwd(), found);
+    py.print(found.path);
+  },
+  // unquoted-heredoc-message <path>: the refusal for a bare delimiter.
+  'unquoted-heredoc-message'(path) {
+    py.print(require('./plugins/harness-core.cjs').HEREDOC_UNQUOTED(path));
+  },
+  // save-request: the prompt in the hook's JSON on stdin (prompt, user_prompt or text) saved word for
+  // word to docs/brain/requests/NN.md of the project (harness-core saveRequest); prints the file.
+  'save-request'() {
+    const data = load();
+    const text = get(data, 'prompt', '') || get(data, 'user_prompt', '') || get(data, 'text', '');
+    const root = process.env.CLAUDE_PROJECT_DIR || process.env.CURSOR_PROJECT_DIR || process.cwd();
+    const file = require('./plugins/harness-core.cjs').saveRequest(root, typeof text === 'string' ? text : '');
+    if (file) py.print(file);
+  },
   'script-written'(...scripts) {
     const text = py.readStdin();
     const m = re.search(EXEC, text);

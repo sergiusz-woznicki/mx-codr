@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.12.12 · mxcli v0.26.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.16.3 · mxcli v0.27.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -205,7 +205,7 @@ html { scroll-behavior: smooth; }
     <div class="step">
       <h3>The tools</h3>
       <ul class="items">
-        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.26.0), checksum-verified.</li>
+        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.27.0), checksum-verified.</li>
         <li>Node, playwright-cli and its browser, MxBuild for <code>mx check</code>, PostgreSQL; Docker only in Docker mode.</li>
         <li>On Windows: Git for Windows, the junctions and the ARM64 fixes Studio Pro's mxbuild needs and, for Mendix 11.15, Studio Pro's own Gradle 9.5.1, JDK 25 and rspack bundler.</li>
         <li>What needs a person (a JDK, starting a Docker daemon) is listed with the command to run.</li>
@@ -288,7 +288,6 @@ html { scroll-behavior: smooth; }
     </ul>
     <dl class="codes-list">
       <dt class="b">SCRIPT01</dt><dd>The same document is created in two scripts: whichever runs last wins. The hint offers <code>alter</code> only for the kinds mxcli can alter.</dd>
-      <dt class="b">MSG01</dt><dd>A message type in lower case (<code>type warning</code>): it would turn into Information at the next save of the model.</dd>
       <dt class="b">STALE01</dt><dd>Re-running an old script would undo later changes to its pages and flows.</dd>
       <dt class="b">TEST01</dt><dd>A new page or <code>ACT_</code> microflow that no test names yet: the test comes first.</dd>
     </dl>
@@ -317,8 +316,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">115</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">70</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">117</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">72</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">6</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
@@ -336,10 +335,10 @@ html { scroll-behavior: smooth; }
     <tbody>
       <tr><td><code>precheck</code></td><td>The script is run on a copy of the app first. If it stops halfway, or if Studio Pro would show new errors afterwards, it is refused. The app is never left half-changed.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SCRIPT01</code></td><td>Each page, microflow, entity or constant is created in only one script in <code>mdlsource/</code>. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>MSG01</code></td><td>A message in a microflow has its type written with a capital (Warning, Error). In lower case mxcli stores it as written, and the next save of the model turns it into Information: the person sees a warning as plain information. (checked before each exec).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>STALE01</code></td><td>An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TEST01</code></td><td>Test first: before a new page or a new <code>ACT_</code> microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REQ01</code></td><td>Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ03</code></td><td>A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What is not built yet is recorded as well, so the next session's orient.sh lists it as open.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -384,7 +383,7 @@ html { scroll-behavior: smooth; }
   <div class="table-wrap"><table class="rules">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
-      <tr><td><code>CAPTION01</code></td><td>Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices".</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>CAPTION01</code></td><td>Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Checked before each exec too, with a suggested caption per line.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION02</code></td><td>No activity keeps the caption Mendix gives it by default, like "Retrieve Invoice" or "Commit object".</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION03</code></td><td>Every decision has a caption.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION04</code></td><td>A decision's caption is a question and ends with "?", like "Is the order approved?".</td><td><span class="lvl a">After DONE</span></td></tr>
@@ -453,7 +452,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>NAME02</code></td><td>Every widget is named after its page, what it is for and its type, in full words, like <code>OrderDetail_GenerateInvoiceButton</code>. Tests find widgets by these names. Checked before each exec; a page the app already had at install is only warned about.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ALERT01</code></td><td>Points out an alert or card style put on a plain text, where it renders badly. Put it on a container around the text.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>HEAD01</code></td><td>Points out a page without a heading.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli (v0.26 and before) creates offline profiles without them, and Studio Pro shows them greyed out, so the person deletes the profile and adds it again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli (v0.27 and before) creates offline profiles without them, and Studio Pro shows them greyed out, so the person deletes the profile and adds it again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>OFFLINE02</code></td><td>An offline profile synchronizes the entities its pages show. Without a sync mode the device downloads nothing and shows an empty app.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>OFFLINE03</code></td><td>An app with an offline profile has a test that cuts the network, does the work, checks the server has nothing yet, then syncs and checks it arrived.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE01</code></td><td>A phone or tablet page shows the app's own menu, not Atlas's template menu (Home, Layouts, Templates, Widgets) whose items do nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -507,12 +506,13 @@ html { scroll-behavior: smooth; }
     <tbody>
       <tr><td><code>MX01</code></td><td>Mendix's own consistency check finds no errors: the same red errors Studio Pro would show in its Errors pane.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>STARTUP01</code></td><td>The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>PUBLISH01</code></td><td>A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEED01</code></td><td>A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
     </tbody>
   </table></div>
 
   <h3 id="g-mxcli-lint">Advice from mxcli's linter</h3>
-  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the nine that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
+  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the ten that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
   <div class="table-wrap"><table class="rules compact">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
@@ -540,6 +540,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>SEC006</code></td><td>Entities with personal data have access rules.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>SEC008</code></td><td>No role reads every record of an entity with personal data.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>SEC009</code></td><td>Large entities limit which attributes each role may read.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>SEC010</code></td><td>A list, grid or picker on a page shows an entity that the roles opening the page may read (otherwise it shows nothing, with every check clean). A read limited to the user's own rows is fine and not reported.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>CONV001</code></td><td>Boolean attributes start with Is, Has, Can, Should, Was or Will.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>CONV002</code></td><td>No default values on attributes; set them in a microflow.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>CONV003</code></td><td>Page names end in _NewEdit, _View, _Overview, _Select, _Details or _Dashboard.</td><td><span class="lvl i">Off</span></td></tr>
