@@ -16,6 +16,11 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **A data grid column across an association** binds the attribute at the end of the path:
   `column (Attribute: Invoice_Customer/Name)`, not the association itself. A data grid column has no
   name in Mendix: `column (...)`, addressed later as `dg column(Name)` (a name warns MDL-DEPR005).
+- **`[%CurrentUser%]` in a microflow fails in a system session**: an after-startup microflow, a scheduled
+  event and `mxcli test` run with no user, and the token throws "cannot be used in a system session". In a
+  microflow use `$currentUser`, which is empty there: `if $currentUser = empty then return empty; end if;`
+  then `retrieve $Account from Administration.Account where [id = $currentUser] first;`. An access rule's
+  `'[%CurrentUser%]'` is fine: it is never evaluated in a system session.
 - **`Administration.Account.Name` does not exist**: Name is System.User's. Show `FullName`.
 - **A user's roles are the reference set `System.UserRoles` -- write it qualified**: `retrieve $Role from
   System.UserRole where [Name = 'Customer'] first;` then `change $User (System.UserRoles = $Role);`. Unqualified

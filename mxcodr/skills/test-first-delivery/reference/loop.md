@@ -21,12 +21,11 @@ set -euo pipefail
 
 A `verify-*.test.sh` is a browser test and only a browser test: the gate hands it to
 `mxcli playwright verify`, which waits for a browser result, so a script that never
-calls `scenario()` hangs for the full timeout. A feature with a calculation, a status
-change, a limit that refuses, a date window, a background job's selection or a text rule
-also gets a `tests/<feature>.test.mdl` with its edge cases: which kinds, how to shape the
-logic so a test can call it, and an example are in `microflow-tests.md`. It is extra, not a
-substitute: the full gate runs it once everything else is green (MFTEST01), and coverage
-counts only `verify-*.test.sh`.
+calls `scenario()` hangs for the full timeout. Logic no screen can drive, such as what a
+scheduled event picks or the after-startup seed, gets a `tests/<feature>.test.mdl` instead
+(`microflow-tests.md`: when, and what to read before changing a microflow for a red one).
+The full gate runs it once everything else is green (MFTEST01); coverage counts only
+`verify-*.test.sh`.
 
 **2. Run it and watch it fail.** `bash tests/gate.sh --only <feature> --boot-if-needed`.
 Quote the failure and read it — the line is self-contained (the Playwright error, the

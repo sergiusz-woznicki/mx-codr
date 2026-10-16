@@ -282,6 +282,16 @@
     }
     return out.join('\n');
   }).catch(() => null);
+  // The fields of the open form the browser marked invalid, as "Label (message)". Mendix checks a
+  // required (not null) attribute and a date's format in the browser, before any microflow runs, so
+  // a validation feedback in the microflow never appears for them (room-booking-t1, 2026-10-16).
+  const __mdl_refused_fields = () => page.evaluate(() => [...document.querySelectorAll('.form-group.has-error')]
+    .filter((g) => g.offsetParent !== null)
+    .map((g) => {
+      const label = (g.querySelector('label') || {}).innerText || g.className.replace(/.*mx-name-(\S+).*/, '$1');
+      const msg = (g.querySelector('.mx-validation-message') || {}).innerText || '';
+      return label.trim() + (msg.trim() ? ' (' + msg.trim() + ')' : ' (no message)');
+    })).catch(() => []);
   const await_message = async (pattern, timeout) => {
     const deadline = Date.now() + (timeout || ACTION_TIMEOUT);
     let text = '', fresh = null;
@@ -292,11 +302,15 @@
       if (pattern.test(candidate)) return candidate.replace(/\s+/g, ' ').trim();
       if (Date.now() > deadline) {
         const stale = fresh !== null && pattern.test(text);
+        const refused = await __mdl_refused_fields();
         throw new Error('no message matching ' + pattern + ' appeared within '
           + (timeout || ACTION_TIMEOUT) + 'ms after the last action'
           + (page.__mdlLastAction ? ' (' + page.__mdlLastAction.slice(0, 120) + ')' : '')
           + (stale ? ' -- the page matches it, but that text was there BEFORE the action: it is not the reply.'
             + ' Match words only the reply carries, or check the action really ran' : '')
+          + (refused.length ? ' -- the browser refused ' + refused.join(', ') + ' before any microflow ran: a required'
+            + " (not null) attribute's message is its own `error message '...'` in the domain model, and a date is typed"
+            + ' in its picker\'s format; a validation feedback in the microflow never runs for these' : '')
           + '; the page says: ' + text.replace(/\s+/g, ' ').trim().slice(0, 300));
       }
       await page.waitForTimeout(100);
@@ -304,10 +318,26 @@
   };
   // Mendix commits an input on blur, so a fill followed straight away by a click
   // on Save can be saved before the last value is committed. Tab out to blur.
+  // A date picker takes a date only in its own format (the input's placeholder, e.g. yyyy-mm-dd hh:mm);
+  // anything else is "Invalid date" and an empty value, so fill says so instead of a later timeout.
   const fill = async (widget, value) => {
     const input = page.locator('.mx-name-' + widget + ' input, .mx-name-' + widget + ' textarea').first();
     await input.fill(String(value));
     await input.press('Tab');
+    const picker = page.locator('.mx-name-' + widget + '.mx-datepicker').first();
+    if (String(value) !== '' && await picker.count()) {
+      // Only a refused date has a message: read it when it appeared, never wait on a missing one
+      // (innerText on no element waited the 8 s action timeout on every valid date, room-booking-t3).
+      const invalid = picker.locator('.mx-validation-message').first();
+      const shown = await invalid.waitFor({timeout: 500}).then(() => true, () => false);
+      const msg = shown ? await invalid.innerText({timeout: 1000}).catch(() => '') : '';
+      if (/invalid/i.test(msg)) {
+        const format = await input.getAttribute('placeholder').catch(() => '');
+        throw new Error("fill('" + widget + "', '" + value + "'): the date picker refused it (" + msg.trim() + ')'
+          + ' -- type it in the picker\'s own format' + (format ? ': ' + format : '')
+          + ", or give the datepicker DateFormat: Custom, CustomDateFormat: 'yyyy-MM-dd HH:mm'");
+      }
+    }
   };
   const pick_combo = async (widget, option) => {
     await page.click('.mx-name-' + widget + ' .widget-combobox-input-container');

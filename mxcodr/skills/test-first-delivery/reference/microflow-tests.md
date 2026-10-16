@@ -1,29 +1,31 @@
-# Microflow tests: which logic gets one
+# Microflow tests: only where a browser cannot reach
 
-A browser test proves a person can do the thing. It reaches a rule through one or two cases,
-because each case costs a page visit. A microflow test (`tests/<feature>.test.mdl`, skill
-`test-microflows`) calls the logic directly. Each case costs milliseconds, so it can cover
-the edges a browser test skips. Write one **next to** the browser test, never instead of it,
-whenever a feature has logic of one of these kinds:
+A browser test proves a person can do the thing, and it is the test that counts. Measured over 31
+sessions of the harness and of agents without it (2026-10-16), a microflow test (`tests/<feature>.test.mdl`,
+skill `test-microflows`) caught one logic bug, and a browser test in the same session caught it too. Its red runs were
+mostly a wrong test (a fixture missing an association, a value read back from memory) or the system
+session it runs in. Twice an agent chasing a red microflow test made a correct microflow worse.
+
+So write one only for logic no screen can drive:
 
 | Kind | What to assert |
 |---|---|
-| **Calculations**: totals, VAT, discounts, rounding, money and unit formatting, scores | a typical value, zero, a negative, the rounding edge (x.xx5), a large value |
-| **Status changes**: an order, request or ticket moving through its states | each allowed step; a skipped or backwards step refused **and** the status left unchanged; a final state that stays final |
-| **Limits that refuse**: credit limit, capacity, stock not below zero, no double booking, a maximum per person | just inside the limit passes, exactly on it, just outside it refused with the message the user sees |
-| **Dates and time windows**: due and overdue, cancel-before deadlines, end before start, opening hours | the day before, the day itself, the day after; month end; a start equal to the end |
-| **What a background job picks**: reminders, expiry, scheduled clean-up | the records it must take (overdue, unpaid) and the ones it must leave (paid, already reminded, not yet due); a browser cannot fire a schedule |
-| **Reading and making text**: a status from an outside system, a tax ID or IBAN check, a generated number (ORD/2026/0001) | the accepted spellings, a rejected one, the next number after the last, the format |
-| **Startup data**: the after-startup seed | running it twice leaves the same number of records |
+| **What a scheduled event or background job picks**: reminders, expiry, clean-up | the records it must take (overdue, unpaid) and the ones it must leave (paid, already reminded, not yet due) |
+| **The after-startup seed** | running it twice leaves the same number of records |
+| **A rule with many edge cases behind one screen**, when the browser test can afford only two of them | the edges the browser test skips: exactly on a limit, the day itself, the touching time slot |
 
-Skip it for logic a browser test already covers in full: plain save, delete, open a page, close
-a page, a microflow that only calls another one.
+Calculations, status changes, limits and messages a person sees are the browser test's job: assert the
+number, the status and the message on the page. A microflow test never replaces one.
 
-## Shape the logic so it can be tested
+## Before you touch a microflow for a red microflow test
 
-Put the rule in a `SUB_` or `VAL_` microflow that takes values and returns a result: the amount,
-the error text ('' when allowed), true or false. The `ACT_` behind the button calls it and shows
-the result. A rule written inside an `ACT_` that opens pages cannot be called from a test.
+Read the test first. The usual cause is the test: an object it created and did not link, a value it
+read back in the same request, a parameter name. Change the microflow only when the test is right and
+the browser shows the same wrong behaviour.
+
+The test runs in a system session, like an after-startup microflow and a scheduled event:
+`[%CurrentUser%]` in a microflow throws there. Use `$currentUser` (empty in a system session) in the
+microflow, not a workaround in the test.
 
 ## Write it
 
@@ -31,19 +33,21 @@ the result. A rule written inside an `ACT_` that opens pages cannot be called fr
 mdl 1;
 
 /**
- * @test VAT is 21% of the net amount, rounded to cents
- * @expect $result = 26.04
+ * @test The reminder job picks an unpaid invoice that is a day overdue
+ * @expect $picked = true
  */
-$result = call microflow Sales.SUB_Vat_Calculate(NetAmount = 124);
+$invoice = create Sales.Invoice (Number = 'INV-T-1', DueDate = addDays([%CurrentDateTime%], -1), IsPaid = false);
+commit $invoice;
+$picked = call microflow Sales.SUB_Invoice_NeedsReminder(Invoice = $invoice);
 /
 
 /**
- * @test An order over the credit limit is refused with the message the user sees
- * @expect $problem = 'The order exceeds the customer''s credit limit.'
+ * @test The reminder job leaves a paid invoice alone
+ * @expect $picked = false
  */
-$customer = create Sales.Customer (Name = 'Limit Test BV', CreditLimit = 1000);
-commit $customer;
-$problem = call microflow Sales.VAL_Order_CreditLimit(Customer = $customer, OrderTotal = 1000.01);
+$invoice = create Sales.Invoice (Number = 'INV-T-2', DueDate = addDays([%CurrentDateTime%], -1), IsPaid = true);
+commit $invoice;
+$picked = call microflow Sales.SUB_Invoice_NeedsReminder(Invoice = $invoice);
 /
 ```
 
@@ -57,9 +61,8 @@ $problem = call microflow Sales.VAL_Order_CreditLimit(Customer = $customer, Orde
 
 ## Run it
 
-Write the test before the microflow, the same way as a browser test. The **full** gate runs every
-`*.test.mdl` once the rest of the gate is green (MFTEST01). It runs them on a copy of the
-project, so the app you are working on is never touched. A failure names the block, the expected
-value and the actual value. The whole output is in `.mxcli/microflow-tests.txt`. Never run
-`mxcli test` by hand: it injects a test module into the project and rewrites `javasource` while
-it runs.
+The **full** gate runs every `*.test.mdl` once the rest of the gate is green (MFTEST01). It runs
+them on a copy of the project, so the app you are working on is never touched. A failure names
+the block, the expected value and the actual value. The whole output is in
+`.mxcli/microflow-tests.txt`. Never run `mxcli test` by hand: it injects a test module into the
+project and rewrites `javasource` while it runs.

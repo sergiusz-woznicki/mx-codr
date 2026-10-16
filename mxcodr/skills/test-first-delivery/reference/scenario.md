@@ -55,6 +55,11 @@ Rules that keep it that way:
   return named fields (`{header: true, missing: [...]}`) rather than one boolean.
 - **Fill then blur.** Mendix commits an input on blur; `fill()` presses Tab for
   this reason. A fill followed straight by a click on Save can save the old value.
+- **Dates in the picker's format.** A date picker takes only its own format, the input's
+  placeholder (`yyyy-mm-dd hh:mm`); `fill()` fails at once on "Invalid date" and names it.
+- **Required fields are refused in the browser.** An empty `not null` attribute never reaches
+  the Save microflow, so its message is the attribute's own `error message '...'`; a
+  validation feedback for it in the microflow never shows. `await_message` names such fields.
 - **Let it fail fast.** The scenario sets an 8s action timeout, not Playwright's
   default 30s, because during development the failing case is the normal case.
 - **Say who you are.** The runner can reuse one browser across scripts, so a test
