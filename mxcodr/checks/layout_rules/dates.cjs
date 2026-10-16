@@ -53,7 +53,7 @@ function dateColumnFindings(lines) {
       line: index + 1,
       message: `${documentName}: the data grid column on ${path} shows the date only, but a form edits its time` +
         ` (${shown}) -- the time a person picked is not on screen. Keep the Attribute and add` +
-        ` ShowContentAs: dynamicText, Content: '{1}', ContentParams: ({1} = formatDateTime($currentObject/${path}, '${pattern}'))` +
+        ` ShowContentAs: dynamicText, DynamicText: '{1}', DynamicTextParams: ({1} = formatDateTime($currentObject/${path}, '${pattern}'))` +
         ' to the column (the $currentObject/ path is required: a bare attribute is CE0117).',
     });
   });

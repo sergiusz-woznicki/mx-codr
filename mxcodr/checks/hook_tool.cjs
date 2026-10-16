@@ -172,17 +172,21 @@ const tools = {
       py.print(matches.length ? matches.join('\n') : word);
     }
   },
-  // The .mdl words of a command, one per line, $PWD resolved, globs expanded.
+  // The .mdl words of a command, one per line, $PWD resolved, globs expanded. A microflow test
+  // (`*.test.mdl`) is never an exec script: `mxcli exec a.mdl; mxcli check tests/x.test.mdl` had the
+  // test file prechecked as a script and refused (room-booking-t1, 2026-10-16).
   scripts() {
     const seen = new Set();
     for (let word of shellWords(py.readStdin())) {
-      if (!word.endsWith('.mdl') || seen.has(word)) continue;
+      if (!word.endsWith('.mdl') || word.endsWith('.test.mdl') || seen.has(word)) continue;
       // `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
       for (const v of ['${PWD}/', '$PWD/', '$(pwd)/']) {
         if (word.startsWith(v)) word = process.cwd() + '/' + word.slice(v.length);
       }
       seen.add(word);
-      const matches = expand(word);
+      const all = expand(word);
+      const matches = all.filter((m) => !m.endsWith('.test.mdl'));
+      if (all.length && !matches.length) continue;
       py.print(matches.length ? matches.join('\n') : word);
     }
   },
