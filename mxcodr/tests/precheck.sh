@@ -176,8 +176,11 @@ fi
 # every request leaves its requirements in docs/brain/plan/ -- built or not -- and the next session's
 # orient.sh shows what is still open (a fresh session per part skipped a whole feature of part 4 and
 # nothing said so, B2B 2026-10-15). Only once the app has pages and its plan has requirements.
+# Only after the app's first DONE (.mxcli/last-gate.txt): during the first build its new pages are
+# that request's, recorded by REQ01 -- REQ03 blocked twice inside the first part of b2b-f4 (2026-10-16).
 if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ03 block)" = "block" ] \
-   && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1; then
+   && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1 \
+   && grep -q '^full: .* DONE' .mxcli/last-gate.txt 2>/dev/null; then
   unanchored="$("$NODE" tools/mdl-checks/gate_helpers.cjs unanchored-features . "$MPR" "$@" 2>/dev/null)"
   if [ -n "$unanchored" ]; then
     echo "precheck: REQ03 -- no requirement of this request names these new documents (the real model is untouched):"
