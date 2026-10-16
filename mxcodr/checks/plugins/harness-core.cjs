@@ -291,6 +291,35 @@ function markSession(root, id) {
 // Employee, one Manager and two customers; a filter bar above the table -- were lost between sessions
 // in two B2B runs (2026-10-15). A short reply ("go ahead") is not a request; a repeat is not saved twice.
 const REQUEST_MIN_CHARS = 80
+// docs/brain/ is mxcli's: `mxcli brain init` refuses a docs/brain/ it did not write (its README.md
+// carries <!-- mxcli-brain -->). The archive below made one before init had run, so a later init
+// failed and a session cleared it with `rm -rf docs/brain`, archive and all (Qwen3.8-27B, 2026-10-17).
+// Run init first; a docs/brain/ that holds only the archive is set aside for it and put back.
+function brainReady(root, mpr) {
+  const brain = join(root, "docs", "brain")
+  try { if (readFileSync(join(brain, "README.md"), "utf8").includes("<!-- mxcli-brain -->")) return true } catch {}
+  const fs = require("node:fs")
+  const bin = [join(root, "mxcli.exe"), join(root, "mxcli")].find((b) => existsSync(b))
+  if (!bin) return false
+  let aside = null
+  if (existsSync(brain)) {
+    const entries = fs.readdirSync(brain)
+    if (entries.some((n) => n !== "requests")) return false
+    if (entries.includes("requests")) {
+      aside = join(root, ".mxcli", "requests-aside-" + process.pid)
+      mkdirSync(dirname(aside), { recursive: true })
+      fs.renameSync(join(brain, "requests"), aside)
+    }
+    fs.rmdirSync(brain)
+  }
+  spawnSync(bin, ["brain", "init", "-p", join(root, mpr)], { cwd: root, timeout: 30000, stdio: "ignore" })
+  if (aside) {
+    mkdirSync(brain, { recursive: true })
+    fs.renameSync(aside, join(brain, "requests"))
+  }
+  return existsSync(join(brain, "README.md"))
+}
+
 function saveRequest(root, text) {
   const body = String(text || "").trim()
   if (!root || body.length < REQUEST_MIN_CHARS) return null
@@ -298,7 +327,9 @@ function saveRequest(root, text) {
   // background task back as <task-notification>, and b2b-f4 archived two of them (2026-10-16).
   if (/^<(task-notification|system-reminder|local-command|command-name|bash-|user-prompt-submit)/i.test(body)) return null
   try {
-    if (!require("node:fs").readdirSync(root).some((n) => n.endsWith(".mpr"))) return null
+    const mpr = require("node:fs").readdirSync(root).find((n) => n.endsWith(".mpr"))
+    if (!mpr) return null
+    brainReady(root, mpr)
     const dir = join(root, "docs", "brain", "requests")
     mkdirSync(dir, { recursive: true })
     const files = require("node:fs").readdirSync(dir).filter((n) => /^\d+\.md$/.test(n)).sort()
