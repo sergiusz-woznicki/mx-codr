@@ -334,7 +334,13 @@ function main() {
 
   const [text, used] = collectText(sources);
   if (!py.strip(text)) {
-    process.stderr.write(`FAIL  no MDL found in ${py.pyRepr(sources)}\n`);
+    const message = `no MDL found in ${py.pyRepr(sources)}`;
+    process.stderr.write(`FAIL  ${message}\n`);
+    // --json promises a report on stdout; a caller that parses it gets the failure, not empty text.
+    if (args.json) {
+      py.print(py.jsonDumps({ verdict: 'FAIL', warnings: [], skills: args.skill, sources: [], lines: 0, failures: [message] },
+        { indent: 2 }));
+    }
     return 1;
   }
 
