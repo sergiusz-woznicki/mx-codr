@@ -74,7 +74,7 @@ Make all decisions yourself dont ask me.</pre>
   <button type="button" data-copy="p1">Copy</button></div>
   <pre id="p1">This is turn 1 of 4 extending the B2B order application that already exists in this Mendix project. Do not rebuild what is there: first run bash tests/orient.sh and read the existing modules, entities, pages and microflows, and keep their names. Build only what this turn asks for. At the end the whole app must work, with this turn&#x27;s features in it, and `bash tests/gate.sh` must say DONE.
 
-* Security level Production with real sign-in. If the app still picks a user from a list, replace that with real accounts.
+* Security level Production with real sign-in: the Mendix login page replaces the role and account picker from turn 0. Keep the demo users listed below; they are the accounts people sign in with.
 * Add a Manager role: everything an Employee can do, and the dashboard becomes Manager-only.
 * Row-level isolation with entity access rules (XPath on the signed-in user), not only hidden pages: a Customer must not be able to read another customer&#x27;s orders or invoices, not even through a URL or a data source.
 * Add an internalNote attribute to Order and to Customer. Member-level access: Employees and Managers read and write it, Customers cannot see it. A Customer can read their own creditLimit but not change it.
