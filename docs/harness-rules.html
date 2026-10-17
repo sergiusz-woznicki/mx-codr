@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.17.3 · mxcli v0.27.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.17.4 · mxcli v0.27.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -488,6 +488,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>FILTER01</code></td><td>If a page shows a user only their own records (with <code>[%CurrentUser%]</code> in its XPath), the entity's access rule limits them the same way. A filter on a page is not security: another page or the browser could still read everything.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>VIEW01</code></td><td>A role that may only see its own records cannot read a view entity that adds up everybody's records, like a total of all customers' invoices.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SQL01</code></td><td>No microflow builds a database query by gluing text and a variable together. Whoever controls the variable controls the query (SQL injection).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>DEMO01</code></td><td>Demo users are on, and every user role of the app has at least one: they are how you sign in as each role to try the app, and how the tests sign in. A request for real sign-in replaces a role picker the app built itself, never the demo users. Switching them off is your step before go-live.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEC007</code></td><td>Anonymous users cannot read all records of an entity: the access rule needs an XPath that limits them (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SCOPE01</code></td><td>Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>WRITE01</code></td><td>Points out a role that may change fields only the system should set, like a total or a status. The finding names the fields to remove and the associations to keep.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -535,7 +536,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>MPR012</code></td><td>No old image widgets the modern React client cannot show.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC001</code></td><td>Every stored entity has at least one access rule.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC002</code></td><td>Passwords must be at least 8 characters.</td><td><span class="lvl i">Off</span></td></tr>
-      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production. Off: while the app is built the harness wants the opposite (DEMO01).</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC004</code></td><td>Anonymous access is on: check every rule of the anonymous role.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC005</code></td><td>Strict mode is off.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC006</code></td><td>Entities with personal data have access rules.</td><td><span class="lvl w">Warning</span></td></tr>

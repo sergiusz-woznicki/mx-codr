@@ -77,7 +77,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 112 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 113 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -200,7 +200,7 @@ mx-codr reads the app and lists everything a user can run into; each needs a tes
 | `WF01` | A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task. | Blocks |
 | `WF02` | Every outcome of every workflow task (approve, reject…) is chosen in a test, and the test logs in as both people: the one who starts the workflow and the one who decides. | Blocks (warning for paths that existed before the install) |
 
-**Security** (12 rules)
+**Security** (13 rules)
 
 Mendix's security best practices, checked on the model.
 
@@ -209,6 +209,7 @@ Mendix's security best practices, checked on the model.
 | `ADMIN01` | Points out that the administrator account is still called MxAdmin. A task for you in Studio Pro; mxcli cannot change it. | Warning |
 | `ANON01` | Anonymous (not logged in) users cannot create or change stored data. | Blocks |
 | `CRED01` | A constant meant for a secret (a password, token or API key) has no default value. A default ends up in every build and backup. The value is set per environment instead. | Blocks |
+| `DEMO01` | Demo users are on, and every user role of the app has at least one: they are how you sign in as each role to try the app, and how the tests sign in. A request for real sign-in replaces a role picker the app built itself, never the demo users. Switching them off is your step before go-live. | Blocks |
 | `EXTENDS01` | Points out an entity that extends the user account (System.User or Administration.Account). Keep business data in its own entity, linked to the account. | Warning |
 | `FILTER01` | If a page shows a user only their own records (with [%CurrentUser%] in its XPath), the entity's access rule limits them the same way. A filter on a page is not security: another page or the browser could still read everything. | Blocks |
 | `PRODUCTION01` | App security is set to Production. At Prototype level Mendix ignores the XPath constraints on access rules, so a test can pass on an app that shows everyone's data. | Blocks |

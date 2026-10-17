@@ -389,8 +389,8 @@ function docs(cards, dir, testsDir) {
   const head = ['# What each check code wants, and its fix', '',
     'One file per gate step; the gate names the file for the step that failed. Read that file, not',
     '`tests/gate/*.sh` or the checkers: the finding already says what to change, the file says why.',
-    'Every code blocks DONE unless its line says "warning". A rule\'s card, with its level and the person\'s',
-    'exceptions: `tests/rulebook/<group>/<CODE>.md`; all of them: `bash tests/rules.sh list`. Generated from the cards.',
+    'Every code blocks DONE unless its line says "warning". A rule\'s card, its level and the person\'s',
+    'exceptions: `tests/rulebook/<group>/<CODE>.md`; all: `bash tests/rules.sh list`. Generated from the cards.',
     '', '| step | file | codes |', '|---|---|---|'];
   fs.writeFileSync(path.join(testsDir, 'CHECKS.md'), head.concat(index).join('\n') + '\n');
   return DOC_FILES.length;
