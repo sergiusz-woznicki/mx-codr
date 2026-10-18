@@ -387,7 +387,7 @@ function askedViews(requests, widgets) {
     if (!asked || widgets.some(w => v.widget.test(w.WidgetType || ''))) continue;
     out.push({ code: 'ASKED01', key: v.kind,
       message: `the request asks for a ${v.kind} ("...${asked.quote}...", ${asked.file}) and no page of the app's own modules has a ${v.kind} widget: ` +
-        `a list or a grid is not one. Install it (./mxcli marketplace search "${v.search}", skill download-marketplace-content), put it on the page ` +
+        `a list or a grid is not one. Install one published by Mendix or Mendixlabs (./mxcli marketplace search "${v.search}", skill download-marketplace-content), put it on the page ` +
         `with the data the person named, and test it in the browser. When it cannot be installed here, say so in the final report: ` +
         `the person may add \`except: ${v.kind}\` under ## Local in tests/rulebook/catalog/ASKED01.md` });
   }

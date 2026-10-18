@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.18.1 · mxcli v0.27.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.19.1 · mxcli v0.27.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -308,7 +308,7 @@ html { scroll-behavior: smooth; }
   </div>
   <div class="step">
     <div class="step-head"><h3>On every tool call</h3><span class="file">guard-harness-env</span></div>
-    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline. In an unattended run (nobody answers the interview) the agent may not <code>brain resolve</code> its own open questions: they wait for the person.</li></ul>
+    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline. In an unattended run (nobody answers the interview) the agent may not <code>brain resolve</code> its own open questions: they wait for the person. A Marketplace widget (or a User Interface module) is installed only when its publisher is Mendix or Mendixlabs; any other is the person's decision.</li></ul>
   </div>
 </section>
 
@@ -511,7 +511,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>STARTUP01</code></td><td>The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PUBLISH01</code></td><td>A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEED01</code></td><td>A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>ASKED01</code></td><td>The request asks for a calendar, a map or a chart, and a page shows that widget: a dated list in place of a calendar is a simplification nobody agreed to. Install it, or say in the report why not.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ASKED01</code></td><td>The request asks for a calendar, a map or a chart, and a page shows that widget: a dated list in place of a calendar is a simplification nobody agreed to. Install one published by Mendix or Mendixlabs, or say in the report why not.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 

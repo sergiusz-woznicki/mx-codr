@@ -31,6 +31,12 @@ hook_resolve_message() {
   printf '%s' "$1" | "$NODE" "$HOOK_TOOL" self-resolve 2>/dev/null
 }
 
+# hook_publisher_message <command> -- prints the block message when the command installs a Marketplace
+# widget whose publisher is not Mendix or Mendixlabs (harness-core widgetPublisherBlock).
+hook_publisher_message() {
+  case "$1" in *"marketplace install"*) printf '%s' "$1" | "$NODE" "$HOOK_TOOL" widget-publisher 2>/dev/null ;; esac
+}
+
 # hook_source_message <command> -- prints the block message when the command reads the gate's, a
 # checker's or a hook's code (harness-core readsHarnessSource): tests/checks/<step>.md says what each wants.
 hook_source_message() {

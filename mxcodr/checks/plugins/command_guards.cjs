@@ -56,6 +56,39 @@ function isSelfResolve(root, command) {
   return resolves && requirementsMode(root) === "assume"
 }
 
+// Marketplace widgets come only from Mendix or Mendixlabs (the person's rule, 2026-10-19): a
+// community or partner widget is theirs to choose. `marketplace install <id>` of a widget, or of a
+// module in the User Interface category (the Calendar is one), is checked with `marketplace info`;
+// when that cannot answer (no login, no network) the install goes ahead and says the same itself.
+// `install --file <x.mpk>` names no publisher and is not checked.
+const WIDGET_PUBLISHERS = /^(?:mendix|mendixlabs|mendix labs)$/i
+function marketplaceInfo(root, id) {
+  const mxcli = ["mxcli", "mxcli.exe"].map((n) => require("path").join(root || ".", n)).find((f) => require("fs").existsSync(f))
+  if (!mxcli) return null
+  const r = require("child_process").spawnSync(mxcli, ["marketplace", "info", String(id), "--json"], { cwd: root || ".", encoding: "utf8", timeout: 30000 })
+  const text = String(r.stdout || "")
+  try { return JSON.parse(text.slice(text.indexOf("{"))) } catch (e) { return null }
+}
+function widgetPublisherBlock(root, command, info = marketplaceInfo) {
+  if (typeof command !== "string") return null
+  for (const part of command.split(/\|\||&&|[|;&\n]/)) {
+    const m = /(?:^|[\s\/])mxcli(?:\.exe)?\s+(?:-p\s+\S+\s+)?marketplace\s+install\s+(\d+)\b/.exec(part)
+    if (!m) continue
+    const item = info(root, m[1])
+    if (!item || !item.publisher) continue
+    const ui = item.type === "Widget" || (item.categories || []).some((c) => /user interface/i.test(c && c.name || ""))
+    if (!ui || WIDGET_PUBLISHERS.test(String(item.publisher).trim())) continue
+    const name = (item.latestVersion && item.latestVersion.name) || item.name || "that widget"
+    return (
+      `Blocked: ${name} (${m[1]}) is published by ${item.publisher}` + (item.supportCategory ? ` (${item.supportCategory} support)` : "") +
+      ". Marketplace widgets here come only from Mendix or Mendixlabs: search again (`./mxcli marketplace search \"<what>\"`) " +
+      "and take one whose publisher is Mendix or Mendixlabs. When none does what the person asked, say so in the final report: " +
+      "a widget from another publisher is the person's decision."
+    )
+  }
+  return null
+}
+
 // The command searches or dumps the mxcli program file itself: one of the files it reads is mxcli.
 // For grep and its kin the first word that is not an option is the pattern (`grep mxcli tests/x.sh`
 // looks for the word, and passes), unless -e or -f gives it; strings, xxd, hexdump and od read every
@@ -269,7 +302,7 @@ function mdlScripts(command) {
 
 module.exports = {
   GUARD_WORDS, mayTouchHarness,
-  SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, SELF_RESOLVE, isSelfResolve, HARNESS_SOURCE, readsHarnessSource,
+  SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, SELF_RESOLVE, isSelfResolve, widgetPublisherBlock, HARNESS_SOURCE, readsHarnessSource,
   newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED,
   scriptWrittenBeforeExec, writtenAndTarget, resolvePwd, EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts,
 }

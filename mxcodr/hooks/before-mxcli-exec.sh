@@ -16,6 +16,7 @@ command="$(printf '%s' "$input" | "$NODE" "$HOOK_TOOL" command 2>/dev/null)"
 message="$(hook_sleep_message "$command")"
 [ -n "$message" ] || message="$(hook_binary_message "$command")"
 [ -n "$message" ] || message="$(hook_resolve_message "$command")"
+[ -n "$message" ] || message="$(hook_publisher_message "$command")"
 [ -n "$message" ] || message="$(hook_source_message "$command")"
 if [ -n "$message" ]; then
   echo "$message" >&2

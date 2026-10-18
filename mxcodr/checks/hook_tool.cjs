@@ -255,6 +255,12 @@ const tools = {
     const core = require('./plugins/harness-core.cjs');
     if (core.isSelfResolve(process.cwd(), py.readStdin())) py.print(core.SELF_RESOLVE);
   },
+  // The block message when the command (stdin) installs a Marketplace widget from a publisher other
+  // than Mendix or Mendixlabs (harness-core widgetPublisherBlock). Run from the project.
+  'widget-publisher'() {
+    const message = require('./plugins/harness-core.cjs').widgetPublisherBlock(process.cwd(), py.readStdin());
+    if (message) py.print(message);
+  },
   'binary-search'() {
     const core = require('./plugins/harness-core.cjs');
     if (core.isBinarySearch(py.readStdin())) py.print(core.BINARY_SEARCH);

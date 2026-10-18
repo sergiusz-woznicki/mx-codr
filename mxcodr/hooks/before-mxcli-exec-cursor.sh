@@ -36,6 +36,7 @@ fi
 message="$(hook_sleep_message "$command")"
 [ -n "$message" ] || message="$(hook_binary_message "$command")"
 [ -n "$message" ] || message="$(hook_resolve_message "$command")"
+[ -n "$message" ] || message="$(hook_publisher_message "$command")"
 [ -n "$message" ] || message="$(hook_source_message "$command")"
 [ -z "$message" ] || deny "$message"
 # The app needs a Marketplace module and mxcli is not logged in: wait for the person's login.
