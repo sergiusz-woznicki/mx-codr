@@ -79,11 +79,32 @@ function stagedFindings(appDir) {
       `${staged.map(e => `./mxcli brain promote ${e.id}`).join('; ')} (skill requirements-interview), then name each in a test` }];
 }
 
+// A line that reads the model's own text -- `./mxcli -c "describe workflow ..."`, a catalog query --
+// or greps a variable holding it. It shows the app was built a certain way, not that it does what
+// the person asked: leave-l2 (2026-10-18) "tested" a 3-day escalation by grepping `describe
+// workflow` for the timer, and REQ02 took it.
+const MODEL_READ_RE = /\bmxcli(?:\.exe)?\b[^\n]*?-c\s+["']?\s*(?:describe|show|list|select\b[^"']*\bcatalog\.)/i;
+function modelReadVariables(text) {
+  const vars = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*(?:local\s+|export\s+)?([A-Za-z_]\w*)=\$\(/.exec(line);
+    if (m && MODEL_READ_RE.test(line)) vars.add(m[1]);
+  }
+  return vars;
+}
+function readsModel(line, vars) {
+  if (MODEL_READ_RE.test(line)) return true;
+  for (const v of vars) if (new RegExp('\\$\\{?' + v + '\\b').test(line)) return true;
+  return false;
+}
+
 // Where each id is named, and the test code under it: from its `# requirement:` line (or a run of
-// them) to the next one, comments left out. {id: {file, code}}, the code lower-cased.
+// them) to the next one, comments and reads of the model's own text left out. {id: {file, code}},
+// the code lower-cased.
 function namedRequirements(testFiles) {
   const named = new Map();
   for (const [file, text] of testFiles) {
+    const vars = modelReadVariables(text);
     let pending = [], code = [], sawCode = false;
     const flush = () => {
       const block = code.join('\n').toLowerCase();
@@ -102,7 +123,7 @@ function namedRequirements(testFiles) {
         continue;
       }
       if (/^\s*(#|\/\/)/.test(line)) continue;
-      if (pending.length && line.trim()) { code.push(line); sawCode = true; }
+      if (pending.length && line.trim()) { sawCode = true; if (!readsModel(line, vars)) code.push(line); }
     }
     flush();
   }
@@ -133,7 +154,9 @@ function judgeRequirements(requirements, open, named) {
     if (!own.length || own.some(w => spellings(w).some(v => where.code.includes(v)))) continue;
     out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
       message: `${where.file} names requirement ${r.id} but its code checks none of it: "${r.text}" -- under ` +
-        `\`# requirement: ${r.id}\`, assert what it says, with a fail message in its words (one of: ${own.join(', ')})` });
+        `\`# requirement: ${r.id}\`, assert what it says, with a fail message in its words (one of: ${own.join(', ')}). ` +
+        'Reading the model back (describe, show, a catalog query) does not count: do what the person does and assert what they see, ' +
+        'or call the microflow in a microflow test' });
   }
   for (const [id, { file }] of named) {
     // An assumption (open, in assume mode) a test checks is welcome, not a stale link: Opus named
@@ -153,5 +176,5 @@ function requirementFindings(appDir, testFiles) {
   return out.concat(judgeRequirements(requirements, open, namedRequirements(testFiles)));
 }
 
-module.exports = { spellings, stagedEntries, requirementsMode, readPlan, stagedFindings, namedRequirements,
+module.exports = { spellings, stagedEntries, requirementsMode, readPlan, stagedFindings, modelReadVariables, readsModel, namedRequirements,
   judgeRequirements, requirementFindings };

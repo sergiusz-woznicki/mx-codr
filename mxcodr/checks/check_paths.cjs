@@ -12,6 +12,8 @@
 //              signs in as a user with that role and reads that entity
 //   ROLE01     each demo user's role is the user of some test
 //   SVC01      each published REST or OData service is called by a test
+//   TIMER01    the work behind a scheduled event or a workflow timer is a microflow a test runs:
+//              nothing that waits days can be seen in a test otherwise
 //
 // Only the tests the gate runs count (tests/verify-*.test.sh), and only outside comment lines: a `# covers:` line, or a comment
 // quoting a message, walks nothing. A test signs in as a demo user when its text names that user
@@ -55,7 +57,9 @@ function readModel(appDir, mpr, read = mxcli) {
     roles: String(r['User Roles'] || r.UserRoles || '').split(/[,\s]+/).filter(Boolean),
   })).filter(u => u.name);
   const moduleRoles = moduleRolesOf(appDir, mpr, read);
-  return { sources, permissions, restServices, odataServices, demoUsers, moduleRoles };
+  const scheduledEvents = read(appDir, mpr, 'SHOW SCHEDULED EVENTS', true).map(r => ({
+    name: r['Scheduled Event'] || r.Name || '', microflow: r.Microflow || '', repeat: r.Repeat || '' })).filter(e => e.name);
+  return { sources, permissions, restServices, odataServices, demoUsers, moduleRoles, scheduledEvents };
 }
 
 // The tests as the rules see them: [{name, text (comments out, lower case), users: Set}].
@@ -83,6 +87,39 @@ function userTasks(source) {
   return out;
 }
 
+// The timers of a workflow's source: [{task, body}] for each `boundary event ... timer <when> { body }`.
+// The catalog keeps a document's source on one line, so this reads braces, not lines.
+function workflowTimers(source) {
+  const text = String(source), out = [];
+  for (const m of text.matchAll(/\bboundary\s+event\b[^{]*?\btimer\b/gi)) {
+    const tasks = [...text.slice(0, m.index).matchAll(/\buser\s+task\s+(\w+)/gi)];
+    const open = text.indexOf('{', m.index + m[0].length);
+    if (open < 0) continue;
+    let depth = 0, end = open;
+    for (; end < text.length; end++) {
+      if (text[end] === '{') depth++;
+      else if (text[end] === '}' && --depth === 0) break;
+    }
+    out.push({ task: tasks.length ? tasks[tasks.length - 1][1] : '', body: text.slice(open, end + 1) });
+  }
+  return out;
+}
+
+// The microflows a test runs: called in a microflow test (tests/*.test.mdl), or named on a
+// `# covers:` line of a browser test that clicks the button which starts it -- and what those call,
+// three calls deep (b2b-f4's test covers ACT_Invoice_RunOverdueCheck, which calls the job's microflow).
+function microflowsRun(testMdl, testFiles, sources = []) {
+  const run = new Set();
+  for (const text of testMdl) for (const m of text.matchAll(/\bcall\s+microflow\s+([\w."]+)/gi)) run.add(m[1].replace(/"/g, ''));
+  for (const [, raw] of testFiles) {
+    for (const m of raw.matchAll(/^\s*#\s*covers\s*:(.*)$/gim)) for (const w of m[1].match(/[\w]+\.[\w]+/g) || []) run.add(w);
+  }
+  const calls = new Map(sources.filter(d => d.ObjectType === 'MICROFLOW').map(d =>
+    [d.QualifiedName, [...String(d.SourceText || '').matchAll(/\bcall\s+microflow\s+([\w."]+)/gi)].map(m => m[1].replace(/"/g, ''))]));
+  for (let depth = 0; depth < 3; depth++) for (const name of [...run]) for (const c of calls.get(name) || []) run.add(c);
+  return run;
+}
+
 // Words of a text, with identifiers taken apart: ApprovalTask_RejectButton is approval task reject
 // button. A widget named after an outcome, as NAME02 names them, chooses that outcome.
 const tokens = text => ' ' + (String(text).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
@@ -103,7 +140,7 @@ function example(o) {
 }
 
 // All findings: [{code, key, version, message}]. key + version decide old (warning) or new (failure).
-function findings(model, tests, modules) {
+function findings(model, tests, modules, run = new Set()) {
   const own = new Set(modules);
   const ownDocs = model.sources.filter(d => own.has(d.ModuleName));
   const out = [];
@@ -178,6 +215,30 @@ function findings(model, tests, modules) {
     out.push({ code: 'SVC01', key: s.QualifiedName, version: hash(s.Path),
       message: `the published service ${s.QualifiedName} (/${p}) is called by no test: call each operation as a user who may, assert the answer, and call it once without signing in (refused)` });
   }
+
+  // TIMER01: a leave app escalated after 3 days and carried days over at the year change; neither ran
+  // in any test, and both runs said DONE (leave-l1, leave-l2, 2026-10-18).
+  for (const e of model.scheduledEvents || []) {
+    if (!own.has(String(e.name).split('.')[0]) || !e.microflow || run.has(e.microflow)) continue;
+    out.push({ code: 'TIMER01', key: e.name, version: hash(e.microflow + '|' + e.repeat),
+      message: `scheduled event ${e.name} runs ${e.microflow} (${e.repeat}) and no test runs it: a test cannot wait for the schedule -- ` +
+        `call it in a microflow test (tests/<feature>.test.mdl) on records past the deadline and assert what it picked and what it left, ` +
+        `or give a person an action that runs it and name it on the \`# covers:\` line of the browser test that clicks it` });
+  }
+  for (const d of ownDocs.filter(d => d.ObjectType === 'WORKFLOW')) {
+    for (const t of workflowTimers(d.SourceText || '')) {
+      const calls = [...t.body.matchAll(/\bcall\s+microflow\s+([\w."]+)/gi)].map(m => m[1].replace(/"/g, ''));
+      const key = `${d.QualifiedName}/${t.task}#timer`;
+      if (!calls.length) {
+        out.push({ code: 'TIMER01', key, version: hash(d.SourceText),
+          message: `workflow ${d.QualifiedName}: the timer on user task ${t.task} does its work with no microflow, so it happens only when the time is up and no test sees it -- ` +
+            `put what it does in a microflow the timer calls (\`call microflow Module.SUB_<What>(...)\` in the boundary event), and run that microflow in a test on a record past the deadline` });
+      } else if (!calls.some(c => run.has(c))) {
+        out.push({ code: 'TIMER01', key, version: hash(d.SourceText),
+          message: `workflow ${d.QualifiedName}: the timer on user task ${t.task} calls ${calls.join(', ')}, which no test runs -- call it in a microflow test on a record past the deadline and assert what changed (who has the task now), or name it on the \`# covers:\` line of a browser test that starts it by hand` });
+      }
+    }
+  }
   return out;
 }
 
@@ -215,6 +276,10 @@ function baselineOf(model, modules) {
   for (const u of model.demoUsers) for (const r of u.roles) (byRole[r] = byRole[r] || []).push(u.name);
   for (const [r, users] of Object.entries(byRole)) out[`role:${r}`] = hash(users.join(','));
   for (const s of [...model.restServices, ...model.odataServices]) out[s.QualifiedName] = hash(s.Path);
+  for (const e of model.scheduledEvents || []) out[e.name] = hash(e.microflow + '|' + e.repeat);
+  for (const d of model.sources.filter(d => d.ObjectType === 'WORKFLOW' && own.has(d.ModuleName))) {
+    for (const t of workflowTimers(d.SourceText || '')) out[`${d.QualifiedName}/${t.task}#timer`] = hash(d.SourceText);
+  }
   return out;
 }
 
@@ -247,7 +312,10 @@ function main() {
   if (a.baseline) { try { baseline = JSON.parse(fs.readFileSync(a.baseline, 'utf8')); } catch { baseline = null; } }
   const skip = new Set(a.untested);
   const failures = [], warnings = [];
-  const all = findings(model, tests, a.modules).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)));
+  let testMdl = [];
+  try { testMdl = fs.readdirSync(path.join(a.appDir, 'tests')).filter(n => n.endsWith('.test.mdl')).map(n => fs.readFileSync(path.join(a.appDir, 'tests', n), 'utf8')); } catch { testMdl = []; }
+  const run = microflowsRun(testMdl, rules.testFiles(a.appDir), model.sources);
+  const all = findings(model, tests, a.modules, run).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)));
   for (const f of all) {
     if (skip.has(f.key) || skip.has(f.key.split('#')[0])) continue;
     // WF01 and REQ02 block whatever their age: a requirement the person agreed has no old version.
@@ -268,4 +336,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { spellings, tokens, readModel, readTests, userTasks, findings, requirementFindings, example, baselineOf, hash };
+module.exports = { spellings, tokens, readModel, readTests, userTasks, workflowTimers, microflowsRun, findings, requirementFindings, example, baselineOf, hash };

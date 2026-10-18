@@ -13,6 +13,9 @@
 //   SEED01  a page the menu opens lists an entity from the database for a role that cannot create it,
 //           and no after-startup seed creates it: the tests' rows are rolled back at DONE, so that role
 //           signs in to an empty list
+//   ASKED01 the request (docs/brain/requests/) names a calendar, a map or a chart, and no page of the
+//           app's own modules has that widget: a dated list stood in for a calendar in both leave runs
+//           (2026-10-18), with the gate green
 //   mxcli's own lint rules, each under its own code at the level of its card (tests/rulebook/lint/,
 //           passed in --levels): `mxcli lint --format json` runs here when one of them, or LINT01 (every
 //           lint rule without a card), is not off. UI001 and SEC007 are ours, so lint's copies are dropped.
@@ -33,7 +36,7 @@ const INPUT_TYPES = new Set(['Forms$CheckBox', 'Forms$DatePicker', 'Forms$TextBo
   'com.mendix.widget.web.combobox.Combobox']);
 const MIN_INPUTS = 2;
 // The codes this file checks itself; mxcli lint reports UI001 and SEC007 too (they began as lint rules).
-const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'LINT01']);
+const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'ASKED01', 'LINT01']);
 
 const entityOfAttribute = ref => { const parts = String(ref || '').split('.'); return parts.length < 3 ? '' : parts.slice(0, -1).join('.'); };
 
@@ -357,6 +360,40 @@ function listsWithoutSeed(settingsText, navigationText, sources, entities, permi
       `An app that really starts empty: say so in the final report; the person adds \`except: ${name}\` under ## Local in tests/rulebook/catalog/SEED01.md` }));
 }
 
+// ASKED01: the kinds of view a person names, the words they use for them (English, Polish, German),
+// and the part of a widget type that is one. A timeline is left out: "a timeline of the status
+// history" is a dated list as often as a widget.
+const ASKED_VIEWS = [
+  // "the current calendar month" (B2B) is a period, not a view; so is "miesiąc kalendarzowy".
+  { kind: 'calendar', words: /\b(?:calendars?(?!\s+(?:months?|years?|days?|weeks?|quarters?)\b)|kalendarz(?:a|u|em|e|y)?|kalender(?:ansicht)?)\b/i, widget: /calendar/i, search: 'calendar' },
+  { kind: 'map', words: /\b(?:(?:a|the|on|in)\s+maps?|map\s+view|mapa|mapie|mapę|mapy|karte)\b/i, widget: /\bmaps?\b|googlemaps|\.maps\./i, search: 'maps' },
+  { kind: 'chart', words: /\b(?:(?:bar|line|pie|column|area)\s+)?(?:charts?|graphs?|wykres\w*|diagramm\w*)\b/i, widget: /chart/i, search: 'charts' },
+];
+function requestTexts(appDir) {
+  const dir = require('path').join(appDir, 'docs', 'brain', 'requests');
+  let names = [];
+  try { names = require('fs').readdirSync(dir).filter(n => n.endsWith('.md')).sort(); } catch { return []; }
+  return names.map(n => [`docs/brain/requests/${n}`, require('fs').readFileSync(require('path').join(dir, n), 'utf8')]);
+}
+function askedViews(requests, widgets) {
+  const out = [];
+  for (const v of ASKED_VIEWS) {
+    let asked = null;
+    for (const [file, text] of requests) {
+      const body = text.replace(/^#.*$/gm, '');
+      const m = v.words.exec(body);
+      if (m) { asked = { file, quote: body.slice(Math.max(0, m.index - 50), m.index + m[0].length + 30).replace(/\s+/g, ' ').trim() }; break; }
+    }
+    if (!asked || widgets.some(w => v.widget.test(w.WidgetType || ''))) continue;
+    out.push({ code: 'ASKED01', key: v.kind,
+      message: `the request asks for a ${v.kind} ("...${asked.quote}...", ${asked.file}) and no page of the app's own modules has a ${v.kind} widget: ` +
+        `a list or a grid is not one. Install it (./mxcli marketplace search "${v.search}", skill download-marketplace-content), put it on the page ` +
+        `with the data the person named, and test it in the browser. When it cannot be installed here, say so in the final report: ` +
+        `the person may add \`except: ${v.kind}\` under ## Local in tests/rulebook/catalog/ASKED01.md` });
+  }
+  return out;
+}
+
 function main() {
   const { levels, excepts, rest: argv } = levelArgs(process.argv.slice(2));
   const args = catalogArgs(argv);
@@ -394,6 +431,13 @@ function main() {
       const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType IN ('PAGE', 'ENTITY', 'MICROFLOW')", true);
       found.push(...listsWithoutSeed(mxcli(appDir, mpr, 'DESCRIBE SETTINGS'), mxcli(appDir, mpr, 'DESCRIBE NAVIGATION'), sources, entities, permissions, modules));
     }
+    if (level('ASKED01') !== 'off') {
+      const requests = requestTexts(appDir);
+      if (requests.length) {
+        const widgets = mxcli(appDir, mpr, 'SELECT WidgetType, ModuleName FROM CATALOG.WIDGETS', true);
+        found.push(...askedViews(requests, widgets.filter(w => modules.has(w.ModuleName))));
+      }
+    }
     if (lintWanted(levels, level('LINT01'))) found.push(...lintAtLevels(lintFindings(appDir, mpr), levels, level('LINT01'), modules));
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
@@ -412,4 +456,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { unpublishedEvents, handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };
+module.exports = { askedViews, requestTexts, unpublishedEvents, handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };

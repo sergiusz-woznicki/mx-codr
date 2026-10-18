@@ -77,7 +77,7 @@ tested in a real browser and checked the way a senior Mendix developer would che
   that fails, then builds until it passes. Every page and every action gets a test, so you get a
   working app and its regression suite in one go.
 - **"Done" you can trust.** One command, `bash tests/gate.sh`, runs the tests, Mendix's own
-  consistency check and 113 quality rules in parallel. The agent may only say it is finished on
+  consistency check and 115 quality rules in parallel. The agent may only say it is finished on
   **DONE**. You never run anything yourself: the hooks make the agent do it.
 - **Your model is never broken.** Every change is tried on a copy of the project first. If Studio
   Pro would show an error, your `.mpr` is not touched.
@@ -167,6 +167,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `STARTUP01` | The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after. | Blocks |
 | `PUBLISH01` | A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing. | Blocks |
 | `SEED01` | A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. | Warning |
+| `ASKED01` | When your request asks for a calendar, a map or a chart, a page shows one: a list of dates in place of a calendar is a simplification you did not agree to. The agent installs the widget, or says in its report why it could not. | Blocks |
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `MFTEST01` | The microflow tests under tests/ pass, and each asserts something. They run once the rest of a full gate is green, on a copy of the project with its own runtime and scratch database; a pass is replayed until the model or a test changes. The `test-first-delivery` skill keeps them for logic no screen can drive (what a scheduled event picks, the after-startup seed); browser tests stay the ones that count. | Blocks |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
@@ -194,9 +195,10 @@ mx-codr reads the app and lists everything a user can run into; each needs a tes
 |---|---|---|
 | `ISO01` | When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not. | Blocks (warning for paths that existed before the install) |
 | `OUTCOME01` | Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute. | Blocks (warning for paths that existed before the install) |
-| `REQ02` | Every requirement the person agreed to (a promoted entry in the project brain) is named by a test: the test carries the line `# requirement: <id>`. A requirement no test proves is not built. A word may appear in another form (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue. | Blocks |
+| `REQ02` | Every requirement the person agreed to (a promoted entry in the project brain) is named by a test: the test carries the line `# requirement: <id>`. A requirement no test proves is not built. Reading the model back (describe, show) does not prove it. A word may appear in another form (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue. | Blocks |
 | `ROLE01` | Every demo user's role is used by at least one test. | Blocks (warning for paths that existed before the install) |
 | `SVC01` | Every published REST or OData service is called by a test. | Blocks (warning for paths that existed before the install) |
+| `TIMER01` | What happens on a schedule or after a wait (a scheduled event, a workflow timer that escalates a task) is done by a microflow that a test runs: a microflow test calls it, or a browser test starts it by hand and names it in its `# covers:` comment. A test cannot wait three days, so otherwise nobody ever sees it work. | Blocks (warning for paths that existed before the install) |
 | `WF01` | A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task. | Blocks |
 | `WF02` | Every outcome of every workflow task (approve, reject…) is chosen in a test, and the test logs in as both people: the one who starts the workflow and the one who decides. | Blocks (warning for paths that existed before the install) |
 

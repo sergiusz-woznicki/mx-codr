@@ -203,12 +203,25 @@ function variableFindings(line, lineNumber) {
   return failures;
 }
 
+// A workflow's activities are not microflow actions: `call microflow` there takes `caption '...'`
+// on the statement, and `@caption` above it is a syntax error ("a workflow activity takes only
+// @annotation"). Asked for one anyway, a leave-request session spent ~20 calls and rebuilt its
+// workflow to please the rule (2026-10-18).
+const WORKFLOW_START_RE = rx(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?workflow\b`, 'i');
+const WORKFLOW_END_RE = rx(String.raw`^\s*end\s+workflow\b`, 'i');
+
 // [failures, warnings] for all naming rules.
 function checkNaming(lines) {
   const failures = [], warnings = [];
   const mdl1 = isMdl1(lines);
+  let inWorkflow = false;
   lines.forEach((line, index) => {
     const lineNumber = index + 1;
+    if (WORKFLOW_START_RE.match(line)) inWorkflow = true;
+    if (inWorkflow) {
+      if (WORKFLOW_END_RE.match(line)) inWorkflow = false;
+      return;
+    }
     const stripped = py.strip(line).toLowerCase();
     if (stripped.startsWith('end ') || stripped === 'end') return;
     if (DECISION_RE.match(line) || (mdl1 && ELSIF_RE.match(line))) {

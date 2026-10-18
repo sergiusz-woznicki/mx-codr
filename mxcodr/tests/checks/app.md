@@ -24,7 +24,7 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `VIS04` | warning: a chart fits one screen | A chart height that fits one screen. |
 | `VIS05` | warning: a phone's bar stays on screen | See PHONE04. |
 | `VIS06` | warning: phone: title row on top | See PHONE06. |
-| `VIS07` | amounts look alike | `formatDecimal($V, '#,##0.00')` |
+| `VIS07` | amounts look alike | `{1} = Amount format (decimalPrecision: 2)` |
 | `WAIT01` | warning: a test waits for events, not for time | Await what the action causes (`await_message`, `landed`, a locator); a filtered list: `filter_list`. |
 
 ## Hints: what the gate says when...
@@ -38,4 +38,4 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `CE0106` `CE0557` | a microflow or page reached from a page, button or menu has a role | the hint's `grant execute` / `grant view` in the script that creates the document |
 | `CE0007` `CE0115` `CE0117` `CE0161` `CE0642` `CE1613` `CE2729` `CE7247` | build errors the gate and precheck explain | read the hint under the error |
 | `CE7247` | a reserved name, or an invalid URL (a REST client BaseUrl set to a constant) | rename Owner/Type/Default; a BaseUrl is a literal http(s):// address |
-| missing Marketplace module | mx check: "couldn't find the X module" (not logged in) | ask the person for `./mxcli auth login`, then `marketplace install <id>`; never build a replacement |
+| missing Marketplace module | mx check: "couldn't find the X module" | ask the person for `./mxcli auth login`, then `marketplace install <id>`; never build a replacement |

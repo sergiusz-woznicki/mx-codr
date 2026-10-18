@@ -592,13 +592,13 @@
       for (const k of kinds) shown.push(nums.find(v => places(v) === k));
       found.push({code: 'VIS07', widgets: [c.name], px: 0,
         message: c.name + ' shows its numbers with ' + [...kinds].sort().join(', ') + ' decimals ("' + shown.slice(0, 3).join('", "')
-          + '"): one value, one format -- formatDecimal($Value, \'#,##0.00\') in a custom column, or the format the request asks for'});
+          + '"): one value, one format -- a column with ShowContentAs: dynamicText, Content: \'{1}\', ContentParams: ({1} = <Attribute> format (decimalPrecision: 2, groupDigits: true)), or the format the request asks for'});
     }
     if (numbers) {
       const where = numbers.ungrouped.map(u => u.name + ' "' + u.sample + '"').join(', ');
       found.push({code: 'VIS07', widgets: numbers.ungrouped.map(u => u.name), px: 0,
         message: 'amounts in two formats on one page: ' + where + ' without a thousands separator, "' + numbers.grouped
-          + '" with one -- format them the same, e.g. formatDecimal($Value, \'#,##0.00\') in a dynamic text (a custom column in a data grid)'});
+          + '" with one -- format them the same: ContentParams: ({1} = <Attribute> format (decimalPrecision: 2, groupDigits: true)) in a dynamic text, or in a data grid column with ShowContentAs: dynamicText'});
     }
     return found;
   };

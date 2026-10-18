@@ -25,6 +25,12 @@ hook_binary_message() {
   printf '%s' "$1" | "$NODE" "$HOOK_TOOL" binary-search 2>/dev/null
 }
 
+# hook_resolve_message <command> -- prints the block message when the command runs `mxcli brain
+# resolve` in an unattended run (MDL_REQUIREMENTS=assume): the answer is the person's (harness-core isSelfResolve).
+hook_resolve_message() {
+  printf '%s' "$1" | "$NODE" "$HOOK_TOOL" self-resolve 2>/dev/null
+}
+
 # hook_source_message <command> -- prints the block message when the command reads the gate's, a
 # checker's or a hook's code (harness-core readsHarnessSource): tests/checks/<step>.md says what each wants.
 hook_source_message() {

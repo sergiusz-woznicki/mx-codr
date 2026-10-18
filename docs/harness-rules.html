@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.17.4 · mxcli v0.27.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.18.1 · mxcli v0.27.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -296,7 +296,7 @@ html { scroll-behavior: smooth; }
     <div class="step-head"><h3>After <code>mxcli exec</code></h3><span class="file">after-mxcli-exec</span></div>
     <ul class="items">
       <li>Says whether a restart is needed and shows the coverage gaps.</li>
-      <li>Records which script was applied, so STALE01 can compare later.</li>
+      <li>Records which script was applied, so STALE01 can compare later: only the one the command exec'd, not a script it wrote or checked beside it.</li>
     </ul>
     <dl class="codes-list">
       <dt class="b">REQ01</dt><dd>The first pages of an app are built before any requirement is recorded: record one per testable statement of the request first (skill <code>requirements-interview</code>).</dd>
@@ -308,7 +308,7 @@ html { scroll-behavior: smooth; }
   </div>
   <div class="step">
     <div class="step-head"><h3>On every tool call</h3><span class="file">guard-harness-env</span></div>
-    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline.</li></ul>
+    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline. In an unattended run (nobody answers the interview) the agent may not <code>brain resolve</code> its own open questions: they wait for the person.</li></ul>
   </div>
 </section>
 
@@ -316,9 +316,9 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">117</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">72</span><span class="t">always stop DONE</span></div>
-    <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
+    <div class="count"><span class="n">119</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">73</span><span class="t">always stop DONE</span></div>
+    <div class="count b"><span class="n">6</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">6</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
@@ -370,12 +370,13 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>OUTCOME01</code></td><td>Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested. Another form of the word counts (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested, and so does a step that only reads the model back (<code>describe</code>, <code>show</code>, a catalog query). Another form of the word counts (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>WF01</code></td><td>A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>WF02</code></td><td>Every outcome of every workflow task (approve, reject…) is chosen in a test, and the test logs in as both people: the one who starts the workflow and the one who decides.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ISO01</code></td><td>When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ROLE01</code></td><td>Every demo user's role is used by at least one test.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SVC01</code></td><td>Every published REST or OData service is called by a test.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TIMER01</code></td><td>What happens on a schedule or after a wait (a scheduled event, a workflow timer that escalates a task) is done by a microflow a test runs: a microflow test calls it, or a browser test starts it by hand and names it on its <code># covers:</code> line. A test cannot wait three days.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -510,6 +511,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>STARTUP01</code></td><td>The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PUBLISH01</code></td><td>A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEED01</code></td><td>A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ASKED01</code></td><td>The request asks for a calendar, a map or a chart, and a page shows that widget: a dated list in place of a calendar is a simplification nobody agreed to. Install it, or say in the report why not.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 

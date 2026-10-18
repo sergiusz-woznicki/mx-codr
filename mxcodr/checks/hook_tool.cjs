@@ -190,6 +190,27 @@ const tools = {
       py.print(matches.length ? matches.join('\n') : word);
     }
   },
+  // The scripts the command execs: the first .mdl word after each `mxcli exec`, expanded, one per
+  // line. `scripts` lists every .mdl word, a heredoc's target and a `check`'s argument included:
+  // STALE01 recorded those as applied, then refused their first exec as "would undo later changes"
+  // to documents that did not exist yet (leave-l2, 2026-10-18).
+  'exec-scripts'() {
+    let mxcli = false, exec = false;
+    for (let word of shellWords(py.readStdin())) {
+      const ends = /[;&|]+$/.test(word) && word.length > 1;  // `a.mdl;` is one word to shlex
+      if (ends) word = word.replace(/[;&|]+$/, '');
+      if (/(^|\/)mxcli(\.exe)?$/.test(word)) { mxcli = true; exec = false; continue; }
+      if (['|', ';', '&&', '||', '>', '>>', '<<', '&'].includes(word)) { mxcli = exec = false; continue; }
+      if (mxcli && !exec && word === 'exec') { exec = true; continue; }
+      if (!exec || !word.endsWith('.mdl') || word.endsWith('.test.mdl')) { if (ends) mxcli = exec = false; continue; }
+      for (const v of ['${PWD}/', '$PWD/', '$(pwd)/']) {
+        if (word.startsWith(v)) word = process.cwd() + '/' + word.slice(v.length);
+      }
+      const matches = expand(word).filter((m) => !m.endsWith('.test.mdl'));
+      py.print(matches.length ? matches.join('\n') : word);
+      mxcli = exec = false;
+    }
+  },
   // MDL given to mxcli with -c that changes the model, NUL-separated.
   'inline-mdl'() {
     let words;
@@ -228,6 +249,12 @@ const tools = {
     if (codes) py.print(core.personOnlyMessage(codes));
   },
   // The block message when the command (stdin) searches the mxcli binary (harness-core isBinarySearch).
+  // The block message when the command (stdin) resolves an open question in an unattended run
+  // (harness-core isSelfResolve). Run from the project.
+  'self-resolve'() {
+    const core = require('./plugins/harness-core.cjs');
+    if (core.isSelfResolve(process.cwd(), py.readStdin())) py.print(core.SELF_RESOLVE);
+  },
   'binary-search'() {
     const core = require('./plugins/harness-core.cjs');
     if (core.isBinarySearch(py.readStdin())) py.print(core.BINARY_SEARCH);
@@ -283,7 +310,8 @@ const tools = {
       const name = script.split('/').pop();
       const redirected = re.search(String.raw`>>?\s*\S*` + re.escape(name), before);
       if (redirected || (writes && (before.includes(script) || before.includes(name)))) {
-        py.print(`Blocked: a step before the exec writes ${script} (an edit, a move or a new file), and the precheck runs before the command -- it would check the old file, or none. Nothing in this command ran. Run that step on its own, then \`./mxcli exec ${script}\` as its own command.`);
+        const [written, target] = require('./plugins/command_guards.cjs').writtenAndTarget(script, text.slice(m.start()), before);
+        py.print(`Blocked: a step before the exec writes ${written} (an edit, a move or a new file), and the precheck runs before the command -- it would check the old file, or none. Nothing in this command ran. Run that step on its own, then \`./mxcli exec ${target}\` as its own command.`);
         break;
       }
     }

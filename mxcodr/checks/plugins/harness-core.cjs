@@ -13,7 +13,7 @@ const { existsSync, readFileSync, writeFileSync, mkdirSync } = require("node:fs"
 const { join, dirname } = require("node:path")
 const { run } = require("./bash_runner.cjs")
 const {
-  mayTouchHarness, SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, HARNESS_SOURCE,
+  mayTouchHarness, SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, SELF_RESOLVE, isSelfResolve, HARNESS_SOURCE,
   readsHarnessSource, newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED,
   scriptWrittenBeforeExec, resolvePwd, EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts,
 } = require("./command_guards.cjs")
@@ -73,6 +73,7 @@ function blockReason(root, tool, args) {
   const command = args && args.command
   if (isSleepBeforeGate(command)) return SLEEP_BEFORE_GATE
   if (isBinarySearch(command)) return BINARY_SEARCH
+  if (isSelfResolve(root, command)) return SELF_RESOLVE
   const waiting = marketplaceWait(root, command)
   if (waiting) return waiting
   const inline = inlineMdl(command)
@@ -117,7 +118,7 @@ function afterExecText(root, command, output) {
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS,
   run, harnessEnvBlocked, blockReason, afterExecText, writeHeredocScript, marketplacePending,
-  mayTouchHarness, readOnlyStep, isSleepBeforeGate, isBinarySearch, BINARY_SEARCH, readsHarnessSource, HARNESS_SOURCE,
+  mayTouchHarness, readOnlyStep, isSleepBeforeGate, isBinarySearch, BINARY_SEARCH, isSelfResolve, SELF_RESOLVE, readsHarnessSource, HARNESS_SOURCE,
   newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC, EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript,
   HEREDOC_UNQUOTED, resolvePwd, inlineMdl, isMxcliExec, mdlScripts,
   markSession, saveRequest,

@@ -257,7 +257,7 @@ function errorSourcesCommand(args) {
 // gates per B2B run (2026-10-15). A suggestion per action, from what the line does, so the fix is a
 // paste. Prints `  <script>:<line>: <message>` lines; nothing when every flow is captioned.
 const CAPTION_AT_EXEC = /^CAPTION0[1-7]$/;
-const words = name => String(name).split('.').pop().replace(/^(ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF)_/i, '')
+const words = name => String(name).split('.').pop().replace(/"/g, '').replace(/^(ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF)_/i, '')
   .replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
 const article = w => (w ? 'the ' + w : '');
 function suggestCaption(line) {
