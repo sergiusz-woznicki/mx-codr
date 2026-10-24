@@ -118,6 +118,16 @@ again -- or it was only passing on leftovers. So:
   empty list after DONE (gate SEED01);
 - a fixture repaired by hand to make a red test green is the bug, not the fix.
 
+**A test owns the record it checks, and finds it by a marker nobody else has.** A test of a list, a
+filter or a search creates its own record with a marker no seeded row can carry (`MARK-$(date +%s)-$RANDOM`
+in the number, name or title field) and filters, opens and asserts on exactly that marker. A prefix
+or a common word (`INV-`, a customer's name) also matches seeded rows: one test passed alone and failed
+in the full gate because its text matched 20 of the 101 rows the seed holds. And a test never assumes
+the seed's size: it counts before, acts, and expects `before + 1`, or counts only the rows with its marker.
+After typing into a filter, wait for the row with the marker (`filter_list` does); the first thing a
+grid shows is its unfiltered first page, so "shows 20 item(s) ... none containing it" with 20 the page
+size means the filter had not answered, not that the record is missing.
+
 ## Dates and times
 
 A form shows and takes local time; the database and OQL hold UTC. 09:00 typed in Central Europe in

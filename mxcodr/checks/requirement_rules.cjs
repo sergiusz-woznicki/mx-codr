@@ -61,7 +61,8 @@ function readPlan(appDir) {
       const id = (m[2].match(/id `([0-9a-f]+)`/) || [])[1];
       if (id && /OPEN\s*$/.test(m[2])) open.add(id);
       if (!id || /OPEN\s*$/.test(m[2])) continue;
-      requirements.push({ id, text: m[1].trim(), slice: name });
+      const anchors = [...m[2].matchAll(/`(@[^`]+)`/g)].map(a => a[1]);
+      requirements.push({ id, text: m[1].trim(), slice: name, anchors });
     }
   }
   return { requirements, open };
@@ -76,7 +77,8 @@ function stagedFindings(appDir) {
   return [{ code: 'REQ02', key: 'staged', version: staged.map(e => e.id).join(','),
     message: `${staged.length} requirement(s) wait in the brain's queue (${staged.map(e => e.id).join(', ')}), where no check ` +
       'reads them: at requirements: assume nobody else promotes them -- ' +
-      `${staged.map(e => `./mxcli brain promote ${e.id}`).join('; ')} (skill requirements-interview), then name each in a test` }];
+      `${staged.map(e => `./mxcli brain promote ${e.id}`).join('; ')} (skill requirements-interview), then name each in a test. ` +
+      `A note that is not a requirement (a decision, a finding: a capture with --slice is always a requirement) is dropped instead: ${staged.map(e => `./mxcli brain drop ${e.id}`).join('; ')}` }];
 }
 
 // A line that reads the model's own text -- `./mxcli -c "describe workflow ..."`, a catalog query --

@@ -31,6 +31,12 @@ hook_resolve_message() {
   printf '%s' "$1" | "$NODE" "$HOOK_TOOL" self-resolve 2>/dev/null
 }
 
+# hook_capture_message <command> -- prints the block message when the command captures a requirement
+# after the scope is frozen, or one for a feature the request never named (harness-core captureBlock).
+hook_capture_message() {
+  case "$1" in *"brain capture"*) printf '%s' "$1" | "$NODE" "$HOOK_TOOL" capture-block 2>/dev/null ;; esac
+}
+
 # hook_publisher_message <command> -- prints the block message when the command installs a Marketplace
 # widget whose publisher is not Mendix or Mendixlabs (harness-core widgetPublisherBlock).
 hook_publisher_message() {

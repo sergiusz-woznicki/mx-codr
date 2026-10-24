@@ -76,3 +76,5 @@ message* dialog (`dismiss_dialog()`) before the next click; wait for a message w
 **6. Only now is it done**, when `bash tests/gate.sh` prints `DONE — every check passed`.
 Never report a feature as working on the strength of having written it. Paste what the
 gate printed. When it prints `NOT DONE`, the cause of each failure is under the verdict.
+At `DONE` the build is over: edit nothing, do not run the gate again, write the report. Warnings
+and open captions printed above it go in the report as "to fix next" -- copied, not fixed.

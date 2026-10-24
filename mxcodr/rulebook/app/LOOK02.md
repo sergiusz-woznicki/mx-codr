@@ -11,7 +11,7 @@ key: none
 Only when switched on: none of those screenshots was judged to look wrong.
 
 ## Fix
-Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`.
+As LOOK01.
 
 ## Local
 # level: warn

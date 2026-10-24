@@ -84,6 +84,27 @@ requirements_line() {
   esac
 }
 
+# The first lines of a new app's orient output in assume mode (nobody answers): the scope rule, before
+# any rule card is read. Two runs of one prompt (Qwen on Pi, 2026-10-24) differed 6 to 9 flows and
+# 16 to 40+ minutes: the run that opened requirements-interview first built the words of the request,
+# the one that read rule cards first planned its scope from the rules. Gone once a requirement is recorded.
+start_here_block() {
+  local dirs="" d
+  [ "${MDL_REQUIREMENTS:-ask}" = assume ] || return 0
+  [ -f .mxcli/last-gate.txt ] && return 0
+  ls docs/brain/plan/*.md >/dev/null 2>&1 && return 0
+  [ "$(grep -c . .mxcli/brain/staged.jsonl 2>/dev/null)" -gt 0 ] 2>/dev/null && return 0
+  for d in .agents/skills .claude/skills .ai-context/skills; do
+    [ -f "$d/requirements-interview/SKILL.md" ] && dirs="${dirs:+$dirs or }$d/requirements-interview/SKILL.md"
+  done
+  echo "== START HERE (new app, nobody answers: do this before reading any rule card)"
+  echo "   1. Read ${dirs:-skill requirements-interview} now. Record the requirements with ./mxcli brain capture: one per user journey, small, in the person's words; write them all, then promote them yourself together: from then on they are the scope, frozen."
+  echo "   2. Scope: build the smallest slice that satisfies the words of the request. What the request names is built, in full."
+  echo "      What it does not name (more roles, dashboards, KPI or statistics pages, edit flows, logs) is not built: list it in the final report under \"to add next\"."
+  echo "      What the gate itself requires (Users, My account, Log out in the menu, the signed-in name, icons, URLs, folders, captions, seed and demo users, the home page) is always built and is never an extra, even when the request says \"only\" about a menu or screen list: list it in the final report under \"added because the gate requires them\"."
+  echo "   3. Only then read tests/checks/*.md rule cards, as a gate finding names them."
+}
+
 # Where the last session left the app (.mxcli/last-gate.txt, written by tests/gate.sh): a session
 # that starts on a built app picks up from here instead of a gate run, or a read of every script, of its own.
 last_gate_lines() {
@@ -157,5 +178,6 @@ rulebook_section   > "$WORK/3-rulebook"   2>&1 &
 app_section        > "$WORK/0-app"        2>&1 &
 
 wait
+start_here_block
 # Structure last: it is long, and output piped through `head` must keep the rest.
 cat "$WORK"/[0-9]-* 2>/dev/null

@@ -4,8 +4,8 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 
 | Code | Wants | Fix |
 |---|---|---|
-| `ACCOUNT01` | a Users menu item for administrators | `menu item 'Users'` showing `Administration.Account_Overview`. |
-| `ACCOUNT02` | a My account menu item | `menu item 'My account'` calling `Administration.ManageMyAccount`. |
+| `ACCOUNT01` | a Users menu item | Always required: `menu item 'Users'` showing `Administration.Account_Overview`. |
+| `ACCOUNT02` | a My account menu item | Always required: `menu item 'My account'` calling `Administration.ManageMyAccount`. |
 | `ACCOUNT03` | every signing-in role has Administration.User | Add Administration.User to the user role. |
 | `ALERT01` | warning: an alert class on a container, not on inline text | `Class: 'alert alert-info'` on a container. |
 | `BACK01` | a Back button, top left, on a page another page opens | In the finding. |

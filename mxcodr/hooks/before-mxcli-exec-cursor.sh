@@ -8,7 +8,7 @@
 
 input="$(cat)"
 allow() { printf '{"permission":"allow"}\n'; exit 0; }
-case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*paths-baseline*|*mxcli/applied*|*write-baseline*|*tests/*|*mdl-checks*|*mxcodr/*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*grep*mxcli*|*rg\ *mxcli*|*strings*mxcli*|*xxd*mxcli*|*hexdump*mxcli*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*|*"brain resolve"*) ;; *) allow ;; esac
+case "$input" in *"mxcli exec"*|*"mxcli.exe exec"*|*harness.env*|*paths-baseline*|*mxcli/applied*|*write-baseline*|*tests/*|*mdl-checks*|*mxcodr/*|*lint-rules*|*hooks.json*|*settings.local.json*|*mxcli*-c*|*grep*mxcli*|*rg\ *mxcli*|*strings*mxcli*|*xxd*mxcli*|*hexdump*mxcli*|*"mxcli marketplace"*|*"mxcli.exe marketplace"*|*"mxcli catalog"*|*"mxcli.exe catalog"*|*"brain resolve"*|*"brain capture"*) ;; *) allow ;; esac
 
 # shellcheck source=before-mxcli-exec-core.sh
 . "$(dirname "$0")/before-mxcli-exec-core.sh"
@@ -36,6 +36,7 @@ fi
 message="$(hook_sleep_message "$command")"
 [ -n "$message" ] || message="$(hook_binary_message "$command")"
 [ -n "$message" ] || message="$(hook_resolve_message "$command")"
+[ -n "$message" ] || message="$(hook_capture_message "$command")"
 [ -n "$message" ] || message="$(hook_publisher_message "$command")"
 [ -n "$message" ] || message="$(hook_source_message "$command")"
 [ -z "$message" ] || deny "$message"

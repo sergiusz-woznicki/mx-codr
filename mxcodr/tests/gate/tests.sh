@@ -88,6 +88,12 @@ clear_test_artefacts() {
   for f in verify-*-failure.png; do
     [ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
   done
+  # The first-failure notes tests write (lib.sh _mdl_note_failure): this run's, not an earlier one's.
+  if [ -d .mxcli/failures ] && [ ! -L .mxcli/failures ]; then
+    for f in .mxcli/failures/*.txt; do
+      [ -f "$f" ] && [ ! -L "$f" ] && rm -f "$f"
+    done
+  fi
   return 0
 }
 
@@ -308,6 +314,68 @@ session_limit_in_log() {
     END { exit !found }' "$log"
 }
 
+# Red tests listed in the result and under "still blocking DONE"; the rest are in .mxcli/red-tests.txt.
+RED_TESTS_SHOWN=30
+
+# red_test_list <runner output> -- one line per red script: `   - verify-a: its first failure line`.
+# Read from the runner's closing summary (after "Playwright Verify Results"), where each `  FAIL  name (time)`
+# is followed by its indented cause lines; a screenshot note is no cause. Without that summary the whole
+# output is read, a cause line (`FAIL: ...`) belonging to the verdict after it.
+red_test_list() {
+  printf '%s\n' "$1" | awk '
+    function flush() { if (name != "") { if (cause == "") cause = "(no failure line printed; run: bash tests/gate.sh --only " short ")";
+      print "   - " name ": " substr(cause, 1, 240); last = cause } name = ""; cause = "" }
+    /Playwright Verify Results/ { flush(); seen_summary = 1; pending = ""; next }
+    /^[[:space:]]+(PASS|FAIL)[[:space:]]/ {
+      flush()
+      if ($1 == "FAIL") { name = $2; short = name; sub(/^verify-/, "", short); cause = pending; pending = ""; if (!seen_summary) flush() }
+      pending = ""; next }
+    /^Total:/ { flush(); next }
+    /^[[:space:]]+\[[0-9]+\/[0-9]+\]/ { next }
+    /^[[:space:]]+[^[:space:]]/ {
+      line = $0; sub(/^[[:space:]]+/, "", line)
+      if (line ~ /^Screenshot saved:/) next
+      sub(/^FAIL: /, "", line)
+      if (seen_summary && name != "") { if (cause == "") cause = line }
+      else if (line != last && pending == "") pending = line
+      next }
+    END { flush() }
+  ' | awk '!seen[$0]++'
+}
+
+# Red tests whose first failure is told in full under the verdict; the others have their one line.
+RED_CAUSES_SHOWN=3
+
+# red_test_causes <tests.reds> -- for the first RED_CAUSES_SHOWN red tests, what the one-line list cannot
+# hold, from the note each wrote (.mxcli/failures/<test>.txt): the whole assertion message with its got
+# and expected values, the line of the test that said it, and the text the page showed. Shortened to
+# fit a screen, never to a bare "FAIL": the agent used to run the test again, twice, to read the cause.
+# A test that left no note (killed by the time limit, a syntax error) has only its line in the list.
+red_test_causes() {
+  local reds="$1" name n=0 note key value
+  while IFS= read -r name; do
+    name="${name#   - }"; name="${name%%:*}"
+    case "$name" in ''|*/*|.*) continue ;; esac
+    note=".mxcli/failures/$name.txt"
+    [ -f "$note" ] && [ ! -L "$note" ] || continue
+    if [ "$n" = 0 ]; then
+      echo "   first failure of the first red tests, in full (the list above keeps one line each; the notes: .mxcli/failures/):"
+    fi
+    n=$((n + 1))
+    [ "$n" -le "$RED_CAUSES_SHOWN" ] || break
+    echo "     $name"
+    while IFS= read -r key; do
+      value="${key#*: }"; key="${key%%: *}"
+      case "$key" in
+        said) printf '       said: %s\n' "${value:0:700}" ;;
+        at)   printf '       at:   %s\n' "${value:0:220}" ;;
+        page) printf '       page: "%s"\n' "${value:0:300}" ;;
+      esac
+    done < "$note"
+  done < "$reds"
+  return 0
+}
+
 # record_suite_result <runner output> <exit code> <environment cause> -- the tests line of the
 # summary, a tests failure, and the facts from diagnose.sh when a feature failed.
 record_suite_result() {
@@ -332,9 +400,19 @@ record_suite_result() {
   fi
   [ "$status" != "0" ] || return 0
   failures+=("tests")
-  # The failing scripts' lines again under the verdict, with the other failures' details.
-  # The runner prints a script's cause line before and after its verdict: keep one of each.
-  { printf '%s\n' "$out" | grep -E '^\s+FAIL' | awk '!seen[$0]++' | head -12
+  # EVERY red script, one line each (name and its first failure line), under the verdict: the whole
+  # suite has run, so the whole list is known. A weak model fixed them one `--only` at a time and read
+  # the first of twelve mixed verdict/cause lines. The full list also goes to .mxcli/red-tests.txt.
+  red_test_list "$out" > "$WORK/tests.reds"
+  tests_environment="$environment"
+  if [ -s "$WORK/tests.reds" ]; then
+    mkdir -p .mxcli 2>/dev/null && cp "$WORK/tests.reds" .mxcli/red-tests.txt 2>/dev/null
+    summary+=("red tests ($(grep -c . "$WORK/tests.reds")): $(sed -E 's/^   - ([^:]*):.*/\1/' "$WORK/tests.reds" | tr '\n' ' ' | sed 's/ $//')")
+  fi
+  { head -"$RED_TESTS_SHOWN" "$WORK/tests.reds"
+    [ "$(grep -c . "$WORK/tests.reds")" -gt "$RED_TESTS_SHOWN" ] \
+      && echo "   ... $(( $(grep -c . "$WORK/tests.reds") - RED_TESTS_SHOWN )) more red tests in .mxcli/red-tests.txt"
+    declare -F red_test_causes >/dev/null && red_test_causes "$WORK/tests.reds"
     cat "$WORK/tests.syntax" 2>/dev/null; } > "$WORK/tests.detail"
   details+=("tests|tests")
   if [ -z "$environment" ] && [ -x tests/diagnose.sh ]; then

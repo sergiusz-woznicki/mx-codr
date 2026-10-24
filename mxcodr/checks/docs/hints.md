@@ -1,6 +1,6 @@
-| stale client bundle | a test failed on a 404 for `dist/*.js` after a `--watch` rebuild | `bash tests/gate.sh --restart --only <feature>` -- not the page, not a widget |
+| stale client bundle | a 404 on `dist/*.js` after a `--watch` rebuild | `bash tests/gate.sh --restart --only <feature>` -- not the page, not a widget |
 | Studio Pro has this project open | its next save replaces what mxcli wrote (warning) | close Studio Pro without saving, or make the change there |
-| "went green without ever being red" | a test seen to fail once (warning) | break the feature, run `--only <feature>`, fix it; or `MDL_ALLOW_GREEN_FIRST` when green by nature |
+| "went green without ever being red" | a test seen to fail once (warning) | break the feature, run `--only <feature>`, fix it; or `MDL_ALLOW_GREEN_FIRST` |
 | `CE0582` | no classic drop-down (not React-client compatible) | `combobox` or `radiobuttons` on the same enumeration or Boolean attribute |
 | `CE0106` `CE0557` | a microflow or page reached from a page, button or menu has a role | the hint's `grant execute` / `grant view` in the script that creates the document |
 | `CE0007` `CE0115` `CE0117` `CE0161` `CE0642` `CE1613` `CE2729` `CE7247` | build errors the gate and precheck explain | read the hint under the error |

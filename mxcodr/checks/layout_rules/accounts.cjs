@@ -50,13 +50,15 @@ function accountFindings(navigation, userRoleText, guestRole) {
     if (!re.search(String.raw`\bpage\s+` + re.escape(ADMIN_PAGE) + String.raw`\b`, menu, 'i')) {
       failures.push({ check: 'ACCOUNT01', line: 0, message:
         `navigation profile ${p}: no menu item for user management -- add \`${ADMIN_ITEM}\` before` +
-        " Log out. It is the Administration module's own page; only Administration.Administrator can" +
+        " Log out. The gate requires it even when the request lists the menu or says 'only' (it is not an extra)." +
+        " It is the Administration module's own page; only Administration.Administrator can" +
         ' open it, so everyone else never sees the item' });
     }
     if (!re.search(String.raw`\bmicroflow\s+` + re.escape(MY_ACCOUNT_FLOW) + String.raw`\b`, menu, 'i')) {
       failures.push({ check: 'ACCOUNT02', line: 0, message:
         `navigation profile ${p}: no menu item for the user's own account and password -- add` +
-        ` \`${MY_ACCOUNT_ITEM}\` before Log out. It opens Administration.MyAccount (view the account,` +
+        ` \`${MY_ACCOUNT_ITEM}\` before Log out. The gate requires it even when the request lists the menu or says 'only'` +
+        ' (it is not an extra). It opens Administration.MyAccount (view the account,' +
         ' change the password) for whoever is signed in; a menu item cannot open MyAccount itself,' +
         ' because the page needs the account as its parameter' });
     }
@@ -65,7 +67,7 @@ function accountFindings(navigation, userRoleText, guestRole) {
   for (const [name, moduleRoles] of byKey(roles)) {
     if (name === guestRole || moduleRoles.has('Administration.User')) continue;
     failures.push({ check: 'ACCOUNT03', line: 0, message:
-      `user role ${name} signs in but lacks Administration.User, so 'My account' is hidden from it and` +
+      `user role ${name} signs in but lacks Administration.User (required for every signing-in role, whatever the request lists), so 'My account' is hidden from it and` +
       ` its users cannot change their password -- \`alter user role ${name} add module roles` +
       ' (Administration.User);`' });
   }

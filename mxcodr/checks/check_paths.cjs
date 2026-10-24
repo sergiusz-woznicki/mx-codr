@@ -12,6 +12,7 @@
 //              signs in as a user with that role and reads that entity
 //   ROLE01     each demo user's role is the user of some test
 //   SVC01      each published REST or OData service is called by a test
+//   SCOPE03    a page, ACT_ microflow or helper entity that serves no approved requirement (scope_rules.cjs)
 //   TIMER01    the work behind a scheduled event or a workflow timer is a microflow a test runs:
 //              nothing that waits days can be seen in a test otherwise
 //
@@ -39,6 +40,7 @@ const { mxcli, ModelReadError, findMpr, moduleRolesOf, withoutFolder } = require
 const { levelArgs, levelOf } = require('./rulebook.cjs');
 const rules = require('./outcome_rules.cjs');
 const { spellings, requirementFindings } = require('./requirement_rules.cjs');
+const { scopeFindings } = require('./scope_rules.cjs');
 
 // A document's version, without its folder: counting a move as a change once turned seven old paths
 // into blocking ones (B2B, 2026-10-08).
@@ -59,7 +61,10 @@ function readModel(appDir, mpr, read = mxcli) {
   const moduleRoles = moduleRolesOf(appDir, mpr, read);
   const scheduledEvents = read(appDir, mpr, 'SHOW SCHEDULED EVENTS', true).map(r => ({
     name: r['Scheduled Event'] || r.Name || '', microflow: r.Microflow || '', repeat: r.Repeat || '' })).filter(e => e.name);
-  return { sources, permissions, restServices, odataServices, demoUsers, moduleRoles, scheduledEvents };
+  // SCOPE03 traces a document through what it references; a catalog without references only loses that.
+  let refs = [];
+  try { refs = read(appDir, mpr, 'SELECT SourceName, TargetName, RefKind FROM CATALOG.REFS', true); } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
+  return { sources, permissions, restServices, odataServices, demoUsers, moduleRoles, scheduledEvents, refs };
 }
 
 // The tests as the rules see them: [{name, text (comments out, lower case), users: Set}].
@@ -315,11 +320,12 @@ function main() {
   let testMdl = [];
   try { testMdl = fs.readdirSync(path.join(a.appDir, 'tests')).filter(n => n.endsWith('.test.mdl')).map(n => fs.readFileSync(path.join(a.appDir, 'tests', n), 'utf8')); } catch { testMdl = []; }
   const run = microflowsRun(testMdl, rules.testFiles(a.appDir), model.sources);
-  const all = findings(model, tests, a.modules, run).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)));
+  const all = findings(model, tests, a.modules, run).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)),
+    scopeFindings(a.appDir, model, rules.testFiles(a.appDir), a.modules, hash));
   for (const f of all) {
     if (skip.has(f.key) || skip.has(f.key.split('#')[0])) continue;
     // WF01 and REQ02 block whatever their age: a requirement the person agreed has no old version.
-    const level = levelOf(levels, f.code, f.code === 'WF01' || f.code === 'REQ02' ? 'block' : 'baseline');
+    const level = levelOf(levels, f.code, f.code === 'WF01' || f.code === 'REQ02' ? 'block' : f.code === 'SCOPE03' ? 'warn' : 'baseline');
     if (level === 'off' || level === 'info') continue;
     // A task anyone can decide is a defect, not a missing test: WF01 blocks whatever its age.
     // `baseline` (the default): old paths warn, new or changed ones block; `block`: every one blocks.

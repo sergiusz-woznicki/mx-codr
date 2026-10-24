@@ -203,6 +203,10 @@ _mdl_js_catch_and_sign_out() {
   cat <<'CATCH'
   } catch (e) {
     const url = page.url();  // synchronous in Playwright; do not await or .catch it
+    // What the page shows, for the gate's account of why a test is red (a quote becomes an apostrophe,
+    // so the marker below stays one piece). Best effort: a closed page gives nothing.
+    const pageText = await page.locator('body').innerText({timeout: 1500})
+      .then(t => t.replace(/\s+/g, ' ').trim().slice(0, 300).replace(/"/g, "'")).catch(() => '');
     // mx is absent on login.html, so asking for the user there throws. Neither
     // getUserName() nor getUserAttribute() exists on mx.session in 11.12 -- the
     // name sits in sessionData, as {value: 'demo_administrator'}. Measured.
@@ -222,7 +226,8 @@ _mdl_js_catch_and_sign_out() {
       note = await page.locator('.login-message, .alert, #loginMessage, .mx-validation-message').first()
         .innerText({timeout: 500}).then(t => t.replace(/\s+/g, ' ').trim()).catch(() => '');
     }
-    throw new Error(why + ' [on ' + url + (who ? ', signed in as ' + who : '') + (note ? ', page says: ' + note : '') + ']');
+    throw new Error(why + ' [on ' + url + (who ? ', signed in as ' + who : '') + (note ? ', page says: ' + note : '') + ']'
+      + (pageText ? ' [page text: "' + pageText + '"]' : ''));
   } finally {
     // Release the session here, in-process, on success and on failure alike. Only
     // where there was a sign-in: with Security Level: Off there is no session to
@@ -249,11 +254,17 @@ _mdl_fail_on_scenario_error() {
   if grep -q '^### Error' <<< "$output"; then
     # Full block to stderr; a one-line summary in fail(), the only line verify reprints.
     printf '%s\n' "$output" | sed -n '/^### Error/,/^###/p' | head -8 >&2
-    local why
-    why="$(_mdl_error_summary "$output")"
+    local why why_long page
+    why="$(_mdl_error_summary "$output" 1500)"
+    # The catch appends the page's visible text as [page text: "..."]: kept apart, so the one-line
+    # message the runner shows spends its 400 characters on the error and not on the page.
+    page="$(sed -nE 's/.* \[page text: "([^"]*)"\].*/\1/p' <<< "$why")"
+    why="$(sed -E 's/ \[page text: "[^"]*"\]//' <<< "$why")"
+    why_long="$(cut -c1-1000 <<< "$why")"; why="$(cut -c1-400 <<< "$why")"
     local refusal logged
     refusal="$(_licence_refusal || true)"
     logged="$(_runtime_errors_since "${_MDL_SCENARIO_START:-}")"
+    _mdl_note_failure "browser scenario failed: ${logged:+runtime logged during this test: $logged | }${why_long:-no error text}${refusal:+ -- $refusal}" "$page"
     fail "browser scenario failed: ${logged:+runtime logged during this test: $logged | }${why:-no error text}${refusal:+ -- $refusal}"
   fi
   # Neither marker. "### Ran Playwright code" means the code did run and simply returned nothing:
@@ -267,11 +278,12 @@ _mdl_fail_on_scenario_error() {
   fi
 }
 
-# _mdl_error_summary <output> -- the "### Error" text on one line, colours removed, at most 400 chars.
+# _mdl_error_summary <output> [<limit>] -- the "### Error" text on one line, colours removed, at most
+# <limit> chars (400).
 _mdl_error_summary() {
   printf '%s\n' "$1" \
     | sed -n '/^### Error/,/^### [A-Z]/p' | sed '1d;/^### /d' \
-    | sed $'s/\033\[[0-9;]*m//g' | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//' | cut -c1-400
+    | sed $'s/\033\[[0-9;]*m//g' | tr '\n' ' ' | tr -s ' ' | sed 's/^ //;s/ $//' | cut -c1-"${2:-400}"
 }
 
 # _mdl_scenario_result <output> -- print the "### Result" section without blank lines.

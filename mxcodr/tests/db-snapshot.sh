@@ -55,6 +55,50 @@ dbsnap_pg() {
 
 dbsnap_sql() { dbsnap_pg psql -d postgres -tAc "$1" 2>/dev/null; }
 
+# dbsnap_fingerprint -- one md5 over the content of every table the tests can change on purpose:
+# all tables outside System.* and MendixSystem.* (own modules, Marketplace modules, Administration),
+# plus the autonumber counters (mendixsystem$sequence), the users and their roles, uploaded files and
+# images, and the workflow tables. Each row is its whole jsonb text (every column, so a status
+# Unpaid->Paid with equal row counts changes it, and so does a new column after a model change),
+# rows sorted, tables sorted by name. Left out as run-time churn: sessions, tokens, queued and
+# processed tasks, scheduled-event bookkeeping, change hashes, offline sync state, time zones, the
+# MendixSystem metadata -- and from System.User only lastlogin, failedlogins and changeddate, which a
+# login rewrites. A user a test created, a role it granted, a password it changed all still count.
+# Prints nothing (= unknown, so the caller swaps as before) when the query fails or the tables hold
+# more than DBSNAP_FP_MAX_ROWS rows in all: hashing a big database costs more than it saves.
+DBSNAP_FP_MAX_ROWS="${DBSNAP_FP_MAX_ROWS:-50000}"
+dbsnap_fingerprint() {
+  local sql out
+  sql="$(cat <<'SQL'
+WITH t AS (
+  SELECT c.relname AS name
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind = 'r' AND n.nspname = 'public'
+    AND ( (left(c.relname, 7) <> 'system$' AND left(c.relname, 13) <> 'mendixsystem$')
+       OR c.relname IN ('mendixsystem$sequence', 'system$user', 'system$userroles', 'system$userrole',
+                        'system$grantableroles', 'system$user_language', 'system$user_timezone',
+                        'system$filedocument', 'system$privatefiledocument', 'system$image')
+       OR left(c.relname, 15) = 'system$workflow')
+), n AS (
+  SELECT coalesce(sum(((xpath('/row/c/text()', query_to_xml(
+           format('SELECT count(*) AS c FROM public.%I', name), false, true, '')))[1])::text::bigint), 0) AS rows
+  FROM t
+)
+SELECT CASE WHEN n.rows > __MAX__ THEN '' ELSE (
+  SELECT md5(string_agg(name || '=' || ((xpath('/row/h/text()', query_to_xml(
+           format('SELECT coalesce(md5(string_agg(j::text, chr(10) ORDER BY j::text)), ''-'') AS h
+                   FROM (SELECT to_jsonb(x) - %L::text[] AS j FROM public.%I x) s',
+                  CASE WHEN name = 'system$user' THEN '{lastlogin,failedlogins,changeddate}' ELSE '{}' END, name),
+           false, true, '')))[1])::text, ',' ORDER BY name)) FROM t) END
+FROM n
+SQL
+)"
+  sql="${sql//__MAX__/$DBSNAP_FP_MAX_ROWS}"
+  out="$(dbsnap_pg psql -d "$DBSNAP_DB" -tAc "$sql" 2>/dev/null)" || return 0
+  case "$out" in ''|*[!0-9a-f]*) return 0 ;; esac
+  printf '%s' "$out"
+}
+
 dbsnap_session() {
   local id
   id="$(cat .mxcli/session.id 2>/dev/null)"
@@ -74,7 +118,13 @@ dbsnap_take() {
   # A new app's database appears with its first boot: nothing to keep yet, the next run takes it.
   [ "$(dbsnap_sql "SELECT 1 FROM pg_database WHERE datname='$DBSNAP_DB'")" = "1" ] || return 0
   mkdir -p "$DBSNAP_DIR" || return 0
+  local fp_before fp_after
+  fp_before="$(dbsnap_fingerprint)"
   if dbsnap_pg pg_dump -Fc -f "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DB" 2>"$DBSNAP_DIR/take.err"; then
+    # The fingerprint counts only when the content did not move while the dump ran.
+    fp_after="$(dbsnap_fingerprint)"
+    rm -f "$DBSNAP_DIR/pending.fp"
+    [ -n "$fp_before" ] && [ "$fp_before" = "$fp_after" ] && printf '%s' "$fp_before" > "$DBSNAP_DIR/pending.fp"
     mv "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DIR/pending.dump"
     rm -f "$DBSNAP_DIR/unavailable"
     printf 'session=%s\ntaken=%s\n' "$session" "$(date '+%Y-%m-%d %H:%M:%S')" > "$DBSNAP_DIR/pending.info"
@@ -92,6 +142,16 @@ dbsnap_take() {
     fi
   fi
   return 0
+}
+
+# dbsnap_unchanged -- true when the live data has the fingerprint stored with the pending snapshot.
+# Unknown (no stored fingerprint, a failed query, a database over the row limit) is false: swap.
+dbsnap_unchanged() {
+  local want have
+  want="$(cat "$DBSNAP_DIR/pending.fp" 2>/dev/null)"
+  [ -n "$want" ] || return 1
+  have="$(dbsnap_fingerprint)"
+  [ -n "$have" ] && [ "$have" = "$want" ]
 }
 
 # dbsnap_swap -- the snapshot becomes the live database: restored beside it while the app still
@@ -145,8 +205,12 @@ dbsnap_restore() {
   [ -f "$DBSNAP_DIR/pending.dump" ] || return 0
   local old="${DBSNAP_DB}_before_restore" taken
   taken="$(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null)"
-  echo "== putting the data back to the snapshot of ${taken:-?}: what the tests created goes (MDL_DB_RESET=${DBSNAP_MODE})"
-  dbsnap_swap || return 0
+  if dbsnap_unchanged; then
+    echo "== the data equals the snapshot of ${taken:-?} (fingerprint of the app's own tables): nothing to put back, no restart"
+  else
+    echo "== putting the data back to the snapshot of ${taken:-?}: what the tests created goes (MDL_DB_RESET=${DBSNAP_MODE})"
+    dbsnap_swap || return 0
+  fi
   # 4. Done: the previous database stays as <name>_before_restore until the next rollback, and the
   # last three snapshots stay in .mxcli/db-snapshot/ for a rollback by hand.
   mv "$DBSNAP_DIR/pending.dump" "$DBSNAP_DIR/restored-$(date '+%Y%m%d-%H%M%S').dump"
@@ -155,7 +219,7 @@ dbsnap_restore() {
   # session that never reached DONE is still the one restored, but the session it was taken in is
   # not this one -- recording that one made the next gate here take a second snapshot (B2B, 2026-10-07).
   dbsnap_session > "$DBSNAP_DIR/restored.session" 2>/dev/null
-  rm -f "$DBSNAP_DIR/pending.info"
+  rm -f "$DBSNAP_DIR/pending.info" "$DBSNAP_DIR/pending.fp" "$DBSNAP_DIR/dirty"
   echo "   the data is back to ${taken:-the snapshot}, and the app runs on it; what the tests created is gone"
   echo "   (the previous data is kept as the database ${old})"
   dbsnap_empty_note
@@ -174,6 +238,12 @@ dbsnap_refresh() {
     return 0
   fi
   [ "${1:-}" = "force" ] || [ -f "$DBSNAP_DIR/dirty" ] || return 0
+  # Not for --reset-data: that one asks for a restart, and gets it.
+  if [ "${1:-}" != "force" ] && dbsnap_unchanged; then
+    rm -f "$DBSNAP_DIR/dirty"
+    echo "== the data already equals the snapshot (fingerprint of the app's own tables): no restart; the tests start on it"
+    return 0
+  fi
   echo "== putting the data back to the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null) before the tests: an earlier run left its test rows"
   local started=$SECONDS
   dbsnap_swap && echo "   the tests start on the snapshot's data; the next DONE puts it back again"

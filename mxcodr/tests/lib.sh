@@ -102,6 +102,33 @@ fi
 # --- 4. fail and the runtime log ---
 RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
 
+# _mdl_note_failure <message> [<page text>] -- the first failure of a gate test, with what its one-line
+# message cannot hold, in .mxcli/failures/<test>.txt: the whole message (fail() keeps 400 characters,
+# and the gate's list of red tests 240), the line of the test that said it, and for a browser error the
+# text the page showed. The gate prints it under the red test (red_test_causes), so reading why a test
+# failed does not take another run. Best effort; the first failure wins; never fails.
+_mdl_note_failure() {
+  local dir="$APP_DIR/.mxcli/failures" name file i line="" src="" page="${2:-}"
+  name="$(basename "${0:-test}")"; name="${name%.test.sh}"
+  case "$name" in verify-*) ;; *) return 0 ;; esac
+  [ -L "$APP_DIR/.mxcli" ] && return 0
+  mkdir -p "$dir" 2>/dev/null || return 0
+  file="$dir/$name.txt"
+  [ -L "$file" ] && rm -f "$file"
+  [ -e "$file" ] && return 0
+  for ((i = 1; i < ${#BASH_SOURCE[@]}; i++)); do
+    if [ "$(basename "${BASH_SOURCE[$i]}")" = "$(basename "$0")" ]; then line="${BASH_LINENO[$((i - 1))]}"; break; fi
+  done
+  case "$line" in ''|*[!0-9]*) line="" ;; esac
+  [ -n "$line" ] && src="$(sed -n "${line}p" "$0" 2>/dev/null | sed -E 's/^[[:space:]]+//' | cut -c1-200)"
+  {
+    printf 'said: %s\n' "$1"
+    [ -z "$line" ] || printf 'at: tests/%s.test.sh:%s: %s\n' "$name" "$line" "$src"
+    [ -z "$page" ] || printf 'page: %s\n' "$page"
+  } > "$file" 2>/dev/null || true
+  return 0
+}
+
 # Inside $(...) fail ends only that subshell; callers add `|| exit 1`.
 # Also noted in a file: a fail inside $(...) (or behind 2>/dev/null) reaches the EXIT trap that way.
 # One line: the runner shows only a test's last stderr line, and `fail "...: $body"` with a grid's
@@ -109,6 +136,7 @@ RUNTIME_LOG="${RUNTIME_LOG:-$APP_DIR/.mxcli/runtime.log}"
 fail() {
   local message="$*"
   message="${message//$'\r'/}"; message="${message//$'\n'/ | }"
+  _mdl_note_failure "${message:0:1500}"
   [ "${#message}" -le 400 ] || message="${message:0:400} ..."
   _MDL_FAIL_SAID=1
   echo "FAIL: $message" >&2

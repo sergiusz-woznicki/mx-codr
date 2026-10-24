@@ -255,6 +255,12 @@ const tools = {
     const core = require('./plugins/harness-core.cjs');
     if (core.isSelfResolve(process.cwd(), py.readStdin())) py.print(core.SELF_RESOLVE);
   },
+  // The block message when the command (stdin) captures a requirement against the frozen scope or
+  // asks for a feature the request never named (plugins/capture_guard.cjs). Run from the project.
+  'capture-block'() {
+    const message = require('./plugins/harness-core.cjs').captureBlock(process.cwd(), py.readStdin());
+    if (message) py.print(message);
+  },
   // The block message when the command (stdin) installs a Marketplace widget from a publisher other
   // than Mendix or Mendixlabs (harness-core widgetPublisherBlock). Run from the project.
   'widget-publisher'() {

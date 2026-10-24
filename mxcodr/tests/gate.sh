@@ -84,7 +84,11 @@ find_project() {
 # On exit, end model checks still running in the background (an early exit -- no app, a failed
 # boot -- leaves them), so they do not write into the removed scratch directory.
 cleanup_work() {
-  local pid pids
+  local pid pids status=$?
+  # The timing line goes last, whatever way the gate ended (--stop and --help are not gate runs).
+  if [ "${STOP:-0}" = "0" ] && [ -n "${GATE_START:-}" ] && declare -F write_timing >/dev/null; then
+    write_timing "$status"
+  fi
   pids="$(jobs -p)"
   if [ -n "$pids" ]; then
     for pid in $pids; do
@@ -130,6 +134,7 @@ main() {
   WORK="$(mdl_tmpdir mdl-gate)"
   trap cleanup_work EXIT
   GATE_START=$SECONDS
+  phase_start setup
 
   # USER_MODULES_READ=0 tells a failed SHOW MODULES apart from a project with no module.
   USER_MODULES=""; USER_MODULES_READ=1
@@ -171,7 +176,9 @@ main() {
     start_model_checks $EARLY_CHECKS
   fi
   # 2. The app: restart it if asked, then find it or boot it.
+  phase_start boot
   [ "$RESTART" = "1" ] && restart_app
+  phase_start db-reset
   # Rows an earlier run that did not end in DONE left behind: a full gate starts its tests on the
   # snapshot's data (a stop and boot); a partial run only with --reset-data.
   if declare -F dbsnap_refresh >/dev/null; then
@@ -181,6 +188,7 @@ main() {
   fi
   # Warn about drifted checkers before any verdict, and before the no-app exit.
   mdl_check_install_freshness
+  phase_start boot
   ensure_app
   keep_offline_caching
   # A new app's database appears with its first boot: the snapshot is taken now, before any test writes.
@@ -192,24 +200,30 @@ main() {
   fi
   # 3. Preflights, then the suite.
   failures=(); cannot_run=(); summary=(); details=()
+  phase_start preflight
   preflight_session
   preflight_debugger
   preflight_environment
   preflight_studio_pro
   preflight_stale_model
+  phase_start tests
   step_tests
+  phase_start visual
   step_visual
   step_runtime_errors
   close_browser_if_asked
   add_red_first_notes
   note_never_red_tests
   # 4. Wait for the model checks and collect their verdicts.
+  phase_start checks-wait
   if [ "$TESTS_ONLY" = "0" ] && [ -z "$ONLY" ]; then
     wait
     collect_model_checks
+    phase_start microflow-tests
     step_microflow_tests
   fi
   [ -n "$ONLY" ] && wait
+  phase_start verdict
   print_verdict_and_exit
 }
 

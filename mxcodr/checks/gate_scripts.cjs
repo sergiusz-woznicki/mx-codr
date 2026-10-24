@@ -139,6 +139,25 @@ function unanchoredFeaturesCommand(args) {
 }
 
 
+// SCOPE02: during the first build, a new page or ACT_ microflow that no approved requirement traces.
+// The approved requirements are the scope (skill requirements-interview); a document nothing in the plan
+// anchors, and no test that names a requirement covers, is more than was agreed. Not after the first DONE
+// (REQ03 asks every later page for an anchor), not with no requirement recorded, not for support pages
+// and seed flows. The caller prints the procedure and blocks on any line.
+function unplannedScopeCommand(args) {
+  const [app, mpr, ...scripts] = args;
+  const scope = require('./scope_rules.cjs');
+  if (!scope.applies(app)) return 0;
+  try {
+    if (/^full: \S+ \S+ DONE\b/m.test(fs.readFileSync(py.join(app, '.mxcli', 'last-gate.txt'), 'utf8'))) return 0;
+  } catch { /* no gate yet: the first build */ }
+  const fresh = newFeatures(app, mpr, scripts, require('./check_test_coverage.cjs'));
+  if (!fresh || !fresh.length) return 0;
+  const tests = require('./outcome_rules.cjs').testFiles(app);
+  for (const [kind, name] of scope.unplannedNew(app, tests, fresh)) py.print(`  - ${kind} ${name}`);
+  return 0;
+}
+
 // SCRIPT01: a document two scripts create is whatever the last one run says.
 // The kinds mxcli 0.25 can patch with `alter <kind>`; a constant or a menu it cannot.
 const ALTERABLE = new Set(['entity', 'enumeration', 'page', 'snippet', 'microflow', 'nanoflow', 'workflow']);
@@ -309,4 +328,4 @@ function widgetNameFindings(scripts) {
   if (out.length) process.stdout.write(out.join('\n') + '\n');
 }
 
-module.exports = { unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, widgetNameFindings, captionFindings, suggestCaption };
+module.exports = { unplannedScopeCommand, unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, widgetNameFindings, captionFindings, suggestCaption };
