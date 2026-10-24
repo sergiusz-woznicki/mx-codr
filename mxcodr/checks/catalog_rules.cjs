@@ -252,7 +252,7 @@ function unpublishedEvents(events, sources, modules) {
     out.push({ code: 'PUBLISH01', key: e.ServiceQualifiedName,
       message: `${e.ServiceQualifiedName} publishes ${e.MessageName} (${entity}), but no microflow hands a ${leaf} to a Java action` +
         (mentions.length ? ` -- ${mentions.map(d => d.QualifiedName).slice(0, 3).join(', ')} create${mentions.length === 1 ? 's' : ''} it and stop${mentions.length === 1 ? 's' : ''} there` : '') +
-        ': consumers never receive it. Publish it -- mxcli (0.26, 0.27) cannot write BusinessEvents.PublishBusinessEvent_V2 (CE0115), so call a ' +
+        ': consumers never receive it. Publish it -- mxcli (0.26 - 0.28) cannot write BusinessEvents.PublishBusinessEvent_V2 (CE0115), so call a ' +
         "Java action of your own that publishes (pitfalls: 'A business event is published through a Java action of your own') -- " +
         'and test that the publish ran, not that a log line was written' });
   }

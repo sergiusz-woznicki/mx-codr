@@ -20,7 +20,7 @@ When it answers DONE, the last lines are a **STOP BUILDING** block: do not edit 
 again, write the report; the warnings above it are marked report-only and go into the report as "to fix next".
 The very last line of every run is `timing:` -- where the seconds went (setup, data reset, boot, preflight,
 tests, checks, restore) and the checks that ran beside them; the table is `.mxcli/last-timing.txt`.
-Harness bundle 2026.10.24.8.
+Harness bundle 2026.10.25.1.
 
 ## Install
 
@@ -65,7 +65,7 @@ replaced; your tests, `tests/credentials.env`, `tests/harness.env` and your rule
 |---|---|
 | Your Mendix app | creates one if the folder has none; on a Mac with several Studio Pro versions it asks which, `MX_VERSION` decides without asking |
 | How the app runs | asks: **locally** (default; runtime and PostgreSQL on this machine, a model change is live in about a second) or **in Docker** (nothing else installed, about 40 s per change) |
-| mxcli | downloads the one release the harness is tested with (`mxcodr/MXCLI_TESTED`, now v0.27.0), checksum-verified |
+| mxcli | downloads the one release the harness is tested with (`mxcodr/MXCLI_TESTED`, now v0.28.0), checksum-verified |
 | Node, Playwright, MxBuild, PostgreSQL | installs what is missing; leaves what is there |
 | Skills, hooks, the rulebook, the checkers | puts them where each of the five agents looks |
 | Windows | links what Studio Pro's mxbuild needs (Gradle, the JDK the Mendix version wants, ARM64 tools) and boots the app without `mxcli run`, which cannot boot on Windows |
@@ -299,7 +299,7 @@ What makes the app look and behave like a proper Mendix app.
 | `NAV04` | The menu is a real Mendix navigation menu, not a row of buttons built into a layout (that has no mobile menu and no highlighted item). | Blocks |
 | `NAV05` | Every menu item has an icon. | Blocks |
 | `NAV06` | No two menu items that the same user can see have the same icon. | Blocks |
-| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli (v0.27 and before) writes offline profiles without these settings, and Studio Pro shows them greyed out for an offline profile, so they cannot be set afterwards: the profile has to be deleted and added again in Studio Pro. Judged where the app is built on this machine (local mode). | Blocks |
+| `OFFLINE01` | An offline profile works without a network only through the service worker Mendix registers for it. A profile with no Progressive web app settings gets none ("registerServiceWorker": false in the built index.js), and then no page opens offline. mxcli 0.28 writes them with the `progressive web app` clause of `create or modify navigation` (0.27 and before had no syntax, and Studio Pro shows them greyed out for an offline profile, so a profile written there had to be deleted and added again in Studio Pro). Judged where the app is built on this machine (local mode). | Blocks |
 | `OFFLINE02` | An offline profile downloads nothing until each entity has a sync mode, and then shows an empty app while every check passes. At least one entity is synchronized with all or where. | Blocks |
 | `OFFLINE03` | An app with an offline profile has a test that cuts the network: it opens the profile, calls go_offline(), does the work the user does without a network, checks the server has nothing yet, then go_online() and sync_now() and checks it arrived. | Blocks |
 | `PHONE01` | Atlas's phone and tablet layouts show a bottom menu from Atlas_Core (Phone_Menu, Tablet_Menu): the template's Home, Layouts, Templates and Widgets, which do nothing. A page whose layout shows a menu whose items all do nothing is reported. | Blocks |
@@ -326,12 +326,12 @@ Where documents live.
 |---|---|---|
 | `FOLDER01` | Every document sits in a folder named after the business process (Orders, Customers), split into three subfolders: UI for pages and snippets, FNC for microflows and nanoflows, ENV for everything else. The finding prints the moves to make. A business event service is left alone: mxcli moves it but cannot read its folder back. | Blocks |
 
-**mxcli's lint rules** (53 cards in `tests/rulebook/lint/`)
+**mxcli's lint rules** (55 cards in `tests/rulebook/lint/`)
 
 Each of mxcli's own lint rules has a card with a level decided once for all of them: a warning for the
-ten that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
+twelve that add something mx-codr does not check itself (`CONV010` an `ACT_` microflow only calls `SUB_`
 ones and UI actions, `CONV011` no commit in a loop, `CONV013` and `CONV014` error handling on calls,
-`SEC006`, `SEC008` and `SEC009` personal data, `SEC010` a page listing an entity its roles cannot read (mxcli 0.27; a row-scoped read mxcli itself rates info is left out), `MPR002` and `MPR006` empty microflows and containers),
+`SEC006`, `SEC008` and `SEC009` personal data, `SEC010` a page listing an entity its roles cannot read (mxcli 0.27; a row-scoped read mxcli itself rates info is left out), `MPR002` and `MPR006` empty microflows and containers, `CONV020` (mxcli 0.28) an object created and never committed, returned or deleted, `MPR013` (mxcli 0.28) a snippet call carrying Class, Style or design properties, which never reach the page),
 off for the rest, each card saying why: another rule checks it, mx check blocks it, or it does not fit
 how these apps are built. The catalog step runs `mxcli lint` and lists the findings in the app's own
 modules; Marketplace modules are left alone. A rule a newer mxcli adds falls under `LINT01` (off) until

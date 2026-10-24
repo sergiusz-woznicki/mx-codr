@@ -204,7 +204,7 @@
         .then(t => (/"registerServiceWorker":\s*(true|false)/.exec(t) || [])[1]).catch(() => '');
       throw new Error('open_app(' + JSON.stringify(profile) + '): no service worker took over the page, so nothing'
         + ' works offline' + (flag === 'false' ? ' -- index.js says "registerServiceWorker": false: the profile has no'
-        + ' Progressive web app settings (OFFLINE01: delete and re-add the profile in Studio Pro)' : ''));
+        + ' Progressive web app settings (OFFLINE01: create or modify navigation <Profile> progressive web app ( Precaching: true ))' : ''));
     }
     const failed = await page.evaluate(async (pages) => {
       const out = [];

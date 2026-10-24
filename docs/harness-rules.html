@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.24.8 · mxcli v0.27.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.25.1 · mxcli v0.28.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -205,7 +205,7 @@ html { scroll-behavior: smooth; }
     <div class="step">
       <h3>The tools</h3>
       <ul class="items">
-        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.27.0), checksum-verified.</li>
+        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.28.0), checksum-verified.</li>
         <li>Node, playwright-cli and its browser, MxBuild for <code>mx check</code>, PostgreSQL; Docker only in Docker mode.</li>
         <li>On Windows: Git for Windows, the junctions and the ARM64 fixes Studio Pro's mxbuild needs and, for Mendix 11.15, Studio Pro's own Gradle 9.5.1, JDK 25 and rspack bundler.</li>
         <li>What needs a person (a JDK, starting a Docker daemon) is listed with the command to run.</li>
@@ -458,7 +458,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>NAME02</code></td><td>Every widget is named after its page, what it is for and its type, in full words, like <code>OrderDetail_GenerateInvoiceButton</code>. Tests find widgets by these names. Checked before each exec; a page the app already had at install is only warned about.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ALERT01</code></td><td>Points out an alert or card style put on a plain text, where it renders badly. Put it on a container around the text.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>HEAD01</code></td><td>Points out a page without a heading.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli (v0.27 and before) creates offline profiles without them, and Studio Pro shows them greyed out, so the person deletes the profile and adds it again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli 0.28 writes them with the <code>progressive web app</code> clause of <code>create or modify navigation</code>; 0.27 and before had no syntax, and Studio Pro shows them greyed out, so a profile written there had to be deleted and added again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>OFFLINE02</code></td><td>An offline profile synchronizes the entities its pages show. Without a sync mode the device downloads nothing and shows an empty app.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>OFFLINE03</code></td><td>An app with an offline profile has a test that cuts the network, does the work, checks the server has nothing yet, then syncs and checks it arrived.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE01</code></td><td>A phone or tablet page shows the app's own menu, not Atlas's template menu (Home, Layouts, Templates, Widgets) whose items do nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -520,7 +520,7 @@ html { scroll-behavior: smooth; }
   </table></div>
 
   <h3 id="g-mxcli-lint">Advice from mxcli's linter</h3>
-  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the ten that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
+  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the twelve that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
   <div class="table-wrap"><table class="rules compact">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
@@ -531,6 +531,8 @@ html { scroll-behavior: smooth; }
       <tr><td><code>CONV011</code></td><td>No commit inside a loop: commit the list once after the loop.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>MPR001</code></td><td>Entities, microflows, pages and enumerations follow the naming conventions.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR002</code></td><td>No empty microflows or nanoflows.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR013</code></td><td>A snippet call carries no Class, Style or design properties: a snippet call renders no element, so they never reach the page (mxcli 0.28).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV020</code></td><td>An object of a stored entity that a microflow creates is committed, returned, passed on, stored or deleted: otherwise it is silently lost when the flow ends (mxcli 0.28).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>MPR003</code></td><td>A module has at most 15 stored entities.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR004</code></td><td>No validation message left empty.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR005</code></td><td>No image widget without an image (it crashes).</td><td><span class="lvl i">Off</span></td></tr>
