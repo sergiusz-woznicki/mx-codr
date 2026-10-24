@@ -77,10 +77,32 @@ build_error_hints() {
   if grep -q 'after-startup-action failed' "$1" 2>/dev/null; then
     echo "   hint after-startup: the app will not start until the AfterStartupMicroflow returns true. A seed wired there must be re-runnable (check whether the data is already there) and must never return false -- or take it out of startup (ALTER SETTINGS MODEL AfterStartupMicroflow = '') and call it from a test instead"
   fi
+  # mxbuild's NullReference at the first build names no document, and mx check reports 0 errors, so five
+  # boots in a row failed the same way (invoice-chase, 2026-10-24: `drop user role Administrator`, the
+  # built-in administrator's role; the boot came up the moment a role of that name existed again).
+  if grep -q 'Object reference not set to an instance of an object' "$1" 2>/dev/null; then
+    echo "   hint NullReference in the first build, no CE code (mx check says 0 errors): look at what the last exec DROPPED. Seen: the user role Administrator, which the built-in administrator (MxAdmin) needs -- create a user role of that name again (module roles, demo user), exec, boot. Dropping a role a demo user holds is the other usual cause. Retrying the boot on an unchanged model fails the same way"
+  fi
   if grep -q 'NoSuchElementException: None.get' "$1" 2>/dev/null; then
     echo "   hint None.get at startup: usually an association to another module's entity (e.g. to Administration.Account) with a PREVENT/RESTRICT delete rule -- recreate it with ON DELETE SET NULL, exec, then --restart. Do not repair mprcontents by hand"
   fi
 }
+# previous_boot_note -- one line before a boot: when the log of the last boot shows it failed, say so and
+# whether the model changed since. Five boots in a row printed only "no app answering; booting" and the
+# same failure, and the agent could not tell a stopped app from a build that never came up (2026-10-24).
+# The log is emptied for each boot, so this runs before the next one starts.
+previous_boot_note() {
+  local log=.mxcli/gate-boot.log first when
+  [ -s "$log" ] && [ ! -L "$log" ] && boot_failed "$log" || return 0
+  first="$(grep -m1 -E "$(boot_error_re)" "$log" | cut -c1-150)"
+  when="$(date -r "$log" '+%H:%M:%S' 2>/dev/null)"
+  if [ "$MPR" -nt "$log" ]; then
+    echo "   why no app: the last boot (${when:-earlier}) failed (${first}); the model changed since, so this boot may come up"
+  else
+    echo "   why no app: the last boot (${when:-earlier}) failed (${first}) and the model has NOT changed since: booting again fails the same way -- find the cause first (hints below), not another boot"
+  fi
+}
+
 # Polls $BASE_URL once a second until it answers, then prints how long it took.
 # Exits 2 when <log> shows a boot error or BOOT_TIMEOUT seconds pass.
 wait_for_boot() {   # wait_for_boot <log>
@@ -250,6 +272,7 @@ restart_app() {
 ensure_app() {
   find_running_app && return 0
   [ "$BOOT" = "1" ] || explain_no_app
+  previous_boot_note
   # Nothing answers, yet this project still has processes: a half-dead run of its own. It can
   # still hold the admin API or mxbuild's port while the app port is free, and the boot then
   # dies on "is already in use" with the app left down. Stop them first -- what --restart does.

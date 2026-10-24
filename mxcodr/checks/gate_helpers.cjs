@@ -13,6 +13,7 @@
 //                                                   in the same folder creates too (SCRIPT01)
 //     gate_helpers.cjs test-first <app> <mpr> <mdl>... pages and ACT_ microflows these scripts create that
 //                                                   no tests/verify-*.test.sh covers yet (TEST01)
+//     gate_helpers.cjs unplanned-scope <app> <mpr> <mdl>... new pages and ACT_ microflows no approved requirement traces (SCOPE02)
 //     gate_helpers.cjs unanchored-features <app> <mpr> <mdl>... new pages and ACT_ microflows of a later
 //                                                   request that no requirement anchors (REQ03)
 //     gate_helpers.cjs captions <mdl>...             the activities of the flows these scripts write that lack
@@ -52,7 +53,7 @@ const path = require('path');
 const py = require('./py_compat.cjs');
 const { re } = py;
 const { PyError, isDict, typeName, truthy, or, head, get, joinStr, strRepr, str, loads, dict, readStrict, stdinText, statOf, walk, pyInt, naive, nowNaive } = require('./gate_values.cjs');
-const { definitions, testFirst, newFeaturesCommand, unanchoredFeaturesCommand, captionFindings, nearIconsCommand, errorSourcesCommand, duplicateDefinitions, widgetNameFindings } = require('./gate_scripts.cjs');
+const { definitions, testFirst, newFeaturesCommand, unanchoredFeaturesCommand, unplannedScopeCommand, captionFindings, nearIconsCommand, errorSourcesCommand, duplicateDefinitions, widgetNameFindings } = require('./gate_scripts.cjs');
 const { deploymentAge, runtimeAge, watchState, runtimeErrors } = require('./gate_runtime.cjs');
 const { fdOpen, visualReport } = require('./gate_visual.cjs');
 const { docMap, recordTestsSeen, changedTests } = require('./gate_changed.cjs');
@@ -203,6 +204,7 @@ function main(argv) {
   if (command === 'test-first' && args.length >= 3) return testFirst(args);
   if (command === 'new-features' && args.length >= 3) return newFeaturesCommand(args);
   if (command === 'unanchored-features' && args.length >= 3) return unanchoredFeaturesCommand(args);
+  if (command === 'unplanned-scope' && args.length >= 3) return unplannedScopeCommand(args);
   if (command === 'near-icons' && args.length === 1) return nearIconsCommand(args);
   if (command === 'error-sources' && args.length) return errorSourcesCommand(args);
   if (command === 'runtime-errors' && args.length === 2) return runtimeErrors(...args);

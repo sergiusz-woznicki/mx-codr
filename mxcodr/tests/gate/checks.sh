@@ -292,7 +292,7 @@ start_model_checks() {
   wants layout && ( run_cached layout   check_layout   "${cache_inputs[@]}" tools/mdl-checks/check_layout.cjs tools/mdl-checks/layout_rules "$CACHE_DIR/names-baseline.json" "env:MDL_OFFLINE_INPUTS=$(offline_inputs)" "$(rulebook_fingerprint layout)" ) &
   wants security && ( run_cached security check_security "${cache_inputs[@]}" tools/mdl-checks/view_access.cjs tools/mdl-checks/security_rules.cjs tools/mdl-checks/layout_rules/offline.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint security)" ) &
   wants scope && ( run_cached scope    check_scope    "${cache_inputs[@]}" tools/mdl-checks/check_scope.cjs "$(rulebook_fingerprint scope)" ) &
-  wants paths && ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/requirement_rules.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests docs/brain .mxcli/brain tests/harness.env "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
+  wants paths && ( run_cached paths    check_paths    "${cache_inputs[@]}" tools/mdl-checks/check_paths.cjs tools/mdl-checks/requirement_rules.cjs tools/mdl-checks/scope_rules.cjs tools/mdl-checks/outcome_rules.cjs tools/mdl-checks/check_unused.cjs tests docs/brain .mxcli/brain tests/harness.env "$CACHE_DIR/paths-baseline.json" "$(rulebook_fingerprint paths)" ) &
   wants folders && ( run_cached folders  check_folders  "${cache_inputs[@]}" tools/mdl-checks/check_folders.cjs tools/mdl-checks/check_unused.cjs "$(rulebook_fingerprint folders)" ) &
   wants unused && ( run_cached unused   check_unused   "${cache_inputs[@]}" javasource javascriptsource meta:theme meta:themesource tests "$(rulebook_fingerprint unused)" ) &
   if [ "$only" = "  " ]; then
@@ -313,7 +313,7 @@ EARLY_CHECKS="catalog naming layout security paths folders"
 # nothing when they all pass. Paths shows only the findings that name a test --only ran (REQ02).
 print_early_blockers() {
   local name detail lines out="" test base
-  EARLY_COVERAGE=""
+  EARLY_COVERAGE=""; EARLY_QUEUE=""
   local pattern='^[[:space:]]*- \[|^[[:space:]]+- '
   for name in $EARLY_CHECKS; do
     [ -f "$WORK/$name.status" ] || continue
@@ -333,6 +333,13 @@ print_early_blockers() {
       local rest
       rest="$(grep -vxF -f <(grep -v '^$' <<< "$kept") <<< "$lines" | grep -v '^$')"
       if [ -n "$rest" ]; then
+        # Entries captured and never promoted wait in the brain's queue, where no check reads them: they
+        # need a promote or a drop, not a test. Said by their ids, apart from the tests still to write
+        # (a bare "REQ02 x1" sent a session to write a test for a note, one extra session, 2026-10-24).
+        EARLY_QUEUE="$(grep -oE "wait in the brain's queue \([0-9a-f, ]+\)" <<< "$rest" | head -1 | sed -E 's/.*\((.*)\)/\1/')"
+        rest="$(grep -v "wait in the brain's queue" <<< "$rest")"
+      fi
+      if [ -n "$rest" ]; then
         EARLY_COVERAGE="$(grep -oE '\[[A-Z]+[0-9]+\]' <<< "$rest" | tr -d '[]' | codes_by_count)"
         local ids
         ids="$(grep -oE '\[REQ02\] requirement [0-9a-f]+' <<< "$rest" | awk '{print $3}' | tr '\n' ' ' | sed 's/ $//')"
@@ -345,10 +352,11 @@ print_early_blockers() {
     out="$out$(head -"$BLOCKERS_SHOWN" <<< "$lines" | sed -E 's/^[[:space:]]*(- )?//' | cut -c1-260 | sed 's/^/     - /')"$'\n'
     [ "$(grep -c . <<< "$lines")" -gt "$BLOCKERS_SHOWN" ] && out="$out     ... all of them: bash tests/gate.sh"$'\n'
   done
-  [ -n "$out" ] || [ -n "${EARLY_COVERAGE:-}" ] || return 0
+  [ -n "$out" ] || [ -n "${EARLY_COVERAGE:-}" ] || [ -n "${EARLY_QUEUE:-}" ] || return 0
   echo "== before DONE: the full gate refuses these too -- fix them now, in the script you have open"
   printf '%s' "$out"
   [ -z "${EARLY_COVERAGE:-}" ] || echo "   coverage still open on other tests: $EARLY_COVERAGE -- write those tests before the full gate (tests/checks/paths.md)"
+  [ -z "${EARLY_QUEUE:-}" ] || echo "   brain queue: $EARLY_QUEUE wait there and no check reads them (REQ02 blocks DONE): a requirement -> ./mxcli brain promote <id>, then a test names it; a note that is not one -> ./mxcli brain drop <id>"
   echo "   what each code wants and its fix: tests/checks/<step>.md"
   # For the verdict line: sessions read --only through `tail -3` or `grep PASS`, and a block above it
   # never reached them -- GRID03 then came back at the full gate three times (room-booking n1).

@@ -45,7 +45,7 @@ function personCodes(root) {
 
 // The person-only codes behind a red gate, or null when the agent still has work. Every finding
 // under "still blocking DONE" must name one of them -- a failed test counts when its message does
-// (an offline test fails with "... (OFFLINE01: delete and re-add the profile in Studio Pro)"). Then
+// (a test fails with a message that names the code). Then
 // sending the agent back to the gate only repeats it: a field-service session ran the same gate
 // three more times, byte for byte, after saying it could not fix it (2026-10-12).
 function personOnly(root, out) {

@@ -55,6 +55,17 @@ over after the second round becomes an assumption with its recommended answer.
 
 `docs/brain/` must exist first: `./mxcli brain init -p <app>.mpr` when it does not.
 
+- **The scope is the words of the request.** One requirement per user journey that the request names,
+  small, in its words. A dashboard, KPI, statistics, totals or summary page, an extra role, a log or notes
+  entity, and edit or admin screens are extras unless the request names them: they are not requirements, and
+  they are not built. A request of two sentences gives about 4 to 6 requirements. Each idea you leave out goes
+  under "to add next" in your final report, where the person approves it. Write the requirements in the order
+  you will build them, and write every one before you build: the approved list is the scope for good.
+- **What the gate itself requires is never an extra.** Sign-in, the Users, My account and Log out menu
+  entries, the signed-in user's name, icons, page URLs, folders, captions, seed and demo users and the home
+  page are built whether or not the request names them, even when it says "only" or "exactly" about a menu or
+  screen list. Do not record them as requirements to leave out; list them in the final report under "added
+  because the gate requires them".
 - **One requirement per acceptance criterion**, one sentence, anchored where it will be built --
   the anchor may name a page or microflow that does not exist yet (that reads as "not built yet"):
   ```
@@ -83,8 +94,11 @@ agree?" Do this even after "all as recommended": they agreed to answers, not to 
 wrote from them. Only after this second yes, promote each entry, all in one command chained with `&&`:
 `./mxcli brain promote <id1> -p <app>.mpr && ./mxcli brain promote <id2> -p <app>.mpr` -- their yes
 is the human step. In `assume` mode promote every entry yourself, requirements and assumptions alike,
-before you build: an entry left in the queue (`brain staged`) is read by no check and shown to no one.
-The assumptions stay open, and the gate lists them at DONE for the person to settle.
+before you build, all together (from the first promotion the scope is frozen: a later
+`brain capture` of a requirement is refused until DONE, and so is a page or ACT_ microflow that no requirement
+serves, gate SCOPE02): an entry left in the queue (`brain staged`) is read by no check and shown to no one.
+The assumptions stay open, and the gate lists them at DONE for the person to settle. Coverage or
+warning notes at DONE are not more building: they go in the report.
 
 **Never resolve an open question yourself** (`./mxcli brain resolve`): it is the person's answer. When
 they give it, run `./mxcli brain resolve <id> "<their answer>"` with their words.

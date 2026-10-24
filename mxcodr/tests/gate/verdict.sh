@@ -10,9 +10,15 @@ add_red_first_notes() {
   fi
 }
 
+# True when this run will end in a full-gate DONE: nothing red, nothing that could not run, not a partial run.
+gate_is_done() {
+  [ ${#failures[@]} -eq 0 ] && [ -z "${cannot_run[*]:-}" ] && [ -z "${ONLY:-}" ] && [ "${TESTS_ONLY:-0}" != "1" ]
+}
+
 # What a check found that does not block DONE (yet): <check>.warnings, as `   - [CODE] ...` lines.
 # "fix them anyway" sent sessions round extra full gates after DONE for warnings alone. Now a
-# warning rides along with the next real fix, and one left at DONE goes into the report.
+# warning rides along with the next real fix, and one left at DONE goes into the report -- and is labelled report-only there, with a closing
+# STOP BUILDING block (print_stop_building).
 # Every warning goes to .mxcli/warnings.txt; the output carries a short form of them. They were
 # up to 11k of a 26k gate output, re-read on every later turn of the session (B2B, 2026-10-12): while
 # a check fails, one line per step (how many, which codes); at DONE, four lines per step.
@@ -21,7 +27,14 @@ print_warnings() {
   mkdir -p .mxcli 2>/dev/null && : > .mxcli/warnings.txt 2>/dev/null
   for file in "$WORK"/*.warnings; do
     [ -s "$file" ] || continue
-    [ "$shown" = "0" ] && { echo; echo "== warnings (they do not block DONE; fix them together with your next fix, not in a gate run of their own -- level: block in a rule's card in tests/rulebook/ makes it block; all of them: .mxcli/warnings.txt)"; }
+    if [ "$shown" = "0" ]; then
+      echo
+      if gate_is_done; then
+        echo "== warnings -- REPORT ONLY: the gate is DONE, so do not fix these now; copy them into your report as \"to fix next\" (all of them: .mxcli/warnings.txt)"
+      else
+        echo "== warnings (they do not block DONE; fix them together with your next fix, not in a gate run of their own -- level: block in a rule's card in tests/rulebook/ makes it block; all of them: .mxcli/warnings.txt)"
+      fi
+    fi
     shown=1
     step="$(basename "$file" .warnings)"
     { echo "== $step"; cat "$file"; } >> .mxcli/warnings.txt 2>/dev/null
@@ -65,7 +78,7 @@ done_repeat_note() {
   key="$(fingerprint tests theme 2>/dev/null)" || return 0
   [ -n "$key" ] || return 0
   if [ -f "$file" ] && [ "$(cat "$file" 2>/dev/null)" = "$key" ]; then
-    echo "   Same model, tests and theme as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- change something before the next run."
+    echo "   Same model, tests and theme as the DONE at $(date -r "$file" +%H:%M 2>/dev/null || echo earlier): a repeat proves nothing new -- do not run the gate again."
   fi
   mkdir -p "$CACHE_DIR" 2>/dev/null && echo "$key" > "$file" 2>/dev/null
   return 0
@@ -79,10 +92,10 @@ captions_after_done() {
   [ -f "$CACHE_DIR/naming.flows.json" ] || return 0
   backlog="$(sed -n 's/.* \([0-9][0-9]*\) caption warning(s).*/\1/p' "$WORK/naming.summary" 2>/dev/null | head -1)"
   if [ ! -f "$CACHE_DIR/captions-baseline.json" ] && [ "${backlog:-0}" -gt 0 ]; then
-    echo "   Next: the app is done, so give its microflows their captions -- the ${backlog} caption warning(s) above."
-    echo "   Module by module (skill naming-and-captions): a business @caption on each action, a question"
-    echo "   on each decision, an @annotation on each loop. Then run the full gate once. From now on a"
-    echo "   microflow you add or change needs its captions before DONE; the older ones stay warnings."
+    echo "   To fix next, not now: the app is done, so list the ${backlog} caption warning(s) above in your report."
+    echo "   They are cleared module by module in a later session (skill naming-and-captions): a business"
+    echo "   @caption on each action, a question on each decision, an @annotation on each loop. From now on"
+    echo "   a microflow added or changed after this DONE needs its captions before DONE; the older ones stay warnings."
     WARNINGS_SHOWN=0
   fi
   cp "$CACHE_DIR/naming.flows.json" "$CACHE_DIR/captions-baseline.json" 2>/dev/null
@@ -133,17 +146,70 @@ refuse_after_red_only() {
   exit 1
 }
 
+# The last thing a full-gate DONE prints. Agents read the warnings above it as work (a Pi session
+# "cleaned up" 11 of them for 25 minutes after DONE, 2026-10-24): after DONE nothing is built.
+print_stop_building() {
+  echo "== DONE -- STOP BUILDING"
+  echo "   Do not edit the app. Do not run the gate again."
+  echo "   Write your final report now: what was built, how to sign in, the assumptions you made,"
+  echo "   and every warning or caption/coverage note above as \"to fix next\" -- copied, not fixed."
+}
+
+# Where the time went. A gate run is split into phases (setup, db-reset, boot, preflight, tests, visual,
+# checks-wait, microflow-tests, verdict, db-restore): phase_start closes the open one and opens the next.
+# The model checks run beside them, each with its own <step>.secs. On exit (cleanup_work, so every way
+# out of the gate is covered, and the line is the LAST one printed: `tail -5` keeps it) write_timing
+# prints one compact line and keeps the table in .mxcli/last-timing.txt. Nothing depends on it.
+phase_start() {
+  phase_stop
+  PHASE_NAME="$1"; PHASE_AT=$SECONDS
+}
+phase_stop() {
+  [ -n "${PHASE_NAME:-}" ] || return 0
+  [ -n "${WORK:-}" ] && [ -d "$WORK" ] && echo "$PHASE_NAME $((SECONDS - ${PHASE_AT:-$SECONDS}))" >> "$WORK/phases"
+  PHASE_NAME=""
+}
+# write_timing <exit status> -- the phases summed by name in the order they began, the checks that ran
+# in parallel, and the time no phase owns ("other"). Seconds, whole.
+write_timing() {
+  local status="${1:-0}" wall phases checks="" name table="" accounted other mode file
+  phase_stop
+  wall=$((SECONDS - GATE_START))
+  phases="$(awk '{ if (!($1 in sum)) order[++n] = $1; sum[$1] += $2 }
+                 END { for (i = 1; i <= n; i++) print order[i], sum[order[i]] }' "$WORK/phases" 2>/dev/null)"
+  accounted="$(printf '%s\n' "$phases" | awk '{ t += $2 } END { print t + 0 }')"
+  other=$((wall - accounted)); [ "$other" -gt 0 ] || other=0
+  for name in mx catalog coverage naming layout security scope paths folders unused; do
+    [ -f "$WORK/$name.secs" ] && checks="$checks $name $(cat "$WORK/$name.secs"),"
+  done
+  mode="full"
+  [ -n "${ONLY:-}" ] && mode="--only $ONLY"
+  [ "${TESTS_ONLY:-0}" = "1" ] && mode="--tests-only"
+  [ "${CHANGED:-0}" = "1" ] && mode="--changed"
+  # Whole seconds, zero phases left out of the printed line (the file has them all).
+  table="$(printf '%s\n' "$phases" | awk 'NF && $2 > 0 { printf "%s%s %s", (c++ ? ", " : ""), $1, $2 }')"
+  [ "$other" -ge 2 ] && table="${table:+$table, }other $other"
+  echo "   timing: wall ${wall}s [${mode}] -- ${table:-no phase over a second}${checks:+ | checks beside them:${checks%,}} (table: .mxcli/last-timing.txt)"
+  file=".mxcli/last-timing.txt"
+  [ -L "$file" ] && rm -f "$file"
+  mkdir -p .mxcli 2>/dev/null && {
+    printf '%s  %s  wall %ss  exit %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$mode" "$wall" "$status"
+    printf '%s\n' "$phases" | awk 'NF { printf "phase %-16s %ss\n", $1, $2 }'
+    printf 'phase %-16s %ss\n' other "$other"
+    for name in mx catalog coverage naming layout security scope paths folders unused; do
+      [ -f "$WORK/$name.secs" ] && printf 'check %-16s %ss (runs beside the phases)\n' "$name" "$(cat "$WORK/$name.secs")"
+    done
+  } > "$file" 2>/dev/null
+  return 0
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
-  local line name timing=""
+  local line name
   print_warnings
   echo
   echo "== gate"
   for line in "${summary[@]}"; do echo "   $line"; done
-  for name in tests mx catalog coverage naming layout security scope paths folders unused visual; do
-    [ -f "$WORK/$name.secs" ] && timing="$timing $name $(cat "$WORK/$name.secs")s,"
-  done
-  echo "   timing:${timing} wall $((SECONDS - GATE_START))s"
   if [ ${#failures[@]} -gt 0 ]; then
     echo "   NOT DONE — failed: ${failures[*]}"
     [ ${#cannot_run[@]} -eq 0 ] || echo "   and could not run: ${cannot_run[*]}"
@@ -153,6 +219,7 @@ print_verdict_and_exit() {
     print_blockers
     [ -n "$EARLY_CODES" ] && echo "   and the full gate would refuse $EARLY_CODES (== before DONE above)"
     record_last_gate "NOT DONE -- failed: ${failures[*]} ($(blocking_codes))"
+    print_do_this_next
     exit 1
   fi
   if [ ${#cannot_run[@]} -gt 0 ]; then
@@ -160,6 +227,7 @@ print_verdict_and_exit() {
     echo "   A check that did not run has not passed. Fix what stopped it, then run the gate again."
     print_failure_details
     record_last_gate "NOT DONE -- could not run: ${cannot_run[*]}"
+    print_do_this_next
     exit 2
   fi
   # A partial run passing is not the gate passing: `--only 000` once ended in the same DONE line
@@ -171,8 +239,11 @@ print_verdict_and_exit() {
     EARLY_CODES=""
     [ -n "${ONLY:-}" ] && print_early_blockers
     local coverage="${EARLY_COVERAGE:+; coverage open: $EARLY_COVERAGE}"
+    coverage="$coverage${EARLY_QUEUE:+; the brain queue holds $EARLY_QUEUE (promote or drop each: == before DONE)}"
     if [ -n "$EARLY_CODES" ]; then
       echo "   PASSED — $scope -- not DONE: the full gate would refuse $EARLY_CODES$coverage (== before DONE above); fix them before the full gate"
+    elif [ -n "$coverage" ] && [ -z "${EARLY_COVERAGE:-}" ]; then
+      echo "   PASSED — $scope -- not DONE: the full gate would refuse while the brain queue holds $EARLY_QUEUE -- promote or drop each (== before DONE above)"
     elif [ -n "$coverage" ]; then
       echo "   PASSED — $scope -- not DONE: the full gate would refuse what is untested$coverage (== before DONE above); write those tests first"
     else
@@ -187,10 +258,9 @@ print_verdict_and_exit() {
   record_last_gate "DONE$( [ -s .mxcli/warnings.txt ] && printf ' (%s warnings in .mxcli/warnings.txt)' "$(grep -cE '^[[:space:]]*- ' .mxcli/warnings.txt)")"
   done_repeat_note
   captions_after_done
+  declare -F phase_start >/dev/null && phase_start db-restore
   declare -F dbsnap_restore >/dev/null && dbsnap_restore
-  if [ "${WARNINGS_SHOWN:-0}" = "1" ]; then
-    echo "   The warnings above stay: do not run the gate again for them alone -- name each in your report as what to fix next."
-  fi
+  print_stop_building
   exit 0
 }
 
@@ -203,7 +273,7 @@ print_verdict_and_exit() {
 BLOCKERS_SHOWN=5
 
 print_blockers() {
-  local entry name label detail count shown pattern
+  local entry name label detail count shown pattern limit
   pattern='^[[:space:]]*- \[|\[error\]|^[[:space:]]*FAIL[[:space:]:]|^[[:space:]]+- '
   # Three sessions grepped tests/gate/*.sh for what a code required; the page says it in one line.
   # One file per step (tests/checks/), so a session reads the codes of what failed, not all of them.
@@ -227,12 +297,87 @@ print_blockers() {
       continue
     fi
     echo "   $label: $count"
-    grep -E "$pattern" "$detail" | head -"$BLOCKERS_SHOWN" \
+    # Red tests are all listed (the whole suite ran): fixing them one `--only` at a time was a weak model's loop.
+    limit="$BLOCKERS_SHOWN"; [ "$name" = "tests" ] && limit="${RED_TESTS_SHOWN:-30}"
+    grep -E "$pattern" "$detail" | head -"$limit" \
       | sed -E 's/^[[:space:]]*(- )?//' | cut -c1-260 | sed 's/^/     - /'
-    shown=$(( count < BLOCKERS_SHOWN ? count : BLOCKERS_SHOWN ))
+    shown=$(( count < limit ? count : limit ))
     [ "$count" -gt "$shown" ] && echo "     ... $((count - shown)) more under == $label above"
   done
   echo "   NOT DONE — failed: ${failures[*]}"
+}
+
+# fix_line_for <CODE> <step> -- one line saying how to fix a rule code: the "## Fix" paragraph of its card
+# (tests/rulebook/<step>/<CODE>.md), else the hint for an mx error code, else where to read.
+fix_line_for() {
+  local code="$1" step="$2" card line=""
+  for card in tests/rulebook/*/"$code".md; do
+    [ -f "$card" ] || continue
+    line="$(awk '/^## Fix/ { f = 1; next } /^## / { f = 0 } f && NF { print; exit }' "$card")"
+    break
+  done
+  if [ -z "$line" ] && declare -F mdl_ce_hints >/dev/null && [ -s "$WORK/$step.detail" ]; then
+    line="$(mdl_ce_hints "$WORK/$step.detail" | grep -m1 "hint $code" | sed -E 's/^ *hint [A-Za-z0-9]+[^:]*: *//')"
+  fi
+  [ -n "$line" ] || line="what it wants and the fix: tests/checks/$step.md"
+  printf '%s' "$line" | cut -c1-170
+}
+
+# The end of every NOT DONE output: at most three numbered steps, ordered by what unblocks most -- the
+# red tests (all of them are listed above), then the blocking rule codes grouped by code with one fix each,
+# then what is still untested. A weak model read a long gate result badly and fixed one finding per run.
+# The detail stays in the files; this is only the order to work in. Absent at DONE.
+print_do_this_next() {
+  local n=0 name label entry codes code count step fix shown=0 total reds
+  echo "== DO THIS NEXT"
+  reds=0
+  [ -s "$WORK/tests.reds" ] && reds="$(grep -c . "$WORK/tests.reds")"
+  if [ "${reds:-0}" -gt 0 ] && [ -z "${tests_environment:-}" ]; then
+    n=$((n + 1))
+    echo "   $n. Fix all $reds red test(s) listed under == still blocking DONE (full list: .mxcli/red-tests.txt)."
+    [ -s "$WORK/tests.detail" ] && grep -q 'first failure of the first red tests' "$WORK/tests.detail" \
+      && echo "      Why the first ones failed (the assertion, the line of the test, the page's text) is under == tests above: read it before running anything."
+    echo "      Check each with: bash tests/gate.sh --only <its name without the verify- prefix>; run the whole gate once at the end."
+  elif [ -n "${tests_environment:-}" ]; then
+    n=$((n + 1))
+    echo "   $n. The tests did not run for a reason outside the features (see !! not a feature failure above): fix that, then run the gate again."
+  fi
+  # Blocking codes, grouped: "<code> <count> <step>" most frequent first.
+  codes=""
+  for entry in ${details[@]+"${details[@]}"}; do
+    name="${entry%%|*}"
+    [ "$name" = "tests" ] && continue
+    [ -s "$WORK/$name.detail" ] || continue
+    codes="$codes$(grep -E '^[[:space:]]*- \[|\[error\]' "$WORK/$name.detail" | grep -oE '\[[A-Z]+[0-9]+\]' | tr -d '[]' | sed "s/\$/ $name/")
+"
+  done
+  codes="$(printf '%s' "$codes" | grep . | sort | uniq -c | sort -rn | awk '{print $2 " " $1 " " $3}')"
+  total="$(printf '%s\n' "$codes" | grep -c .)"
+  if [ "$total" -gt 0 ] && [ "$n" -lt 3 ]; then
+    n=$((n + 1))
+    echo "   $n. Fix the blocking rule codes, all findings of a code in one pass:"
+    while read -r code count step; do
+      [ -n "$code" ] || continue
+      [ "$shown" -lt 3 ] || break
+      shown=$((shown + 1))
+      echo "      $code x$count: $(fix_line_for "$code" "$step")"
+    done <<<"$codes"
+    [ "$total" -gt 3 ] && echo "      ... $((total - 3)) more code(s) under == still blocking DONE"
+  fi
+  if [ "$n" -lt 3 ]; then
+    for name in ${failures[@]+"${failures[@]}"}; do
+      [ "$name" = "coverage" ] || continue
+      n=$((n + 1))
+      echo "   $n. Close the coverage gaps: $(sed -n 's/^coverage FAIL *//p' "$WORK/coverage.summary" 2>/dev/null | head -1 | cut -c1-150) -- one test per untested element (tests/checks/coverage.md)."
+      break
+    done
+  fi
+  if [ "$n" -lt 3 ] && [ ${#cannot_run[@]} -gt 0 ]; then
+    n=$((n + 1))
+    echo "   $n. Fix what stopped ${cannot_run[*]} from running (see == above); a check that did not run has not passed."
+  fi
+  [ "$n" -gt 0 ] || echo "   1. Read the findings under == still blocking DONE above, fix them all in one pass, run the gate again."
+  return 0
 }
 
 # The cause of every failure, under the verdict: a session that reads only the last lines of

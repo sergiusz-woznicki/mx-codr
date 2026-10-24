@@ -41,10 +41,11 @@ record_applied() {
   [ -f tests/mdl-applied.sh ] || return 0
   . tests/mdl-applied.sh
   _applied=()
+  # Only what the command exec'd: a script it wrote or checked beside the exec has not applied.
   while IFS= read -r _word; do
     case "$_word" in *.mdl) _applied+=("$_word") ;; esac
   done <<HOOK_APPLIED
-$WORDS
+$(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" exec-scripts 2>/dev/null)
 HOOK_APPLIED
   mdl_applied_record ${_applied[@]+"${_applied[@]}"}
 }

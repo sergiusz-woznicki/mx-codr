@@ -34,6 +34,61 @@ const BINARY_SEARCH =
   "works: write it into a two-line script and run `./mxcli check <script>.mdl -p <App>.mpr --references`; " +
   "what it does at runtime: a test of the feature, `bash tests/gate.sh --only <feature>`."
 
+// `./mxcli brain resolve <id> "<answer>"` records the person's answer to an open question. In an
+// unattended run (MDL_REQUIREMENTS=assume) nobody answers: leave-l2 (2026-10-18) resolved its own
+// assumption after DONE, and the person's review queue came back empty. With a person in the chat
+// (ask), the agent writes their words down with it, so it stays allowed there.
+const SELF_RESOLVE =
+  "Blocked: `brain resolve` records the person's answer to an open question, and nobody answers in this run " +
+  "(MDL_REQUIREMENTS=assume in tests/harness.env). Leave the question open: the gate lists it for the person " +
+  "with your assumption. Name it in your report as an assumption for them to confirm or change."
+function requirementsMode(root) {
+  let mode = process.env.MDL_REQUIREMENTS || "ask"
+  try {
+    const text = require("fs").readFileSync(require("path").join(root || ".", "tests", "harness.env"), "utf8")
+    for (const m of text.matchAll(/^\s*MDL_REQUIREMENTS=["']?(\w+)["']?\s*$/gm)) mode = m[1]
+  } catch (e) { /* no harness.env: the environment, else ask */ }
+  return mode
+}
+function isSelfResolve(root, command) {
+  if (typeof command !== "string") return false
+  const resolves = command.split(/\|\||&&|[|;&\n]/).some((part) => /(^|[\s\/])mxcli(\.exe)?\s+(?:-p\s+\S+\s+)?brain\s+resolve\b/.test(part))
+  return resolves && requirementsMode(root) === "assume"
+}
+
+// Marketplace widgets come only from Mendix or Mendixlabs (the person's rule, 2026-10-19): a
+// community or partner widget is theirs to choose. `marketplace install <id>` of a widget, or of a
+// module in the User Interface category (the Calendar is one), is checked with `marketplace info`;
+// when that cannot answer (no login, no network) the install goes ahead and says the same itself.
+// `install --file <x.mpk>` names no publisher and is not checked.
+const WIDGET_PUBLISHERS = /^(?:mendix|mendixlabs|mendix labs)$/i
+function marketplaceInfo(root, id) {
+  const mxcli = ["mxcli", "mxcli.exe"].map((n) => require("path").join(root || ".", n)).find((f) => require("fs").existsSync(f))
+  if (!mxcli) return null
+  const r = require("child_process").spawnSync(mxcli, ["marketplace", "info", String(id), "--json"], { cwd: root || ".", encoding: "utf8", timeout: 30000 })
+  const text = String(r.stdout || "")
+  try { return JSON.parse(text.slice(text.indexOf("{"))) } catch (e) { return null }
+}
+function widgetPublisherBlock(root, command, info = marketplaceInfo) {
+  if (typeof command !== "string") return null
+  for (const part of command.split(/\|\||&&|[|;&\n]/)) {
+    const m = /(?:^|[\s\/])mxcli(?:\.exe)?\s+(?:-p\s+\S+\s+)?marketplace\s+install\s+(\d+)\b/.exec(part)
+    if (!m) continue
+    const item = info(root, m[1])
+    if (!item || !item.publisher) continue
+    const ui = item.type === "Widget" || (item.categories || []).some((c) => /user interface/i.test(c && c.name || ""))
+    if (!ui || WIDGET_PUBLISHERS.test(String(item.publisher).trim())) continue
+    const name = (item.latestVersion && item.latestVersion.name) || item.name || "that widget"
+    return (
+      `Blocked: ${name} (${m[1]}) is published by ${item.publisher}` + (item.supportCategory ? ` (${item.supportCategory} support)` : "") +
+      ". Marketplace widgets here come only from Mendix or Mendixlabs: search again (`./mxcli marketplace search \"<what>\"`) " +
+      "and take one whose publisher is Mendix or Mendixlabs. When none does what the person asked, say so in the final report: " +
+      "a widget from another publisher is the person's decision."
+    )
+  }
+  return null
+}
+
 // The command searches or dumps the mxcli program file itself: one of the files it reads is mxcli.
 // For grep and its kin the first word that is not an option is the pattern (`grep mxcli tests/x.sh`
 // looks for the word, and passes), unless -e or -f gives it; strings, xxd, hexdump and od read every
@@ -179,11 +234,24 @@ function scriptWrittenBeforeExec(command, scripts) {
   const redirected = (script) => new RegExp(">>?\\s*\\S*" + name(script).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).test(before)
   const hit = scripts.find((script) => redirected(script) || (WRITES_BEFORE_EXEC.test(before) && mentions(script)))
   if (!hit) return null
+  const [written, target] = writtenAndTarget(hit, command.slice(m.index), before)
   return (
-    "Blocked: a step before the exec writes " + hit + " (an edit, a move or a new file), and the " +
+    "Blocked: a step before the exec writes " + written + " (an edit, a move or a new file), and the " +
     "precheck runs before the command -- it would check the old file, or none. Nothing in this " +
-    "command ran. Run that step on its own, then `./mxcli exec " + hit + "` as its own command."
+    "command ran. Run that step on its own, then `./mxcli exec " + target + "` as its own command."
   )
+}
+
+// The script as the message names it, and the one to exec afterwards. The hit is any .mdl word of
+// the command: `p='mdlsource/x.mdl'` in a python edit, or the source of a `cp`/`mv`. Told to exec
+// `p=mdlsource/x.mdl` or `/tmp/x.mdl`, a leave-request session did neither (2026-10-18): the exec
+// to repeat is the one the command ran.
+function writtenAndTarget(hit, fromExec, before = "") {
+  const cleaned = hit.replace(/^[A-Za-z_]\w*=/, "").replace(/^["']|["']$/g, "")
+  const words = fromExec.split(/\s*(?:&&|\|\||[;|\n])\s*/)[0].match(/"[^"]*"|'[^']*'|\S+/g) || []
+  const target = words.map((w) => w.replace(/^["']|["']$/g, "")).find((w, i) => i > 1 && w.endsWith(".mdl"))
+  // `cp /tmp/x.mdl mdlsource/x.mdl` writes the exec's script, not the one it copies.
+  return [target && before.includes(target) ? target : cleaned, target || cleaned]
 }
 
 // `$PWD/mdlsource/x.mdl` is the project itself, not a loop variable.
@@ -234,7 +302,7 @@ function mdlScripts(command) {
 
 module.exports = {
   GUARD_WORDS, mayTouchHarness,
-  SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, HARNESS_SOURCE, readsHarnessSource,
+  SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, SELF_RESOLVE, isSelfResolve, widgetPublisherBlock, HARNESS_SOURCE, readsHarnessSource,
   newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED,
-  scriptWrittenBeforeExec, resolvePwd, EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts,
+  scriptWrittenBeforeExec, writtenAndTarget, resolvePwd, EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts,
 }

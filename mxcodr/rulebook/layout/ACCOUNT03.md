@@ -8,7 +8,7 @@ key: none
 # ACCOUNT03 — every signing-in role has Administration.User
 
 ## What it checks
-With login: every role that logs in includes the Administration module's User role, and some role can manage users.
+With login: every role that logs in includes the Administration module's User role, and some role can manage users. Required whatever the request lists.
 
 ## Fix
 Add Administration.User to the user role.

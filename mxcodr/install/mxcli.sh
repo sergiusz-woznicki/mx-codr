@@ -30,7 +30,7 @@ mxcli_release_url() {
     *)             arch=amd64 ;;
   esac
   printf 'https://github.com/mendixlabs/mxcli/releases/download/%s/mxcli-%s-%s%s\n' \
-    "$(mxcli_compat_tag || echo v0.27.0)" "$os" "$arch" "$EXE"
+    "$(mxcli_compat_tag || echo v0.28.0)" "$os" "$arch" "$EXE"
 }
 
 # sha256_of <file> -- the file's SHA-256, or nothing; never fails. Git for Windows has

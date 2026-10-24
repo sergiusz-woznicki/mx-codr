@@ -74,6 +74,8 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   in one `.mdl`: a `show page` in a microflow may name a page the script creates further down. A
   button on a page may not, and neither may a `call microflow`: create the page it opens or the
   microflow it calls first (`references page ... before it is created`). `--no-check` does not pass.
+  A `create or modify navigation` is refused the same way (0.28) when its home page, role home or a menu item
+  names a page or flow that does not exist yet: it goes after them in the script.
 - **Model changes go through a `.mdl` file** and `./mxcli exec`: `mxcli -c "grant ..."` is checked
   like a script, and one broken inline rule used to block every later exec.
 - **A scenario's result must be captured**: `result=$(scenario '...')`, then `field "$result" x`.
@@ -113,12 +115,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   their own rows does not reach what the microflow retrieves. Constrain the retrieve itself --
   `where [Mod.Invoice_Customer = $SignedInCustomer]` or the `'[%CurrentUser%]'` path (gate `SCOPE01`).
 - **A business event is published through a Java action of your own**: `BusinessEvents.PublishBusinessEvent_V2`
-  takes its Subject as a text template, which mxcli (0.26, 0.27) writes wrong (CE0115). Declare a wrapper and call it:
+  takes its Subject as a text template, which mxcli (0.26 - 0.28) writes wrong (CE0115). Declare a wrapper and call it:
   `create or modify java action Mod.JA_PublishEvent(EntityType: entity <pEvent> not null, Event: pEvent not null,`
   `ServiceName: string not null, EventName: string not null, Channel: string not null, Subject: string not null)`
   `returns boolean as $$ ... new businessevents.actions.PublishBusinessEvent(getContext(), ServiceName, "<app>",`
   `Channel, template, EventName, Event).executeAction(); return true; $$;` (the template: a
   `java.lang.reflect.Proxy` for `IStringTemplate` whose `toString` returns Subject). A log line is not a publish.
 - **An agent is called through AgentCommons**: `AgentEditorCommons.Agent_CallDocument_*` picks the agent
-  document in an argument mxcli (0.26, 0.27) cannot write (CE0115). `retrieve $Agent from AgentCommons."Agent" where
+  document in an argument mxcli (0.26 - 0.28) cannot write (CE0115). `retrieve $Agent from AgentCommons."Agent" where
   [_QualifiedName = 'Mod.MyAgent'] first;` then `$Response = call java action AgentCommons.Agent_Call_WithoutHistory(Agent = $Agent, OptionalContextObject = $Context);`.

@@ -21,10 +21,11 @@ the device; a test picks it by name.
 - **Menu items for user management stay on the online profile.** ACCOUNT01/02 do not ask an
   offline profile for them: they would make the Administration pages reachable offline.
 - The profile needs **Progressive web app** settings, or no service worker registers and no page
-  opens offline (OFFLINE01). mxcli (v0.27 and before) creates offline profiles without them, and Studio Pro shows
-  them greyed out for an offline profile, so they cannot be set afterwards: stop and ask the person
-  to delete the profile in Studio Pro and add it again there, then re-apply its home pages, menu and
-  sync with `create or modify navigation` (that leaves the settings alone).
+  opens offline (OFFLINE01). Write them with the statement that creates the profile:
+  `create or modify navigation PhoneOffline home page ... progressive web app ( Precaching: true ) sync ( ... ) { ... };`.
+  mxcli 0.28 warns at `exec` when an offline profile lacks the clause; an existing profile gets it with
+  `create or modify navigation <Profile> progressive web app ( Precaching: true );` (the clause alone
+  leaves the rest alone). mxcli 0.27 and before had no syntax for it.
 - **Strict mode on Mendix before 11.12.5** breaks every client commit of a synced object: the
   offline save fails with `mx.data.commit is disabled`. There, and only there, turn it off
   (`alter app security ( StrictMode: FALSE );`): STRICT01 then warns instead of blocking. Say in the

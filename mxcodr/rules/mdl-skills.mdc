@@ -6,21 +6,20 @@ alwaysApply: true
 # Project rules that are always in force
 
 This project's own skills live in `.claude/skills/`, beside the mxcli skills `AGENTS.md` lists.
-Read **one** up front: `test-first-delivery`, before the first feature. The others are named
-by the check that needs them -- a `layout` finding says `spacing-and-layout`, a `folders` finding
-`module-structure` or `reuse-and-snippets`, a `naming` finding `naming-and-captions` -- and
-each finding already carries its fix, so read a skill when a finding names it, one file per
-command, not all of them at the start. Uploads, photos or documents: `files-and-images` first.
+Read **one** up front: `test-first-delivery`, before the first feature (`START HERE`: `requirements-interview` first). The others are named
+by the check that needs them -- `layout` says `spacing-and-layout`, `folders`
+`module-structure` or `reuse-and-snippets`, `naming` `naming-and-captions` -- and
+each finding already carries its fix, so read a skill only when a finding names it. Uploads, photos, documents: `files-and-images`.
 
-`requirements: assume` in `orient.sh`: nobody answers, so never end a turn on a plan or question.
+`requirements: assume` in `orient.sh`: nobody answers, so never end a turn on a plan or question. What the gate requires (account menu, log out, icons, URLs) is no extra, even if the request says "only".
 
-Facts about this app come from one call, not from exploring by hand:
+Facts about this app: one call, no exploring:
 
 ```bash
-bash tests/orient.sh                            # structure, security, navigation, tests + covers, coverage, app state
-bash tests/diagnose.sh <Entity> <user>          # row counts, sessions, access rules, associations, runtime errors
+bash tests/orient.sh                            # structure, security, navigation, tests, coverage, app state
+bash tests/diagnose.sh <Entity> <user>          # row counts, sessions, access, associations, runtime errors
 bash tests/peek.sh '<menu item>' [widget]       # a page's visible text and console errors -- writes no test
-bash tests/film.sh --list | <name> | --all        # a video of a test's run; --all in the background (skill film-tests)
+bash tests/film.sh --list | <name> | --all        # a video of a test's run (skill film-tests)
 ```
 
 To look at a page, use `tests/peek.sh` -- never a throwaway script or `verify-zz-*` test of
@@ -33,14 +32,11 @@ bash tests/gate.sh --restart                 # the one way to restart; --stop th
 bash tests/gate.sh                           # "done" is this ending in DONE; --only ends in PASSED, never DONE
 ```
 
-The gate boots, restarts and waits by itself: never boot the app or run `mxcli test` by hand.
+The gate boots, restarts and waits itself: never boot the app or run `mxcli test` by hand.
 Never wrap a harness command in `timeout`. Never hand-roll a wait for the app. Microflow tests (`*.test.mdl`) run in
 the full gate (MFTEST01); coverage counts only `tests/verify-*.test.sh`.
 
-**What each check code wants, and its fix: `tests/checks/<step>.md`**, named by the gate for the failed step; `tests/CHECKS.md` says which file holds a code (`USER01`,
-`UI001`, `SCRIPT01`, `VIS01`). Each
-rule is a card, `tests/rulebook/<group>/<CODE>.md`; its level and exceptions are the person's. Read
-that, never `tests/gate/*.sh` or the checkers: the page says in one line what a code requires.
+**What each check code wants, and its fix: `tests/checks/<step>.md`**, named by the gate for the failed step; `tests/CHECKS.md` says which file holds a code. Each rule is a card, `tests/rulebook/<group>/<CODE>.md`; its level and exceptions are the person's. Read that, never `tests/gate/*.sh` or the checkers.
 
 **The syntax digest is already in your context** under Claude Code, Cursor, OpenCode and Pi
 (elsewhere: `cat tools/mdl-checks/syntax-digest.md` once). It holds the
@@ -101,7 +97,8 @@ Users who sign in need no login screen of your own:
   Marketplace module.
 - **Tests sign in as that user:** `export TEST_USER=demo_customer` before sourcing `tests/lib.sh`,
   and `TEST_PASSWORD_demo_customer=...` in `tests/credentials.env`. End your DONE report with
-  the gate's `== for the person` block, as printed.
+  the gate's `== for the person` block, as printed. After DONE edit nothing;
+  warnings are "to fix next".
 
 Three names are reserved by the platform and quoting does not help:
 **`Owner`, `Type`, `Default`** -- rename them (CE7247 at boot; `./mxcli syntax keywords`, skill `check-syntax`).
@@ -120,8 +117,7 @@ editing them and setting a gate switch inline. When a check stands in your way, 
 report it.
 
 **Ask before any git command that writes** (`init`, `add`, `commit`, `checkout`, `branch`,
-`merge`, `reset`, `stash`, `clean`, `push`), here and in any other folder; reading (`git status`,
-`git log`, `git diff`) is free.
+`merge`, `reset`, `stash`, `clean`, `push`), here and in any other folder; reading (`git status`, `git log`, `git diff`) is free.
 
 When you record a decision in the project brain, carry what proved it -- the error message, the
 command, the measurement; a guess is written as one. On Windows the binary is `./mxcli.exe`;

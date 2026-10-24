@@ -11,7 +11,7 @@ key: document
 No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it.
 
 ## Fix
-The `drop` lines given, plus its `mdlsource/` source and `# covers:` name; to keep one: `except:` in ## Local.
+The `drop` lines given, plus its source and `# covers:` name; to keep one: `except:` in ## Local.
 
 ## Local
 # level: block

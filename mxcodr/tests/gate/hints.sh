@@ -24,7 +24,7 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
                 echo "   hint CE1613 in an access rule: an XPath path alternates association and entity, ending on the association to the user, and the token is quoted whole: where '[Mod.Invoice_Customer/Mod.Customer/Mod.Customer_Account = ''[%CurrentUser%]'']' -- 'selected entity Mod.X_Y no longer exists' means an association stands where an entity step belongs. Skill: xpath-constraints"
               fi ;;
       # Three B2B runs in a row lost the OrderShipped publish and the AI agent call to this (2026-10-15):
-      # mxcli 0.26 and 0.27 write a StringTemplate argument and an agent-document argument as plain expressions.
+      # mxcli 0.26 - 0.28 write a StringTemplate argument and an agent-document argument as plain expressions.
       CE0115)
         local known=""
         if grep -q "CE0115.*Java action 'BusinessEvents\.PublishBusinessEvent" "$1" 2>/dev/null; then known=1
@@ -34,7 +34,7 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
           echo "   hint CE0115 AgentEditorCommons.Agent_CallDocument_*: its Agent argument picks a document, which mxcli cannot write yet -- retrieve the agent object and call AgentCommons.Agent_Call_WithoutHistory(Agent = \$Agent, OptionalContextObject = \$Context) (pitfalls: 'An agent is called through AgentCommons')"
         fi
         if [ -z "$known" ]; then
-          echo "   hint CE0115: the call's arguments do not match the action's parameters -- DESCRIBE the action and pass exactly its parameter names; a text-template or document parameter cannot be written by mxcli 0.26 (wrap the action in one of your own)"
+          echo "   hint CE0115: the call's arguments do not match the action's parameters -- DESCRIBE the action and pass exactly its parameter names; a text-template or document parameter cannot be written by mxcli 0.26 - 0.28 (wrap the action in one of your own)"
         fi ;;
       CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
       CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;

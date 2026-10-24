@@ -5,13 +5,13 @@ check: layout_rules/accounts.cjs#accountFindings
 key: none
 ---
 
-# ACCOUNT01 — a Users menu item for administrators
+# ACCOUNT01 — a Users menu item
 
 ## What it checks
-With login: administrators have a "Users" menu item to manage accounts.
+With login: administrators have a "Users" menu item to manage accounts. It is required even when the request lists the menu or says "only": it is not an extra.
 
 ## Fix
-`menu item 'Users'` showing `Administration.Account_Overview`.
+Always required: `menu item 'Users'` showing `Administration.Account_Overview`.
 
 ## Local
 # level: block

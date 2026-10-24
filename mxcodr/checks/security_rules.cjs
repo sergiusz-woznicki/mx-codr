@@ -15,6 +15,9 @@
 //            "visibility does not equal security")
 //   SQL01    a microflow builds a SQL or OQL statement by concatenating a variable ("use prepared
 //            statements", "avoid injection")
+//   DEMO01   demo users are off, or a user role of the app's own modules has none: the person cannot sign
+//            in as each role to try the app, and the tests sign in as them (b2b-f4, 2026-10-16: a request
+//            for "real accounts" turned them off and nothing said so)
 // Warnings:
 //   EXTENDS01 an entity specialises System.User or Administration.Account ("do not combine business
 //            information with the end-user by specialising System.User"; link them 1-1)
@@ -91,6 +94,7 @@ function projectSecurity(text) {
     strict: /^true$/i.test(field(/Strict Mode:\s*(.+)/i)),
     guest: /^true$/i.test(field(/Guest Access:\s*(.+)/i)),
     guestRole: field(/Guest (?:User )?Role:\s*(.+)/i),
+    demo: /^true$/i.test(field(/Demo Users Enabled:\s*(.+)/i)),
     admin: field(/Admin User:\s*(.+)/i),
     minLength: parseInt(field(/Minimum Length:\s*(\d+)/i) || '0', 10),
     digit: /^true$/i.test(field(/Require Digit:\s*(.+)/i)),
@@ -342,7 +346,28 @@ function pwd01({ sec, add }) {
   }
 }
 
-const RULES = [cred01, strict01, anon01, filter01, sql01, extends01, admin01, xss01, write01, pwd01];
+// DEMO01: demo users are on, and every user role of the app's own modules but the guest's has one.
+// A model without demoUsers (a caller that did not read them) is not judged.
+function demo01({ model, sec, mine, add }) {
+  if (!Array.isArray(model.demoUsers) || !sec.level || /^off/i.test(sec.level)) return;
+  const how = "create demo user 'demo_<role>' ( Password: '<12+ characters, a digit, mixed case>', Entity: Administration.Account, " +
+    'UserRoles: (<Role>) ); and its TEST_PASSWORD_demo_<role>= line in tests/credentials.env';
+  if (!sec.demo) {
+    add('DEMO01', true, 'demo users are off: the person has no account per role to sign in with and try the app, and the tests ' +
+      'sign in as them. They sit beside real accounts and the login page: a request for real sign-in or real accounts replaces ' +
+      'a role picker of your own, never the demo users; switching them off is the person\'s step before go-live. Turn them on: ' +
+      `alter app security ( EnableDemoUsers: TRUE ); then, for each user role without one, ${how}`);
+    return;
+  }
+  const covered = new Set(model.demoUsers.flatMap(u => u.roles));
+  for (const [role, moduleRoles] of Object.entries(model.moduleRoles)) {
+    if (role === sec.guestRole || covered.has(role) || !moduleRoles.some(mine)) continue;
+    add('DEMO01', true, `user role ${role} has no demo user: the person cannot sign in as a ${role} to try what that role ` +
+      `sees, and no test can. ${how.replace(/<role>/g, role.toLowerCase()).replace('<Role>', role)}`, role);
+  }
+}
+
+const RULES = [cred01, strict01, anon01, filter01, sql01, extends01, admin01, xss01, write01, pwd01, demo01];
 
 // Mendix before 11.12.5 sends an offline app's client commits through mx.data, which strict mode
 // disables (release notes 11.12.5: "Strict mode did not work correctly with certain Client APIs and
@@ -363,11 +388,16 @@ function readModel(appDir, mpr, read = mxcli) {
   const associations = read(appDir, mpr, 'SELECT QualifiedName FROM CATALOG.ASSOCIATIONS', true);
   const security = projectSecurity(read(appDir, mpr, 'show project security;'));
   const moduleRoles = moduleRolesOf(appDir, mpr, read);
+  // DEMO01: mxcli lists none while demo users are off, and projectSecurity says so first.
+  const demoUsers = read(appDir, mpr, 'SHOW DEMO USERS', true).map(r => ({
+    name: r['User Name'] || r.UserName || r.Name || '',
+    roles: String(r['User Roles'] || r.UserRoles || '').split(/[,\s]+/).filter(Boolean),
+  })).filter(u => u.name);
   // STRICT01 only: the Mendix version and the offline profiles; a read that fails leaves STRICT01 blocking.
   let version = '', offline = [];
   try { version = (/Mendix Version:\s*(\S+)/.exec(read(appDir, mpr, 'show version;')) || [])[1] || ''; } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
   try { offline = [...offlineProfiles(read(appDir, mpr, 'describe navigation;')).keys()]; } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
-  return { sources, permissions, constants, associations, security, moduleRoles, version, offline };
+  return { sources, permissions, constants, associations, security, moduleRoles, demoUsers, version, offline };
 }
 
 function main() {

@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.17.3 · mxcli v0.27.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.25.1 · mxcli v0.28.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -205,7 +205,7 @@ html { scroll-behavior: smooth; }
     <div class="step">
       <h3>The tools</h3>
       <ul class="items">
-        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.27.0), checksum-verified.</li>
+        <li>mxcli: the one release the harness is tested with (<code>MXCLI_TESTED</code>, v0.28.0), checksum-verified.</li>
         <li>Node, playwright-cli and its browser, MxBuild for <code>mx check</code>, PostgreSQL; Docker only in Docker mode.</li>
         <li>On Windows: Git for Windows, the junctions and the ARM64 fixes Studio Pro's mxbuild needs and, for Mendix 11.15, Studio Pro's own Gradle 9.5.1, JDK 25 and rspack bundler.</li>
         <li>What needs a person (a JDK, starting a Docker daemon) is listed with the command to run.</li>
@@ -284,10 +284,11 @@ html { scroll-behavior: smooth; }
   <div class="step">
     <div class="step-head"><h3>Before <code>mxcli exec</code></h3><span class="file">before-mxcli-exec → tests/precheck.sh</span></div>
     <ul class="items">
-      <li>Applies the script to a scratch copy and runs <code>mx check</code> there. A script that fails, or one that would add build errors, is refused; the real model is untouched.</li>
+      <li>Applies the script to a scratch copy and runs <code>mx check</code> there. A script that fails, or one that would add build errors, is refused; the real model is untouched. The errors the model already had are checked once per model and kept for an hour, so fixing a refused script and trying again costs one check, not two.</li>
     </ul>
     <dl class="codes-list">
       <dt class="b">SCRIPT01</dt><dd>The same document is created in two scripts: whichever runs last wins. The hint offers <code>alter</code> only for the kinds mxcli can alter.</dd>
+      <dt class="b">SCRIPT02</dt><dd>A <code>drop user role</code> the build cannot take: the role Administrator (the built-in administrator's; mxbuild stops with a NullReference and <code>mx check</code> says 0 errors) or a role a demo user still holds (CE1613). Read from the script and <code>SHOW DEMO USERS</code> in half a second, before the 20-40 s check on a copy.</dd>
       <dt class="b">STALE01</dt><dd>Re-running an old script would undo later changes to its pages and flows.</dd>
       <dt class="b">TEST01</dt><dd>A new page or <code>ACT_</code> microflow that no test names yet: the test comes first.</dd>
     </dl>
@@ -296,7 +297,7 @@ html { scroll-behavior: smooth; }
     <div class="step-head"><h3>After <code>mxcli exec</code></h3><span class="file">after-mxcli-exec</span></div>
     <ul class="items">
       <li>Says whether a restart is needed and shows the coverage gaps.</li>
-      <li>Records which script was applied, so STALE01 can compare later.</li>
+      <li>Records which script was applied, so STALE01 can compare later: only the one the command exec'd, not a script it wrote or checked beside it.</li>
     </ul>
     <dl class="codes-list">
       <dt class="b">REQ01</dt><dd>The first pages of an app are built before any requirement is recorded: record one per testable statement of the request first (skill <code>requirements-interview</code>).</dd>
@@ -308,7 +309,7 @@ html { scroll-behavior: smooth; }
   </div>
   <div class="step">
     <div class="step-head"><h3>On every tool call</h3><span class="file">guard-harness-env</span></div>
-    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline.</li></ul>
+    <ul class="items"><li>The session may not change what judges it: no editing harness files or <code>tests/harness.env</code>, no gate switch set inline, no rewriting a baseline. In an unattended run (nobody answers the interview) the agent may not <code>brain resolve</code> its own open questions: they wait for the person. A Marketplace widget (or a User Interface module) is installed only when its publisher is Mendix or Mendixlabs; any other is the person's decision.</li></ul>
   </div>
 </section>
 
@@ -316,9 +317,9 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">117</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">72</span><span class="t">always stop DONE</span></div>
-    <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
+    <div class="count"><span class="n">119</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">73</span><span class="t">always stop DONE</span></div>
+    <div class="count b"><span class="n">6</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">6</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">33</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
@@ -335,10 +336,12 @@ html { scroll-behavior: smooth; }
     <tbody>
       <tr><td><code>precheck</code></td><td>The script is run on a copy of the app first. If it stops halfway, or if Studio Pro would show new errors afterwards, it is refused. The app is never left half-changed.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SCRIPT01</code></td><td>Each page, microflow, entity or constant is created in only one script in <code>mdlsource/</code>. If two scripts both create the same page, running the older one again silently throws away the newer version. One-off repair scripts kept elsewhere are not compared.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCRIPT02</code></td><td>A script does not drop a user role something still needs: the role Administrator (the built-in administrator's -- the build then stops with a NullReference that Mendix's check does not see and the app does not boot) or a role a demo user still holds. A script that creates the role again, or drops or creates the demo user, passes.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>STALE01</code></td><td>An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TEST01</code></td><td>Test first: before a new page or a new <code>ACT_</code> microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REQ01</code></td><td>Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REQ03</code></td><td>A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What is not built yet is recorded as well, so the next session's orient.sh lists it as open.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCOPE02</code></td><td>The approved requirements are the scope of the first build: a new page or <code>ACT_</code> microflow must serve one (a requirement anchors it, or a test that names a requirement covers it), or the exec is refused with the way out: leave it out and list it under "to add next" in the report. The home and login pages and seed flows are never flagged; nothing is checked while no requirement is recorded or after the first DONE (REQ03 takes over). Where nobody answers (<code>requirements: assume</code>) the scope is frozen too: from the first promoted requirement until DONE a new <code>brain capture</code> of a requirement is refused, and so is one that asks for a dashboard, totals, tiles, charts or a report in words the request never used.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -370,12 +373,14 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>OUTCOME01</code></td><td>Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested. Another form of the word counts (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested, and so does a step that only reads the model back (<code>describe</code>, <code>show</code>, a catalog query). Another form of the word counts (colour, color). When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCOPE03</code></td><td>On the finished app: every page and <code>ACT_</code> microflow serves an approved requirement (anchored, covered by a test that names one, or reached from such a document), and a helper entity for totals or a summary is named by a requirement or needed by a page one anchors. Lists what grew past the requirements, for the report.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>WF01</code></td><td>A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>WF02</code></td><td>Every outcome of every workflow task (approve, reject…) is chosen in a test, and the test logs in as both people: the one who starts the workflow and the one who decides.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ISO01</code></td><td>When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ROLE01</code></td><td>Every demo user's role is used by at least one test.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SVC01</code></td><td>Every published REST or OData service is called by a test.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TIMER01</code></td><td>What happens on a schedule or after a wait (a scheduled event, a workflow timer that escalates a task) is done by a microflow a test runs: a microflow test calls it, or a browser test starts it by hand and names it on its <code># covers:</code> line. A test cannot wait three days.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -422,9 +427,9 @@ html { scroll-behavior: smooth; }
       <tr><td><code>NAV05</code></td><td>Every menu item has an icon.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>NAV06</code></td><td>No two menu items that the same user can see have the same icon.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>HOME01</code></td><td>With login: administrators start on a page of the app itself, not on a template page.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>ACCOUNT01</code></td><td>With login: administrators have a "Users" menu item to manage accounts.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>ACCOUNT02</code></td><td>With login: everyone has a "My account" menu item to change their own password. Not asked of an offline profile, where the Administration pages cannot be reached.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>ACCOUNT03</code></td><td>With login: every role that logs in includes the Administration module's User role, and some role can manage users.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT01</code></td><td>With login: administrators have a "Users" menu item to manage accounts. Required even when the request lists the menu or says "only": it is not an extra.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT02</code></td><td>With login: everyone has a "My account" menu item to change their own password. Required even when the request lists the menu or says "only": it is not an extra. Not asked of an offline profile, where the Administration pages cannot be reached.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>ACCOUNT03</code></td><td>With login: every role that logs in includes the Administration module's User role, and some role can manage users. Required whatever the request lists.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>MODULE01</code></td><td>The empty <code>MyFirstModule</code> from the Mendix template is deleted once the app has its own module. The finding lists what still uses it.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>USER01</code></td><td>With login: every page shows who is signed in, top right. Pop-ups and the login page don't need it. On a phone or tablet page PHONE06 checks it, in the title's row.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>BACK01</code></td><td>A page opened from another page has a Back button, top left. Pop-ups don't need one: they close with their X.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -453,7 +458,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>NAME02</code></td><td>Every widget is named after its page, what it is for and its type, in full words, like <code>OrderDetail_GenerateInvoiceButton</code>. Tests find widgets by these names. Checked before each exec; a page the app already had at install is only warned about.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ALERT01</code></td><td>Points out an alert or card style put on a plain text, where it renders badly. Put it on a container around the text.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>HEAD01</code></td><td>Points out a page without a heading.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli (v0.27 and before) creates offline profiles without them, and Studio Pro shows them greyed out, so the person deletes the profile and adds it again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>OFFLINE01</code></td><td>An offline profile (a PWA that works without a network) gets a service worker. Without Progressive web app settings Mendix registers none, and no page opens offline. mxcli 0.28 writes them with the <code>progressive web app</code> clause of <code>create or modify navigation</code>; 0.27 and before had no syntax, and Studio Pro shows them greyed out, so a profile written there had to be deleted and added again in Studio Pro.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>OFFLINE02</code></td><td>An offline profile synchronizes the entities its pages show. Without a sync mode the device downloads nothing and shows an empty app.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>OFFLINE03</code></td><td>An app with an offline profile has a test that cuts the network, does the work, checks the server has nothing yet, then syncs and checks it arrived.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PHONE01</code></td><td>A phone or tablet page shows the app's own menu, not Atlas's template menu (Home, Layouts, Templates, Widgets) whose items do nothing.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -488,6 +493,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>FILTER01</code></td><td>If a page shows a user only their own records (with <code>[%CurrentUser%]</code> in its XPath), the entity's access rule limits them the same way. A filter on a page is not security: another page or the browser could still read everything.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>VIEW01</code></td><td>A role that may only see its own records cannot read a view entity that adds up everybody's records, like a total of all customers' invoices.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SQL01</code></td><td>No microflow builds a database query by gluing text and a variable together. Whoever controls the variable controls the query (SQL injection).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>DEMO01</code></td><td>Demo users are on, and every user role of the app has at least one: they are how you sign in as each role to try the app, and how the tests sign in. A request for real sign-in replaces a role picker the app built itself, never the demo users. Switching them off is your step before go-live.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEC007</code></td><td>Anonymous users cannot read all records of an entity: the access rule needs an XPath that limits them (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SCOPE01</code></td><td>Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>WRITE01</code></td><td>Points out a role that may change fields only the system should set, like a total or a status. The finding names the fields to remove and the associations to keep.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -509,11 +515,12 @@ html { scroll-behavior: smooth; }
       <tr><td><code>STARTUP01</code></td><td>The microflow the app runs at startup returns true on every path. Mendix stops the app when it returns false, so a seed that returns false once its rows exist starts once and fails every restart after (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>PUBLISH01</code></td><td>A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEED01</code></td><td>A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ASKED01</code></td><td>The request asks for a calendar, a map or a chart, and a page shows that widget: a dated list in place of a calendar is a simplification nobody agreed to. Install one published by Mendix or Mendixlabs, or say in the report why not.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
   <h3 id="g-mxcli-lint">Advice from mxcli's linter</h3>
-  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the ten that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
+  <p class="intro">Each of mxcli's lint rules has its own card in <code>tests/rulebook/lint/</code>, with a level decided once for all of them (2026-10-15): a warning for the twelve that add something mx-codr does not check itself, off for the rest, each card saying why (another rule already checks it, mx check blocks it, or it does not fit how these apps are built). The catalog step runs <code>mxcli lint</code> and shows the findings in the app's own modules at their card's level; Marketplace modules are left alone. The person changes a level or excepts a document under <code>## Local</code> in the card. A rule a newer mxcli adds has no card yet and falls under LINT01 (off) until it gets one: every mxcli upgrade checks the list. MOD001 and REU001 are lint rules mx-codr ships; UI001 and SEC007 began as lint rules and are checked by the catalog step itself.</p>
   <div class="table-wrap"><table class="rules compact">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
@@ -524,6 +531,8 @@ html { scroll-behavior: smooth; }
       <tr><td><code>CONV011</code></td><td>No commit inside a loop: commit the list once after the loop.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>MPR001</code></td><td>Entities, microflows, pages and enumerations follow the naming conventions.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR002</code></td><td>No empty microflows or nanoflows.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>MPR013</code></td><td>A snippet call carries no Class, Style or design properties: a snippet call renders no element, so they never reach the page (mxcli 0.28).</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CONV020</code></td><td>An object of a stored entity that a microflow creates is committed, returned, passed on, stored or deleted: otherwise it is silently lost when the flow ends (mxcli 0.28).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>MPR003</code></td><td>A module has at most 15 stored entities.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR004</code></td><td>No validation message left empty.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>MPR005</code></td><td>No image widget without an image (it crashes).</td><td><span class="lvl i">Off</span></td></tr>
@@ -535,7 +544,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>MPR012</code></td><td>No old image widgets the modern React client cannot show.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC001</code></td><td>Every stored entity has at least one access rule.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC002</code></td><td>Passwords must be at least 8 characters.</td><td><span class="lvl i">Off</span></td></tr>
-      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production.</td><td><span class="lvl i">Off</span></td></tr>
+      <tr><td><code>SEC003</code></td><td>Demo users are switched off in Production. Off: while the app is built the harness wants the opposite (DEMO01).</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC004</code></td><td>Anonymous access is on: check every rule of the anonymous role.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC005</code></td><td>Strict mode is off.</td><td><span class="lvl i">Off</span></td></tr>
       <tr><td><code>SEC006</code></td><td>Entities with personal data have access rules.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -581,8 +590,13 @@ html { scroll-behavior: smooth; }
     <li><strong>DONE</strong> (exit 0): every step passed. <code>--only</code> and <code>--tests-only</code> say PASSED, never DONE.</li>
     <li><strong>NOT DONE — failed</strong> (exit 1): each failing step prints its findings, the fix, and the <code>tests/checks/&lt;step&gt;.md</code> file to read.</li>
     <li><strong>NOT DONE — could not run</strong> (exit 2): a check or the app could not run; the line says why.</li>
-    <li><strong>Warnings</strong> are listed apart and never block: fix them with the next fix, not in a gate run of their own.</li>
-    <li><strong>Timing</strong> per step and a closing list of what still blocks DONE.</li>
+    <li><strong>Warnings</strong> are listed apart and never block. While the gate is red, fix them with the next fix, not in a gate run of their own. At DONE they are labelled <em>report only</em>: they are not fixed, they go into the final report as "to fix next".</li>
+    <li><strong>Red tests</strong>: the whole suite always runs, so the result lists every red test, one line each with its first failure line (also in <code>.mxcli/red-tests.txt</code>), not only the first.</li>
+    <li><strong>Why a test is red</strong>: under <code>== tests</code>, the first three red tests are told in full: the whole assertion message (the got and expected values), the line of the test that said it, and the text the page showed (<code>.mxcli/failures/&lt;test&gt;.txt</code>), so reading the cause does not take another run.</li>
+    <li><strong>Timing</strong>: the last line of every run, <code>timing: wall 84s [full] -- tests 33, boot 0, db-reset 22 ...</code>, with the checks that ran beside the phases; the table is <code>.mxcli/last-timing.txt</code>. A boot that failed is said before the next one (<code>why no app</code>), with whether the model changed since. A note in the brain's queue is named with its id (promote or drop) in the <code>--only</code> block, apart from the tests still to write.</li>
+    <li><strong>What still blocks DONE</strong>, a closing list.</li>
+    <li><strong>DO THIS NEXT</strong>: the last lines of every NOT DONE, at most three numbered steps, ordered by what unblocks most: the red tests, then the blocking rule codes grouped by code with one fix line each (from the rule card), then coverage gaps. Absent at DONE.</li>
+    <li><strong>== DONE -- STOP BUILDING</strong>: the last lines of a full-gate DONE (after the data-restore lines; never at <code>--only</code> PASSED or NOT DONE): do not edit the app, do not run the gate again, write the final report with the warnings as "to fix next".</li>
   </ul>
 </section>
 
@@ -601,7 +615,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>level: off</code> in <code>TEST01</code></td><td>Turns off test-first in precheck.</td></tr>
       <tr><td><code>level: warn</code>, <code>block</code> or <code>off</code> in a card of <code>tests/rulebook/lint/</code></td><td>Shows that mxcli lint rule's findings under the warnings, makes them block, or hides them.</td></tr>
       <tr><td><code>level: block</code> in <code>WAIT01</code></td><td>The coverage step fails on tests that wait for time.</td></tr>
-      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
+      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); both swaps are skipped (no app restart) when a fingerprint of the app's own tables equals the snapshot's; <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
       <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>
       <tr><td><code>MDL_REQUIREMENTS=assume</code> or <code>off</code></td><td>Nobody answers the requirements interview: the agent takes its recommended answers as assumptions, listed at DONE, and builds without stopping on a plan or a question. <code>off</code>: no interview.</td></tr>
     </tbody>

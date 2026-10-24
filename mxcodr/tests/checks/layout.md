@@ -4,8 +4,8 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 
 | Code | Wants | Fix |
 |---|---|---|
-| `ACCOUNT01` | a Users menu item for administrators | `menu item 'Users'` showing `Administration.Account_Overview`. |
-| `ACCOUNT02` | a My account menu item | `menu item 'My account'` calling `Administration.ManageMyAccount`. |
+| `ACCOUNT01` | a Users menu item | Always required: `menu item 'Users'` showing `Administration.Account_Overview`. |
+| `ACCOUNT02` | a My account menu item | Always required: `menu item 'My account'` calling `Administration.ManageMyAccount`. |
 | `ACCOUNT03` | every signing-in role has Administration.User | Add Administration.User to the user role. |
 | `ALERT01` | warning: an alert class on a container, not on inline text | `Class: 'alert alert-info'` on a container. |
 | `BACK01` | a Back button, top left, on a page another page opens | In the finding. |
@@ -31,7 +31,7 @@ One line per code of the `layout` step; every code blocks DONE unless marked war
 | `NAV04` | no menu built from buttons in a layout | Those pages go in the profile's menu. |
 | `NAV05` | an icon on every menu item | `Icon: Atlas_Core.Atlas_Filled.<name>` at the end of the item. |
 | `NAV06` | no icon twice in what one role sees | The other icon the message suggests. |
-| `OFFLINE01` | an offline profile has a service worker | The person re-adds it in Studio Pro. |
+| `OFFLINE01` | offline profile has a service worker | Add `progressive web app` to the profile. |
 | `OFFLINE02` | an offline profile syncs entities | `sync Module.Entity all;` in its sync block. |
 | `OFFLINE03` | a test goes offline | `go_offline()`, `go_online()`, `sync_now()`. |
 | `PHONE01` | phone layouts show the app's menu | In the finding. |

@@ -191,6 +191,32 @@ precheck_req03() {
   fi
 }
 
+# SCOPE02: the approved requirements are the scope of the first build. A new page or ACT_ microflow that
+# no requirement anchors (-a @Module.Doc), and no test naming a requirement covers, is more than was
+# agreed: two runs of one two-sentence prompt built 6 and 9 flows, the second with a KPI page, four helper
+# entities and a note log nobody had asked for (invoice-chase iq3a/iq3b, 2026-10-24). Runs after TEST01, so
+# the test (with its `# requirement:` line) is written first. Not after the first DONE (REQ03 anchors every
+# later page), not while no requirement is recorded, never for the home page or a seed flow.
+# SCOPE02 `off` in tests/rulebook/paths/SCOPE02.md turns it off.
+precheck_scope02() {
+  if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level SCOPE02 block)" = "block" ] \
+     && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1 \
+     && ! grep -qE '^full: [^ ]+ [^ ]+ DONE' .mxcli/last-gate.txt 2>/dev/null; then
+    unplanned="$("$NODE" tools/mdl-checks/gate_helpers.cjs unplanned-scope . "$MPR" "$@" 2>/dev/null)"
+    if [ -n "$unplanned" ]; then
+      echo "precheck: SCOPE02 -- these documents serve no approved requirement (the real model is untouched):"
+      printf '%s\n' "$unplanned"
+      echo "  The approved requirements are the scope of this build (./mxcli brain plan -p $MPR lists them). Either:"
+      echo "  - the document builds one of them: name it on the \`# covers:\` line of the test file that holds that"
+      echo "    requirement's \`# requirement: <id>\` line; or"
+      echo "  - it is more than was asked: take it out of the script, and list the idea under \"to add next\" in your final"
+      echo "    report. Do not capture a new requirement for it (at requirements: assume the scope is frozen once"
+      echo "    the requirements are promoted; with a person in the chat, ask them to approve it first). Then exec again."
+      exit 1
+    fi
+  fi
+}
+
 # TEST01: test first. A page or ACT_ microflow new to the model, named by no `# covers:` line of
 # tests/verify-*.test.sh, waits for its test. Then the test is red until the exec (red-first comes
 # by itself) and the tests do not pile up at the end. TEST01 `off` in tests/rulebook/app/TEST01.md turns it off.
@@ -209,13 +235,35 @@ precheck_test01() {
   fi
 }
 
+# SCRIPT02: a `drop user role` that the build cannot take: the built-in administrator's role (mxbuild stops with a
+# NullReference that mx check does not see) or a role a demo user still holds (CE1613). Read from the scripts and
+# SHOW DEMO USERS / SHOW USER ROLES (0.5 s); the mx check below finds the second only after 20-40 s.
+# SCRIPT02 `off` in tests/rulebook/app/SCRIPT02.md turns it off.
+precheck_script02() {
+  [ "$(mdl_rule_level SCRIPT02 block)" != "off" ] && [ -f tools/mdl-checks/role_drops.cjs ] || return 0
+  grep -qiE 'drop[[:space:]]+user[[:space:]]+role' "$@" 2>/dev/null || return 0
+  local demo roles found
+  demo="$(mdl_tmpfile mdl-demo-users)"; roles="$(mdl_tmpfile mdl-user-roles)"
+  "$MXCLI" -p "$MPR" --json -c "SHOW DEMO USERS" > "$demo" 2>/dev/null || : > "$demo"
+  "$MXCLI" -p "$MPR" --json -c "SHOW USER ROLES" > "$roles" 2>/dev/null || : > "$roles"
+  found="$("$NODE" tools/mdl-checks/role_drops.cjs "$demo" "$roles" "$@" 2>/dev/null)"
+  rm -f "$demo" "$roles"
+  if [ -n "$found" ]; then
+    echo "precheck: SCRIPT02 -- a user role these scripts drop is still needed (the real model is untouched):"
+    printf '%s\n' "$found"
+    exit 1
+  fi
+}
+
 # The script rules above, in this order: the first that finds something prints it and exits 1.
 precheck_script01 "$@"
+precheck_script02 "$@"
 precheck_caption01 "$@"
 precheck_name02 "$@"
 precheck_req01 "$@"
 precheck_req03 "$@"
 precheck_test01 "$@"
+precheck_scope02 "$@"
 
 started="$(date +%s)"
 # The model often runs this by hand and the hook then runs it again before the exec: the second
@@ -372,11 +420,27 @@ fi
 # Errors the model already had before these scripts are not theirs: an exec that adds none of its
 # own passes, and says what is already broken, instead of blocking every script on the same error.
 new_errors="$(printf '%s\n' "$out" | grep -E '^\[error\]')"
+# The model's own errors depend on the model alone, and a failed precheck leaves it as it was: fixing the
+# script and checking again used to pay the second mx check (the copy without the scripts) every time --
+# 41 s of a 46 s block on a project of 30 microflows (invoice-chase, 2026-10-24). Kept for an hour under
+# the model's fingerprint (the .mpr, mprcontents' names, sizes and times, the widgets); an exec changes
+# the model and with it the key.
+base_key="$("$NODE" "$MDL_SHELL_HELPERS" precheck-fingerprint "$MPR" $(ls widgets/*.mpk 2>/dev/null) 2>/dev/null)"
+base_cache="$cache_dir/base-${base_key:-none}"
 base="$(mdl_tmpdir mdl-precheck-base)" && {
-  mdl_copy_model "$base" keep-going
-  base_out="$("$MXCLI" docker check -p "$base/$MPR" ${MDL_MXBUILD_PATH:+--mxbuild-path "$MDL_MXBUILD_PATH"} --no-update-widgets 2>&1)"
+  if [ -n "$base_key" ] && [ -f "$base_cache" ]; then
+    old_errors="$(cat "$base_cache")"
+  else
+    mdl_copy_model "$base" keep-going
+    base_out="$("$MXCLI" docker check -p "$base/$MPR" ${MDL_MXBUILD_PATH:+--mxbuild-path "$MDL_MXBUILD_PATH"} --no-update-widgets 2>&1)"
+    old_errors="$(printf '%s\n' "$base_out" | grep -E '^\[error\]')"
+    # Only a check that gave an answer is kept: an error count is what says it ran.
+    if [ -n "$base_key" ] && grep -qE 'contains: [0-9]+ errors' <<< "$base_out" && mkdir -p "$cache_dir" 2>/dev/null; then
+      find "$cache_dir" -type f -name 'base-*' -mmin +60 -delete 2>/dev/null
+      printf '%s' "$old_errors" > "$base_cache" 2>/dev/null
+    fi
+  fi
   rm -rf "$base"
-  old_errors="$(printf '%s\n' "$base_out" | grep -E '^\[error\]')"
   if [ -n "$old_errors" ]; then
     # An old error stays the script's when the script touches what it names: CE0161 reads the same
     # for every broken rule of an entity, so a script that swaps one broken rule for another would
