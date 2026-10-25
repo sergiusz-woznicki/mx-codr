@@ -4,6 +4,15 @@ Detail behind [test-first-delivery](../SKILL.md): what a browser test alone will
 catch, how to ask the app for facts in one call, and the session cap of a developer
 licence.
 
+## Assert what the request says, not what the app has
+
+A test compares with the request's own number, caption, format or state, never with a value read back from
+the app's data: a count asserted as the rows the page happens to have passes on any page ("6 bars" checked
+against the number of data rows). Seed the data so the literal can be met (a series of 6 weeks needs 6
+slots, empty ones too, each labelled), and check the labels or captions as text. A control the request calls
+"disabled" is asserted disabled (`disabled` attribute or class), not absent. A generated document is opened
+and read: its text has lines, not the characters `\n`.
+
 ## Things a browser test alone will not catch
 
 Two failure modes this app has already hit. Cover them deliberately:

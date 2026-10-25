@@ -13,6 +13,11 @@ So write one only for logic no screen can drive:
 | **What a scheduled event or background job picks**: reminders, expiry, clean-up | the records it must take (overdue, unpaid) and the ones it must leave (paid, already reminded, not yet due) |
 | **The after-startup seed** | running it twice leaves the same number of records |
 | **A rule with many edge cases behind one screen**, when the browser test can afford only two of them | the edges the browser test skips: exactly on a limit, the day itself, the touching time slot |
+| **A data rule no screen of the request edits**: a format, uniqueness, a bound on stored data | the bad value refused and a good one saved, by calling the microflow that saves or validates -- no edit page built only to test it |
+
+A data rule the request names is a requirement like any other: `-- requirement: <id>` above its
+`/** @test */` block names it for REQ02. A requirement a person meets on a screen (a page, a button,
+what a list shows) still needs its browser test; REQ02 says so when only a microflow test names it.
 
 Calculations, status changes, limits and messages a person sees are the browser test's job: assert the
 number, the status and the message on the page. A microflow test never replaces one.
@@ -54,6 +59,9 @@ $picked = call microflow Sales.SUB_Invoice_NeedsReminder(Invoice = $invoice);
 - One behaviour per block, ending with `/`. The `@test` line says it in the user's words.
 - Every block asserts something, with `@expect` or `@throws`. The gate runs with
   `--require-assertions`, so a block with no assertion fails.
+- A refusal is asserted on a microflow call: `@throws` then `$Saved = call microflow Mod.SUB_Member_Save(...)`.
+  A `commit` written straight in the block that breaks a validation rule is reported as `ERROR`, not
+  caught by `@throws` (measured on mxcli 0.28, Mendix 11.12).
 - A block makes its own data and commits it. It never relies on what the seed or another block
   left behind.
 - `./mxcli check tests/<feature>.test.mdl -p <app>.mpr` reads the file in about a second. Run it

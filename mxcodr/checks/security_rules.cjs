@@ -15,6 +15,9 @@
 //            "visibility does not equal security")
 //   SQL01    a microflow builds a SQL or OQL statement by concatenating a variable ("use prepared
 //            statements", "avoid injection")
+//   ENDPOINT01 a consumed REST service or a REST call action has its address (scheme and host) written in,
+//            not taken from a constant: it breaks on any other port and in every deployment; or it calls
+//            this app itself through a constant on a port that is not the model's own HttpPortNumber
 //   DEMO01   demo users are off, or a user role of the app's own modules has none: the person cannot sign
 //            in as each role to try the app, and the tests sign in as them (b2b-f4, 2026-10-16: a request
 //            for "real accounts" turned them off and nothing said so)
@@ -32,6 +35,8 @@
 // Prints `FAIL|PASS <summary>`, `  - [CODE] ...` blocking lines, `  ~ [CODE] ...` warnings.
 // Exit 0 nothing blocking, 1 blocking findings, 2 the model could not be read.
 'use strict';
+const fs = require('fs');
+const path = require('path');
 const { mxcli, ModelReadError, moduleRolesOf, catalogArgs } = require('./mxcli_client.cjs');
 const { levelArgs, levelOf } = require('./rulebook.cjs');
 const { offlineProfiles } = require('./layout_rules/offline.cjs');
@@ -367,7 +372,109 @@ function demo01({ model, sec, mine, add }) {
   }
 }
 
-const RULES = [cred01, strict01, anon01, filter01, sql01, extends01, admin01, xss01, write01, pwd01, demo01];
+// ENDPOINT01: no REST address written into a consumed REST service or a REST call action. A literal
+// host (often localhost:<port> of the machine it was built on) breaks the app on any other port and in
+// every deployment (b2b-orders hb1, 2026-10-25: the evaluator's app on another port called the agent's
+// port). The address comes from a constant, which each environment sets. Measured on mxcli 0.28 and
+// Mendix 11.15: a REST client's BaseUrl cannot take a constant (@Mod.C is refused by mxcli, '{@Mod.C}'
+// by mx check, CE7247; Mendix's base-URL parameter is not in MDL), so a service gets the call action;
+// `call rest service get @Mod.C + '/x'` is stored as that text, so only the template form works.
+const LITERAL_URL = /^https?:\/\/[^{\s/]/i;
+function endpointFix(module, url, whole = false) {
+  const m = whole ? [url, url, ''] : (/^(https?:\/\/[^/?#]+)(.*)$/i.exec(url) || [url, url, '']);
+  const used = (url.match(/\{(\d+)\}/g) || []).map(s => Number(s.slice(1, -1)));
+  const n = used.length ? Math.max(...used) + 1 : 1;
+  const name = `${module}.ApiBaseUrl`;
+  return { n, name, text: `create constant ${name} ( Type: String, DefaultValue: '${m[1]}' ); (named for the service; each environment ` +
+    `sets its own value)` + (whole ? '' : `, and the URL '{${n}}${m[2]}' with ({${n}} = @${name})`) };
+}
+function endpoint01({ model, own, add }) {
+  for (const s of model.restServices || []) {
+    if (!own.has(s.ModuleName)) continue;
+    const urls = [s.BaseUrl, ...(model.restOperations || []).filter(o => o.ServiceQualifiedName === s.QualifiedName).map(o => o.Path)];
+    const url = urls.find(u => LITERAL_URL.test(String(u || '').trim()));
+    if (!url) continue;
+    const fix = endpointFix(s.ModuleName, String(url).trim());
+    add('ENDPOINT01', true, `${s.QualifiedName} has its address written in (${url}): on any other port or server the app calls ` +
+      `the wrong place. mxcli cannot bind a REST client's base URL to a constant ('{@Mod.C}' is CE7247), so call the endpoint ` +
+      `from the microflow and drop the client: ${fix.text}, e.g. $Response = call rest service get '{${fix.n}}/<path>' with ` +
+      `({${fix.n}} = @${fix.name}) returns String; (or returns mapping Mod.IMM as Mod.Entity). A client the person keeps ` +
+      '(an imported contract): they bind its base URL in Studio Pro; until then it is theirs to except', s.QualifiedName);
+  }
+  const call = /\bcall\s+rest\s+service\s+(?:get|post|put|patch|delete)\s+'((?:[^']|'')*)'/gi;
+  for (const d of model.sources) {
+    if (d.ObjectType !== 'MICROFLOW' || !own.has(d.ModuleName)) continue;
+    const text = d.SourceText || '';
+    let m;
+    call.lastIndex = 0;
+    while ((m = call.exec(text))) {
+      const url = m[1].replace(/''/g, "'").trim();
+      let literal = LITERAL_URL.test(url) ? url : '';
+      const lead = /^\{(\d+)\}/.exec(url);
+      if (lead) {
+        const bound = new RegExp(`\\{${lead[1]}\\}\\s*=\\s*'(https?://[^']*)'`, 'i').exec(text.slice(call.lastIndex, call.lastIndex + 400));
+        if (bound) literal = bound[1];
+      }
+      if (/^@/.test(url)) {
+        add('ENDPOINT01', true, `${d.QualifiedName} calls the text '${url.slice(0, 60)}' as its URL: mxcli stores an expression ` +
+          `there as plain text. Write the template form: call rest service get '{1}/<path>' with ({1} = @Mod.ApiBaseUrl)`, d.QualifiedName);
+        break;
+      }
+      if (!literal) continue;
+      const fix = endpointFix(d.ModuleName, literal, Boolean(lead));
+      add('ENDPOINT01', true, `${d.QualifiedName} calls ${literal} written into the action: on any other port or server the app ` +
+        `calls the wrong place (the app's own published service included). Take the address from a constant: ${fix.text}` +
+        (lead ? `, and {${lead[1]}} = @${fix.name} in place of that text` : ''), d.QualifiedName);
+      break;
+    }
+  }
+}
+
+// ENDPOINT01, the app calling itself: a constant bound into a REST call whose value is this machine on a
+// port that is not the model's own (HttpPortNumber of the configuration it runs with), where the call is
+// provably the app's own -- the port is the one the gate runs on (APP_PORT/ADMIN_PORT of tests/harness.env)
+// or the path is one of its published REST services. Blocks: from Studio Pro or any runner that boots the
+// model, the app calls a port nothing of it listens on (b2b-orders hb1, hb2, 2026-10-25). A mock of an
+// outside system on its own port (Prism on 4010) is neither, and is left alone. Fix and why: own_port.cjs.
+function ownPortFindings({ model, own, add }) {
+  const { configurationOf, constantValues, localUrl } = require('./own_port.cjs');
+  if (typeof model.settings !== 'string') return;
+  const configuration = configurationOf(model.settings);
+  if (!configuration.httpPort) return;
+  const values = new Map(constantValues(model.constants || [], configuration).map(c => [c.name, c.value]));
+  const published = (model.publishedRest || []).map(r => String(r.Path || '').replace(/^\/+|\/+$/g, '').toLowerCase()).filter(Boolean);
+  const gatePorts = new Set((model.gatePorts || []).map(Number));
+  const call = /\bcall\s+rest\s+service\s+(?:get|post|put|patch|delete)\s+'((?:[^']|'')*)'/gi;
+  for (const d of model.sources) {
+    if (d.ObjectType !== 'MICROFLOW' || !own.has(d.ModuleName)) continue;
+    const text = d.SourceText || '';
+    let m;
+    call.lastIndex = 0;
+    while ((m = call.exec(text))) {
+      const lead = /^\{(\d+)\}(.*)$/.exec(m[1].replace(/''/g, "'").trim());
+      if (!lead) continue;
+      const bound = new RegExp(`\\{${lead[1]}\\}\\s*=\\s*@([\\w.]+)`).exec(text.slice(call.lastIndex, call.lastIndex + 400));
+      if (!bound || !values.has(bound[1])) continue;
+      const value = values.get(bound[1]), url = localUrl(value);
+      if (!url || !url.written || url.port === configuration.httpPort) continue;
+      const path = (url.rest + lead[2]).replace(/^\/+/, '').toLowerCase();
+      const self = gatePorts.has(url.port) || published.some(p => path === p || path.startsWith(p + '/') || path.startsWith(p + '?'));
+      if (!self) continue;
+      const fixed = `${url.base}:${configuration.httpPort}${url.rest}`;
+      const where = Object.prototype.hasOwnProperty.call(configuration.overrides, bound[1])
+        ? `alter settings constant '${bound[1]}' value '${fixed}' in configuration '${configuration.name}';`
+        : `create or modify constant ${bound[1]} ( Type: String, DefaultValue: '${fixed}' );`;
+      add('ENDPOINT01', true, `${d.QualifiedName} calls this app itself through ${bound[1]} = '${value}', on port ${url.port}` +
+        `${gatePorts.has(url.port) ? ' (the one the gate runs it on)' : ''}, but the model's own port is ${configuration.httpPort} ` +
+        `(HttpPortNumber of configuration '${configuration.name}'): from Studio Pro, a deployment or anyone who boots the model the call ` +
+        `goes to a port the app does not listen on. Name the model's own port: ${where} The gate's boot points such a constant at the ` +
+        'port it runs on: run bash tests/gate.sh --restart once after the change, so the running app picks that up and your tests keep working', d.QualifiedName);
+      break;
+    }
+  }
+}
+
+const RULES = [cred01, strict01, anon01, filter01, sql01, extends01, admin01, xss01, write01, pwd01, demo01, endpoint01, ownPortFindings];
 
 // Mendix before 11.12.5 sends an offline app's client commits through mx.data, which strict mode
 // disables (release notes 11.12.5: "Strict mode did not work correctly with certain Client APIs and
@@ -378,6 +485,15 @@ function strictBreaksOffline(version) {
   if (!v) return false;
   const [major, minor, patch] = v.slice(1).map(Number);
   return major < 11 || (major === 11 && (minor < 12 || (minor === 12 && patch < 5)));
+}
+
+// APP_PORT and ADMIN_PORT of tests/harness.env (the last line wins): the ports the gate runs the app on.
+function gatePorts(appDir) {
+  const ports = {};
+  try {
+    for (const m of fs.readFileSync(path.join(appDir, 'tests', 'harness.env'), 'utf8').matchAll(/^\s*(APP_PORT|ADMIN_PORT)="?(\d+)"?\s*$/gm)) ports[m[1]] = Number(m[2]);
+  } catch { /* no harness.env */ }
+  return Object.values(ports);
 }
 
 function readModel(appDir, mpr, read = mxcli) {
@@ -397,7 +513,20 @@ function readModel(appDir, mpr, read = mxcli) {
   let version = '', offline = [];
   try { version = (/Mendix Version:\s*(\S+)/.exec(read(appDir, mpr, 'show version;')) || [])[1] || ''; } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
   try { offline = [...offlineProfiles(read(appDir, mpr, 'describe navigation;')).keys()]; } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
-  return { sources, permissions, constants, associations, security, moduleRoles, demoUsers, version, offline };
+  // ENDPOINT01 only: the consumed REST services and their operations.
+  let restServices = [], restOperations = [];
+  try {
+    restServices = read(appDir, mpr, 'SELECT QualifiedName, ModuleName, BaseUrl FROM CATALOG.CONSUMED_REST_SERVICES', true);
+    restOperations = read(appDir, mpr, 'SELECT ServiceQualifiedName, ModuleName, Path FROM CATALOG.CONSUMED_REST_OPERATIONS', true);
+  } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
+  // ENDPOINT01's own-port half: the configuration, the published REST services, the ports the gate runs on.
+  let settings, publishedRest = [];
+  try { settings = read(appDir, mpr, 'describe settings'); } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
+  try { publishedRest = read(appDir, mpr, 'SELECT QualifiedName, Path FROM CATALOG.PUBLISHED_REST_SERVICES', true); } catch (error) { if (!(error instanceof ModelReadError)) throw error; }
+  if (!Array.isArray(publishedRest)) publishedRest = [];
+  if (typeof settings !== 'string') settings = undefined;
+  return { sources, permissions, constants, associations, security, moduleRoles, demoUsers, version, offline, restServices, restOperations,
+    settings, publishedRest, gatePorts: gatePorts(appDir) };
 }
 
 function main() {
@@ -428,4 +557,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { secretName, databaseSources, widgetBodies, projectSecurity, findings, readModel, strictBreaksOffline };
+module.exports = { endpointFix, secretName, databaseSources, widgetBodies, projectSecurity, findings, readModel, strictBreaksOffline };

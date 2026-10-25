@@ -65,7 +65,8 @@ function handRolledGridFilter(widgets, entities) {
       out.push({ code: 'UI001', key: w.ContainerQualifiedName,
         message: `'${w.ContainerQualifiedName}' has ${names.length} hand-built filter input(s) bound to the non-persistent entity '${helper}' ` +
           `(${[...names].sort().slice(0, 4).join(', ')}), and data grid '${grids[module].Name}' in this module has no column filter. ` +
-          'Put the filter in the column it belongs to and delete the helper entity, its apply microflow and the XPath that reads it: ' +
+          'Put the filter in the column it belongs to -- or, for a filter bar above the grid, the same filter widgets in the grid\'s controlbar { } linked to the column ' +
+          '(dropdownfilter fltStatus (attrchoice: linked, attributes: [Module.Order.Status])) -- and delete the helper entity, its apply microflow and the XPath that reads it: ' +
           'column colStatus (attribute: Status) { dropdownfilter fltStatus }, column colCreated (attribute: DateCreated) { datefilter fltCreated (FilterType: between) }, ' +
           'column colCustomer (attribute: Order_Customer/Name) { dropdownfilter fltCustomer (Association: Module.Order_Customer, datasource: database Module.Customer, CaptionAttribute: Name) }' });
     }

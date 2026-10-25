@@ -156,8 +156,8 @@ precheck_req01() {
       echo "    count, limit, role and screen it names is its own line (a request in numbered sections gives"
       echo "    several per section; \"dates as DD/MM/YYYY\" is one). Slices by feature, one command per slice:"
       echo "      ./mxcli brain capture \"<requirement>\" --slice 01-<feature> -a @<Module.Doc> -p $MPR && ./mxcli brain capture ..."
-      echo "  - what the request leaves open, and what you build differently from its words (a sign-in where it asks"
-      echo "    for a picker), as an assumption: ./mxcli brain capture \"Assumed: <decision>\" --open --slice <slice> -p $MPR"
+      echo "  - what the request leaves open, as an assumption: ./mxcli brain capture \"Assumed: <decision>\" --open --slice <slice> -p $MPR"
+      echo "    (what the request says is built as it says, a caption, a count, a place, a state; only what an error or a gate rule refuses is an assumption, with its text)"
       echo "  - then ./mxcli brain promote <id> for each (assume mode promotes its own; ask mode waits for the person)."
       echo "  Each requirement then needs a test that names it (# requirement: <id>, gate REQ02), one test file per"
       echo "  slice so --only <slice> runs a short one. Then exec again."
@@ -217,6 +217,25 @@ precheck_scope02() {
   fi
 }
 
+# REQ04: the requirements keep what the request spells out. A number, a quoted caption, a format, a bound
+# or a word like "exactly", "disabled", "above" of the request that no requirement or assumption repeats is
+# a detail nobody will test (b2b-orders hb1, 2026-10-25: "exactly 10 digits", "a bar above the table" and
+# "disabled" were in no requirement, and the gate said DONE). Checked at the first exec of features,
+# before the pages exist. REQ04 `off` in tests/rulebook/paths/REQ04.md turns it off.
+precheck_req04() {
+  if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ04 block)" = "block" ] \
+     && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1; then
+    gaps="$("$NODE" tools/mdl-checks/gate_helpers.cjs request-gaps . "$MPR" "$@" 2>/dev/null)"
+    if [ -n "$gaps" ]; then
+      echo "precheck: REQ04 -- the plan does not keep what the request spells out (the real model is untouched):"
+      printf '%s\n' "$gaps"
+      echo "  Capture those details as requirements (a capture that repeats the request's own words passes the freeze), then"
+      echo "  ./mxcli brain promote <id>, and exec again."
+      exit 1
+    fi
+  fi
+}
+
 # TEST01: test first. A page or ACT_ microflow new to the model, named by no `# covers:` line of
 # tests/verify-*.test.sh, waits for its test. Then the test is red until the exec (red-first comes
 # by itself) and the tests do not pile up at the end. TEST01 `off` in tests/rulebook/app/TEST01.md turns it off.
@@ -264,6 +283,7 @@ precheck_req01 "$@"
 precheck_req03 "$@"
 precheck_test01 "$@"
 precheck_scope02 "$@"
+precheck_req04 "$@"
 
 started="$(date +%s)"
 # The model often runs this by hand and the hook then runs it again before the exec: the second

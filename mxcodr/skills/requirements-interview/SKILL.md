@@ -55,12 +55,24 @@ over after the second round becomes an assumption with its recommended answer.
 
 `docs/brain/` must exist first: `./mxcli brain init -p <app>.mpr` when it does not.
 
-- **The scope is the words of the request.** One requirement per user journey that the request names,
-  small, in its words. A dashboard, KPI, statistics, totals or summary page, an extra role, a log or notes
-  entity, and edit or admin screens are extras unless the request names them: they are not requirements, and
-  they are not built. A request of two sentences gives about 4 to 6 requirements. Each idea you leave out goes
-  under "to add next" in your final report, where the person approves it. Write the requirements in the order
-  you will build them, and write every one before you build: the approved list is the scope for good.
+- **The scope is the words of the request.** Everything the request names is built, literally, and nothing it
+  does not name. A dashboard, KPI, statistics, totals or summary page, an extra role, a log or notes entity, and
+  edit or admin screens are extras unless the request names them: they are not requirements, and they are not
+  built. A short request gives few requirements; a request with numbered sections gives several per section.
+  Each idea you leave out goes under "to add next" in your final report, where the person approves it. Write
+  the requirements in the order you will build them, and write every one before you build: the approved list
+  is the scope for good.
+- **Keep what the request spells out.** A requirement is a paraphrase, and the details fall out of a paraphrase:
+  a count ("exactly 8 characters", "last 6 weeks"), a bound (a quantity > 0), a format, a caption in quotes ("Add to
+  cart"), a place ("a bar above the table"), a state ("disabled", not hidden), "unique", "default". Copy the words
+  into the requirement and write its "checked when" so that it asserts them: the literal number or caption, never a
+  value read back from the app's own data. "Do not simplify" and "literally" in a request are binding. The gate
+  (REQ04) lists every such detail no requirement or assumption repeats, and blocks the first exec of pages.
+- **A departure is an assumption with its proof.** What the request says about a screen or a step (what a
+  bar shows, which button is disabled) is built as written. What you cannot build is recorded as
+  `Assumed: ... because <the mx check or runtime error text>`; "simpler", "it is hidden instead" and a harness
+  rule code are no proof -- the rules allow the form the request asks for (a filter bar above a grid is its
+  controlbar), so read the card and build it. The gate lists departures without proof at DONE (REQ04, warning).
 - **What the gate itself requires is never an extra.** Sign-in, the Users, My account and Log out menu
   entries, the signed-in user's name, icons, page URLs, folders, captions, seed and demo users and the home
   page are built whether or not the request names them, even when it says "only" or "exactly" about a menu or
@@ -76,8 +88,7 @@ over after the second round becomes an assumption with its recommended answer.
 - **One slice per journey** (a role and its goal): `01-customer-sees-invoices`,
   `02-clerk-sends-reminder`.
 - **An assumption is only what the person did not decide** -- a question left over after the second
-  round, one they left to you, every answer in `assume` mode, and anything you build differently from
-  the request's own words (a sign-in where it asks to pick a user from a list) -- captured as an open question:
+  round, one they left to you, and every answer in `assume` mode -- captured as an open question:
   `./mxcli brain capture "Assumed: one currency, EUR" --open --slice <slice> -p <app>.mpr`.
   An answer the person gave or accepted ("all as recommended" included) is a requirement, never `--open`.
 - **A feature that needs a key, an account or an outside service is built, not deferred**: build it to

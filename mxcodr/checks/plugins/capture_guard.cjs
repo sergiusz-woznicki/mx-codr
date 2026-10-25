@@ -10,6 +10,8 @@
  *            DONE: the approved requirements ARE the scope, so a new requirement is refused. A later
  *            request (after DONE) is REQ03's business and stays open. `--open` captures (assumptions)
  *            and captures with no --slice (decisions) add no feature and pass.
+ *            A requirement that repeats a detail of the request (request_specifics.cjs: a number, a quoted
+ *            caption, a format, a bound, "disabled") passes: it keeps what was asked (REQ04), it adds nothing.
  *   BEYOND   a requirement that asks for an analytics-type feature (dashboard, KPI, statistics, totals,
  *            summary, tiles, charts, reports) in words the request never used. Two runs of one
  *            two-sentence prompt differed 6 to 9 flows because one added a dashboard and a log of its own
@@ -164,7 +166,14 @@ function captureBlock(root, command) {
     const fresh = words.filter((w) => !warned(root, w))
     if (fresh.length) { noteWarned(root, fresh); return beyondMessage(fresh) }
   }
-  if (frozen(root)) return FROZEN_CAPTURE
+  // A requirement that repeats a detail of the request (a number, a quoted caption, a format, "disabled") adds
+  // no feature: it keeps what was asked, REQ04's fix. Only a new idea is refused.
+  if (frozen(root)) {
+    let spec = null
+    try { spec = require("./request_specifics.cjs") } catch { /* the guard works without it */ }
+    if (spec && requirements.every((c) => spec.restatesRequest(root, c.text))) return null
+    return FROZEN_CAPTURE
+  }
   return null
 }
 

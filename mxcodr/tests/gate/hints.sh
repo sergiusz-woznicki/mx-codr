@@ -65,13 +65,14 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
       # CE7247 is more than one error: a reserved name, and an invalid URL. A DeepSeek session set a
       # REST client's BaseUrl to a constant (stored as '{@Mod.Const}', refused as an invalid URL) and
       # was told to rename Owner/Type/Default. The hint follows the message, and says nothing when
-      # it does not know the text.
+      # it does not know the text. `get @Mod.Const + '/x'` is stored as that text (mxcli 0.28), so the
+      # URL hint gives the template form.
       CE7247)
         if grep -q 'CE7247.*is a reserved word' "$1" 2>/dev/null; then
           echo "   hint CE7247: that name is reserved by the Mendix platform and quoting does not rescue it -- Owner, Type and Default have to be renamed (Staff, ResourceType, Standard); other keywords only need quotes. Full list: ./mxcli syntax keywords"
         fi
         if grep -q "CE7247.*URL '.*' is invalid" "$1" 2>/dev/null; then
-          echo "   hint CE7247 (URL): a REST client's BaseUrl must be a literal http:// or https:// address -- a constant there is stored as '{@Mod.Const}' and refused. To point the app at a mock, build the URL in the microflow instead (rest call get @Mod.ApiBaseUrl + '/rates') or change the literal. Skill: mock-rest-apis"
+          echo "   hint CE7247 (URL): a REST client's BaseUrl cannot take a constant in mxcli -- it is stored as '{@Mod.Const}' and refused -- and a written-in address is ENDPOINT01. Call the endpoint from the microflow and drop the client: create constant Mod.ApiBaseUrl ( Type: String, DefaultValue: 'https://api.example.com' ); then call rest service get '{1}/rates' with ({1} = @Mod.ApiBaseUrl) returns String;"
         fi ;;
     esac
   done

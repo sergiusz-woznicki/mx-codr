@@ -158,6 +158,24 @@ function unplannedScopeCommand(args) {
   return 0;
 }
 
+// REQ04 at the first exec of features: the plan keeps what the request spells out. Cheapest here, before the
+// pages exist: the same finding at the end of the build means rewriting tests. Not after the first DONE (a
+// later request is REQ03's), not while no requirement is recorded (REQ01's). Prints one line per finding;
+// the caller blocks on any line.
+function requestGapsCommand(args) {
+  const [app, mpr, ...scripts] = args;
+  const requirements = require('./requirement_rules.cjs');
+  try {
+    if (/^full: \S+ \S+ DONE\b/m.test(fs.readFileSync(py.join(app, '.mxcli', 'last-gate.txt'), 'utf8'))) return 0;
+  } catch { /* no gate yet: the first build */ }
+  const found = requirements.requestFindings(app).filter(f => !f.warn);
+  if (!found.length) return 0;
+  const fresh = newFeatures(app, mpr, scripts, require('./check_test_coverage.cjs'));
+  if (!fresh || !fresh.length) return 0;
+  for (const f of found) py.print(`  - ${f.message}`);
+  return 0;
+}
+
 // SCRIPT01: a document two scripts create is whatever the last one run says.
 // The kinds mxcli 0.25 can patch with `alter <kind>`; a constant or a menu it cannot.
 const ALTERABLE = new Set(['entity', 'enumeration', 'page', 'snippet', 'microflow', 'nanoflow', 'workflow']);
@@ -328,4 +346,4 @@ function widgetNameFindings(scripts) {
   if (out.length) process.stdout.write(out.join('\n') + '\n');
 }
 
-module.exports = { unplannedScopeCommand, unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, widgetNameFindings, captionFindings, suggestCaption };
+module.exports = { requestGapsCommand, unplannedScopeCommand, unanchoredFeaturesCommand, DEFINITION_RE, definitions, testFirst, newFeatures, newFeaturesCommand, nearIcons, nearIconsCommand, errorSources, errorSourcesCommand, ALTERABLE, duplicateDefinitions, widgetNameFindings, captionFindings, suggestCaption };

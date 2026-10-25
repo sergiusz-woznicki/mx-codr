@@ -25,5 +25,6 @@ One line per code of the `naming` step; every code blocks DONE unless marked war
 | `PERF07` | warning: every query is served by an index | The line it prints: `alter entity M.E add index if not exists (A, B);`, `=` columns first; a query along an association needs none. |
 | `PERF08` | warning: no index that no query needs | The `drop index if exists (...)` it prints, spelled as written; keep it if Java, other OQL or an outside client filters on it. |
 | `REFRESH01` | a pop-up's Save commits with refresh | `commit $Invoice refresh;`, `change $Invoice (...) commit refresh;` -- blocks DONE. |
+| `TEXT03` | warning: no backslash escape in a string | Build the lines in the Java action that makes the document. |
 | `VAR01` | a variable name says what it holds | `$OpenInvoiceCount`, not `$Int1`, `$tmp`, `$x`. |
 | `VAR02` | no _List, _Object or _Obj suffix on a variable | `$OverdueInvoices`, not `$Invoice_List`. |

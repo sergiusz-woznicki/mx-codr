@@ -4,6 +4,7 @@
 //
 //   OUTCOME01  every message a user can be shown (outcome_rules.cjs) is asserted by a test
 //   REQ02      every requirement in docs/brain/plan is named by a test (# requirement: <id>)
+//   REQ04      every number, quote, format, bound and cue word a line of the request spells out is kept by the plan
 //   WF01       a microflow completes a workflow user task without checking the user is one of its
 //              targets: anyone allowed to run it decides the task
 //   WF02       each workflow user task: every outcome is chosen in a test, and a test of it signs in
@@ -39,7 +40,7 @@ const crypto = require('crypto');
 const { mxcli, ModelReadError, findMpr, moduleRolesOf, withoutFolder } = require('./mxcli_client.cjs');
 const { levelArgs, levelOf } = require('./rulebook.cjs');
 const rules = require('./outcome_rules.cjs');
-const { spellings, requirementFindings } = require('./requirement_rules.cjs');
+const { spellings, requirementFindings, requestFindings } = require('./requirement_rules.cjs');
 const { scopeFindings } = require('./scope_rules.cjs');
 
 // A document's version, without its folder: counting a move as a change once turned seven old paths
@@ -320,17 +321,17 @@ function main() {
   let testMdl = [];
   try { testMdl = fs.readdirSync(path.join(a.appDir, 'tests')).filter(n => n.endsWith('.test.mdl')).map(n => fs.readFileSync(path.join(a.appDir, 'tests', n), 'utf8')); } catch { testMdl = []; }
   const run = microflowsRun(testMdl, rules.testFiles(a.appDir), model.sources);
-  const all = findings(model, tests, a.modules, run).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)),
+  const all = findings(model, tests, a.modules, run).concat(requirementFindings(a.appDir, rules.testFiles(a.appDir)), requestFindings(a.appDir),
     scopeFindings(a.appDir, model, rules.testFiles(a.appDir), a.modules, hash));
   for (const f of all) {
     if (skip.has(f.key) || skip.has(f.key.split('#')[0])) continue;
-    // WF01 and REQ02 block whatever their age: a requirement the person agreed has no old version.
-    const level = levelOf(levels, f.code, f.code === 'WF01' || f.code === 'REQ02' ? 'block' : f.code === 'SCOPE03' ? 'warn' : 'baseline');
+    // WF01, REQ02 and REQ04 block whatever their age: a requirement the person agreed has no old version.
+    const level = levelOf(levels, f.code, f.code === 'WF01' || f.code === 'REQ02' || f.code === 'REQ04' ? 'block' : f.code === 'SCOPE03' ? 'warn' : 'baseline');
     if (level === 'off' || level === 'info') continue;
     // A task anyone can decide is a defect, not a missing test: WF01 blocks whatever its age.
     // `baseline` (the default): old paths warn, new or changed ones block; `block`: every one blocks.
     const old = level === 'baseline' && !a.allFail && f.code !== 'WF01' && baseline && baseline[f.key] === f.version;
-    (old || level === 'warn' ? warnings : failures).push(f);
+    (old || level === 'warn' || f.warn ? warnings : failures).push(f);
   }
   const lines = [failures.length
     ? `FAIL  ${failures.length} finding(s) block (new or changed since the harness was installed, or WF01), ${warnings.length} older path(s) without a test`

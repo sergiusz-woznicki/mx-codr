@@ -295,16 +295,36 @@ function refreshFindings(lines) {
   return failures;
 }
 
+// TEXT03: a backslash is not an escape in an MDL string. `'a\nb'` is four characters, so a text built
+// with `\n` shows the two characters wherever it ends up (a generated document came out as one line
+// with literal backslash-n in it, b2b-orders hb1, 2026-10-25; `mxcli syntax regular-expression`: "Backslashes
+// are NOT escape characters"). Lines that build a pattern are left alone.
+function escapeFindings(lines) {
+  const out = [];
+  lines.forEach((line, index) => {
+    if (/^\s*(?:--|\/\/|\/?\*|@)/.test(line) || /regular\s+expression|\bregex\b|\bpattern\b|\bmatch(?:es)?\b|replaceAll|\bfind\w*\(/i.test(line)) return;
+    for (const m of line.matchAll(/'((?:[^']|'')*)'/g)) {
+      const hit = /\\[nrt]/.exec(m[1]);
+      if (!hit) continue;
+      out.push(finding('TEXT03', `a string literal holds \`${hit[0]}\`, which MDL keeps as two characters (a backslash is no escape): ` +
+        'the text shows them instead of a line break or a tab. Build the lines in the Java action that produces the document ' +
+        '(split a list of rows there), or put each line in its own value; a pattern is a regular expression document.', index + 1));
+      break;
+    }
+  });
+  return out;
+}
+
 function checkNamingAndRefresh(lines) {
   const [failures, warnings] = checkNaming(lines);
   // Performance (PERF02/03/05/06, perf_rules.cjs): warnings, listed before the caption warnings.
   const perf = perfFindings(lines).map(([code, message, line]) => finding(code, message, line));
-  return [[...failures, ...refreshFindings(lines)], [...perf, ...warnings]];
+  return [[...failures, ...refreshFindings(lines)], [...perf, ...escapeFindings(lines), ...warnings]];
 }
 
 module.exports = {
   ANNOTATION_RE, CAPTION_RE, DECISION_RE, LOOP_RE, ACTION_RE, DEFAULT_ACTION_CAPTION_RE, PLACEHOLDER_VAR_RE,
   THROWAWAY_VAR_RE, TYPE_ECHO_VAR_RE, COMPARISON_RE, VARIABLE_RULES, MICROFLOW_START_RE, COMMIT_STATEMENT_RE,
   finding, stripComments, precedingAnnotations, captionText, annotationKinds, decisionFindings, loopFindings,
-  actionFindings, variableFindings, checkNaming, refreshFindings, checkNamingAndRefresh,
+  actionFindings, variableFindings, checkNaming, refreshFindings, escapeFindings, checkNamingAndRefresh,
 };

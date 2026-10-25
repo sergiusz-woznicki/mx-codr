@@ -84,6 +84,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   -- never splice `'"$var"'` into the body, and no quotes around `$(...)` (an assignment needs none).
   No apostrophe anywhere in that body, comments included: `// the module's page` ends the quoted JS
   and bash refuses the whole script.
+- **A REST address comes from a constant** (gate ENDPOINT01), never written in: `create constant
+  Mod.ApiBaseUrl ( Type: String, DefaultValue: 'https://api.example.com' );` then `$Forecast = call rest
+  service get '{1}/forecast' with ({1} = @Mod.ApiBaseUrl) returns String;`. `get @Mod.ApiBaseUrl + '/x'`
+  passes check but is stored as that text; a REST client's BaseUrl cannot take a constant (CE7247).
+  The app calling its own published service: the constant names the model's port (`show settings`,
+  `http=8080`), never the gate's port -- the gate's boot points it at the port it runs on.
 - **HTTP from a scenario** (an OData or REST test) goes through `page.request.get(url, {headers})`:
   the scenario runner has no Node globals -- no `fetch`, no `Buffer` ("... is not defined").
   Build a Basic-auth header in bash (`SV_AUTH=$(printf '%s' "$user:$pw" | base64)`), use vars.AUTH.

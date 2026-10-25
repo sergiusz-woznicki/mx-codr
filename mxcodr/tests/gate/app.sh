@@ -412,6 +412,13 @@ boot_with_mxcli_run() {
     # A fresh project has no database; --ensure-db creates it only when missing.
     boot_args+=(--ensure-db)
   fi
+  # A constant that names the model's own port (HttpPortNumber) is the app calling itself: it gets the port
+  # this boot listens on, so the model keeps its own port for Studio Pro and every other runner (ENDPOINT01,
+  # checks/own_port.cjs). Read at boot; a later change of such a constant needs a restart.
+  local own
+  while IFS= read -r own; do
+    [ -n "$own" ] && boot_args+=(--constant "$own")
+  done <<< "$("$NODE" tools/mdl-checks/own_port.cjs boot-constants . "$MPR" "$APP_PORT" 2>/dev/null < /dev/null)"
   # Empty the log first; see boot_with_command for why.
   mkdir -p .mxcli && mdl_rotate_boot_log
   ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )

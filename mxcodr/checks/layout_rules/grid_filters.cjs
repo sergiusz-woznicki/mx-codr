@@ -10,6 +10,13 @@
 // have nothing to filter on and are left alone. Boolean is filtered too: Data Grid 2's drop-down
 // filter takes Enumeration and Boolean attributes (DatagridDropdownFilter 3.4.0, checked with
 // mx check on Mendix 11.12.1).
+//
+// A filter in the grid's own `controlbar { }` -- the filter bar above the table -- covers the columns
+// it is linked to (`attributes: [Mod.Entity.Attr]`, `association: Mod.Assoc`; describe writes `Attribute: Mod.Assoc`): a request that asks
+// for filters in a bar above the grid is built there, not with a helper entity (UI001). A run told
+// "a filter bar above the table" read the in-column wording as a refusal of the bar and dropped it
+// (b2b-orders, 2026-10-25). A column that only holds buttons (customContent) has nothing to filter,
+// bound attribute or not.
 'use strict';
 const py = require('../py_compat.cjs');
 const { depthChange } = require('./mdl_text.cjs');
@@ -23,6 +30,12 @@ const CONTEXT = /^\s*--\s*Context:\s*\$currentObject\s*\(([^),\s]+)/;
 const SOURCE_DATABASE = /\bDataSource:\s*database\s+(?:from\s+)?(\w+\.\w+)/i;
 const ATTRIBUTE = /\bAttribute:\s*"?([\w/.]+?)"?\s*[,)]/i;
 const CAPTION = /\bCaption:\s*'((?:[^']|'')*)'/i;
+const CONTROLBAR = /^\s*controlbar\b/i;
+const LINKED_ATTRIBUTES = /\battributes\s*:\s*\[([^\]]*)\]/i;
+const LINKED_ASSOCIATION = /\bassociation\s*:\s*("?[\w]+"?\s*\.\s*"?\w+"?|"?\w+"?)/i;
+const CUSTOM_CONTENT = /\bShowContentAs\s*:\s*customContent\b/i;
+const WIDGET_WORD = /^\s*([a-z]+)\b/i;
+const BUTTONS = new Set(['actionbutton', 'linkbutton']);
 
 const ENTITY_HEAD = /^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:persistent\s+|non-persistent\s+|view\s+)?entity\s+(\w+\.(?:"[^"]+"|\w+))/i;
 // `Name: String(200)`, `"Status": Enumeration(Mod.Status) default ...`, `Active: Boolean default false`.
@@ -120,6 +133,46 @@ function suggestion(entities, grid, attribute, caption) {
   return '';
 }
 
+// The attributes and associations the filters in a grid's `controlbar { }` are linked to, read from
+// the grid's body (it may come after the columns): {attributes: Set, associations: Set} of bare names.
+function controlbarTargets(lines, header) {
+  const attributes = new Set(), associations = new Set();
+  if (!header.opens) return { attributes, associations };
+  let depth = 1, bar = 0;
+  for (let look = header.end + 1; look < lines.length && depth > 0; look++) {
+    const line = lines[look];
+    if (!bar && depth === 1 && CONTROLBAR.test(line)) bar = depth + 1;
+    else if (bar && FILTER.test(line)) {
+      const props = headerOf(lines, look).text;
+      const linked = LINKED_ATTRIBUTES.exec(props);
+      if (linked) for (const a of linked[1].split(',')) { const name = unquote(a).trim().split('.').pop(); if (name) attributes.add(name); }
+      const assoc = LINKED_ASSOCIATION.exec(props);
+      if (assoc) associations.add(unquote(assoc[1]).replace(/\s+/g, '').split('.').pop());
+      // describe writes an association filter as `Attribute: Mod.Assoc` and one attribute as `Attribute: Name`.
+      const single = ATTRIBUTE.exec(props);
+      if (single) (single[1].includes('.') ? associations : attributes).add(single[1].split('.').pop());
+    }
+    depth += depthChange(line);
+    if (bar && depth < bar) bar = 0;
+  }
+  return { attributes, associations };
+}
+
+// Whether a column's body holds only buttons: an action column, nothing to filter.
+function onlyButtons(lines, index, header) {
+  if (!header.opens || !CUSTOM_CONTENT.test(header.text)) return false;
+  let inner = 0, seen = 0;
+  for (let look = index; look < lines.length; look++) {
+    if (look > header.end && inner === 1) {
+      const w = WIDGET_WORD.exec(lines[look]);
+      if (w && /^\s*[a-z]+\s+[\w"]/i.test(lines[look])) { if (!BUTTONS.has(w[1].toLowerCase())) return false; seen++; }
+    }
+    inner += depthChange(lines[look]);
+    if (look >= header.end && inner <= 0) break;
+  }
+  return seen > 0;
+}
+
 // GRID03 findings for every data grid column on the pages and snippets in <lines>.
 function missingFilterFindings(lines, entityText) {
   const entities = attributeTypes(entityText);
@@ -139,12 +192,14 @@ function missingFilterFindings(lines, entityText) {
     const grid = GRID.exec(line);
     if (grid) {
       const header = headerOf(lines, index);
-      grids.push({ name: unquote(grid[1]), entity: gridEntity(lines, header), at: depth + 1, opened: false });
+      grids.push({ name: unquote(grid[1]), entity: gridEntity(lines, header), at: depth + 1, opened: false, bar: controlbarTargets(lines, header) });
     } else if (top && top.opened && depth === top.at && COLUMN.test(line)) {
       const header = headerOf(lines, index);
       const attr = ATTRIBUTE.exec(header.text);
-      if (attr) {
-        let filtered = false;
+      if (attr && !onlyButtons(lines, index, header)) {
+        const path = attr[1].split('/');
+        let filtered = path.length === 1 ? top.bar.attributes.has(path[0])
+          : top.bar.associations.has(path[0].split('.').pop());
         if (header.opens) {
           // The column's own body, one level down: a filter there filters this column.
           let inner = 0;
@@ -169,7 +224,11 @@ function missingFilterFindings(lines, entityText) {
               ' narrow the rows by it, and the rows grow with the app. ' +
               (filter
                 ? `Add it inside the column: \`${column} { ${filter} }\``
-                : `Add the filter that matches its type inside the column (${TABLE}), e.g. \`${column} { textfilter ${prefixOf(top.name)}_${namePart(captionText, attr[1])}Filter }\` for a String`),
+                : `Add the filter that matches its type inside the column (${TABLE}), e.g. \`${column} { textfilter ${prefixOf(top.name)}_${namePart(captionText, attr[1])}Filter }\` for a String`) +
+              '. Asked for a filter bar above the grid: put it in the grid\'s `controlbar { }` instead, linked to the column -- ' +
+              (attr[1].includes('/') ? '`dropdownfilter <name> (association: <Mod.Assoc>, datasource: database <Mod.Other>, captionattribute: <Attr>)`'
+                : `\`<type>filter <name> (attrchoice: linked, attributes: [${top.entity || 'Mod.Entity'}.${attr[1]}])\``) +
+              '. A column of buttons only needs no Attribute',
           });
         }
       }

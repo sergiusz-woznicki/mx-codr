@@ -63,8 +63,8 @@ datagrid OrderOverview_OrdersGrid (...) { column colStatus (attribute: "Status")
   -- a grid filters itself, one filter inside its column: textfilter, numberfilter, datefilter,
   --   dropdownfilter on an enumeration or over an association (dropdownfilter OrderOverview_CustomerFilter
   --   (Association: Mod.Order_Customer, datasource: database Mod.Customer, CaptionAttribute: Name)).
-  --   Never a filter bar of your own over a helper entity (UI001); the column keeps its Attribute (GRID01)
-  --   Every column bound to an attribute has a filter, on every grid (GRID03); Boolean takes a dropdownfilter too
+  --   A bar above it: those filters in its controlbar { } (attrchoice: linked, attributes: [Mod.E.Attr]), no helper entity (UI001).
+  --   A column keeps its Attribute (GRID01); each bound column has a filter, in it or the bar (GRID03)
 show message '{1}' type info objects [$Obj/Name + ' saved'];   validation feedback $Obj/Attr message 'Name is required';
 ```
 
