@@ -1,7 +1,7 @@
 # What each check code wants, and its fix
 
-One file per gate step; the gate names the file of the failed step. Read it, not `tests/gate/*.sh`.
-Every code blocks DONE unless its line says "warning". A rule's card, its level and the person's
+One file per gate step; the gate names the failed step's file. Read it, not `tests/gate/*.sh`.
+Every code blocks DONE unless its line says "warning". A rule's card, level and the person's
 exceptions: `tests/rulebook/<group>/<CODE>.md`; all: `bash tests/rules.sh list`.
 
 | step | file | codes |
@@ -10,6 +10,6 @@ exceptions: `tests/rulebook/<group>/<CODE>.md`; all: `bash tests/rules.sh list`.
 | naming | `tests/checks/naming.md` | CAPTION01, CAPTION02, CAPTION03, CAPTION04, CAPTION05, CAPTION06, CAPTION07, CAPTION08, CAPTION09, DS01, ERR01, EVENT01, EVENT02, EVENT03, EVENT04, PERF02, PERF03, PERF05, PERF06, PERF07, PERF08, REFRESH01, TEXT03, VAR01, VAR02 |
 | security | `tests/checks/security.md` | ADMIN01, ANON01, CRED01, DEMO01, ENDPOINT01, EXTENDS01, FILTER01, PRODUCTION01, PWD01, SQL01, STRICT01, VIEW01, WRITE01, XSS01 |
 | paths | `tests/checks/paths.md` | ISO01, OUTCOME01, REQ02, REQ04, ROLE01, SCOPE02, SCOPE03, SVC01, TIMER01, WF01, WF02 |
-| catalog | `tests/checks/catalog.md` | ASKED01, CHART01, LINT01, PUBLISH01, SEC007, SEED01, STARTUP01, STATUS01, UI001, CONV010, CONV011, CONV013, CONV014, CONV020, MPR002, MPR006, MPR013, SEC006, SEC008, SEC009, SEC010 |
+| catalog | `tests/checks/catalog.md` | ASKED01, CHART01, FIELD01, LINT01, OVERVIEW01, PUBLISH01, SEC007, SEED01, STARTUP01, STATUS01, UI001, CONV010, CONV011, CONV013, CONV014, CONV020, MPR002, MPR006, MPR013, SEC006, SEC008, SEC009, SEC010 |
 | folders | `tests/checks/folders.md` | FOLDER01 |
 | mx, coverage, precheck, scope, unused, tests | `tests/checks/app.md` | COVERAGE01, LOOK01, LOOK02, MFTEST01, MX01, REQ01, REQ03, RUNTIME01, SCOPE01, SCRIPT01, SCRIPT02, STALE01, TEST01, TESTS01, UNUSED01, VIS01, VIS02, VIS03, VIS04, VIS05, VIS06, VIS07, WAIT01, CE0582, CE0106, CE0557, CE0007, CE0115, CE0117, CE0161, CE0642, CE1613, CE2729, CE7247 |

@@ -307,8 +307,9 @@ dbsnap_restore() {
 # it again. Costs one stop and boot (about 30 s), so only when a suite ran since the last restore.
 dbsnap_refresh() {
   dbsnap_enabled || return 0
+  local started=$SECONDS
   if [ ! -f "$DBSNAP_DIR/pending.dump" ]; then
-    [ "${1:-}" = "force" ] && echo "   --reset-data: no snapshot is pending, so there is nothing to put back (one is taken at this gate)"
+    [ "${1:-}" = "force" ] && echo "   --reset-data took 0s: no snapshot is pending, so there is nothing to put back (one is taken at this gate)"
     return 0
   fi
   # The seed changed since the snapshot: its rows would put the old seed back. A fresh database, filled
@@ -316,17 +317,19 @@ dbsnap_refresh() {
   if dbsnap_seed_changed; then
     echo "== the after-startup seed changed since the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null): a fresh database, filled by the current seed, before the tests"
     dbsnap_fresh && echo "   the tests start on the seed's data alone; a new snapshot is taken now"
+    [ "${1:-}" = "force" ] && echo "   --reset-data took $((SECONDS - started))s (a fresh database and a restart)"
     return 0
   fi
   [ "${1:-}" = "force" ] || [ -f "$DBSNAP_DIR/dirty" ] || return 0
-  # Not for --reset-data: that one asks for a restart, and gets it.
-  if [ "${1:-}" != "force" ] && dbsnap_unchanged; then
+  # --reset-data too: a restart onto data that already equals the snapshot puts nothing back (a B2B run
+  # paid 15-30 s for it on --only runs whose tests had left no rows, b2b-orders hb4).
+  if dbsnap_unchanged; then
     rm -f "$DBSNAP_DIR/dirty"
     echo "== the data already equals the snapshot (fingerprint of the app's own tables): no restart; the tests start on it"
+    [ "${1:-}" = "force" ] && echo "   --reset-data took $((SECONDS - started))s (no restart: nothing to put back)"
     return 0
   fi
   echo "== putting the data back to the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null) before the tests: an earlier run left its test rows"
-  local started=$SECONDS
   dbsnap_swap && echo "   the tests start on the snapshot's data; the next DONE puts it back again"
   # A room-booking session added --reset-data to every --only run, passing ones too: 13 restarts,
   # 17 s each, after one test had clashed with leftovers (2026-10-13). The cost, where it is paid.

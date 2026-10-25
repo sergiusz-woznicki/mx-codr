@@ -93,6 +93,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **Pages and microflows need a role** the moment a menu, a button or another page reaches them
   (CE0557, CE0106): put the `grant view on page` / `grant execute on microflow` in the same
   script that creates them.
+- **A new user role** gets, in the script that creates it, its module roles (with `System.User`), a page of
+  its own and that page as its home: `create user role "ApiClient" ("Help"."ApiClient", "System"."User");`
+  `grant view on page Help.ApiClientHome to Help.ApiClient;` `alter navigation Responsive { set home page
+  Help.ApiClientHome for "ApiClient" };`. Without its own home it gets the default one and the menu, and mx check
+  refuses each page it may not read (CE2729, dozens for one role) -- a role for a REST client too. A role "with no
+  roles defined in module" Help gets one (`alter user role "Employee" add module roles ("Help"."Agent");`) or is dropped.
 - **Two scripts that need each other** (a page calls a new microflow that opens that page) belong
   in one `.mdl`: a `show page` in a microflow may name a page the script creates further down. A
   button on a page may not, and neither may a `call microflow`: create the page it opens or the

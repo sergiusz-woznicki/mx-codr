@@ -420,11 +420,19 @@ done
 # here -- 5.2s against 2.3s, measured on a 41-microflow app -- and nothing in a script
 # changes widgets/. So the check runs without it, and only a CE0463 in the result buys the
 # slow run: a real one is still reported, a false one still prevented.
+# A script that writes a data grid or a file uploader always gets that error on the copy: mxcli writes
+# them in its own older definition, and the after-exec hook's `mxcli fix widgets` only ever runs on the
+# real model. Such a script goes straight to the slow run -- the fast one was 3.5 s spent on CE0463
+# before every page exec with a grid (b2b-orders hb4: 14-18 s prechecks of one page script).
 mx_args=(docker check -p "$scratch/$MPR")
 [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
-out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
-if grep -q 'CE0463' <<< "$out"; then
+if grep -qiE '^[[:space:]]*(datagrid|fileuploader)[[:space:]]' "$@" 2>/dev/null; then
   out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
+else
+  out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
+  if grep -q 'CE0463' <<< "$out"; then
+    out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
+  fi
 fi
 # mx check exits 0 even with model errors, so read the count it prints.
 errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"

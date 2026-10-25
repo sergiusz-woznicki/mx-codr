@@ -19,6 +19,9 @@
 //   CHART01 the request asks for a chart of the last N periods (months, weeks, days) and a chart's series
 //           comes from a group-by view: a period with no rows gets no bar (4 bars of 6), or its axis label is
 //           a number, a date or a 'yyyy-MM' text that Plotly reads as a date axis (ticks every two weeks)
+//   FIELD01 a field the request lists for an entity is bound on no page or snippet that shows it;
+//   OVERVIEW01 an entity a role of the request sees or manages has no list on a page that role reaches
+//           from the navigation (request_views.cjs)
 //   mxcli's own lint rules, each under its own code at the level of its card (tests/rulebook/lint/,
 //           passed in --levels): `mxcli lint --format json` runs here when one of them, or LINT01 (every
 //           lint rule without a card), is not off. UI001 and SEC007 are ours, so lint's copies are dropped.
@@ -31,6 +34,7 @@ const { spawnSync } = require('child_process');
 const { mxcli, ModelReadError, binary, catalogArgs } = require('./mxcli_client.cjs');
 const { readModel } = require('./security_rules.cjs');
 const { levelArgs, levelOf } = require('./rulebook.cjs');
+const { unshownFields, missingOverviews } = require('./request_views.cjs');
 
 // The grid, and the filter widgets that belong inside its columns (the Starlark's constants).
 const GRID_TYPES = new Set(['com.mendix.widget.web.datagrid.Datagrid']);
@@ -39,7 +43,7 @@ const INPUT_TYPES = new Set(['Forms$CheckBox', 'Forms$DatePicker', 'Forms$TextBo
   'com.mendix.widget.web.combobox.Combobox']);
 const MIN_INPUTS = 2;
 // The codes this file checks itself; mxcli lint reports UI001 and SEC007 too (they began as lint rules).
-const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'ASKED01', 'CHART01', 'LINT01']);
+const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'ASKED01', 'CHART01', 'FIELD01', 'OVERVIEW01', 'LINT01']);
 
 const entityOfAttribute = ref => { const parts = String(ref || '').split('.'); return parts.length < 3 ? '' : parts.slice(0, -1).join('.'); };
 
@@ -514,6 +518,23 @@ function main() {
       if (lastPeriods(requests)) {
         const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ModuleName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('PAGE', 'SNIPPET', 'MICROFLOW', 'ENTITY')", true);
         found.push(...periodCharts(requests, sources.filter(d => d.ObjectType !== 'PAGE' && d.ObjectType !== 'SNIPPET' || modules.has(d.ModuleName)), entities));
+      }
+    }
+    // FIELD01, OVERVIEW01: the fields and the lists the request names, held against the screens (request_views.cjs).
+    if (level('FIELD01') !== 'off' || level('OVERVIEW01') !== 'off') {
+      const requests = requestTexts(appDir);
+      if (requests.length) {
+        const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ModuleName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('PAGE', 'SNIPPET', 'MICROFLOW')", true);
+        const associations = mxcli(appDir, mpr, 'SELECT QualifiedName, FromEntity, ToEntity FROM CATALOG.ASSOCIATIONS', true);
+        if (level('FIELD01') !== 'off') {
+          const attributes = mxcli(appDir, mpr, 'SELECT EntityQualifiedName, Name, DataType FROM CATALOG.ATTRIBUTES', true);
+          found.push(...unshownFields(requests, entities, attributes, sources, modules, associations));
+        }
+        if (level('OVERVIEW01') !== 'off') {
+          const permissions = mxcli(appDir, mpr, "SELECT ModuleRoleName, ElementType, ElementName, AccessType FROM CATALOG.PERMISSIONS WHERE ElementType = 'PAGE'", true);
+          const roleMappings = mxcli(appDir, mpr, 'SELECT UserRoleName, ModuleRoleName FROM CATALOG.ROLE_MAPPINGS', true);
+          found.push(...missingOverviews(requests, entities, sources, modules, mxcli(appDir, mpr, 'DESCRIBE NAVIGATION'), permissions, roleMappings, associations));
+        }
       }
     }
     if (lintWanted(levels, level('LINT01'))) found.push(...lintAtLevels(lintFindings(appDir, mpr), levels, level('LINT01'), modules));
