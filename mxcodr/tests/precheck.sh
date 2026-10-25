@@ -100,18 +100,19 @@ precheck_script01() {
   fi
 }
 
-# CAPTION01-07, 09: the business captions of the flows these scripts create or modify (gate_scripts.cjs
-# captionFindings). Not a refusal: blocking each exec on them cost a B2B run rounds of rewrites, so the
-# exec hook lists them after the exec, all at once with a suggestion per line (hooks/after-mxcli-exec.sh
-# caption_note), and the full gate refuses DONE on them as before. Run by hand, the list prints here.
-# CAPTION01 `off` in tests/rulebook/naming/ turns it off.
+# CAPTION01-07, 09: the flows these scripts create or modify carry their business captions now, not after
+# the gate names them (gate_scripts.cjs captionFindings): nine to twenty-three --only runs a B2B run
+# ended with "the full gate would refuse CAPTION01". CAPTION01 `off` in tests/rulebook/naming/ turns it off.
 precheck_caption01() {
-  [ "$for_exec" = "1" ] && return 0
   if [ "$(mdl_rule_level CAPTION01 warn)" != "off" ] && [ -f tools/mdl-checks/gate_helpers.cjs ]; then
     uncaptioned="$("$NODE" tools/mdl-checks/gate_helpers.cjs captions "$@" 2>/dev/null)"
     if [ -n "$uncaptioned" ]; then
-      echo "precheck: CAPTION01 -- activities without a business caption (not blocking the exec; the full gate refuses DONE on them):"
+      echo "precheck: CAPTION01 -- activities without a business caption (the real model is untouched):"
       printf '%s\n' "$uncaptioned"
+      echo "  Put @caption '<what it does for the business>' on the line above each action and decision (a question ending in ?),"
+      echo "  @annotation '<why it repeats>' above each loop; fill each e.g.'s <slot> with what the step does for the person,"
+      echo "  in the request's words: a caption that only names the variable or the called flow is refused (CAPTION09). Then exec again."
+      exit 1
     fi
   fi
 }

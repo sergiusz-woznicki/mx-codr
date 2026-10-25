@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.25.11 · mxcli v0.28.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.25.12 · mxcli v0.28.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -390,7 +390,7 @@ html { scroll-behavior: smooth; }
   <div class="table-wrap"><table class="rules">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
-      <tr><td><code>CAPTION01</code></td><td>Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Listed after each exec with a suggested caption per line (the exec is not refused), and refused at DONE -- the first DONE too -- in any script the exec applied.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>CAPTION01</code></td><td>Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Checked before each exec too, with a suggested caption per line.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION02</code></td><td>No activity keeps the caption Mendix gives it by default, like "Retrieve Invoice" or "Commit object".</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION03</code></td><td>Every decision has a caption.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION04</code></td><td>A decision's caption is a question and ends with "?", like "Is the order approved?".</td><td><span class="lvl a">After DONE</span></td></tr>
@@ -398,7 +398,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>CAPTION06</code></td><td>Every loop has an annotation saying what it walks through.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION07</code></td><td>A loop has no caption: mxcli drops loop captions, so the text belongs in the annotation.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>CAPTION08</code></td><td>Points out a decision whose caption was overwritten by its expression.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>CAPTION09</code></td><td>A caption says more than its line: a call's caption is not the called microflow's name ("Run send reminder"), a commit's or retrieve's is not a stock verb with its own variable ("Save the ticket" over a commit of $Ticket, "Load the open tickets"), and no caption is a stock phrase ("Work out the value") or a suggested caption's <code>&lt;slot&gt;</code> left unfilled. Listed after each exec; refused at DONE in a script the exec applied.</td><td><span class="lvl a">After DONE</span></td></tr>
+      <tr><td><code>CAPTION09</code></td><td>A caption says more than its line: a call's caption is not the called microflow's name ("Run send reminder"), a commit's or retrieve's is not a stock verb with its own variable ("Save the ticket" over a commit of $Ticket, "Load the open tickets"), and no caption is a stock phrase ("Work out the value") or a suggested caption's <code>&lt;slot&gt;</code> left unfilled. Checked before each exec too.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>VAR01</code></td><td>No variables named like <code>$Int1</code>, <code>$tmp</code> or <code>$x</code>. A name says what the variable holds, like <code>$OpenInvoiceCount</code>.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>VAR02</code></td><td>No variable names ending in <code>_List</code>, <code>_Object</code> or <code>_Obj</code>: <code>$OverdueInvoices</code>, not <code>$Invoice_List</code>.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REFRESH01</code></td><td>When the Save button of a pop-up commits an object and closes the pop-up, the commit refreshes the client. Otherwise the list behind the pop-up does not show the new or changed row until the user reloads.</td><td><span class="lvl b">Blocks</span></td></tr>

@@ -20,7 +20,7 @@ When it answers DONE, the last lines are a **STOP BUILDING** block: do not edit 
 again, write the report; the warnings above it are marked report-only and go into the report as "to fix next".
 The very last line of every run is `timing:` -- where the seconds went (setup, data reset, boot, preflight,
 tests, checks, restore) and the checks that ran beside them; the table is `.mxcli/last-timing.txt`.
-Harness bundle 2026.10.25.11.
+Harness bundle 2026.10.25.12.
 
 ## Install
 
@@ -244,7 +244,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 
 | Rule | What it checks | Level |
 |---|---|---|
-| `CAPTION01` | Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Listed after each exec with a suggested caption per line (the exec is not refused), and refused at DONE -- the first DONE too -- in any script the exec applied. | Warning until the first DONE; then blocks a new or changed microflow |
+| `CAPTION01` | Every activity (retrieve, create, change, commit, delete, show page, call…) has a caption in business words, like "Find the customer's open invoices". Checked before each exec too, with a suggested caption per line. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION02` | No activity keeps the caption Mendix gives it by default, like "Retrieve Invoice" or "Commit object". | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION03` | Every decision has a caption. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION04` | A decision's caption is a question and ends with "?", like "Is the order approved?". | Warning until the first DONE; then blocks a new or changed microflow |
@@ -252,7 +252,7 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `CAPTION06` | Every loop has an annotation saying what it walks through. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION07` | A loop has no caption: mxcli drops loop captions, so the text belongs in the annotation. | Blocks |
 | `CAPTION08` | Points out a decision whose caption was overwritten by its expression. | Warning |
-| `CAPTION09` | A caption says more than its line: a call's caption is not the called microflow's name ("Run send reminder"), a commit's or retrieve's is not a stock verb with its own variable ("Save the ticket" over a commit of $Ticket, "Load the open tickets"), and no caption is a stock phrase ("Work out the value") or a suggested caption's `<slot>` left unfilled. Listed after each exec; refused at DONE in a script the exec applied. | Warning until the first DONE; then blocks a new or changed microflow |
+| `CAPTION09` | A caption says more than its line: a call's caption is not the called microflow's name ("Run send reminder"), a commit's or retrieve's is not a stock verb with its own variable ("Save the ticket" over a commit of $Ticket, "Load the open tickets"), and no caption is a stock phrase ("Work out the value") or a suggested caption's `<slot>` left unfilled. Checked before each exec too. | Warning until the first DONE; then blocks a new or changed microflow |
 | `DS01` | A data grid, list view or gallery whose data source is a microflow that only retrieves rows uses a Database source instead. The database then pages, sorts and filters, which is much faster. | Blocks |
 | `ERR01` | Points out an error handler that nobody would notice: it should log, show a message, raise the error again or return. One that logs names the error itself (`$latestError/Message`, or `$latestHttpResponse` after a REST call), not only that something failed. | Warning |
 | `EVENT01` | An entity's after-commit event microflow does not commit its own object again with events. That commit starts the same event again: an endless loop. | Blocks |

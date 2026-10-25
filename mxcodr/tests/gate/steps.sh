@@ -127,40 +127,7 @@ check_naming() {
   if [ "$gate" = "2" ]; then
     checker_failed naming check_mdl.cjs "$code" "$out"; return 2
   fi
-  naming_record_findings; gate=$?
-  naming_applied_captions || gate=1
-  return "$gate"
-}
-
-# CAPTION01-07, 09 on the scripts that applied (.mxcli/applied/: each script as its last exec wrote it).
-# The precheck refused such a script at the exec until bundle 2026.10.25.11; it is listed after the exec
-# now (hooks/after-mxcli-exec.sh caption_note), and this refuses DONE on it instead -- the first DONE too,
-# before captions-baseline.json exists -- so a DONE is as captioned as the exec refusal kept it. The same
-# function and codes as that refusal; CAPTION01 `off` turns both off. False when it found any.
-naming_applied_captions() {
-  local copy original line count
-  local -a copies=()
-  [ "$(mdl_rule_level CAPTION01 warn)" != "off" ] || return 0
-  for copy in .mxcli/applied/*; do
-    case "$copy" in *.git) continue ;; esac
-    [ -f "$copy" ] || continue
-    original="$(basename "$copy" | tr '%' '/')"
-    [ -f "$original" ] && copies+=("$copy")
-  done
-  [ "${#copies[@]}" -gt 0 ] || return 0
-  "$NODE" tools/mdl-checks/gate_helpers.cjs captions "${copies[@]}" > "$WORK/naming.applied" 2>/dev/null
-  [ -s "$WORK/naming.applied" ] || return 0
-  # "  .mxcli/applied/mdlsource%40_x.mdl:4: [CAPTION01] ..." -> "  - [CAPTION01] mdlsource/40_x.mdl:4: ..."
-  while IFS= read -r line; do
-    copy="${line#  .mxcli/applied/}"; original="${copy%%:*}"
-    copy="${copy#*:}"; count="${copy%%:*}"; copy="${copy#*: }"
-    printf '  - %s %s:%s: %s\n' "${copy%% *}" "$(printf '%s' "$original" | tr '%' '/')" "$count" "${copy#* }"
-  done < "$WORK/naming.applied" > "$WORK/naming.applied.lines"
-  count="$(grep -c . "$WORK/naming.applied.lines")"
-  echo "naming: FAIL -- $count caption finding(s) in scripts the exec applied (CAPTION01-09, refused at DONE): fix them in place, then exec each script once" >> "$WORK/naming.summary"
-  head -10 "$WORK/naming.applied.lines" >> "$WORK/naming.detail"
-  [ "$count" -gt 10 ] && echo "  ... 10 of $count caption findings shown -- \`bash tests/precheck.sh <script>\` lists a script's" >> "$WORK/naming.detail"
-  return 1
+  naming_record_findings
 }
 
 # naming_caption_mode -- what check_mdl.cjs gets as --captions: `error` when the six baseline caption
