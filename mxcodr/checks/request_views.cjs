@@ -1,22 +1,16 @@
 'use strict';
-// What the request (docs/brain/requests/*.md) names, held against the screens. Two catalog-step rules:
-//
-//   FIELD01  a field the request lists for an entity ("Line: product, quantity, unitPriceNet, netValue") is
-//            bound on no page or snippet that shows that entity. A B2B run kept the copied unit price in the
-//            database and showed each line as "name x qty, net, gross": the person could not see the price
-//            the order was placed at (b2b-orders hb4, 2026-10-25).
-//   OVERVIEW01 an entity a role of the request sees, views, lists or manages ("Agent: sees all tickets",
-//            "Agent: sees everything") has a list of it on a page that role reaches from the navigation --
-//            its home page or a menu item. "All" or "everything" asks for an overview of every row: a list
-//            whose data source is not tied to an object the page was given. The same run had no list of
-//            invoices or products for the role that "sees everything"; a run without the harness had both.
+// FIELD01, catalog step: the request (docs/brain/requests/*.md) lists the fields of an entity ("Line: product,
+// quantity, unitPriceNet, netValue") and asks for a view of it ("the full list of line items", "a table of their
+// invoices", "the ticket details"); each listed field is then bound on a page or snippet that shows that entity.
+// A B2B run kept the copied unit price on each order line and showed the lines as "name x qty, net, gross": the
+// person never saw the price the order was placed at (b2b-orders hb4, 2026-10-25). An entity the request asks no
+// view of, or that no page shows, is not judged: the rule never asks for a page the request did not name.
 //
 // Matching is by name only, so it stays generic: a request word matches an entity or an attribute when
 // they are the same letters once case, spaces and underscores are gone ("unit price net" = UnitPriceNet,
 // "order number" = Order + Number); a list head matches the longest entity name it starts with
 // ("OrderLineItem" -> OrderLine). A line counts as a field list only with three items or more, two of
-// which name attributes, so prose is left alone. Nothing here judges a field shown on no screen at all,
-// or an entity without a page: those are OVERVIEW01's, when a role asks to see them.
+// which name attributes, so prose is left alone.
 
 const QNAME = '"?\\w+"?\\."?\\w+"?';
 const unquote = name => String(name || '').replace(/"/g, '');
@@ -203,6 +197,26 @@ const SKIP_TYPES = /^(HashString|Binary)$/i;
 // Words in a field's brackets that say its type or a rule, not a field of its own: "price (number, net)".
 const TYPE_WORDS = /^(?:string|text|number|integer|int|long|decimal|float|boolean|bool|date|datetime|time|currency|money|enum|enumeration|unique|default|optional|required|mandatory|net|gross|calculated)$/i;
 
+// The words a request uses for a view of rows or of one row.
+const VIEWS = '(?:list|lists|table|tables|grid|overview|history|timeline|details?|columns?)';
+const VIEW_WORDS = new RegExp(`\\b${VIEWS}\\b`, 'i');
+// Does the request ask for a view of this entity? "list of line items", "table of their invoices", "order
+// details", "status history": the head word or the entity's name (its last two words, or one when it has one).
+// A picker is no view: "a dropdown list of the customers".
+function viewAsked(headWord, entity, requests) {
+  const split = w => String(w).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[\s_]+/).filter(Boolean);
+  const forms = new Set();
+  for (const words of [split(headWord), split(shortName(entity))]) {
+    for (let i = 0; i < words.length; i++) {
+      const tail = words.slice(i);
+      if (tail.length < Math.min(2, words.length)) continue;
+      for (const last of plural(tail[tail.length - 1])) forms.add([...tail.slice(0, -1), last].join(' '));
+    }
+  }
+  const text = ' ' + requests.map(([, t]) => t).join(' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ';
+  return [...forms].some(f => new RegExp(`(?<!\\b(?:drop ?down|select|pick|choose)\\s)\\b${VIEWS}\\s+of\\s+(?:\\w+\\s+){0,3}?${f}\\b|\\b${f}\\s+${VIEWS}\\b`).test(text));
+}
+
 // FIELD01: [{code, key, message}].
 function unshownFields(requests, entities, attributes, sources, modules, associations = []) {
   const own = entities.filter(e => modules.has(e.ModuleName) && /^persistent$/i.test(e.EntityType || '')).map(e => e.QualifiedName);
@@ -211,6 +225,9 @@ function unshownFields(requests, entities, attributes, sources, modules, associa
   const out = [], said = new Set();
   for (const list of fieldLists(requests)) {
     const head = list.head ? entityFor(list.head, own) : null;
+    // Only a view the request asks for: of the head's entity somewhere in it, or, for a list with no head,
+    // the line itself ("A table with columns: number, subject, priority").
+    if (list.head ? !(head && viewAsked(list.head, head, requests)) : !VIEW_WORDS.test(list.line)) continue;
     const fields = [];
     for (const item of list.items) {
       const found = attributesFor(item.name, head, attrs, own);
@@ -239,176 +256,4 @@ function unshownFields(requests, entities, attributes, sources, modules, associa
   return out;
 }
 
-const VIEW_VERBS = /\b(?:sees?|seeing|views?|viewing|lists?|listing|brows(?:e|es|ing)|manag(?:e|es|ing)|filters?|searche?s?|tracks?|overview|widzi|przegl[aą]da|zarz[aą]dza|sieht|verwaltet)\b/i;
-const EVERYTHING = /\b(?:sees?|views?|access(?:es)?\s+to|widzi|sieht)\s+(?:everything|all\s+(?:data|records|of\s+it)|wszystko|alles)\b/i;
-
-// The first view verb of a clause, not a noun: "a dropdown list of the customers" and "their own view" name none.
-const NOUN_BEFORE = /\b(?:a|an|the|this|that|its|their|your|own|dropdown|drop-down|price|pick|select|order|to-do|todo)\s*$/i;
-function verbIn(clause) {
-  const re = new RegExp(VIEW_VERBS.source, 'gi');
-  for (const m of clause.matchAll(re)) if (!NOUN_BEFORE.test(clause.slice(0, m.index))) return m;
-  return null;
-}
-
-// "never sees", "cannot view", "no access to": a view the role must not have.
-const NEGATION = /\b(?:never|not|no|cannot|can't|cant|nobody|without|nie|nicht|kein\w*)\b/i;
-// What a verb takes: the words up to the first preposition, possessives dropped. "see today's bookings for
-// all rooms" asks for bookings; "other customers' invoices" names invoices. "A list of" keeps its "of".
-function objectOf(text) {
-  const words = String(text).replace(/\b\w+(?:'s|s')(?=\s|$)/gi, ' ').replace(/\b\w+['’]s\b/gi, ' ').split(/\s+/).filter(Boolean);
-  const out = [];
-  for (const w of words) {
-    const bare = w.toLowerCase().replace(/[^a-ząćęłńóśźż]/g, '');
-    if (/^(?:for|in|from|with|by|per|at|on|within|across|inside|under|about|to|into|z|dla|w|na|f[uü]r|im|mit|von)$/.test(bare)) break;
-    if (bare === 'of' && !/^(?:list|lists|overview|table|grid|history|all|each|any|every)$/i.test((out[out.length - 1] || '').replace(/[^a-z]/gi, ''))) break;
-    out.push(w);
-  }
-  return out.join(' ');
-}
-
-// The entities a clause names, longest name first: "order lines" is OrderLine, not Order.
-function entitiesNamed(clause, entities) {
-  const text = ' ' + clause.toLowerCase().replace(/[^a-z0-9ąćęłńóśźż]+/g, ' ') + ' ';
-  const found = [];
-  let rest = text;
-  const byLength = [...entities].sort((a, b) => shortName(b).length - shortName(a).length);
-  for (const e of byLength) {
-    const words = shortName(e).replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase().split(/[\s_]+/);
-    const last = words.pop();
-    const forms = plural(last).map(f => ' ' + [...words, f].join(' ') + ' ');
-    const hit = forms.find(f => rest.includes(f));
-    if (!hit) continue;
-    const all = new RegExp(`\\b(?:all|every|each|wszystk\\w*|alle)\\s+(?:the\\s+|of\\s+the\\s+)?${hit.trim().replace(/\s+/g, '\\s+')}\\b`).test(text);
-    found.push({ entity: e, all });
-    rest = rest.split(hit).join(' ');
-  }
-  return found;
-}
-
-// [{role, entity, all, file, quote}] -- what each role of the request is to see.
-function roleViews(requests, roleNames, topLevel, entities) {
-  const out = [];
-  const roleOf = word => roleNames.find(r => plural(norm(r)).includes(norm(word)));
-  for (const { file, line } of requestLines(requests)) {
-    const lead = /^([A-Za-z][A-Za-z ]{0,30}?)\s*[:–—-]\s+(.*)$/.exec(line);
-    const sentences = [];
-    if (lead && roleOf(lead[1])) sentences.push([roleOf(lead[1]), lead[2]]);
-    else {
-      for (const s of line.split(/(?<=[.;!?])\s+/)) {
-        const m = /^(?:the\s+|an?\s+|each\s+|every\s+)?([A-Za-z]+)\b(.*)$/i.exec(s.trim());
-        if (m && roleOf(m[1]) && verbIn(m[2].split(/[,;—–(]/)[0])) sentences.push([roleOf(m[1]), m[2]]);
-      }
-    }
-    for (const [role, text] of sentences) {
-      if (EVERYTHING.test(text)) for (const e of topLevel) out.push({ role, entity: e, all: true, file, quote: line });
-      for (const clause of text.split(/[,;.—–()]/)) {
-        const verb = verbIn(clause);
-        if (!verb) continue;
-        if (NEGATION.test(clause.slice(0, verb.index))) continue;
-        for (const { entity, all } of entitiesNamed(objectOf(clause.slice(verb.index + verb[0].length)), entities)) out.push({ role, entity, all, file, quote: line });
-      }
-    }
-  }
-  return out;
-}
-
-// The pages each user role reaches from the navigation: its home page (the default one when it has
-// none of its own) and the menu items it may open, a menu microflow's `show page` included.
-function navigationPages(navigationText, sources, permissions, roleMappings, roleNames) {
-  const text = String(navigationText || '');
-  const source = {};
-  for (const d of sources) source[d.QualifiedName] = d.SourceText || '';
-  const shownBy = flow => [...String(source[flow] || '').matchAll(new RegExp(`\\bshow\\s+page\\s+(${QNAME})`, 'gi'))].map(m => unquote(m[1]));
-  const homes = {}, defaults = [], menu = [];
-  for (const m of text.matchAll(new RegExp(`\\bhome\\s+(page|microflow)\\s+(${QNAME})(?:\\s+for\\s+("?[\\w]+"?))?`, 'gi'))) {
-    const pages = m[1].toLowerCase() === 'page' ? [unquote(m[2])] : shownBy(unquote(m[2]));
-    if (m[3]) (homes[unquote(m[3])] = homes[unquote(m[3])] || []).push(...pages); else defaults.push(...pages);
-  }
-  for (const m of text.matchAll(new RegExp(`\\bmenu\\s+item\\b[^\\n]*?\\b(show\\s+page|call\\s+microflow)\\s+(${QNAME})`, 'gi'))) {
-    if (/^show/i.test(m[1])) menu.push(unquote(m[2])); else menu.push(...shownBy(unquote(m[2])));
-  }
-  const viewers = {};
-  for (const p of permissions) if (p.ElementType === 'PAGE' && p.AccessType === 'VIEW') (viewers[p.ElementName] = viewers[p.ElementName] || new Set()).add(p.ModuleRoleName);
-  const out = {};
-  for (const role of roleNames) {
-    const moduleRoles = new Set(roleMappings.filter(r => r.UserRoleName === role).map(r => r.ModuleRoleName));
-    const may = page => !viewers[page] || !moduleRoles.size || [...viewers[page]].some(r => moduleRoles.has(r));
-    out[role] = new Set([...(homes[role] || defaults), ...menu].filter(may));
-  }
-  return out;
-}
-
-// A data source's own text: up to the comma or the bracket that ends it, brackets and quotes kept whole.
-function dataSourceText(text, from) {
-  let depth = 0, i = from;
-  for (; i < text.length; i++) {
-    const c = text[i];
-    if (c === "'") { i = text.indexOf("'", i + 1); if (i < 0) return text.slice(from); continue; }
-    if ('([{'.includes(c)) depth++;
-    else if (')]}'.includes(c)) { if (depth === 0) break; depth--; }
-    else if ((c === ',' || c === '\n') && depth === 0) break;
-  }
-  return text.slice(from, i).trim();
-}
-
-// The lists a page or snippet holds, with the snippets it places: [{entity, overview}]. An overview lists
-// every row the role may read: a database source tied to no object of the page, or a flow without arguments.
-function listsOn(doc, source, flowReturns, associations = {}, seen = new Set()) {
-  if (seen.has(doc) || !(doc in source)) return [];
-  seen.add(doc);
-  const text = source[doc];
-  const out = [];
-  for (const m of text.matchAll(/\b(?:datagrid|gallery|listview|combobox)\s+[\w"]+\s*\(([^{;]*?)DataSource:\s*/gi)) {
-    const ds = dataSourceText(text, m.index + m[0].length);
-    let d;
-    if ((d = new RegExp(`^database\\s+(?:from\\s+)?(${QNAME})(.*)$`, 'i').exec(ds))) out.push({ entity: unquote(d[1]), overview: !/\[%CurrentObject%\]|\$/.test(d[2]) });
-    else if ((d = new RegExp(`^\\$\\w+/(${QNAME})`).exec(ds)) && associations[unquote(d[1])]) {
-      const a = associations[unquote(d[1])];
-      out.push({ entity: a.ToEntity, overview: false }, { entity: a.FromEntity, overview: false });
-    } else if ((d = new RegExp(`^microflow\\s+(${QNAME})\\s*(\\(([^)]*)\\))?`, 'i').exec(ds)) && flowReturns[unquote(d[1])]) {
-      out.push({ entity: flowReturns[unquote(d[1])], overview: !(d[3] || '').trim() });
-    }
-  }
-  for (const m of text.matchAll(new RegExp(`\\bSnippet:\\s*(${QNAME})`, 'g'))) out.push(...listsOn(unquote(m[1]), source, flowReturns, associations, seen));
-  return out;
-}
-
-// OVERVIEW01: [{code, key, message}].
-function missingOverviews(requests, entities, sources, modules, navigationText, permissions, roleMappings, associationRows = []) {
-  const associations = associationMap(associationRows);
-  const own = entities.filter(e => modules.has(e.ModuleName) && /^persistent$/i.test(e.EntityType || '')).map(e => e.QualifiedName);
-  const roleNames = [...new Set(roleMappings.map(r => r.UserRoleName))];
-  if (!own.length || !roleNames.length) return [];
-  // The entities the request's data model describes, less the parts of another ("lines: OrderLine[]").
-  const lists = fieldLists(requests);
-  const parts = new Set(lists.flatMap(l => l.items.map(i => i.type).filter(Boolean)).map(t => entityFor(t, own)).filter(Boolean));
-  const topLevel = [...new Set(lists.map(l => (l.head ? entityFor(l.head, own) : null)).filter(e => e && !parts.has(e)))];
-  const wanted = roleViews(requests, roleNames, topLevel, own);
-  if (!wanted.length) return [];
-  const source = {}, flowReturns = {};
-  for (const d of sources) {
-    source[d.QualifiedName] = d.SourceText || '';
-    const r = new RegExp(`\\breturns\\s+list\\s+of\\s+(${QNAME})`, 'i').exec(d.SourceText || '');
-    if (d.ObjectType === 'MICROFLOW' && r) flowReturns[d.QualifiedName] = unquote(r[1]);
-  }
-  const reach = navigationPages(navigationText, sources, permissions, roleMappings, roleNames);
-  const out = [], said = new Set();
-  for (const w of wanted) {
-    const key = `${w.role}:${w.entity}`;
-    if (said.has(key)) continue;
-    const lists = [...(reach[w.role] || [])].flatMap(page => listsOn(page, source, flowReturns, associations).map(l => ({ ...l, page })));
-    const ofIt = lists.filter(l => l.entity === w.entity);
-    if (ofIt.some(l => !w.all || l.overview)) continue;
-    said.add(key);
-    const name = shortName(w.entity);
-    const quote = w.quote.length > 90 ? w.quote.slice(0, 87) + '...' : w.quote;
-    out.push({ code: 'OVERVIEW01', key: w.entity, message: `the request has ${w.role} see ${w.all ? 'all ' : ''}${name} rows ("${quote}", ${w.file}), ` +
-      `and no page ${w.role} reaches from the navigation (its home page, a menu item) ${ofIt.length ? `lists every ${name}: ${[...new Set(ofIt.map(l => l.page))].join(', ')} lists only the ones of an object it was given` : `lists ${name}`}. ` +
-      `Add an overview page: a data grid with DataSource: database from ${w.entity}, its columns the fields the request names, a grant view on page to ${w.role}'s module role, ` +
-      `and a menu item for it (alter navigation ... insert before 'Log out'); assert its rows in a test signed in as ${w.role}. ` +
-      `When the request means something else here: say so in the final report; the person adds \`except: ${w.entity}\` under ## Local in tests/rulebook/catalog/OVERVIEW01.md` });
-  }
-  return out;
-}
-
-module.exports = { fieldLists, entityFor, attributesFor, screenBindings, unshownFields, roleViews, entitiesNamed, navigationPages, listsOn, missingOverviews };
+module.exports = { fieldLists, entityFor, attributesFor, screenBindings, viewAsked, unshownFields };

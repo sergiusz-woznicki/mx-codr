@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.25.7 · mxcli v0.28.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.25.8 · mxcli v0.28.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -317,8 +317,8 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">125</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">75</span><span class="t">always stop DONE</span></div>
+    <div class="count"><span class="n">124</span><span class="t">mx-codr rules</span></div>
+    <div class="count b"><span class="n">74</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">37</span><span class="t">warnings</span></div>
@@ -520,8 +520,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>PUBLISH01</code></td><td>A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEED01</code></td><td>A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>ASKED01</code></td><td>The request asks for a calendar, a map or a chart, and a page shows that widget: a dated list in place of a calendar is a simplification nobody agreed to. Install one published by Mendix or Mendixlabs, or say in the report why not.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>FIELD01</code></td><td>The request lists the fields of something ("Ticket: number, subject, priority"), and each field that exists in the app is shown on a page that shows that thing: a column, a field of its detail, a value in a text. Matched by name, ignoring case and spaces; something no page shows yet is OVERVIEW01's (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>OVERVIEW01</code></td><td>The request says a role sees, views, lists or manages something ("Agent: can view all tickets", "sees everything"), and that role finds a list of it from its home page or menu; "all" or "everything" asks for a list of every row, not one tied to an object the page was given. "Never sees", "a dropdown list" and "bookings for all rooms" are not read as views (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>FIELD01</code></td><td>The request lists the fields of something ("Ticket: number, subject, priority") and asks for a view of it ("the full list of line items", "the ticket details", a table with columns), and each field that exists in the app is shown where that thing is shown: a column, a field of its detail, a value in a text. Matched by name, ignoring case and spaces; something the request asks no view of, or no page shows, is not judged (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>CHART01</code></td><td>The request asks for a chart of the last N months, weeks or days, and the chart has N bars: not one fed by a group-by view (a period with no rows gets no bar), and not one whose x axis is a number, a date or a "2026-05" text (the chart then draws a date axis with ticks between the bars). The fix is N rows built in the data-source microflow, 0 for an empty period, labelled like "May 2026" (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
