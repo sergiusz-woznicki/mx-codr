@@ -22,10 +22,9 @@ set -euo pipefail
 A `verify-*.test.sh` is a browser test and only a browser test: the gate hands it to
 `mxcli playwright verify`, which waits for a browser result, so a script that never
 calls `scenario()` hangs for the full timeout. Logic no screen can drive, such as what a
-scheduled event picks or the after-startup seed, gets a `tests/<feature>.test.mdl` instead
-(`microflow-tests.md`: when, and what to read before changing a microflow for a red one).
-The full gate runs it once everything else is green (MFTEST01); coverage counts only
-`verify-*.test.sh`.
+scheduled event picks or the after-startup seed, gets no test now: list it under "Suggested
+microflow tests" in the final report (`microflow-tests.md`; they are optional, and if one exists
+the full gate runs it, MFTEST01, as a warning). Coverage counts only `verify-*.test.sh`.
 
 **2. Run it and watch it fail.** `bash tests/gate.sh --only <feature> --boot-if-needed`.
 Quote the failure and read it — the line is self-contained (the Playwright error, the
@@ -78,3 +77,4 @@ Never report a feature as working on the strength of having written it. Paste wh
 gate printed. When it prints `NOT DONE`, the cause of each failure is under the verdict.
 At `DONE` the build is over: edit nothing, do not run the gate again, write the report. Warnings
 and open captions printed above it go in the report as "to fix next" -- copied, not fixed.
+It ends with the "Suggested microflow tests" the gate lists: optional, for the person.

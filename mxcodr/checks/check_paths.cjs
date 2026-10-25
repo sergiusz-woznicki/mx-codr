@@ -14,8 +14,8 @@
 //   ROLE01     each demo user's role is the user of some test
 //   SVC01      each published REST or OData service is called by a test
 //   SCOPE03    a page, ACT_ microflow or helper entity that serves no approved requirement (scope_rules.cjs)
-//   TIMER01    the work behind a scheduled event or a workflow timer is a microflow a test runs:
-//              nothing that waits days can be seen in a test otherwise
+//   TIMER01    (warn) the work behind a scheduled event or a workflow timer that no test runs: a
+//              suggested microflow test for the final report, never an obligation
 //
 // Only the tests the gate runs count (tests/verify-*.test.sh), and only outside comment lines: a `# covers:` line, or a comment
 // quoting a message, walks nothing. A test signs in as a demo user when its text names that user
@@ -223,13 +223,15 @@ function findings(model, tests, modules, run = new Set()) {
   }
 
   // TIMER01: a leave app escalated after 3 days and carried days over at the year change; neither ran
-  // in any test, and both runs said DONE (leave-l1, leave-l2, 2026-10-18).
+  // in any test, and both runs said DONE (leave-l1, leave-l2, 2026-10-18). A warning (the card's level)
+  // and a suggested microflow test for the final report: microflow tests are never an obligation, and an
+  // action built only to start the job by hand is a screen nobody asked for (decision 2026-10-25).
   for (const e of model.scheduledEvents || []) {
     if (!own.has(String(e.name).split('.')[0]) || !e.microflow || run.has(e.microflow)) continue;
     out.push({ code: 'TIMER01', key: e.name, version: hash(e.microflow + '|' + e.repeat),
-      message: `scheduled event ${e.name} runs ${e.microflow} (${e.repeat}) and no test runs it: a test cannot wait for the schedule -- ` +
-        `call it in a microflow test (tests/<feature>.test.mdl) on records past the deadline and assert what it picked and what it left, ` +
-        `or give a person an action that runs it and name it on the \`# covers:\` line of the browser test that clicks it` });
+      message: `suggested microflow test: what ${e.microflow} of scheduled event ${e.name} (${e.repeat}) picks and what it leaves ` +
+        `(optional: a test cannot wait for the schedule and no test runs it; a browser test that clicks an action the request asked for ` +
+        `and names it on its \`# covers:\` line counts -- do not build one only to test it; list it in your final report)` });
   }
   for (const d of ownDocs.filter(d => d.ObjectType === 'WORKFLOW')) {
     for (const t of workflowTimers(d.SourceText || '')) {
@@ -237,11 +239,14 @@ function findings(model, tests, modules, run = new Set()) {
       const key = `${d.QualifiedName}/${t.task}#timer`;
       if (!calls.length) {
         out.push({ code: 'TIMER01', key, version: hash(d.SourceText),
-          message: `workflow ${d.QualifiedName}: the timer on user task ${t.task} does its work with no microflow, so it happens only when the time is up and no test sees it -- ` +
-            `put what it does in a microflow the timer calls (\`call microflow Module.SUB_<What>(...)\` in the boundary event), and run that microflow in a test on a record past the deadline` });
+          message: `suggested microflow test: what the timer on user task ${t.task} of workflow ${d.QualifiedName} does ` +
+            `(optional: its work is in no microflow, so no test can run it -- put it in a microflow the timer calls, ` +
+            `\`call microflow Module.SUB_<What>(...)\` in the boundary event; list it in your final report)` });
       } else if (!calls.some(c => run.has(c))) {
         out.push({ code: 'TIMER01', key, version: hash(d.SourceText),
-          message: `workflow ${d.QualifiedName}: the timer on user task ${t.task} calls ${calls.join(', ')}, which no test runs -- call it in a microflow test on a record past the deadline and assert what changed (who has the task now), or name it on the \`# covers:\` line of a browser test that starts it by hand` });
+          message: `suggested microflow test: what ${calls.join(', ')} changes when the timer on user task ${t.task} of workflow ${d.QualifiedName} fires ` +
+            `(optional: no test runs it; a browser test that starts it from an action the request asked for and names it on its \`# covers:\` line counts; ` +
+            'list it in your final report)' });
       }
     }
   }

@@ -33,8 +33,8 @@ bash tests/gate.sh                           # "done" is this ending in DONE; --
 ```
 
 The gate boots, restarts and waits itself: never boot the app or run `mxcli test` by hand.
-Never wrap a harness command in `timeout`. Never hand-roll a wait for the app. Microflow tests (`*.test.mdl`) run in
-the full gate (MFTEST01); coverage counts only `tests/verify-*.test.sh`.
+Never wrap a harness command in `timeout`. Never hand-roll a wait for the app. Microflow tests (`*.test.mdl`) are
+optional: write none, suggest them in the report. Coverage counts only `tests/verify-*.test.sh`.
 
 **What each check code wants, and its fix: `tests/checks/<step>.md`**, named by the gate for the failed step; `tests/CHECKS.md` says which file holds a code. Each rule is a card, `tests/rulebook/<group>/<CODE>.md`; its level and exceptions are the person's. Read that, never `tests/gate/*.sh` or the checkers.
 

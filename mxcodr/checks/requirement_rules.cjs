@@ -104,33 +104,30 @@ function readsModel(line, vars) {
 
 // Where each id is named, and the test code under it: from its `# requirement:` line (or a run of
 // them) to the next one, comments and reads of the model's own text left out. {id: {file, code}},
-// the code lower-cased.
-// A microflow test (tests/<feature>.test.mdl) names one with `-- requirement: <id>` above its block, and its
-// `@test` / `@expect` / `@throws` lines count as its code; `browser` says whether a browser test named it.
+// the code lower-cased. Only the browser tests (tests/verify-*.test.sh) prove a requirement: a microflow
+// test is never an obligation and never a proof (decision 2026-10-25).
 function namedRequirements(testFiles) {
   const named = new Map();
   for (const [file, text] of testFiles) {
     const vars = modelReadVariables(text);
-    const mdl = /\.test\.mdl$/.test(file);
     let pending = [], code = [], sawCode = false;
     const flush = () => {
       const block = code.join('\n').toLowerCase();
       for (const id of pending) {
-        const seen = named.get(id) || { file, code: '', browser: false };
+        const seen = named.get(id) || { file, code: '' };
         seen.code += '\n' + block;
-        if (!mdl) { seen.browser = true; seen.file = file; }
         named.set(id, seen);
       }
       pending = []; code = []; sawCode = false;
     };
     for (const line of text.split(/\r?\n/)) {
-      const m = (mdl ? /^\s*--\s*requirements?\s*:\s*(.+)$/i : /^\s*#\s*requirements?\s*:\s*(.+)$/i).exec(line);
+      const m = /^\s*#\s*requirements?\s*:\s*(.+)$/i.exec(line);
       if (m) {
         if (sawCode) flush();
         pending.push(...(m[1].match(/[0-9a-f]{6,}/g) || []));
         continue;
       }
-      if (mdl ? /^\s*--/.test(line) : /^\s*(#|\/\/)/.test(line)) continue;
+      if (/^\s*(#|\/\/)/.test(line)) continue;
       if (pending.length && line.trim()) { sawCode = true; if (!readsModel(line, vars)) code.push(line); }
     }
     flush();
@@ -159,7 +156,11 @@ function looksFor(code, literal) {
 // 10/6/2026 and 19190.829 under a gate that said DONE (InvoiceB2BG2, 2026-10-12). So a requirement
 // counts as tested when the code under its name holds one of its own words that few other
 // requirements share -- a selector, a value, an OQL column, or the fail message that says what is checked.
-function judgeRequirements(requirements, open, named, mftest = false) {
+// A requirement no test names whose "checked when" names no screen cue -- a data rule (a format,
+// uniqueness, a bound) or logic no requested screen reaches -- is a suggested microflow test, a warning:
+// REQ02 that asked for a browser test sent a run to build two edit pages nobody asked for (b2b-orders hb2,
+// 2026-10-25). One with no "checked" clause, or with a screen cue, still needs its browser test.
+function judgeRequirements(requirements, open, named) {
   const out = [];
   const words = t => new Set((t.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(w => w.length >= 4 && !STOP.has(w)));
   const df = new Map();
@@ -169,26 +170,17 @@ function judgeRequirements(requirements, open, named, mftest = false) {
   for (const r of requirements) {
     const where = named.get(r.id);
     if (!where) {
-      out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
-        message: `requirement ${r.id} (docs/brain/plan/${r.slice}) has no test: "${r.text}" -- write the test that ` +
-          `checks its "checked when" and name it there, a line \`# requirement: ${r.id}\` above the step that checks it` +
-          (mftest ? `. A data rule no screen of the request shows (a format, uniqueness, a bound, a validation) needs no page of its own: ` +
-            `a microflow test in tests/<feature>.test.mdl proves it, \`-- requirement: ${r.id}\` above its /** @test */ block, ` +
-            'calling the microflow that saves or validates (reference/microflow-tests.md of test-first-delivery)' : '') });
-      continue;
-    }
-    if (!where.browser) {
-      // A data rule (a format, uniqueness, a bound, a validation) may be proved by a microflow test; what a
-      // person meets on a screen may not: a run whose data rules REQ02 could only see in browser tests built
-      // two edit pages nobody asked for to test them (b2b-orders, 2026-10-25).
-      const checked = (/\bchecked\b(.*)$/i.exec(r.text) || [null, r.text])[1];
-      const cue = SCREEN_CUE.exec(checked);
-      if (cue) {
-        out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
-          message: `${where.file} names requirement ${r.id} only in a microflow test, but it is what a person meets on a screen ` +
-            `("${cue[0]}"): "${r.text}" -- check it in a browser test (tests/verify-<feature>.test.sh), \`# requirement: ${r.id}\` above the step` });
+      const checked = /\bchecked\b(.*)$/i.exec(r.text);
+      if (checked && !SCREEN_CUE.test(checked[1])) {
+        out.push({ code: 'REQ02', key: r.id, version: hash(r.text), warn: true,
+          message: `suggested microflow test: ${r.text} (optional: no requested screen reaches it, so no browser test can; ` +
+            'do not build a page to test it -- list it in your final report)' });
         continue;
       }
+      out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
+        message: `requirement ${r.id} (docs/brain/plan/${r.slice}) has no test: "${r.text}" -- write the browser test that ` +
+          `checks its "checked when" (tests/verify-<feature>.test.sh) and name it there, a line \`# requirement: ${r.id}\` above the step that checks it` });
+      continue;
     }
     const own = [...words(r.text)].filter(w => df.get(w) <= rare).slice(0, 8);
     if (!own.length || own.some(w => spellings(w).some(v => where.code.includes(v)))) {
@@ -208,8 +200,7 @@ function judgeRequirements(requirements, open, named, mftest = false) {
     out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
       message: `${where.file} names requirement ${r.id} but its code checks none of it: "${r.text}" -- under ` +
         `\`# requirement: ${r.id}\`, assert what it says, with a fail message in its words (one of: ${own.join(', ')}). ` +
-        'Reading the model back (describe, show, a catalog query) does not count: do what the person does and assert what they see, ' +
-        'or call the microflow in a microflow test' });
+        'Reading the model back (describe, show, a catalog query) does not count: do what the person does and assert what they see' });
   }
   for (const [id, { file }] of named) {
     // An assumption (open, in assume mode) a test checks is welcome, not a stale link: Opus named
@@ -259,38 +250,13 @@ function requestFindings(appDir) {
   return out.slice(0, 20);
 }
 
-// Whether the full gate runs the microflow tests and holds DONE on them (MFTEST01 at block, booted by
-// mxcli run --local): only then does a microflow test prove a requirement.
-function microflowTestsBlock(appDir) {
-  const env = {};
-  try {
-    for (const m of fs.readFileSync(path.join(appDir, 'tests', 'harness.env'), 'utf8').matchAll(/^\s*(MDL_BOOT_COMMAND|MDL_RUN_MODE)=(.*)$/gm)) env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim();
-  } catch { /* no harness.env */ }
-  if (env.MDL_BOOT_COMMAND || env.MDL_RUN_MODE === 'docker') return false;
-  try {
-    const rulebook = require('./rulebook.cjs');
-    const card = rulebook.load(path.join(appDir, 'tests', 'rulebook')).MFTEST01;
-    if (card && rulebook.effective(card) !== 'block') return false;
-  } catch { /* no rulebook: the card's default, block */ }
-  return true;
-}
-
-// The microflow tests of the app: [[tests/<name>.test.mdl, text]].
-function microflowTestFiles(appDir) {
-  let names = [];
-  try { names = fs.readdirSync(path.join(appDir, 'tests')).filter(n => n.endsWith('.test.mdl')).sort(); } catch { names = []; }
-  return names.map(n => ['tests/' + n, fs.readFileSync(path.join(appDir, 'tests', n), 'utf8')]);
-}
-
 // The REQ02 findings: {code, key, version, message}, as check_paths.cjs's other rules give them.
 function requirementFindings(appDir, testFiles) {
   const out = stagedFindings(appDir);
   const { requirements, open } = readPlan(appDir);
   if (!requirements.length) return out;
-  const mftest = microflowTestsBlock(appDir);
-  const files = mftest ? testFiles.concat(microflowTestFiles(appDir)) : testFiles;
-  return out.concat(judgeRequirements(requirements, open, namedRequirements(files), mftest));
+  return out.concat(judgeRequirements(requirements, open, namedRequirements(testFiles)));
 }
 
 module.exports = { looksFor, requestFindings, spellings, stagedEntries, requirementsMode, readPlan, stagedFindings, modelReadVariables, readsModel, namedRequirements,
-  judgeRequirements, requirementFindings, microflowTestsBlock, microflowTestFiles, SCREEN_CUE };
+  judgeRequirements, requirementFindings, SCREEN_CUE };

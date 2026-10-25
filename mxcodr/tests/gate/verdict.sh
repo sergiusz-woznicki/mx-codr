@@ -153,6 +153,21 @@ print_stop_building() {
   echo "   Do not edit the app. Do not run the gate again."
   echo "   Write your final report now: what was built, how to sign in, the assumptions you made,"
   echo "   and every warning or caption/coverage note above as \"to fix next\" -- copied, not fixed."
+  print_suggested_microflow_tests
+}
+
+# The end of the final report: "Suggested microflow tests". Microflow tests are never an obligation
+# (decision 2026-10-25); the logic no screen reaches -- a data rule no requested screen shows (REQ02), what a
+# scheduled job or a workflow timer does (TIMER01) -- is suggested to the person instead, from the paths
+# findings (.mxcli/paths.txt), plus the kinds no checker sees.
+print_suggested_microflow_tests() {
+  local found total
+  found="$(sed -n 's/^  ~ \[[A-Z0-9]*\] suggested microflow test: \(.*\) (optional: .*$/\1/p' .mxcli/paths.txt 2>/dev/null)"
+  total="$(printf '%s' "$found" | grep -c .)"
+  echo "   End it with \"Suggested microflow tests\" -- optional, for the person; do not write them now:"
+  [ "$total" -gt 0 ] && printf '%s\n' "$found" | head -5 | sed 's/^/     - /'
+  [ "$total" -gt 5 ] && echo "     - ... $((total - 5)) more in .mxcli/paths.txt"
+  echo "     - any other logic no screen reaches: what a scheduled job picks, the seed run twice, edge cases the browser tests skip"
 }
 
 # Where the time went. A gate run is split into phases (setup, db-reset, boot, preflight, tests, visual,

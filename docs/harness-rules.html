@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.25.5 · mxcli v0.28.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.25.6 · mxcli v0.28.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -318,10 +318,10 @@ html { scroll-behavior: smooth; }
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
     <div class="count"><span class="n">123</span><span class="t">mx-codr rules</span></div>
-    <div class="count b"><span class="n">74</span><span class="t">always stop DONE</span></div>
-    <div class="count b"><span class="n">6</span><span class="t">stop DONE for new paths</span></div>
+    <div class="count b"><span class="n">73</span><span class="t">always stop DONE</span></div>
+    <div class="count b"><span class="n">5</span><span class="t">stop DONE for new paths</span></div>
     <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
-    <div class="count w"><span class="n">35</span><span class="t">warnings</span></div>
+    <div class="count w"><span class="n">37</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
   </div>
   <p class="intro">Part B lists mxcli's lint rules with the level each one's card gives it.</p>
@@ -350,10 +350,10 @@ html { scroll-behavior: smooth; }
   <div class="table-wrap"><table class="rules">
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
-      <tr><td><code>TESTS01</code></td><td>Every browser test passes. Microflow unit tests (<code>*.test.mdl</code>) are not run by the gate; it shows the command that runs them.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TESTS01</code></td><td>Every browser test passes. Microflow unit tests (<code>*.test.mdl</code>) are optional; MFTEST01 runs any that exist, as a warning.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>COVERAGE01</code></td><td>Every page and every <code>ACT_</code> microflow has a test. A test says which pages and microflows it tests in a comment at its top, <code># covers: Order_List, ACT_Order_Save</code>. This rule checks that every page and <code>ACT_</code> microflow appears in such a comment, and that every name in those comments really exists in the app (a renamed page leaves an old name behind).</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>RUNTIME01</code></td><td>While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>MFTEST01</code></td><td>The microflow tests under tests/ pass, and each asserts something. They run once the rest of a full gate is green, on a copy of the project with its own runtime and scratch database.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>MFTEST01</code></td><td>Microflow tests are optional, never an obligation. When tests/ holds some, a full gate with the rest green runs them on a copy of the project with its own runtime and scratch database; red, or unable to run, is a warning that never holds DONE. A DONE ends with &ldquo;Suggested microflow tests&rdquo; for the final report.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS01</code></td><td>On the page a test ends on, no two widgets lie on top of each other.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS02</code></td><td>The page does not scroll sideways.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>VIS03</code></td><td>No text is cut off because its box is too small. On a phone- or tablet-wide screen a data grid's cells count too, an ellipsis included.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -373,7 +373,7 @@ html { scroll-behavior: smooth; }
     <thead><tr><th>Rule</th><th>What it checks, in plain words</th><th>Level</th></tr></thead>
     <tbody>
       <tr><td><code>OUTCOME01</code></td><td>Every message the app can show (a success message, a validation error, a "credit limit exceeded" refusal) is checked by a test: the test makes the message appear and reads it on the screen. An attribute's validation rule counts only where a page lets the user edit that attribute.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested, and so does a step that only reads the model back (<code>describe</code>, <code>show</code>, a catalog query). Another form of the word counts (colour, color). A data rule no screen shows (a format, uniqueness, a bound) may be named by a microflow test (<code>-- requirement:</code> in <code>tests/*.test.mdl</code>, while MFTEST01 blocks); a requirement whose "checked when" names a screen still needs a browser test. A quoted format with placeholders (<code>ORD/YYYY/0001</code>) is looked for by its pattern or an instance. When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ02</code></td><td>Every requirement the person agreed to (a promoted entry in the project brain) is named by a test with the line <code># requirement: &lt;id&gt;</code> above the step that checks it, and that step holds one of the requirement's own words (its fail message says what is checked). A requirement named without a check counts as untested, and so does a step that only reads the model back (<code>describe</code>, <code>show</code>, a catalog query). Another form of the word counts (colour, color). Only a browser test proves a requirement; a microflow test never does. A requirement whose "checked when" names no screen, button or thing a person sees (a format, uniqueness, a bound no requested screen reaches) and that no test names is a warning, a suggested microflow test for the final report: no page is built only to test it. One whose "checked when" names a screen still needs a browser test. A quoted format with placeholders (<code>ORD/YYYY/0001</code>) is looked for by its pattern or an instance. When nobody answers the interview, nothing may wait unpromoted in the brain's queue.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REQ04</code></td><td>The requirements keep what the request spells out: every number with its noun, quoted caption, format (<code>DD/MM/YYYY</code>), bound (<code>&gt;0</code>) and word like exactly, unique, default, disabled, above, below in a line of the newest archived request is repeated by a requirement or an assumption of the plan. Checked at the first exec of pages and at the gate. An assumption that gives a detail up is a warning, unless it carries the platform's proof: the mx check or runtime error text, a CE code. A harness rule code (<code>GRID03</code>, <code>UI001</code>…) is no proof: the rules allow the form the request asks for, and the warning says to read the card and build that form. A requirement that repeats the request passes the scope freeze.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SCOPE03</code></td><td>On the finished app: every page and <code>ACT_</code> microflow serves an approved requirement (anchored, covered by a test that names one, or reached from such a document), and a helper entity for totals or a summary is named by a requirement or needed by a page one anchors. Lists what grew past the requirements, for the report.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>WF01</code></td><td>A microflow that approves or rejects a workflow task first checks that the person clicking is someone the task was assigned to. Without that check, anyone allowed to run the microflow can decide someone else's task.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -381,7 +381,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>ISO01</code></td><td>When a role may only see its own records (for example a customer sees only their own orders), a test logs in as that role and checks that their own records are there and someone else's are not.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>ROLE01</code></td><td>Every demo user's role is used by at least one test.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SVC01</code></td><td>Every published REST or OData service is called by a test.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>TIMER01</code></td><td>What happens on a schedule or after a wait (a scheduled event, a workflow timer that escalates a task) is done by a microflow a test runs: a microflow test calls it, or a browser test starts it by hand and names it on its <code># covers:</code> line. A test cannot wait three days.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>TIMER01</code></td><td>What happens on a schedule or after a wait (a scheduled event, a workflow timer that escalates a task) and that no test runs is listed as a suggested microflow test for the final report. A test cannot wait three days; a browser test that clicks an action the request asked for and names it on its <code># covers:</code> line counts, and no action is built only to test it.</td><td><span class="lvl w">Warning</span></td></tr>
     </tbody>
   </table></div>
 

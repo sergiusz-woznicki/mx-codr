@@ -7,7 +7,7 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `COVERAGE01` | every page and ACT_ microflow is on a test's # covers: line | Comma- or space-separated; a `SUB_`, entity or enumeration does not count. |
 | `LOOK01` | warning: every screenshot the suite took has been reviewed (MDL_VISUAL_REVIEW=agent) | Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`. |
 | `LOOK02` | warning: no reviewed screenshot was rejected (MDL_VISUAL_REVIEW=agent) | As LOOK01. |
-| `MFTEST01` | the microflow tests pass | Fix the flow, or the test if the need changed; output: .mxcli/microflow-tests.txt. |
+| `MFTEST01` | warning: the optional microflow tests pass | Optional: read the test first; fix it or the flow, or delete it (.mxcli/microflow-tests.txt). |
 | `MX01` | Mendix's consistency check reports 0 errors | The CE hints under each error. |
 | `REQ01` | requirements recorded before building | A `brain capture` per testable statement; open ones `Assumed:` --open. |
 | `REQ03` | a later request records its requirements | `brain capture -a @<Doc>` per statement, unbuilt ones too. |

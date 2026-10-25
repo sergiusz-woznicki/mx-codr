@@ -1,17 +1,17 @@
 ---
 step: tests
-level: block
+level: warn
 check: bash:tests/gate/mftest.sh#run_microflow_tests
 key: none
 ---
 
-# MFTEST01 — the microflow tests pass
+# MFTEST01 — the optional microflow tests pass
 
 ## What it checks
-The microflow tests under tests/ (`*.test.mdl`, `*.test.md`) pass, and each one asserts something. They run once the rest of a full gate is green, on a copy of the project with its own runtime and scratch database, so the app and its data are not touched. A pass is replayed until the model or a test file changes.
+Microflow tests are never an obligation. When tests/ holds some (`*.test.mdl`, `*.test.md`), a full gate with the rest green runs them on a copy of the project, with its own runtime and scratch database, so the app and its data are not touched. Red, or unable to run, is a warning that never holds DONE; the result is replayed until the model or a test file changes.
 
 ## Fix
-Fix the flow, or the test if the need changed; output: .mxcli/microflow-tests.txt.
+Optional: read the test first; fix it or the flow, or delete it (.mxcli/microflow-tests.txt).
 
 ## Local
-# level: block
+# level: warn

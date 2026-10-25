@@ -1,26 +1,26 @@
-# Microflow tests: only where a browser cannot reach
+# Microflow tests: optional -- suggest them in the final report
 
-A browser test proves a person can do the thing, and it is the test that counts. Measured over 31
-sessions of the harness and of agents without it (2026-10-16), a microflow test (`tests/<feature>.test.mdl`,
-skill `test-microflows`) caught one logic bug, and a browser test in the same session caught it too. Its red runs were
-mostly a wrong test (a fixture missing an association, a value read back from memory) or the system
-session it runs in. Twice an agent chasing a red microflow test made a correct microflow worse.
+A browser test proves a person can do the thing, and it is the only test a check asks for. A
+microflow test (`tests/<feature>.test.mdl`, skill `test-microflows`) is never an obligation: no check
+requires one, and none is the way out of a finding. Measured over 31 sessions (2026-10-16), one caught a
+single logic bug, which a browser test caught too; its red runs were mostly a wrong test or the system
+session it runs in, and twice an agent chasing one made a correct microflow worse.
 
-So write one only for logic no screen can drive:
+So do not write them while building. End the final report with **Suggested microflow tests**: the
+logic no screen reaches, for the person to decide on. The gate's DONE lists the ones it found (REQ02,
+TIMER01); add the kinds no checker sees:
 
-| Kind | What to assert |
+| Kind | What a test would assert |
 |---|---|
 | **What a scheduled event or background job picks**: reminders, expiry, clean-up | the records it must take (overdue, unpaid) and the ones it must leave (paid, already reminded, not yet due) |
 | **The after-startup seed** | running it twice leaves the same number of records |
-| **A rule with many edge cases behind one screen**, when the browser test can afford only two of them | the edges the browser test skips: exactly on a limit, the day itself, the touching time slot |
-| **A data rule no screen of the request edits**: a format, uniqueness, a bound on stored data | the bad value refused and a good one saved, by calling the microflow that saves or validates -- no edit page built only to test it |
-
-A data rule the request names is a requirement like any other: `-- requirement: <id>` above its
-`/** @test */` block names it for REQ02. A requirement a person meets on a screen (a page, a button,
-what a list shows) still needs its browser test; REQ02 says so when only a microflow test names it.
+| **A rule with many edge cases behind one screen** | the edges the browser test skips: exactly on a limit, the day itself, the touching time slot |
+| **A data rule no requested screen reaches**: a format, uniqueness, a bound on stored data | the bad value refused and a good one saved, by calling the microflow that saves or validates -- never an edit page built only to test it |
 
 Calculations, status changes, limits and messages a person sees are the browser test's job: assert the
-number, the status and the message on the page. A microflow test never replaces one.
+number, the status and the message on the page.
+
+The rest of this page is for whoever writes one anyway, now or later.
 
 ## Before you touch a microflow for a red microflow test
 
@@ -69,8 +69,8 @@ $picked = call microflow Sales.SUB_Invoice_NeedsReminder(Invoice = $invoice);
 
 ## Run it
 
-The **full** gate runs every `*.test.mdl` once the rest of the gate is green (MFTEST01). It runs
-them on a copy of the project, so the app you are working on is never touched. A failure names
-the block, the expected value and the actual value. The whole output is in
+The **full** gate runs every `*.test.mdl` once the rest of the gate is green (MFTEST01, a warning:
+red never holds DONE). It runs them on a copy of the project, so the app you are working on is never
+touched. A failure names the block, the expected value and the actual value. The whole output is in
 `.mxcli/microflow-tests.txt`. Never run `mxcli test` by hand: it injects a test module into the
 project and rewrites `javasource` while it runs.
