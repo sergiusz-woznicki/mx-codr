@@ -73,6 +73,8 @@ hook_precheck ${args[@]+"${args[@]}"} ${inline[@]+"${inline[@]}"}
 if [ "$HOOK_STATUS" -ne 0 ]; then
   note=""; [ -n "$HOOK_HEREDOC" ] || note="$(steps_before_exec "$command")"
   [ -n "$note" ] && HOOK_OUT="$note"$'\n'"$HOOK_OUT"
+  note="$(saved_script_note "$command" ${args[@]+"${args[@]}"})"
+  [ -n "$note" ] && HOOK_OUT="$note"$'\n'"$HOOK_OUT"
   deny "$HOOK_BLOCKED_HEAD"$'\n'"$HOOK_OUT"
 fi
 allow

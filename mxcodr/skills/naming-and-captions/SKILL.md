@@ -133,7 +133,7 @@ If the honest caption would be identical to that default, the activity is not
 yet named — find the business operation, do not type the default out by hand.
 Nor one that only restates its line: *"Run send reminder"* over a call of `SUB_Reminder_Send`,
 *"Save the ticket"* over `commit $Ticket`, *"Load the open tickets"* over `retrieve $OpenTickets`,
-*"Work out the value"* over a `set` (CAPTION09, checked at the exec).
+*"Work out the value"* over a `set` (CAPTION09, listed after the exec, refused at DONE).
 Say why the step runs: *"Mark the ticket as resolved"*, *"Record who closed the ticket"*.
 
 Escape a single quote by doubling it: `@caption 'Load the customer''s invoices'`.

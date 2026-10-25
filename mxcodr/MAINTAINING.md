@@ -33,7 +33,7 @@ and `rules/mdl-skills.md` to `.claude/rules/`.
    DONE ends with "Suggested microflow tests" (`print_suggested_microflow_tests`): the `suggested microflow
    test:` warnings of REQ02 and TIMER01, for the report, never work.
 
-`--only <test>` runs one test plus the model checks that need no app, and ends in `PASSED`, never `DONE`.
+`--only <test>` runs one test plus the model checks that need no app, and ends in `PASSED`, never `DONE`. A pass prints a short form (`print_only_short`); its whole output is in `.mxcli/last-only.txt`.
 
 ## A rule, end to end
 

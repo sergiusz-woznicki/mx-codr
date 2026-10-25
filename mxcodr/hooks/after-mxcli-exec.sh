@@ -116,6 +116,31 @@ HOOK_REQ
   fi
 }
 
+# CAPTION01-07, 09: the captions the exec'd scripts still lack, all at once with a suggested caption per
+# line (gate_scripts.cjs captionFindings). Not a refusal before the exec any more -- a B2B run rewrote
+# its scripts round after round on them -- but the full gate refuses DONE on them exactly as before.
+caption_note() {
+  local _scripts _level _found _word
+  [ -f tools/mdl-checks/gate_helpers.cjs ] || return 0
+  _level=warn
+  [ -f tools/mdl-checks/rulebook.cjs ] && [ -d tests/rulebook ] \
+    && _level="$("$NODE" tools/mdl-checks/rulebook.cjs tests/rulebook level CAPTION01 2>/dev/null || echo warn)"
+  [ "$_level" != "off" ] || return 0
+  _scripts=()
+  while IFS= read -r _word; do
+    case "$_word" in *.mdl) [ -f "$_word" ] && _scripts+=("$_word") ;; esac
+  done <<HOOK_CAPTIONS
+$(printf '%s' "$command" | "$NODE" "$HOOK_TOOL" exec-scripts 2>/dev/null)
+HOOK_CAPTIONS
+  [ "${#_scripts[@]}" -gt 0 ] || return 0
+  _found="$("$NODE" tools/mdl-checks/gate_helpers.cjs captions "${_scripts[@]}" 2>/dev/null)"
+  [ -n "$_found" ] || return 0
+  echo "Captions still to write (CAPTION01-09; this exec went through, the full gate refuses DONE until they are fixed):"
+  printf '%s\n' "$_found"
+  echo "  Fix them all in one pass, in place: @caption '<what it does for the business>' above each action, a question"
+  echo "  ending in ? above each decision, @annotation above each loop; fill each e.g.'s <slot> in the request's words. Then exec once."
+}
+
 # Re-running an older script undoes a later one: `create or modify page` drops another script's
 # `alter page`, and a `grant` puts back access another script revoked (script_overrides.cjs).
 script_overrides_note() {
@@ -239,6 +264,7 @@ record_applied
 widgets_refresh
 studio_pro_warning
 req01_note
+caption_note
 script_overrides_note
 restart_advice
 coverage_report

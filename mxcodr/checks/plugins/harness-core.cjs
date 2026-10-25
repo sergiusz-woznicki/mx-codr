@@ -14,7 +14,7 @@ const { join, dirname } = require("node:path")
 const { run } = require("./bash_runner.cjs")
 const {
   mayTouchHarness, SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, SELF_RESOLVE, isSelfResolve, widgetPublisherBlock, HARNESS_SOURCE,
-  readsHarnessSource, newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED,
+  readsHarnessSource, newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED, savedScriptNote,
   scriptWrittenBeforeExec, resolvePwd, EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts,
 } = require("./command_guards.cjs")
 const { markSession, saveRequest } = require("./request_archive.cjs")
@@ -124,6 +124,7 @@ function blockReason(root, tool, args) {
     // The same head as the shell hooks (hooks/before-mxcli-exec-core.sh): a build error, a document
     // created twice (SCRIPT01) and a page with no test yet (TEST01) all land here.
     "Blocked by the precheck (nothing changed in the model). Do what it says below, then exec again:\n" +
+    savedScriptNote(command, scripts, heredoc) +
     (stepsBeforeExec(command) && !heredoc ? STEPS_BEFORE_EXEC : "") + out.slice(-OUTPUT_LIMIT)
   )
 }
@@ -146,7 +147,7 @@ module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS,
   run, harnessEnvBlocked, blockReason, afterExecText, writeHeredocScript, putHeredocBack, dropHeredocNote, marketplacePending,
   mayTouchHarness, readOnlyStep, isSleepBeforeGate, isBinarySearch, BINARY_SEARCH, isSelfResolve, SELF_RESOLVE, captureBlock, widgetPublisherBlock, readsHarnessSource, HARNESS_SOURCE,
-  newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC, EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript,
+  newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC, EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript, savedScriptNote,
   HEREDOC_UNQUOTED, resolvePwd, inlineMdl, isMxcliExec, mdlScripts,
   markSession, saveRequest,
   filmsRecording, gateFailureMessage, reminder, personOnly, personOnlyMessage,

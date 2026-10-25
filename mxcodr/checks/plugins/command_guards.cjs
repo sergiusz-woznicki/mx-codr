@@ -228,6 +228,22 @@ const HEREDOC_UNQUOTED = (path) =>
   "Blocked: the heredoc that writes " + path + " has an unquoted delimiter, so the shell would expand every $Variable of the MDL " +
   "before mxcli saw it. Write it as `cat > " + path + " <<'EOF'` (quoted), then the exec may stay in the same command."
 
+// A precheck refusal names the script it checked and says to fix it in place: a B2B run sent its
+// scripts again whole after 11 refusals, 149k characters of MDL for 94k that stayed (2026-10-25).
+// The heredoc's script stays on disk (the hook wrote it), so a fix there and the exec alone suffice.
+function savedScriptNote(command, scripts, heredoc) {
+  const paths = [...new Set(scripts || [])].filter((s) => /\.mdl$/.test(s))
+  if (paths.length === 0) return ""
+  const mpr = (/\s-p\s+(\S+\.mpr)\b/.exec(command || "") || [])[1]
+  const exec = paths.map((p) => "./mxcli exec " + p + (mpr ? " -p " + mpr : "")).join("` then `")
+  const where = heredoc
+    ? "The script is saved at " + heredoc.path + " (the hook wrote your heredoc there)."
+    : (paths.length > 1 ? "The scripts are on disk as checked: " : "The script is on disk as checked: ") + paths.join(", ") + "."
+  return where + " When the fix is in the script, change only the lines named below, in place (the Edit tool, or `sed -i` in a call of its own), " +
+    "then run `" + exec + "` by itself. Do not send the whole script again" +
+    (heredoc && heredoc.append ? " (a `cat >>` sent again adds the block twice)" : "") + ".\n"
+}
+
 function scriptWrittenBeforeExec(command, scripts) {
   const m = /(?:^|[\s;&|(])(?:\.\/)?mxcli(?:\.exe)?\s+exec\b/.exec(command || "")
   if (!m) return null
@@ -307,6 +323,6 @@ function mdlScripts(command) {
 module.exports = {
   GUARD_WORDS, mayTouchHarness,
   SLEEP_BEFORE_GATE, isSleepBeforeGate, BINARY_SEARCH, isBinarySearch, SELF_RESOLVE, isSelfResolve, widgetPublisherBlock, HARNESS_SOURCE, readsHarnessSource,
-  newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED,
+  newTestNote, STEPS_BEFORE_EXEC, readOnlyStep, stepsBeforeExec, heredocScript, HEREDOC_UNQUOTED, savedScriptNote,
   scriptWrittenBeforeExec, writtenAndTarget, resolvePwd, EXEC_THROUGH_VARIABLE, inlineMdl, isMxcliExec, mdlScripts,
 }

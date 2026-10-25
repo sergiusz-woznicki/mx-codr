@@ -218,6 +218,21 @@ write_timing() {
   return 0
 }
 
+# A passing `--only` prints its output to .mxcli/last-only.txt (ONLY_LOG, tests/gate.sh main) and only this
+# on the screen: one line, the summary (the tests' count, the red-first and coverage notes), the
+# "== before DONE" block when the full gate would refuse something, and the PASSED line. A B2B run grepped
+# every --only run's 7 kB down to those lines by hand (2026-10-25). A red run prints in full, unchanged.
+print_only_short() {
+  local line checks=0 name
+  [ -n "${ONLY_LOG:-}" ] || return 0
+  for name in $EARLY_CHECKS; do [ -f "$WORK/$name.status" ] && checks=$((checks + 1)); done
+  exec 1>&3 3>&-
+  ONLY_SHORT=1
+  echo "== --only $ONLY PASSED (${#targets_ran[@]} test(s), $checks model check(s), $((SECONDS - GATE_START))s) -- full output: $ONLY_LOG"
+  for line in ${summary[@]+"${summary[@]}"}; do echo "   $line"; done
+  cat "$WORK/only.early" "$WORK/only.passed"
+}
+
 # Prints the verdict lines and exits: 1 on a failure, 2 when a check could not run, else 0.
 print_verdict_and_exit() {
   local line name
@@ -252,19 +267,25 @@ print_verdict_and_exit() {
     [ -n "${ONLY:-}" ] && scope="--only $ONLY"
     [ "${CHANGED:-0}" = "1" ] && scope="--changed (${#targets_ran[@]} of $(ls tests/verify-*.test.sh 2>/dev/null | wc -l | tr -d ' ') tests)"
     EARLY_CODES=""
-    [ -n "${ONLY:-}" ] && print_early_blockers
+    : > "$WORK/only.early"
+    [ -n "${ONLY:-}" ] && print_early_blockers > "$WORK/only.early"
+    cat "$WORK/only.early"
     local coverage="${EARLY_COVERAGE:+; coverage open: $EARLY_COVERAGE}"
     coverage="$coverage${EARLY_QUEUE:+; the brain queue holds $EARLY_QUEUE (promote or drop each: == before DONE)}"
-    if [ -n "$EARLY_CODES" ]; then
-      echo "   PASSED — $scope -- not DONE: the full gate would refuse $EARLY_CODES$coverage (== before DONE above); fix them before the full gate"
-    elif [ -n "$coverage" ] && [ -z "${EARLY_COVERAGE:-}" ]; then
-      echo "   PASSED — $scope -- not DONE: the full gate would refuse while the brain queue holds $EARLY_QUEUE -- promote or drop each (== before DONE above)"
-    elif [ -n "$coverage" ]; then
-      echo "   PASSED — $scope -- not DONE: the full gate would refuse what is untested$coverage (== before DONE above); write those tests first"
-    else
-      echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
-    fi
-    only_coverage_note
+    {
+      if [ -n "$EARLY_CODES" ]; then
+        echo "   PASSED — $scope -- not DONE: the full gate would refuse $EARLY_CODES$coverage (== before DONE above); fix them before the full gate"
+      elif [ -n "$coverage" ] && [ -z "${EARLY_COVERAGE:-}" ]; then
+        echo "   PASSED — $scope -- not DONE: the full gate would refuse while the brain queue holds $EARLY_QUEUE -- promote or drop each (== before DONE above)"
+      elif [ -n "$coverage" ]; then
+        echo "   PASSED — $scope -- not DONE: the full gate would refuse what is untested$coverage (== before DONE above); write those tests first"
+      else
+        echo "   PASSED — $scope -- not DONE: the full gate has not run; run \`bash tests/gate.sh\`"
+      fi
+      only_coverage_note
+    } > "$WORK/only.passed"
+    cat "$WORK/only.passed"
+    print_only_short
     record_last_gate "PASSED${EARLY_CODES:+ -- the full gate would refuse $EARLY_CODES}$coverage"
     exit 0
   fi
