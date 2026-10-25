@@ -213,7 +213,8 @@ function viewAsked(headWord, entity, requests) {
       for (const last of plural(tail[tail.length - 1])) forms.add([...tail.slice(0, -1), last].join(' '));
     }
   }
-  const text = ' ' + requests.map(([, t]) => t).join(' ').toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' ';
+  // A bracket or a colon ends the phrase: "a table of line items (product name, ...)" is no view of products.
+  const text = ' ' + requests.map(([, t]) => t).join(' ').toLowerCase().replace(/[([{:;.,]/g, ' | ').replace(/[^a-z0-9|]+/g, ' ') + ' ';
   return [...forms].some(f => new RegExp(`(?<!\\b(?:drop ?down|select|pick|choose)\\s)\\b${VIEWS}\\s+of\\s+(?:\\w+\\s+){0,3}?${f}\\b|\\b${f}\\s+${VIEWS}\\b`).test(text));
 }
 
