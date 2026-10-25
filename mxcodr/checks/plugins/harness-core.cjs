@@ -9,7 +9,7 @@
  * gate_verdict.cjs. This file decides, and exports what the plugins call from all of them.
  */
 
-const { existsSync, readFileSync, writeFileSync, mkdirSync } = require("node:fs")
+const { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } = require("node:fs")
 const { join, dirname } = require("node:path")
 const { run } = require("./bash_runner.cjs")
 const {
@@ -39,11 +39,32 @@ function harnessEnvBlocked(root, tool, args) {
 }
 
 // Writes the heredoc's script so the precheck checks what the command is about to exec.
+// `cat >>`: the script grows by the heredoc, as the command would grow it -- and the command, let
+// through, appends it once more. So the script as it was is kept in .mxcli/heredoc-append (null: it
+// did not exist), and putHeredocBack restores it once the precheck passed: one addition, not two.
 function writeHeredocScript(root, found) {
   const file = join(root, found.path)
   mkdirSync(dirname(file), { recursive: true })
-  // `cat >>`: the script grows by the heredoc, as the command would grow it.
-  writeFileSync(file, (found.append && existsSync(file) ? readFileSync(file, "utf8") : "") + found.body)
+  const before = existsSync(file) ? readFileSync(file, "utf8") : null
+  if (found.append) {
+    mkdirSync(join(root, ".mxcli"), { recursive: true })
+    writeFileSync(join(root, ".mxcli", "heredoc-append"), JSON.stringify({ path: found.path, before }))
+  }
+  writeFileSync(file, (found.append && before !== null ? before : "") + found.body)
+}
+// The precheck passed: an appended script goes back to what it was, for the command to append to.
+function putHeredocBack(root) {
+  const note = join(root, ".mxcli", "heredoc-append")
+  let saved = null
+  try { saved = JSON.parse(readFileSync(note, "utf8")) } catch { return }
+  try { rmSync(note) } catch { /* gone */ }
+  if (!saved || typeof saved.path !== "string") return
+  const file = join(root, saved.path)
+  if (saved.before === null) { try { rmSync(file) } catch { /* gone */ } } else writeFileSync(file, saved.before)
+}
+// The precheck refused: the addition stays (the message says the write happened); the note goes.
+function dropHeredocNote(root) {
+  try { rmSync(join(root, ".mxcli", "heredoc-append")) } catch { /* none */ }
 }
 
 // The app needs a Marketplace module and mxcli is not logged in: tests/marketplace-login.sh holds
@@ -97,7 +118,8 @@ function blockReason(root, tool, args) {
   }
   const inlineArgs = inline.flatMap((text) => ["--inline", text])
   const { status, out } = run([precheck.replace(/\\/g, "/"), "--for-exec", ...scripts, ...inlineArgs], root, PRECHECK_TIMEOUT_MS)
-  if (status === 0 || out.includes("precheck: could not run")) return null
+  if (status === 0 || out.includes("precheck: could not run")) { if (heredoc) putHeredocBack(root); return null }
+  if (heredoc) dropHeredocNote(root)
   return (
     // The same head as the shell hooks (hooks/before-mxcli-exec-core.sh): a build error, a document
     // created twice (SCRIPT01) and a page with no test yet (TEST01) all land here.
@@ -122,7 +144,7 @@ function afterExecText(root, command, output) {
 // What the plugins and hook_tool.cjs call, from this file and its parts.
 module.exports = {
   MAX_GATE_ROUNDS, GATE_DONE, GATE_TIMEOUT_MS,
-  run, harnessEnvBlocked, blockReason, afterExecText, writeHeredocScript, marketplacePending,
+  run, harnessEnvBlocked, blockReason, afterExecText, writeHeredocScript, putHeredocBack, dropHeredocNote, marketplacePending,
   mayTouchHarness, readOnlyStep, isSleepBeforeGate, isBinarySearch, BINARY_SEARCH, isSelfResolve, SELF_RESOLVE, captureBlock, widgetPublisherBlock, readsHarnessSource, HARNESS_SOURCE,
   newTestNote, stepsBeforeExec, STEPS_BEFORE_EXEC, EXEC_THROUGH_VARIABLE, scriptWrittenBeforeExec, heredocScript,
   HEREDOC_UNQUOTED, resolvePwd, inlineMdl, isMxcliExec, mdlScripts,

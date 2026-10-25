@@ -5,6 +5,7 @@ One line per code of the `catalog` step; every code blocks DONE unless marked wa
 | Code | Wants | Fix |
 |---|---|---|
 | `ASKED01` | a calendar, map or chart the request names is on a page | `./mxcli marketplace search "calendar"`, install the widget, put it on the page with the data the person named; when it cannot be installed, say so in the final report. |
+| `CHART01` | a chart of the last N periods shows N labelled periods | A data-source microflow builds N non-persistent rows, 0 for an empty period, labelled 'MMM yyyy' (mdl-pitfalls.md). |
 | `LINT01` | off unless the rulebook turns it on: an mxcli lint rule that has no card yet | Give the rule its own card in lint/ (what mx-codr does when it moves to that mxcli). |
 | `PUBLISH01` | a business event the app publishes is really published | mxcli (0.26 - 0.28) cannot write `BusinessEvents.PublishBusinessEvent_V2` (CE0115): a Java action of your own that publishes (pitfalls); test that it ran. |
 | `SEC007` | anonymous users cannot read every row of an entity (DIVD-2022-00019) | An XPath constraint on the anonymous role's read rule, or revoke the grant if the data is not public. |

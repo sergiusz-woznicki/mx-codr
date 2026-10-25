@@ -18,7 +18,8 @@
 //   EVENT04 WARN  a page saves (Save changes) an entity whose before-commit handler raises an error:
 //                 the user gets "An error has occurred" instead of a message at the field
 //   ERR01   WARN  an error handler that does nothing anyone sees: no log, no raise, no message,
-//                 no return (`on error continue` is mxcli's CONV014)
+//                 no return (`on error continue` is mxcli's CONV014); or one that logs without the
+//                 error itself ($latestError, $latestHttpResponse): the log says that it failed, not why
 //
 // One level deep: a handler that commits through a microflow it calls is not followed.
 // Written for Node after the port from Python, so plain RegExp.
@@ -195,6 +196,12 @@ function eventFindings(flowLines, entityText, pageText) {
     });
     // ERR01: an error handler that nobody would notice.
     for (const [line, body] of errorHandlers(flow)) {
+      if (/(?:^|[\s;])log\s+(?:error|warning|info|debug|trace|critical)\b/i.test(body) && !/\$latest(?:Error|HttpResponse|SoapFault)\b|\braise\s+error\b/i.test(body)) {
+        out.push(['ERR01', `${name}: an error handler logs that it failed, not why: \`${body.replace(/@\w+\s*(?:\([^)]*\)|'(?:[^']|'')*')\s*/g, '').slice(0, 70)}\` -- add the error itself, ` +
+          '`log error \'... {1}: {2}\' with ({1} = $Ticket/Code, {2} = $latestError/Message);` ($latestHttpResponse/StatusCode ' +
+          'and /Content after a REST call), so the log names the cause.', line]);
+        continue;
+      }
       if (/\blog\b|\braise\s+error\b|\bshow\s+message\b|\bvalidation\s+feedback\b|\breturn\b|\bcall\s+(?:microflow|nanoflow)\b|\bshow\s+page\b/i.test(body)) continue;
       out.push(['ERR01', `${name}: an error handler does nothing anyone sees (${body ? `\`${body.slice(0, 60)}\`` : 'it is empty'})` +
         ' -- the failure disappears without a trace. Log it (`log error \'...\' + $latestError/Message;`), tell' +

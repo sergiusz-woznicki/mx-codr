@@ -100,7 +100,7 @@ precheck_script01() {
   fi
 }
 
-# CAPTION01-07: the flows these scripts create or modify carry their business captions now, not after
+# CAPTION01-07, 09: the flows these scripts create or modify carry their business captions now, not after
 # the gate names them (gate_scripts.cjs captionFindings): nine to twenty-three --only runs a B2B run
 # ended with "the full gate would refuse CAPTION01". CAPTION01 `off` in tests/rulebook/naming/ turns it off.
 precheck_caption01() {
@@ -110,7 +110,8 @@ precheck_caption01() {
       echo "precheck: CAPTION01 -- activities without a business caption (the real model is untouched):"
       printf '%s\n' "$uncaptioned"
       echo "  Put @caption '<what it does for the business>' on the line above each action and decision (a question ending in ?),"
-      echo "  @annotation '<why it repeats>' above each loop -- the e.g. is a paste when it fits -- then exec again."
+      echo "  @annotation '<why it repeats>' above each loop; fill each e.g.'s <slot> with what the step does for the person,"
+      echo "  in the request's words: a caption that only names the variable or the called flow is refused (CAPTION09). Then exec again."
       exit 1
     fi
   fi
@@ -172,10 +173,12 @@ precheck_req01() {
 # nothing said so, B2B 2026-10-15). Only once the app has pages and its plan has requirements.
 # Only after the app's first DONE (.mxcli/last-gate.txt): during the first build its new pages are
 # that request's, recorded by REQ01 -- REQ03 blocked twice inside the first part of b2b-f4 (2026-10-16).
+# "DONE" right after the date and time: `.* DONE` also matched "NOT DONE", so REQ03 fired after the
+# first red full gate of a build and demanded anchors the scope freeze then refused.
 precheck_req03() {
   if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ03 block)" = "block" ] \
      && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1 \
-     && grep -q '^full: .* DONE' .mxcli/last-gate.txt 2>/dev/null; then
+     && grep -qE '^full: [^ ]+ [^ ]+ DONE' .mxcli/last-gate.txt 2>/dev/null; then
     unanchored="$("$NODE" tools/mdl-checks/gate_helpers.cjs unanchored-features . "$MPR" "$@" 2>/dev/null)"
     if [ -n "$unanchored" ]; then
       echo "precheck: REQ03 -- no requirement of this request names these new documents (the real model is untouched):"
@@ -183,6 +186,8 @@ precheck_req03() {
       echo "  Record this request's requirements first, one per testable statement of it, in a slice of its own,"
       echo "  each anchored at the document that will build it:"
       echo "    ./mxcli brain capture \"<requirement>\" --slice <NN>-<this request> -a @<Module.Doc> -p $MPR"
+      echo "  A requirement already recorded keeps its id and gets the anchor:"
+      echo "    node tools/mdl-checks/plugins/capture_guard.cjs anchor <id> @<Module.Doc>"
       echo "  A part of the request you will not build now gets its requirement too, anchored at the document it"
       echo "  will be: the next session's orient.sh lists it as open. A part that needs a key or an outside service is"
       echo "  built with a stand-in, not deferred. Promote each (./mxcli brain promote <id>), then exec again."

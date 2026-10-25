@@ -35,6 +35,42 @@ const DEFAULT_ACTION_CAPTION_RE = rx(String.raw`^(?:` +
   String.raw`Show page(?:\s+\S+)?|` +
   String.raw`Call (?:microflow|nanoflow)(?:\s+\S+)?` +
   ')$', 'i');
+// CAPTION09: a caption that only restates its line: a call named after the flow it calls ("Run send
+// reminder" over `call microflow M.SUB_Reminder_Send`, or just "Send reminder"), a commit or a retrieve
+// named after its own variable or entity behind a stock verb ("Save the ticket" over `commit $Ticket`,
+// "Load the open tickets" over `retrieve $OpenTickets`), a stock phrase ("Work out the value") or a hint's
+// <slot> left unfilled. It says nothing the line does not, and a script can write it. Matched by words, so
+// "Mark the ticket as resolved" passes; change, create and set lines are judged by the stock phrases only.
+const VERBS = {
+  call: String.raw`run|call|execute|do|perform|invoke|start|trigger`,
+  commit: String.raw`save|commit|store|persist|keep|write`,
+  retrieve: String.raw`load|get|fetch|find|retrieve|read|look up|query`,
+};
+const STOCK_PHRASES = new Set(['work out the value', 'set the value', 'update the value', 'calculate the value', 'run the step', 'do the step',
+  'update the list', 'update the object', 'save the object', 'create the object', 'delete the object', 'change the object', 'open the page',
+  'run the flow', 'call the flow', 'run the microflow', 'call the microflow', 'run the subflow', 'call the subflow']);
+const PREFIX_RE = /^(?:ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF|JA|JS)_/i;
+const wordsOf = name => name.replace(PREFIX_RE, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase().trim();
+const singular = text => text.split(' ').map(w => w.length > 3 ? w.replace(/(?:ies)$/, 'y').replace(/s$/, '') : w).join(' ');
+function genericCaption(caption, line) {
+  const plain = caption.toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (STOCK_PHRASES.has(plain) || /[<>]|\.\.\./.test(caption)) return true;  // a stock phrase, or a hint's slot left unfilled
+  const t = line.replace(/"/g, '').trim();
+  const kind = /^(?:\$\w+\s*=\s*)?call\s+(?:microflow|nanoflow|java\s+action|javascript\s+action)\b/i.test(t) ? 'call'
+    : /^commit\b/i.test(t) ? 'commit' : /^(?:\$\w+\s*=\s*)?retrieve\b/i.test(t) ? 'retrieve' : '';
+  if (!kind) return false;
+  const verb = new RegExp(String.raw`^(?:${VERBS[kind]})\b\s*`, 'i');
+  const rest = plain.replace(verb, '').replace(/^(?:the|a|an|all|this|that|these|those)\s+/, '').trim();
+  if (!rest) return true;
+  const names = new Set();
+  for (const m of t.matchAll(/\$(\w+)|\b[A-Za-z]\w*\.(\w+)(?=\s*[(;\s]|$)/g)) {
+    const w = wordsOf(m[1] || m[2]);
+    if (w) { names.add(w); names.add(w.split(' ').slice(1).join(' ')); }
+  }
+  names.delete('');
+  return [...names].some(n => singular(n) === singular(rest));
+}
+
 // Type word plus digits: $Int1, $List2, $Var10.
 const PLACEHOLDER_VAR_RE = rx(String.raw`\$(?:int|bool|boolean|str|string|dec|decimal|date|datetime|list|obj|object|var|num|item)\d+\b`, 'i');
 const THROWAWAY_VAR_RE = rx(String.raw`\$(?:tmp|temp|foo|bar|x|y|z|aa)\b`, 'i');
@@ -188,6 +224,12 @@ function actionFindings(lines, index) {
       `action caption restates the Mendix default: '${text}' -- say what it does for the business, e.g. 'Load the open invoices'`,
       index + 1)];
   }
+  if (text && genericCaption(text, line)) {
+    return [finding('CAPTION09',
+      `caption only names what the line already says: '${text}' -- say what it does for the person, in their words: ` +
+      `why it runs, what changes or what is checked (e.g. 'Mark the ticket as resolved', 'Record who closed the ticket')`,
+      index + 1)];
+  }
   return [];
 }
 
@@ -322,7 +364,7 @@ function checkNamingAndRefresh(lines) {
   return [[...failures, ...refreshFindings(lines)], [...perf, ...escapeFindings(lines), ...warnings]];
 }
 
-module.exports = {
+module.exports = { genericCaption,
   ANNOTATION_RE, CAPTION_RE, DECISION_RE, LOOP_RE, ACTION_RE, DEFAULT_ACTION_CAPTION_RE, PLACEHOLDER_VAR_RE,
   THROWAWAY_VAR_RE, TYPE_ECHO_VAR_RE, COMPARISON_RE, VARIABLE_RULES, MICROFLOW_START_RE, COMMIT_STATEMENT_RE,
   finding, stripComments, precedingAnnotations, captionText, annotationKinds, decisionFindings, loopFindings,

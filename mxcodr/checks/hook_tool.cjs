@@ -299,6 +299,9 @@ const tools = {
     core.writeHeredocScript(process.cwd(), found);
     py.print(found.path);
   },
+  // heredoc-put-back / heredoc-drop-note: after the precheck of a `cat >>` heredoc (harness-core).
+  'heredoc-put-back'() { require('./plugins/harness-core.cjs').putHeredocBack(process.cwd()); },
+  'heredoc-drop-note'() { require('./plugins/harness-core.cjs').dropHeredocNote(process.cwd()); },
   // unquoted-heredoc-message <path>: the refusal for a bare delimiter.
   'unquoted-heredoc-message'(path) {
     py.print(require('./plugins/harness-core.cjs').HEREDOC_UNQUOTED(path));

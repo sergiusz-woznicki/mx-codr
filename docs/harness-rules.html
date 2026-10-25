@@ -152,7 +152,7 @@ html { scroll-behavior: smooth; }
 
 <main>
 <header class="top">
-  <div class="eyebrow">mx-codr · bundle 2026.10.25.4 · mxcli v0.28.0</div>
+  <div class="eyebrow">mx-codr · bundle 2026.10.25.5 · mxcli v0.28.0</div>
   <h1>Everything the mx-codr harness does</h1>
   <p class="lede">An AI agent builds the Mendix app; the harness makes it prove the work is finished. One command, <code>bash tests/gate.sh</code>, answers with one of three verdicts, and only one of them means done.</p>
   <div class="verdict-strip">
@@ -317,10 +317,10 @@ html { scroll-behavior: smooth; }
   <h2><span class="num">6</span>The rule catalogue</h2>
   <p class="intro"><code>bash tests/gate.sh</code> checks every rule in the first part: the rules mx-codr adds, one card each in <code>tests/rulebook/</code>. The second part lists the rules that come from Mendix itself and from mxcli: the gate runs Mendix's consistency check, and mxcli's lint rules at the level of each one's card. Each rule is described in plain words: what it looks at, and why it matters.</p>
   <div class="count-grid">
-    <div class="count"><span class="n">122</span><span class="t">mx-codr rules</span></div>
+    <div class="count"><span class="n">123</span><span class="t">mx-codr rules</span></div>
     <div class="count b"><span class="n">74</span><span class="t">always stop DONE</span></div>
     <div class="count b"><span class="n">6</span><span class="t">stop DONE for new paths</span></div>
-    <div class="count b"><span class="n">6</span><span class="t">stop DONE after the first DONE</span></div>
+    <div class="count b"><span class="n">7</span><span class="t">stop DONE after the first DONE</span></div>
     <div class="count w"><span class="n">35</span><span class="t">warnings</span></div>
     <div class="count"><span class="n">1</span><span class="t">off (LINT01)</span></div>
   </div>
@@ -340,8 +340,8 @@ html { scroll-behavior: smooth; }
       <tr><td><code>STALE01</code></td><td>An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>TEST01</code></td><td>Test first: before a new page or a new <code>ACT_</code> microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REQ01</code></td><td>Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>REQ03</code></td><td>A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What is not built yet is recorded as well, so the next session's orient.sh lists it as open.</td><td><span class="lvl b">Blocks</span></td></tr>
-      <tr><td><code>SCOPE02</code></td><td>The approved requirements are the scope of the first build: a new page or <code>ACT_</code> microflow must serve one (a requirement anchors it, or a test that names a requirement covers it), or the exec is refused with the way out: leave it out and list it under "to add next" in the report. The home and login pages and seed flows are never flagged; nothing is checked while no requirement is recorded or after the first DONE (REQ03 takes over). Where nobody answers (<code>requirements: assume</code>) the scope is frozen too: from the first promoted requirement until DONE a new <code>brain capture</code> of a requirement is refused, and so is one that asks for a dashboard, totals, tiles, charts or a report in words the request never used.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>REQ03</code></td><td>A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What is not built yet is recorded as well, so the next session's orient.sh lists it as open. Only after the app's first DONE (a red full gate does not count).</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>SCOPE02</code></td><td>The approved requirements are the scope of the first build: a new page or <code>ACT_</code> microflow must serve one (a requirement anchors it, or a test that names a requirement covers it), or the exec is refused with the way out: leave it out and list it under "to add next" in the report. The home and login pages and seed flows are never flagged; nothing is checked while no requirement is recorded or after the first DONE (REQ03 takes over). Where nobody answers (<code>requirements: assume</code>) the scope is frozen too: from the first promoted requirement until DONE a new <code>brain capture</code> of a requirement is refused, and so is one that asks for a dashboard, totals, tiles, charts or a report in words the request never used. Each capture is judged on its own: one that is a sentence of the request word for word, or repeats one of its details, passes; a requirement already recorded gets an anchor with <code>node tools/mdl-checks/plugins/capture_guard.cjs anchor &lt;id&gt; @Module.Doc</code>, keeping its id.</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -398,6 +398,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>CAPTION06</code></td><td>Every loop has an annotation saying what it walks through.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>CAPTION07</code></td><td>A loop has no caption: mxcli drops loop captions, so the text belongs in the annotation.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>CAPTION08</code></td><td>Points out a decision whose caption was overwritten by its expression.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>CAPTION09</code></td><td>A caption says more than its line: a call's caption is not the called microflow's name ("Run send reminder"), a commit's or retrieve's is not a stock verb with its own variable ("Save the ticket" over a commit of $Ticket, "Load the open tickets"), and no caption is a stock phrase ("Work out the value") or a suggested caption's <code>&lt;slot&gt;</code> left unfilled. Checked before each exec too.</td><td><span class="lvl a">After DONE</span></td></tr>
       <tr><td><code>VAR01</code></td><td>No variables named like <code>$Int1</code>, <code>$tmp</code> or <code>$x</code>. A name says what the variable holds, like <code>$OpenInvoiceCount</code>.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>VAR02</code></td><td>No variable names ending in <code>_List</code>, <code>_Object</code> or <code>_Obj</code>: <code>$OverdueInvoices</code>, not <code>$Invoice_List</code>.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>REFRESH01</code></td><td>When the Save button of a pop-up commits an object and closes the pop-up, the commit refreshes the client. Otherwise the list behind the pop-up does not show the new or changed row until the user reloads.</td><td><span class="lvl b">Blocks</span></td></tr>
@@ -407,7 +408,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>EVENT02</code></td><td>A before-commit event microflow that can say "no" (return false) is set to raise an error. Otherwise the save is skipped and the user gets no message at all.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>EVENT03</code></td><td>Points out a commit "without events" on an entity whose event microflow sets or checks something: that work is silently skipped.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>EVENT04</code></td><td>Points out a plain Save button on an entity whose before-commit event can refuse: the user sees only "An error has occurred". Save through a microflow with a validation message instead.</td><td><span class="lvl w">Warning</span></td></tr>
-      <tr><td><code>ERR01</code></td><td>Points out an error handler that nobody would notice: it should log, show a message, raise the error again or return.</td><td><span class="lvl w">Warning</span></td></tr>
+      <tr><td><code>ERR01</code></td><td>Points out an error handler that nobody would notice: it should log, show a message, raise the error again or return. One that logs names the error itself (<code>$latestError/Message</code>, or <code>$latestHttpResponse</code> after a REST call), not only that something failed.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>PERF02</code></td><td>Points out a loop over database rows that only adds them up or counts them. The database can do that in one query.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>PERF03</code></td><td>Points out a database call for every row inside such a loop (a retrieve, a Java action, a sub-microflow that reads data): with 10,000 rows, 10,000 calls.</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>PERF05</code></td><td>Points out a retrieve of a whole table followed by an <code>if</code> that keeps some rows. Filter in the retrieve's XPath instead.</td><td><span class="lvl w">Warning</span></td></tr>
@@ -519,6 +520,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>PUBLISH01</code></td><td>A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing.</td><td><span class="lvl b">Blocks</span></td></tr>
       <tr><td><code>SEED01</code></td><td>A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. (catalog step).</td><td><span class="lvl w">Warning</span></td></tr>
       <tr><td><code>ASKED01</code></td><td>The request asks for a calendar, a map or a chart, and a page shows that widget: a dated list in place of a calendar is a simplification nobody agreed to. Install one published by Mendix or Mendixlabs, or say in the report why not.</td><td><span class="lvl b">Blocks</span></td></tr>
+      <tr><td><code>CHART01</code></td><td>The request asks for a chart of the last N months, weeks or days, and the chart has N bars: not one fed by a group-by view (a period with no rows gets no bar), and not one whose x axis is a number, a date or a "2026-05" text (the chart then draws a date axis with ticks between the bars). The fix is N rows built in the data-source microflow, 0 for an empty period, labelled like "May 2026" (catalog step).</td><td><span class="lvl b">Blocks</span></td></tr>
     </tbody>
   </table></div>
 
@@ -618,7 +620,7 @@ html { scroll-behavior: smooth; }
       <tr><td><code>level: off</code> in <code>TEST01</code></td><td>Turns off test-first in precheck.</td></tr>
       <tr><td><code>level: warn</code>, <code>block</code> or <code>off</code> in a card of <code>tests/rulebook/lint/</code></td><td>Shows that mxcli lint rule's findings under the warnings, makes them block, or hides them.</td></tr>
       <tr><td><code>level: block</code> in <code>WAIT01</code></td><td>The coverage step fails on tests that wait for time.</td></tr>
-      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); both swaps are skipped (no app restart) when a fingerprint of the app's own tables equals the snapshot's; <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
+      <tr><td><code>MDL_DB_RESET=done|session|off</code></td><td>Database snapshot at first boot, restored after every DONE and before the tests of a full gate that follows a red one (default <code>done</code>; <code>--reset-data</code> for <code>--only</code>); both swaps are skipped (no app restart) when a fingerprint of the app's own tables equals the snapshot's; a changed after-startup seed gets an empty database the current seed fills instead, same one restart; <code>session</code>: only after a session's first DONE; <code>off</code>: data stays.</td></tr>
       <tr><td><code>MDL_VISUAL_REVIEW=agent</code></td><td>A model that reads images judges each page's screenshot.</td></tr>
       <tr><td><code>MDL_REQUIREMENTS=assume</code> or <code>off</code></td><td>Nobody answers the requirements interview: the agent takes its recommended answers as assumptions, listed at DONE, and builds without stopping on a plan or a question. <code>off</code>: no interview.</td></tr>
     </tbody>

@@ -209,7 +209,11 @@ const WRITES_BEFORE_EXEC = /<<|(^|[\s;&|(])(mv|cp|tee|rm|ln|rsync|install|patch|
 // 21 of them this shape, 2026-10-15). An unquoted delimiter is refused: the shell would expand
 // every $Var of the MDL. Only a .mdl outside the harness's own folders, so the guard keeps its say.
 // Returns { path, body } for the shape, { unquoted: path } for the unquoted one, else null.
-const HEREDOC_SCRIPT = /^(?:\s*(?:mkdir\s+-p\s+\S+|cd\s+\S+|(?:export\s+)?[A-Za-z_]\w*=\S*)\s*(?:&&|;|\n)\s*)*cat\s+(?:(>>?)\s*(\S+)\s+<<\s*(['"]?)([A-Za-z_]\w*)\3|<<\s*(['"]?)([A-Za-z_]\w*)\5\s+(>>?)\s*(\S+))[ \t]*\n([\s\S]*?)\n\4?\6?[ \t]*\n\s*(?:&&|;)?\s*(?:\.\/)?mxcli(?:\.exe)?\s+exec\s+(\S+)(?:\s+-p\s+\S+)?(?:\s+2>&1)?(?:\s*\|\s*(?:tail|head|grep|cut|sed\s+-n)[^\n;&|]*)?\s*$/
+// Between the heredoc and the exec, `./mxcli check <script> ... [| tail]` steps may stand: they only read.
+const PIPE_TAIL = String.raw`(?:\s*\|\s*(?:tail|head|grep|cut|sed\s+-n)(?:"[^"\n]*"|'[^'\n]*'|[^\n;&|"'>])*)*`
+const CHECK_STEP = String.raw`(?:(?:\.\/)?mxcli(?:\.exe)?\s+check\s+(?:"[^"\n]*"|'[^'\n]*'|2>&1|2>\/dev\/null|[^\n;&|"'>])*` + PIPE_TAIL + String.raw`\s*(?:&&|;|\n)\s*)*`
+const HEREDOC_SCRIPT = new RegExp(String.raw`^(?:\s*(?:mkdir\s+-p\s+\S+|cd\s+\S+|(?:export\s+)?[A-Za-z_]\w*=\S*)\s*(?:&&|;|\n)\s*)*cat\s+(?:(>>?)\s*(\S+)\s+<<\s*(['"]?)([A-Za-z_]\w*)\3|<<\s*(['"]?)([A-Za-z_]\w*)\5\s+(>>?)\s*(\S+))[ \t]*\n([\s\S]*?)\n\4?\6?[ \t]*\n\s*(?:&&|;)?\s*` +
+  CHECK_STEP + String.raw`(?:\.\/)?mxcli(?:\.exe)?\s+exec\s+(\S+)(?:\s+-p\s+\S+)?(?:\s+2>&1)?` + PIPE_TAIL + String.raw`\s*$`)
 const HARNESS_FOLDERS = /^(tests|tools|mxcodr|\.claude|\.cursor|\.codex|\.opencode|\.pi|\.agents|\.ai-context)(\/|$)/
 function heredocScript(command) {
   const m = HEREDOC_SCRIPT.exec(command || "")

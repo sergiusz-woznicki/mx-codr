@@ -66,6 +66,8 @@ if [ -z "$HOOK_HEREDOC" ]; then
 fi
 
 hook_precheck ${args[@]+"${args[@]}"} ${inline[@]+"${inline[@]}"}
+# A `cat >>` heredoc the hook appended for the precheck: put back on a pass (the command appends it).
+[ -z "$HOOK_HEREDOC" ] || "$NODE" "$HOOK_TOOL" "$([ "$HOOK_STATUS" -eq 0 ] && echo heredoc-put-back || echo heredoc-drop-note)" 2>/dev/null
 if [ "$HOOK_STATUS" -ne 0 ]; then
   {
     echo "$HOOK_BLOCKED_HEAD"

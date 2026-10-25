@@ -293,23 +293,27 @@ function errorSourcesCommand(args) {
 // captions came back as "the full gate would refuse CAPTION01" on 9-23 --only runs and 3-7 red full
 // gates per B2B run (2026-10-15). A suggestion per action, from what the line does, so the fix is a
 // paste. Prints `  <script>:<line>: <message>` lines; nothing when every flow is captioned.
-const CAPTION_AT_EXEC = /^CAPTION0[1-7]$/;
+const CAPTION_AT_EXEC = /^CAPTION0[1-79]$/;
 const words = name => String(name).split('.').pop().replace(/"/g, '').replace(/^(ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF)_/i, '')
   .replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
 const article = w => (w ? 'the ' + w : '');
+// The hint names what the line works on and leaves a <slot> for what only the author knows -- why it runs
+// for the person. Pasted as it is, the slot is refused (CAPTION09), as is a caption that only names the
+// line's own variable or flow ("Save the ticket", "Run send reminder", "Work out the value"): the hints
+// this function used to give had exactly that shape, and a script could fill a whole app with them.
 function suggestCaption(line) {
   const t = line.trim();
   let m;
-  if ((m = /^retrieve\s+\$\w+\s+from\s+(?:database\s+)?(?:\$\w+\/)?(?:["\w]+\.)*(["\w]+)/i.exec(t))) return `Find ${article(words(m[1]))}`;
-  if ((m = /^\$\w+\s*=\s*create\s+(?:list\s+of\s+)?["\w.]*\.(["\w]+)/i.exec(t))) return `Start a new ${words(m[1])}`;
-  if ((m = /^change\s+\$(\w+)/i.exec(t))) return `Update ${article(words(m[1]))}`;
-  if ((m = /^commit\s+\$(\w+)/i.exec(t))) return `Save ${article(words(m[1]))}`;
-  if ((m = /^delete\s+\$(\w+)/i.exec(t))) return `Remove ${article(words(m[1]))}`;
-  if ((m = /^(?:\$\w+\s*=\s*)?call\s+(?:microflow|nanoflow|java\s+action|javascript\s+action)\s+["\w.]*\.(["\w]+)/i.exec(t))) return words(m[1]).replace(/^./, c => c.toUpperCase());
+  if ((m = /^retrieve\s+\$\w+\s+from\s+(?:database\s+)?(?:\$\w+\/)?(?:["\w]+\.)*(["\w]+)/i.exec(t))) return `Find ${article(words(m[1]))} <that this step needs>`;
+  if ((m = /^\$\w+\s*=\s*create\s+(?:list\s+of\s+)?["\w.]*\.(["\w]+)/i.exec(t))) return `Start ${article(words(m[1]))} <for what>`;
+  if ((m = /^change\s+\$(\w+)/i.exec(t))) return `<Mark|Record|Reserve> ${article(words(m[1]))} <as what>`;
+  if ((m = /^commit\s+\$(\w+)/i.exec(t))) return `Record ${article(words(m[1]))} <as what: sent, resolved>`;
+  if ((m = /^delete\s+\$(\w+)/i.exec(t))) return `Remove ${article(words(m[1]))} <which, why>`;
+  if ((m = /^(?:\$\w+\s*=\s*)?call\s+(?:microflow|nanoflow|java\s+action|javascript\s+action)\s+["\w.]*\.(["\w]+)/i.exec(t))) return `<what ${words(m[1])} does for the person>`;
   if ((m = /^show\s+page\s+["\w.]*\.(["\w]+)/i.exec(t))) return `Open ${article(words(m[1]).replace(/\s+(new ?edit|overview|detail|view)$/, ''))} page`;
   if (/^show\s+message/i.test(t)) return 'Tell the user what happened';
   if (/^close\s+page/i.test(t)) return 'Close the page';
-  if (/^(set|declare)\s+\$/i.test(t)) return 'Work out the value';
+  if (/^(set|declare)\s+\$/i.test(t)) return '<what the value means: Add the line to the total>';
   if (/^(if|case|while)\b/i.test(t)) return 'Is it ...?';
   if (/^loop\b/i.test(t)) return 'One row at a time';
   return '';
@@ -325,7 +329,7 @@ function captionFindings(scripts) {
     const [failures] = CHECKS.naming(lines);
     for (const f of failures) {
       if (!CAPTION_AT_EXEC.test(f.check)) continue;
-      const hint = /^CAPTION0[1356]$/.test(f.check) ? suggestCaption(lines[f.line - 1] || '') : '';
+      const hint = /^CAPTION0[13569]$/.test(f.check) ? suggestCaption(lines[f.line - 1] || '') : '';
       const kind = f.check === 'CAPTION06' ? '@annotation' : '@caption';
       out.push(`  ${script}:${f.line}: [${f.check}] ${f.message}${hint ? ` -- e.g. ${kind} '${hint.replace(/'/g, "''")}'` : ''}`);
     }

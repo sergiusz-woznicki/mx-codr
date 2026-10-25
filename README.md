@@ -20,7 +20,7 @@ When it answers DONE, the last lines are a **STOP BUILDING** block: do not edit 
 again, write the report; the warnings above it are marked report-only and go into the report as "to fix next".
 The very last line of every run is `timing:` -- where the seconds went (setup, data reset, boot, preflight,
 tests, checks, restore) and the checks that ran beside them; the table is `.mxcli/last-timing.txt`.
-Harness bundle 2026.10.25.4.
+Harness bundle 2026.10.25.5.
 
 ## Install
 
@@ -163,7 +163,7 @@ fix it, and how hard it judges. **Blocks** means the gate says NOT DONE until it
 prints the code; `tests/checks/<group>.md` says in one line what each code wants.
 `bash tests/rules.sh` lists them all, `bash tests/rules.sh explain URL01` shows one.
 
-**Done means tested and building** (22 rules)
+**Done means tested and building** (29 rules)
 
 The browser tests, Mendix's own check, and what must be true before a script runs.
 
@@ -177,6 +177,7 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `PUBLISH01` | A business event the app publishes is really sent: some microflow hands the event object to a Java action (the module's publish action, or a wrapper of the app's own). Creating the object and writing a log line is not publishing. | Blocks |
 | `SEED01` | A list the menu opens shows rows to a role that cannot create them, such as a customer's invoices or a technician's jobs. The microflow the app runs at startup, or a microflow or workflow it calls, creates those rows. The tests' rows are removed at DONE, so without them that role signs in to an empty list. A list the role fills itself is not judged. | Warning |
 | `ASKED01` | When your request asks for a calendar, a map or a chart, a page shows one: a list of dates in place of a calendar is a simplification you did not agree to. The agent installs one published by Mendix or Mendixlabs (the hooks refuse any other publisher), or says in its report why it could not. | Blocks |
+| `CHART01` | When your request asks for a chart of the last N months, weeks or days, the chart has N bars: not one fed by a group-by view (a period with no rows gets no bar), and not one whose x axis is a number, a date or a "2026-05" text (the chart then draws a date axis with ticks between the bars). The fix is N rows built in the data-source microflow, 0 for an empty period, labelled like "May 2026". | Blocks |
 | `RUNTIME01` | While the tests ran, the Mendix server logged no errors. A test can pass while something failed in the background. | Warning |
 | `MFTEST01` | The microflow tests under tests/ pass, and each asserts something. They run once the rest of a full gate is green, on a copy of the project with its own runtime and scratch database; a pass is replayed until the model or a test changes. The `test-first-delivery` skill keeps them for logic no screen can drive (what a scheduled event picks, the after-startup seed); browser tests stay the ones that count. | Blocks |
 | `SCOPE01` | Points out a page whose data source microflow retrieves records that the page's role should only partly see. A microflow ignores access rules, so the retrieve itself must limit the records to the user. | Warning |
@@ -185,8 +186,8 @@ The browser tests, Mendix's own check, and what must be true before a script run
 | `STALE01` | An old script cannot be run again if that would undo changes made to its pages or microflows later. Moving a document to another folder does not count as a change. | Blocks |
 | `TEST01` | Test first: before a new page or a new ACT_ microflow is added, a browser test for it must already exist. Fixing something that is already in the app is fine. | Blocks |
 | `REQ01` | Before the first pages of an app are built, its requirements are recorded in the project brain: one per testable statement of the request (every rule, format, count and role), what it leaves open as an assumption. Until then the exec is refused, with the procedure in the message; an app that grew without a brain gets a warning instead. | Blocks |
-| `REQ03` | A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What the request asks for and is not built yet is recorded as well, so the next session's `orient.sh` lists it as open. | Blocks |
-| `SCOPE02` | The approved requirements are the scope of the first build: a new page or ACT_ microflow must serve one (a requirement anchors it, or a test that names a requirement covers it), or the exec is refused with the way out: leave it out and list it under "to add next" in the report. The home and login pages and seed flows are never flagged; nothing is checked while no requirement is recorded or after the first DONE (REQ03 takes over). Where nobody answers (`requirements: assume`) the scope is frozen too: from the first promoted requirement until DONE a new `brain capture` of a requirement is refused, and so is one that asks for a dashboard, totals, tiles, charts or a report in words the request never used. | Blocks |
+| `REQ03` | A later request records its requirements too: once the app has pages and a plan, a new page or ACT_ microflow waits until one of the request's requirements names it. What the request asks for and is not built yet is recorded as well, so the next session's `orient.sh` lists it as open. Only after the app's first DONE (a red full gate does not count). | Blocks |
+| `SCOPE02` | The approved requirements are the scope of the first build: a new page or ACT_ microflow must serve one (a requirement anchors it, or a test that names a requirement covers it), or the exec is refused with the way out: leave it out and list it under "to add next" in the report. The home and login pages and seed flows are never flagged; nothing is checked while no requirement is recorded or after the first DONE (REQ03 takes over). Where nobody answers (`requirements: assume`) the scope is frozen too: from the first promoted requirement until DONE a new `brain capture` of a requirement is refused, and so is one that asks for a dashboard, totals, tiles, charts or a report in words the request never used. Each capture is judged on its own: one that is a sentence of the request word for word, or repeats one of its details, passes; a requirement already recorded gets an anchor with `node tools/mdl-checks/plugins/capture_guard.cjs anchor <id> @Module.Doc`, keeping its id. | Blocks |
 | `TESTS01` | Every browser test passes. Microflow unit tests (*.test.mdl) are not run by the gate; it shows the command that runs them. | Blocks |
 | `UNUSED01` | No microflow, page, snippet, enumeration or Java action is left that nothing uses. It is reported only if nothing in the app refers to it, its name appears nowhere else, and the app still builds without it. | Blocks |
 | `VIS01` | On the page a test ends on, no two widgets lie on top of each other. | Warning |
@@ -236,7 +237,7 @@ Mendix's security best practices, checked on the model.
 | `WRITE01` | Points out a role that may change fields only the system should set, like a total or a status. The finding names the fields to remove and the associations to keep. | Warning |
 | `XSS01` | Points out an HTML widget that shows text a user typed as HTML. Someone could type a script that runs in other users' browsers. | Warning |
 
-**Microflows** (24 rules)
+**Microflows** (25 rules)
 
 Logic a colleague can read on the canvas, and data work that scales.
 
@@ -250,8 +251,9 @@ Logic a colleague can read on the canvas, and data work that scales.
 | `CAPTION06` | Every loop has an annotation saying what it walks through. | Warning until the first DONE; then blocks a new or changed microflow |
 | `CAPTION07` | A loop has no caption: mxcli drops loop captions, so the text belongs in the annotation. | Blocks |
 | `CAPTION08` | Points out a decision whose caption was overwritten by its expression. | Warning |
+| `CAPTION09` | A caption says more than its line: a call's caption is not the called microflow's name ("Run send reminder"), a commit's or retrieve's is not a stock verb with its own variable ("Save the ticket" over a commit of $Ticket, "Load the open tickets"), and no caption is a stock phrase ("Work out the value") or a suggested caption's `<slot>` left unfilled. Checked before each exec too. | Warning until the first DONE; then blocks a new or changed microflow |
 | `DS01` | A data grid, list view or gallery whose data source is a microflow that only retrieves rows uses a Database source instead. The database then pages, sorts and filters, which is much faster. | Blocks |
-| `ERR01` | Points out an error handler that nobody would notice: it should log, show a message, raise the error again or return. | Warning |
+| `ERR01` | Points out an error handler that nobody would notice: it should log, show a message, raise the error again or return. One that logs names the error itself (`$latestError/Message`, or `$latestHttpResponse` after a REST call), not only that something failed. | Warning |
 | `EVENT01` | An entity's after-commit event microflow does not commit its own object again with events. That commit starts the same event again: an endless loop. | Blocks |
 | `EVENT02` | A before-commit event microflow that can say "no" (return false) is set to raise an error. Otherwise the save is skipped and the user gets no message at all. | Blocks |
 | `EVENT03` | Points out a commit "without events" on an entity whose event microflow sets or checks something: that work is silently skipped. | Warning |
@@ -369,7 +371,7 @@ The default is in bold. A key you leave out takes its default.
 | `MDL_PSQL` | a path to `psql` | Which PostgreSQL client to use when it is not on the `PATH`. |
 | `MDL_MXBUILD_PATH`, `JAVA_HOME`, `MDL_BOOT_COMMAND`, `MX_VERSION` | set by the installer | How the app is built and booted, and which Studio Pro version to use when there are several. |
 | `GRADLE_HOME` | the newest `gradle-*` beside mxbuild | The Gradle the Windows boot (`tests/run-app.sh`) builds with, when another one is needed. |
-| `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data; a full gate after a red one also starts its tests on the saved data (`--reset-data` does it for `--only`). Both resets are skipped (no stop, no boot, ~14 s each) when a fingerprint of the app's own tables (all rows, all columns; users and roles, autonumber counters and files too; not sessions, queues or `lastlogin`) equals the one stored with the snapshot; `--reset-data` always restarts. `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
+| `MDL_DB_RESET` | **`done`** · `session` · `off` | `done`: the database is saved when the app first boots and put back after every DONE, so the person never sees test data; a full gate after a red one also starts its tests on the saved data (`--reset-data` does it for `--only`). Both resets are skipped (no stop, no boot, ~14 s each) when a fingerprint of the app's own tables (all rows, all columns; users and roles, autonumber counters and files too; not sessions, queues or `lastlogin`) equals the one stored with the snapshot; `--reset-data` always restarts. When the after-startup seed (its microflow and what it calls) changed since the snapshot, a full gate, `--reset-data` and the DONE start from an empty database the current seed fills instead, with the same one restart. `session`: put back only after a session's first DONE. `off`: the data stays. Local mode only. |
 | `MDL_CLOSE_BROWSER` | **`0`** · `1` | `0`: the test browser stays open, so the next run starts faster. `1`: it closes after each gate run. |
 | `MDL_REQUIREMENTS` | **`ask`** · `assume` · `off` | `ask`: before the first feature the agent asks you what the app must do and waits. `assume`: nobody answers (a benchmark); it takes its recommended answers as assumptions, listed at DONE, and builds without stopping on a plan or a question. `off`: no interview. |
 | `MDL_COMPACTION` | `on` · **`off`** | `on`: the installer gives Pi a compaction threshold of 70% of each model's window (`.pi/settings.json`, only for models you have not set yourself). `off`: Pi's own default. Read by the installer only; re-run it after a change. Measured on one prompt: a shorter context each turn, but more turns in two of three runs. Claude Code and Codex are not set: their threshold is a token count, not a share of the window. |
@@ -381,7 +383,8 @@ The default is in bold. A key you leave out takes its default.
 | `MDL_HARNESS_EDITS` | **empty** · `allow` | `allow`: the agent may edit the harness's own files. The rule cards and this file stay protected either way. |
 
 **Test users: `tests/credentials.env`.** `TEST_PASSWORD_<user>=...` for each demo user a test signs
-in as.
+in as. A test whose `TEST_USER` has no line fails at `open_app()` saying so, and so does one the browser
+would run as another user.
 
 **The look: `bash tests/theme.sh`** lists the themes, `bash tests/theme.sh teal` switches. A reinstall refreshes the theme's frame, so a fix to it (one focus ring on a combo box, not two) reaches existing apps.
 

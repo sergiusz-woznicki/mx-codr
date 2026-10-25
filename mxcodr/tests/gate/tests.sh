@@ -153,7 +153,8 @@ step_tests() {
     if [ "$status" != "0" ] && [ "${RESET_DATA:-0}" != "1" ] && { [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ]; } && [ -f "${DBSNAP_DIR:-.mxcli/db-snapshot}/pending.dump" ]; then
       echo "   the rows these tests created stay until DONE; if a test failed on rows an earlier run left"
       echo "   (a slot already taken, a list not empty), run it once more with --reset-data (a restart, ~15 s): the tests then"
-      echo "   start on the snapshot's data. Better: let the test make its own room (a time far from now, a name of its own)"
+      echo "   start on the snapshot's data (on a fresh database the current seed fills, when the after-startup seed changed"
+      echo "   since the snapshot -- never drop the schema by hand). Better: let the test make its own room (a time far from now, a name of its own)"
     fi
   fi
   # Only a run on the current model counts as having exercised it.

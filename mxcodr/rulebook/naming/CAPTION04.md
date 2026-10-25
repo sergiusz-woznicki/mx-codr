@@ -12,7 +12,7 @@ baseline: captions
 A decision's caption is a question and ends with "?", like "Is the order approved?".
 
 ## Fix
-Warns until the first DONE; a microflow new or changed since the last DONE then blocks (`level: block` on CAPTION01-06: all block).
+As CAPTION01: warns until the first DONE, then blocks a microflow new or changed since.
 
 ## Local
 # level: warn

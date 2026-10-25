@@ -16,6 +16,9 @@
 //   ASKED01 the request (docs/brain/requests/) names a calendar, a map or a chart, and no page of the
 //           app's own modules has that widget: a dated list stood in for a calendar in both leave runs
 //           (2026-10-18), with the gate green
+//   CHART01 the request asks for a chart of the last N periods (months, weeks, days) and a chart's series
+//           comes from a group-by view: a period with no rows gets no bar (4 bars of 6), or its axis label is
+//           a number, a date or a 'yyyy-MM' text that Plotly reads as a date axis (ticks every two weeks)
 //   mxcli's own lint rules, each under its own code at the level of its card (tests/rulebook/lint/,
 //           passed in --levels): `mxcli lint --format json` runs here when one of them, or LINT01 (every
 //           lint rule without a card), is not off. UI001 and SEC007 are ours, so lint's copies are dropped.
@@ -36,7 +39,7 @@ const INPUT_TYPES = new Set(['Forms$CheckBox', 'Forms$DatePicker', 'Forms$TextBo
   'com.mendix.widget.web.combobox.Combobox']);
 const MIN_INPUTS = 2;
 // The codes this file checks itself; mxcli lint reports UI001 and SEC007 too (they began as lint rules).
-const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'ASKED01', 'LINT01']);
+const OUR_CODES = new Set(['UI001', 'SEC007', 'STATUS01', 'STARTUP01', 'SEED01', 'PUBLISH01', 'ASKED01', 'CHART01', 'LINT01']);
 
 const entityOfAttribute = ref => { const parts = String(ref || '').split('.'); return parts.length < 3 ? '' : parts.slice(0, -1).join('.'); };
 
@@ -395,6 +398,73 @@ function askedViews(requests, widgets) {
   return out;
 }
 
+// CHART01: "the last 6 months", "past 4 weeks", "ostatnich 6 miesięcy", "letzten 6 Monate" -- {n, unit, quote}.
+const NUMBER_WORDS = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+const LAST_PERIODS = /\b(?:last|past|previous|ostatni(?:ch|e)|letzten)\s+(\d+|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(days?|weeks?|months?|quarters?|years?|dni|tygodni|miesi[eę]cy|kwarta[lł][oó]w|lat|tage|wochen|monate|quartale|jahre)\b/i;
+function lastPeriods(requests) {
+  for (const [file, text] of requests) {
+    const body = text.replace(/^#.*$/gm, '');
+    const m = LAST_PERIODS.exec(body);
+    if (m) return { n: NUMBER_WORDS[m[1].toLowerCase()] || Number(m[1]), unit: m[2].toLowerCase(), file, quote: m[0] };
+  }
+  return null;
+}
+// The series of the charts on a page's source: [{chart, source: {kind, name}, x}].
+function chartSeries(text) {
+  const out = [];
+  const charts = [...text.matchAll(/\b(\w*chart|pluggablewidget\s+'[^']*chart[^']*')\s+(\w+)\s*\(/gi)].map(m => ({ at: m.index, name: m[2] }));
+  for (const m of text.matchAll(/\bseries\s+(?:\w+\s*)?\(/gi)) {
+    let depth = 0, end = m.index + m[0].length - 1;
+    for (; end < text.length; end++) { if (text[end] === '(') depth++; else if (text[end] === ')' && --depth === 0) break; }
+    const body = text.slice(m.index, end);
+    const src = /\b(?:static)?DataSource:\s*(microflow|database)\s+(?:from\s+)?([\w."]+)/i.exec(body);
+    const chart = charts.filter(c => c.at < m.index).pop();
+    if (!src || !chart) continue;
+    out.push({ chart: chart.name, source: { kind: src[1].toLowerCase(), name: src[2].replace(/"/g, '') }, x: (/\bstaticXAttribute:\s*(\w+)/i.exec(body) || [])[1] || '' });
+  }
+  return out;
+}
+function periodCharts(requests, sources, entities) {
+  const asked = lastPeriods(requests);
+  if (!asked) return [];
+  const byName = {};
+  for (const d of sources) byName[d.QualifiedName] = d;
+  const isView = new Set(entities.filter(e => /^view$/i.test(e.EntityType || '')).map(e => e.QualifiedName));
+  const grouped = name => isView.has(name) && /\bgroup\s+by\b/i.test((byName[name] || {}).SourceText || '');
+  const unit = asked.unit.replace(/s$/, '');
+  const out = [];
+  for (const page of sources.filter(d => /^(PAGE|SNIPPET)$/.test(d.ObjectType))) {
+    for (const s of chartSeries(page.SourceText || '')) {
+      const flow = s.source.kind === 'microflow' ? ((byName[s.source.name] || {}).SourceText || '') : '';
+      const views = s.source.kind === 'database' ? [s.source.name]
+        : [...flow.matchAll(/\bretrieve\s+\$\w+\s+from\s+([\w."]+)/gi)].map(m => m[1].replace(/"/g, ''));
+      const builds = /\$\w+\s*=\s*create\s+(?!list\b)[\w."]+\s*\(/i.test(flow);
+      const view = views.find(grouped);
+      const where = `${page.QualifiedName}: the chart ${s.chart} (the request: "${asked.quote}", ${asked.file})`;
+      const fix = ` Build the ${asked.n} rows in a data-source microflow: a non-persistent entity, one row per ${unit} from the oldest to the current one, ` +
+        `0 for a ${unit} without data, labelled with text ('MMM yyyy' for a month) -- the form is in tools/mdl-checks/mdl-pitfalls.md ("A chart of the last N periods"). ` +
+        `A chart that really shows only the periods with data: the person adds \`except: ${page.QualifiedName}\` under ## Local in tests/rulebook/catalog/CHART01.md`;
+      if (view && !builds) {
+        out.push({ code: 'CHART01', key: page.QualifiedName, message: `${where} takes its bars from ${view}, a group-by over the rows that exist: ` +
+          `a ${unit} with no rows gets no bar, so the chart shows fewer than ${asked.n}.` + fix });
+        continue;
+      }
+      // The x label: a number or a date, or a text written as digits ('yyyy-MM'), is read by Plotly as a
+      // continuous axis -- ticks fall between the periods and their labels are not the periods.
+      const entity = s.source.kind === 'database' ? s.source.name : (/\breturns\s+list\s+of\s+([\w."]+)/i.exec(flow) || [])[1];
+      if (!s.x || !entity) continue;
+      const type = (new RegExp(`\\b${s.x}\\s*:\\s*(\\w+)`).exec((byName[entity.replace(/"/g, '')] || {}).SourceText || '') || [])[1] || '';
+      const digits = [...flow.matchAll(new RegExp(`\\b${s.x}\\s*=\\s*formatDateTime\\([^;]*?,\\s*'([^']*)'\\s*\\)`, 'g'))].map(m => m[1]).find(f => !/[a-ce-xzA-LN-Z]|MMM/.test(f));
+      if (/^(Integer|Long|Decimal|DateTime|Date)$/i.test(type) || digits !== undefined) {
+        out.push({ code: 'CHART01', key: page.QualifiedName, message: `${where} labels its x axis with ${s.x}, ` +
+          (digits !== undefined ? `a text written as '${digits}'` : `a ${type}`) + ': Plotly reads it as a ' + (digits !== undefined || /date/i.test(type) ? 'date' : 'number') +
+          ` axis and puts its ticks between the ${unit}s, not one label per bar. Label each bar with a text such as formatDateTime($Start, 'MMM yyyy').` + fix });
+      }
+    }
+  }
+  return out;
+}
+
 function main() {
   const { levels, excepts, rest: argv } = levelArgs(process.argv.slice(2));
   const args = catalogArgs(argv);
@@ -439,6 +509,13 @@ function main() {
         found.push(...askedViews(requests, widgets.filter(w => modules.has(w.ModuleName))));
       }
     }
+    if (level('CHART01') !== 'off') {
+      const requests = requestTexts(appDir);
+      if (lastPeriods(requests)) {
+        const sources = mxcli(appDir, mpr, "SELECT QualifiedName, ModuleName, ObjectType, SourceText FROM CATALOG.SOURCE WHERE ObjectType IN ('PAGE', 'SNIPPET', 'MICROFLOW', 'ENTITY')", true);
+        found.push(...periodCharts(requests, sources.filter(d => d.ObjectType !== 'PAGE' && d.ObjectType !== 'SNIPPET' || modules.has(d.ModuleName)), entities));
+      }
+    }
     if (lintWanted(levels, level('LINT01'))) found.push(...lintAtLevels(lintFindings(appDir, mpr), levels, level('LINT01'), modules));
   } catch (error) {
     if (!(error instanceof ModelReadError)) throw error;
@@ -457,4 +534,4 @@ function main() {
 }
 
 if (require.main === module) process.exitCode = main();
-module.exports = { askedViews, requestTexts, unpublishedEvents, handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };
+module.exports = { askedViews, periodCharts, lastPeriods, chartSeries, requestTexts, unpublishedEvents, handRolledGridFilter, anonymousUnconstrainedRead, parseLint, lintWanted, lintAtLevels, singleStatusTargets, repeatStatusButtons, startupReturnsFalse, listsWithoutSeed };
