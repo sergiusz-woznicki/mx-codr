@@ -1,6 +1,6 @@
 ---
 name: files-and-images
-description: "Photos, images and documents that users upload, show, download or delete in a Mendix app: the System.Image and System.FileDocument entities, the Marketplace File Uploader, thumbnails and large photos, document lists with name and size, download and delete. Use before building any upload, photo, picture, attachment, document or file feature, and when an image or a file upload does not build or does not show."
+description: "Photos, images and documents that users upload, show, download or delete in a Mendix app: the System.Image and System.FileDocument entities, the Marketplace File Uploader, thumbnails and large photos, document lists with name and size, download and delete, and a PDF the app generates (invoice, receipt, report). Use before building any upload, photo, picture, attachment, document or file feature, and when an image or a file upload does not build or does not show."
 ---
 
 # Files and images
@@ -155,3 +155,44 @@ end;
   owner's page after it is saved, or accept that the upload saves it.
 - **In a browser test, wait for a grid cell's text, not for its row.** The row
   exists before its cells are filled.
+
+## 6. A document the app generates (PDF)
+
+A document a person reads -- an invoice, a receipt, a report -- is a laid-out
+page: each column placed at its own x position, a bold header row with a rule
+under it, amounts and totals right-aligned. Lines padded with spaces in a
+monospace font (Courier) are not that, nor is one text block with line breaks.
+
+The cheapest verified way here: a Java action that writes the PDF itself, one
+`BT ... Tj ET` per cell, with the standard Type1 fonts `Helvetica` and
+`Helvetica-Bold` (nothing to embed, no library), and stores the bytes in a
+`System.FileDocument` specialisation. Compiled and opened in a viewer:
+
+```java
+// BEGIN EXTRA CODE: the content stream and two helpers
+private final StringBuilder cs = new StringBuilder();
+// F1 = Helvetica, F2 = Helvetica-Bold, named in the page's /Resources /Font
+void text(boolean bold, double size, double x, double y, String t) {
+  t = t.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)");
+  cs.append("BT /").append(bold ? "F2" : "F1").append(' ').append(size).append(" Tf ")
+    .append(x).append(' ').append(y).append(" Td (").append(t).append(") Tj ET\n");
+}
+void right(boolean bold, double size, double xr, double y, String t) {  // right edge at xr
+  double w = 0;                                    // Helvetica: digits 0.556 em, '.' ' ' 0.278
+  for (char c : t.toCharArray()) w += Character.isDigit(c) ? 0.556 : c == '.' || c == ' ' ? 0.278 : 0.6;
+  text(bold, size, xr - w * size, y, t);
+}
+// BEGIN USER CODE: header, rule, rows, total
+text(true, 10, 40, 700, "Item"); right(true, 10, 300, 700, "Qty"); right(true, 10, 400, 700, "Price");
+cs.append("0.6 w 40 696 m 400 696 l S\n");
+text(false, 10, 40, 684, "Coffee"); right(false, 10, 300, 684, "2"); right(false, 10, 400, 684, "6.40");
+text(true, 10, 40, 664, "Total"); right(true, 10, 400, 664, "6.40");
+// font objects: << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> and /Helvetica-Bold;
+// then catalog, pages, page (/MediaBox [0 0 595 842]), the stream, xref; bytes in ISO-8859-1;
+Core.storeFileDocumentContent(getContext(), document, "receipt.pdf", new java.io.ByteArrayInputStream(bytes));
+```
+
+Start a new page when `y` falls below the bottom margin. A document template
+that already exists in the app is the other way; mxcli does not write one, and
+Mendix's Document Generation module (it needs its cloud service) only if the
+app already has it -- neither is verified here.

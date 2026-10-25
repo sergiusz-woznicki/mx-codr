@@ -159,3 +159,6 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **An agent is called through AgentCommons**: `AgentEditorCommons.Agent_CallDocument_*` picks the agent
   document in an argument mxcli (0.26 - 0.28) cannot write (CE0115). `retrieve $Agent from AgentCommons."Agent" where
   [_QualifiedName = 'Mod.MyAgent'] first;` then `$Response = call java action AgentCommons.Agent_Call_WithoutHistory(Agent = $Agent, OptionalContextObject = $Context);`.
+- **A generated PDF (invoice, receipt, report) is a laid-out table**: each column at its own x position,
+  a bold header row, amounts and totals right-aligned -- not lines padded with spaces in Courier. A Java
+  action drawing each cell at coordinates in Helvetica / Helvetica-Bold: skill `files-and-images` section 6.
