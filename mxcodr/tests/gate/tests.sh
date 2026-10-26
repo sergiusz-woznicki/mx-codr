@@ -102,7 +102,7 @@ clear_test_artefacts() {
 run_suite_once() {
   # From here on, what the runtime logs as an error happened during the suite (step_runtime_errors).
   date '+%Y-%m-%d %H:%M:%S' > "$WORK/tests.started"
-  out="$(run_suite "${targets[@]}")"
+  out="$(run_suite "${targets[@]}" 3>&-)"   # 3>&-: see boot_with_mxcli_run
   status=$?
   echo $((SECONDS - started)) > "$WORK/tests.secs"
   # Script verdicts only; each failure's cause line is printed once, under the gate verdict.

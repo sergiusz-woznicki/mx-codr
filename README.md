@@ -20,7 +20,7 @@ When it answers DONE, the last lines are a **STOP BUILDING** block: do not edit 
 again, write the report; the warnings above it are marked report-only and go into the report as "to fix next".
 The very last line of every run is `timing:` -- where the seconds went (setup, data reset, boot, preflight,
 tests, checks, restore) and the checks that ran beside them; the table is `.mxcli/last-timing.txt`.
-Harness bundle 2026.10.25.12.
+Harness bundle 2026.10.25.13.
 
 ## Install
 
