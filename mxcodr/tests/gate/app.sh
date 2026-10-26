@@ -390,7 +390,7 @@ boot_with_command() {
   # second the wait loop would otherwise read the PREVIOUS boot's errors and report this boot
   # as failed after 1s, with the old failure as its reason.
   mkdir -p .mxcli && mdl_rotate_boot_log
-  ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 & )
+  ( bash -c "$MDL_BOOT_COMMAND" > .mxcli/gate-boot.log 2>&1 3>&- & )
   BASE_URL="http://localhost:$APP_PORT"
   wait_for_boot .mxcli/gate-boot.log
 }
@@ -412,9 +412,18 @@ boot_with_mxcli_run() {
     # A fresh project has no database; --ensure-db creates it only when missing.
     boot_args+=(--ensure-db)
   fi
+  # A constant that names the model's own port (HttpPortNumber) is the app calling itself: it gets the port
+  # this boot listens on, so the model keeps its own port for Studio Pro and every other runner (ENDPOINT01,
+  # checks/own_port.cjs). Read at boot; a later change of such a constant needs a restart.
+  local own
+  while IFS= read -r own; do
+    [ -n "$own" ] && boot_args+=(--constant "$own")
+  done <<< "$("$NODE" tools/mdl-checks/own_port.cjs boot-constants . "$MPR" "$APP_PORT" 2>/dev/null < /dev/null)"
   # Empty the log first; see boot_with_command for why.
   mkdir -p .mxcli && mdl_rotate_boot_log
-  ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 & )
+  # 3>&-: a --only run keeps the caller's stdout on fd 3 (tests/gate.sh main); an app that inherits it
+  # keeps the caller's pipe open, and `gate.sh --only x | tail` then waits until the app stops (hb7, 10 min).
+  ( "$MXCLI" "${boot_args[@]}" > .mxcli/gate-boot.log 2>&1 3>&- & )
   BASE_URL="http://localhost:$APP_PORT"
   wait_for_boot .mxcli/gate-boot.log
 }
@@ -471,6 +480,6 @@ keep_offline_caching() {
   ( MDL_KEEPER="$(declare -f answers offline_caching_on offline_caching_keeper)" \
     MDL_OFFLINE_KEEPER_SECONDS="${MDL_OFFLINE_KEEPER_SECONDS:-2}" MDL_OFFLINE_KEEPER_DOWN="${MDL_OFFLINE_KEEPER_DOWN:-60}" \
       exec bash -c 'eval "$MDL_KEEPER"; offline_caching_keeper "$1"' mdl-offline-cache-keeper "$BASE_URL" \
-      </dev/null >/dev/null 2>&1 &
+      </dev/null >/dev/null 2>&1 3>&- &
     echo $! > .mxcli/offline-caching.pid )
 }

@@ -23,7 +23,7 @@ behind single lines; read one when its line is the thing you are doing (table at
 #    feature, what "working" means: one sentence in the user's words
 # 1. write tests/verify-<feature>.test.sh with a `# covers:` header -- ONE scenario call;
 #    a script without `scenario()` hangs for the full timeout. A scheduled job or the
-#    seed, no screen: tests/<feature>.test.mdl (reference/microflow-tests.md)
+#    seed, no screen: no test; suggest one in the report (microflow-tests.md)
 #    The exec of a new page or ACT_ microflow waits for this header (precheck TEST01)
 # 2. RUN IT AND WATCH IT FAIL, for the right reason; quote the FAIL line and read it --
 #    it names the error, locator, URL and user, so do not rerun or screenshot by hand
@@ -139,7 +139,7 @@ grows without a big-bang backfill.
 | You are | Read |
 |---|---|
 | A step of the loop in prose, with a worked example | [reference/loop.md](reference/loop.md) |
-| Which logic gets a microflow test | [reference/microflow-tests.md](reference/microflow-tests.md) |
+| Microflow tests: optional | [reference/microflow-tests.md](reference/microflow-tests.md) |
 | The scenario body: a complete script, one-scenario rule, fill/blur, fast timeouts, signing in as another user, navigating with security off | [reference/scenario.md](reference/scenario.md) |
 | Sign-in failures, "Maximum number of sessions", startup or idempotence regressions, a date or time in a check, subagents, facts about the app in one call | [reference/facts.md](reference/facts.md) |
 | Listing a feature's paths, or reading a `paths` finding | [reference/paths.md](reference/paths.md) |

@@ -9,7 +9,7 @@ fixed: yes
 # TESTS01 — every browser test passes
 
 ## What it checks
-Every browser test passes. Microflow unit tests (*.test.mdl) are MFTEST01.
+Every browser test passes. Microflow unit tests (*.test.mdl) are optional, MFTEST01.
 
 ## Fix
 Read the failing scenario's own message; the test names the widget and the page.

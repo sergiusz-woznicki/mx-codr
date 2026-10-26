@@ -4,7 +4,7 @@
 # its own. The two hooks differed only in how they read the call and answer it, and three changes
 # in one day were made twice each. Provides: NODE, HOOK_TOOL, hook_sleep_message,
 # hook_binary_message, hook_source_message, inline_mdl, steps_before_exec, hook_scripts,
-# hook_heredoc_write, script_written_before_exec, hook_marketplace_wait, HOOK_VARIABLE_MESSAGE,
+# hook_heredoc_write, script_written_before_exec, saved_script_note, hook_marketplace_wait, HOOK_VARIABLE_MESSAGE,
 # HOOK_BLOCKED_HEAD, hook_precheck.
 
 # NODE and HOOK_TOOL (hook_tool.cjs, the small jobs: read a field, wrap a message).
@@ -60,6 +60,13 @@ inline_mdl() {
 # exec` seven times, was blocked before the edit ran, and debugged an edit that was never applied.
 steps_before_exec() {
   printf '%s' "$1" | "$NODE" "$HOOK_TOOL" steps-before-exec 2>/dev/null
+}
+
+# saved_script_note <command> <script>... -- after a precheck refusal: the script is on disk (a heredoc's
+# too: the hook wrote it), fix the named lines there and exec it alone (harness-core savedScriptNote).
+saved_script_note() {
+  local command="$1"; shift
+  printf '%s' "$command" | "$NODE" "$HOOK_TOOL" saved-script-note "$@" 2>/dev/null
 }
 
 # hook_scripts <command> -- the .mdl words of the command, one per line, split like a shell (shlex,

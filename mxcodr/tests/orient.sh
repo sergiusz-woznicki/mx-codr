@@ -98,8 +98,8 @@ start_here_block() {
     [ -f "$d/requirements-interview/SKILL.md" ] && dirs="${dirs:+$dirs or }$d/requirements-interview/SKILL.md"
   done
   echo "== START HERE (new app, nobody answers: do this before reading any rule card)"
-  echo "   1. Read ${dirs:-skill requirements-interview} now. Record the requirements with ./mxcli brain capture: one per user journey, small, in the person's words; write them all, then promote them yourself together: from then on they are the scope, frozen."
-  echo "   2. Scope: build the smallest slice that satisfies the words of the request. What the request names is built, in full."
+  echo "   1. Read ${dirs:-skill requirements-interview} now. Record the requirements with ./mxcli brain capture: one per testable statement, in the person's words, keeping every number, caption, format, place and state it names; write them all, then promote them yourself together: from then on they are the scope, frozen."
+  echo "   2. Scope: build the words of the request, no more and no less, literally: what it spells out (a caption, a count, a place, \"disabled\", \"do not simplify\") is built as written, and the gate checks the plan keeps it (REQ04)."
   echo "      What it does not name (more roles, dashboards, KPI or statistics pages, edit flows, logs) is not built: list it in the final report under \"to add next\"."
   echo "      What the gate itself requires (Users, My account, Log out in the menu, the signed-in name, icons, URLs, folders, captions, seed and demo users, the home page) is always built and is never an extra, even when the request says \"only\" about a menu or screen list: list it in the final report under \"added because the gate requires them\"."
   echo "   3. Only then read tests/checks/*.md rule cards, as a gate finding names them."

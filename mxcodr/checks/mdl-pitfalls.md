@@ -51,6 +51,29 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **A text's `{1}` takes an attribute of the widget's own object**: inside `dataview ... (DataSource: $Invoice)`,
   `dynamictext InvoiceDetail_NumberText (Content: 'Invoice {1}', ContentParams: ({1} = Number))` -- never `$Invoice/Number` (refused).
   Without it the grid under the popup shows the old rows until a reload (gate code REFRESH01).
+- **An amount in a page text is not formatted there**: `formatDecimal(...)` in a text's `{1}` is CE0117 at
+  build (with `2`, a pattern or a locale), and so is `round()`; `toString()` passes but shows every digit.
+  Show it in a read-only text box: `textbox PaymentDetail_AmountInput (Label: 'Amount', Attribute: Amount,
+  Editable: Never, ReadOnlyStyle: Text, DecimalPrecision: 2, GroupDigits: true)`, or format it in a flow
+  (`formatDecimal($Payment/Amount, '#,##0.00')` works there; `formatDecimal($x, 2)` is CE0117) into a String.
+- **A disabled button is a class, not editability**: `Editable:` on an `actionbutton` is dropped (MDL-WIDGET20).
+  `actionbutton TicketDetail_CloseButton (Caption: 'Close ticket', Action: call microflow
+  Shop.ACT_Ticket_Close(Ticket = $currentObject), DynamicClasses: if $currentObject/Status =
+  Shop.TicketStatus.Resolved then '' else 'disabled')` greys it out and stops the click (Atlas `.btn.disabled`);
+  the flow refuses the same case too. "Disabled" in a request is not hidden: keep the button visible.
+- **An XPath takes no function call**: `where [PaidOn >= addMonths($ThisMonth, -5)]` passes `mxcli check`
+  and is CE0161 at build. Declare the bound first: `declare $FirstMonth DateTime = addMonths($ThisMonth, -5);`
+  then `where [PaidOn >= $FirstMonth]`.
+- **A chart of the last N periods** (gate CHART01) has N bars, an empty period's too, each labelled with
+  text: a group-by view gives only the periods that have rows (4 bars of 6), and a number, a date or a
+  `'yyyy-MM'` text on the x axis makes Plotly draw a date axis with ticks between the bars. Build the rows
+  on a non-persistent entity in the chart's data-source microflow, oldest first:
+  `retrieve $Recent from Shop.Payment where [PaidOn >= $FirstMonth];` once, then `while $Back >= 0 begin`
+  `declare $Start DateTime = addMonths($ThisMonth, -$Back);` `$InMonth = filter $Recent where
+  $currentObject/PaidOn >= $Start and $currentObject/PaidOn < addMonths($Start, 1);` `$MonthTotal = sum
+  $InMonth by Amount;` `$MonthBar = create Shop.MonthBar (Label = formatDateTime($Start, 'MMM yyyy'), Total =
+  $MonthTotal, SortKey = 5 - $Back);` `add $MonthBar to $Bars;` `set $Back = $Back - 1; end while;`, with
+  `staticXAttribute: Label` and `aggregationType: 'none'` on the series.
 - **A list takes its rows from the database, not from a flow that only retrieves them** (gate DS01):
   `datagrid OrderDetail_LinesGrid (DataSource: database Shop.OrderLine where [Shop.OrderLine_Order = $Order])`;
   inside a data view the enclosing object is `'[%CurrentObject%]'`. The database pages, sorts and
@@ -70,6 +93,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **Pages and microflows need a role** the moment a menu, a button or another page reaches them
   (CE0557, CE0106): put the `grant view on page` / `grant execute on microflow` in the same
   script that creates them.
+- **A new user role** gets, in the script that creates it, its module roles (with `System.User`), a page of
+  its own and that page as its home: `create user role "ApiClient" ("Help"."ApiClient", "System"."User");`
+  `grant view on page Help.ApiClientHome to Help.ApiClient;` `alter navigation Responsive { set home page
+  Help.ApiClientHome for "ApiClient" };`. Without its own home it gets the default one and the menu, and mx check
+  refuses each page it may not read (CE2729, dozens for one role) -- a role for a REST client too. A role "with no
+  roles defined in module" Help gets one (`alter user role "Employee" add module roles ("Help"."Agent");`) or is dropped.
 - **Two scripts that need each other** (a page calls a new microflow that opens that page) belong
   in one `.mdl`: a `show page` in a microflow may name a page the script creates further down. A
   button on a page may not, and neither may a `call microflow`: create the page it opens or the
@@ -84,6 +113,12 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
   -- never splice `'"$var"'` into the body, and no quotes around `$(...)` (an assignment needs none).
   No apostrophe anywhere in that body, comments included: `// the module's page` ends the quoted JS
   and bash refuses the whole script.
+- **A REST address comes from a constant** (gate ENDPOINT01), never written in: `create constant
+  Mod.ApiBaseUrl ( Type: String, DefaultValue: 'https://api.example.com' );` then `$Forecast = call rest
+  service get '{1}/forecast' with ({1} = @Mod.ApiBaseUrl) returns String;`. `get @Mod.ApiBaseUrl + '/x'`
+  passes check but is stored as that text; a REST client's BaseUrl cannot take a constant (CE7247).
+  The app calling its own published service: the constant names the model's port (`show settings`,
+  `http=8080`), never the gate's port -- the gate's boot points it at the port it runs on.
 - **HTTP from a scenario** (an OData or REST test) goes through `page.request.get(url, {headers})`:
   the scenario runner has no Node globals -- no `fetch`, no `Buffer` ("... is not defined").
   Build a Basic-auth header in bash (`SV_AUTH=$(printf '%s' "$user:$pw" | base64)`), use vars.AUTH.
@@ -124,3 +159,6 @@ Each one below cost a measured session minutes to forty minutes. Write it right 
 - **An agent is called through AgentCommons**: `AgentEditorCommons.Agent_CallDocument_*` picks the agent
   document in an argument mxcli (0.26 - 0.28) cannot write (CE0115). `retrieve $Agent from AgentCommons."Agent" where
   [_QualifiedName = 'Mod.MyAgent'] first;` then `$Response = call java action AgentCommons.Agent_Call_WithoutHistory(Agent = $Agent, OptionalContextObject = $Context);`.
+- **A generated PDF (invoice, receipt, report) is a laid-out table**: each column at its own x position,
+  a bold header row, amounts and totals right-aligned -- not lines padded with spaces in Courier. A Java
+  action drawing each cell at coordinates in Helvetica / Helvetica-Bold: skill `files-and-images` section 6.

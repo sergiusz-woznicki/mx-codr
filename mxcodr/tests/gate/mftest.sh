@@ -16,12 +16,13 @@ free_port() {
   return 1
 }
 
-# Microflow tests (*.test.mdl, *.test.md under tests/), MFTEST01. Only on the run that can end in
-# DONE: a full gate with nothing else red, so a red suite never sends the session to them, and the
-# 30-40 s they cost (21 tests, b2b, 2026-10-16) is paid once, then replayed from the cache until
-# the model or a test file changes. `mxcli test --local` injects module MxTest into the model and
-# rewrites javasource while it runs, so it runs on a copy, with its own runtime on free ports and
-# its own scratch database: the app and its data are not touched.
+# Microflow tests (*.test.mdl, *.test.md under tests/), MFTEST01. Never an obligation (decision
+# 2026-10-25): the agent may write them, the gate runs what it finds, and at the card's level, warn, a
+# red run or one that could not run is a warning that never holds DONE. Only on the run that can end in
+# DONE: a full gate with nothing else red, so the 30-40 s they cost (21 tests, b2b, 2026-10-16) is paid
+# once, then replayed from the cache -- at warn a red result too -- until the model or a test file
+# changes. `mxcli test --local` injects module MxTest into the model and rewrites javasource while it
+# runs, so it runs on a copy, with its own runtime on free ports and its own scratch database.
 step_microflow_tests() {
   local mode files how
   files="$(find tests -name '*.test.mdl' -o -name '*.test.md' 2>/dev/null | sort)"
@@ -33,7 +34,7 @@ step_microflow_tests() {
   if [ -n "${MDL_BOOT_COMMAND:-}" ] || [ "${MDL_RUN_MODE:-}" = "docker" ]; then
     # This project boots without `mxcli run --local` (Windows, Docker); `mxcli test --local` boots that way.
     how="run them with mxcli test (skill test-microflows): --local does not boot where mxcli run --local cannot"
-    summary+=("microflow tests: under tests/, NOT run by the gate -- after changing logic $how")
+    summary+=("microflow tests: under tests/, NOT run by the gate (optional, a warning at most) -- to $how")
     return 0
   fi
   # Read whole, then matched: `| grep -q` stops reading, mxcli gets SIGPIPE, and pipefail makes the
@@ -42,22 +43,35 @@ step_microflow_tests() {
   if ! grep -q -- '--app-port' <<< "$help"; then
     # Before mxcli 0.27 `test --local` always took 8081/8091, the app's own ports.
     how="run them: bash tests/gate.sh --stop && $MXCLI test tests/ -p $MPR --local; bash tests/gate.sh --boot-if-needed"
-    summary+=("microflow tests: under tests/, NOT run by the gate -- after changing logic $how")
+    summary+=("microflow tests: under tests/, NOT run by the gate (optional, a warning at most) -- to $how")
     return 0
   fi
+  local MFTEST_MODE="$mode"   # read by run_microflow_tests
   run_cached mftest run_microflow_tests $files meta:userlib meta:vendorlib meta:javasource \
     "env:MXCLI=$("$MXCLI" version 2>/dev/null | head -1)" "env:MFTEST01=$mode"
-  if [ "$(cat "$WORK/mftest.status" 2>/dev/null)" = "1" ] && [ "$mode" = "warn" ]; then
-    # warn in ## Local: the failures are listed, DONE is not held.
-    cat "$WORK/mftest.detail" >> "$WORK/mftest.warnings" 2>/dev/null
-    summary+=("$(cat "$WORK/mftest.summary") -- see == warnings (MFTEST01 at warn)")
+  if [ "$mode" = "warn" ]; then
+    # warn: whatever happened is in the summary and the warnings; DONE is not held.
+    summary+=("$(cat "$WORK/mftest.summary" 2>/dev/null)")
     return 0
   fi
   collect mftest "microflow tests"
 }
 
-# run_microflow_tests -- the body of step_microflow_tests: 0 all passed, 1 a test failed, 2 could not run.
+# run_microflow_tests -- the body of step_microflow_tests: run_microflow_tests_once, its red result
+# turned into a warning at warn.
 run_microflow_tests() {
+  local status
+  run_microflow_tests_once; status=$?
+  [ "$status" = "0" ] || [ "${MFTEST_MODE:-block}" != "warn" ] && return "$status"
+  # warn: a red run, or one that could not run, is a warning -- and cached like a pass.
+  { sed 's/^/   - [MFTEST01] /' "$WORK/mftest.summary"; cat "$WORK/mftest.detail" 2>/dev/null; } > "$WORK/mftest.warnings"
+  sed -i.bak 's/$/ -- a warning (MFTEST01 at warn): it does not hold DONE/' "$WORK/mftest.summary" && rm -f "$WORK/mftest.summary.bak"
+  : > "$WORK/mftest.detail"
+  return 0
+}
+
+# run_microflow_tests_once -- one run of mxcli test on a copy: 0 all passed, 1 a test failed, 2 could not run.
+run_microflow_tests_once() {
   local copy="$WORK/mftest" app_port admin_port serve_port out status item
   project_copy "$copy" mftest || return 2
   for item in javascriptsource userlib vendorlib resources; do
@@ -83,6 +97,6 @@ run_microflow_tests() {
   echo "microflow tests: FAILED -- $totals; the whole output: .mxcli/microflow-tests.txt" > "$WORK/mftest.summary"
   # The FAIL or ERROR line names the test; the line under it, the expected and actual values.
   grep -A1 -E '^ *(FAIL|ERROR) ' <<< "$out" | grep -v '^--$' | head -40 | sed 's/^ */   /' > "$WORK/mftest.detail"
-  echo "   fix the flow (or the test, when the requirement changed): bash tests/gate.sh --only <feature>, then the full gate" >> "$WORK/mftest.detail"
+  echo "   optional: fix the flow (or the test, when it is the test that is wrong), or delete the test; read the test first" >> "$WORK/mftest.detail"
   return 1
 }

@@ -298,9 +298,9 @@ function untested(list, corpus, minRun = MIN_RUN) {
   return list.filter(o => matchable(o) && !asserted(o, corpus, minRun));
 }
 
-// The tests the gate runs, tests/verify-*.test.sh: [[relative name, text]]. Microflow tests
-// (*.test.mdl) are not among them -- the gate does not run them -- so a message written there walks
-// nothing: an assertion nothing executes is not a test of the path (B2B, 2026-10-08).
+// The browser tests, tests/verify-*.test.sh: [[relative name, text]]. Microflow tests (*.test.mdl)
+// are not among them -- optional, a warning at most (MFTEST01) -- so a message written there walks
+// nothing: it is not a test of the path (B2B, 2026-10-08).
 function testFiles(appDir) {
   const dir = path.join(appDir, 'tests');
   let names = [];

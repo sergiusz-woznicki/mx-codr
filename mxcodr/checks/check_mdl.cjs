@@ -15,6 +15,7 @@
 //   CAPTION06    FAIL  loop/while without @annotation
 //   CAPTION01    FAIL  retrieve/create/change/commit/delete/set/show page/call without @caption
 //   CAPTION02    FAIL  caption is the Mendix default ("Retrieve Invoice", "Commit object")
+//   CAPTION09    FAIL  caption only restates its line: a call's flow name, a commit or retrieve's own variable ("Save the ticket")
 //   VAR01        FAIL  $Int1, $List2, $tmp, $x ...
 //   VAR02        FAIL  name ends in _List, _Object or _Obj
 //   REFRESH01    FAIL  a microflow that closes its page commits without `refresh`
@@ -53,7 +54,7 @@ const CHECKS = { naming: checkNamingAndRefresh };
 // The wording rules: a flow runs the same without them. Variable names and loop captions that
 // mxcli drops stay failures.
 const CAPTION_RULES = new Set(['CAPTION03', 'CAPTION05', 'CAPTION04',
-  'CAPTION06', 'CAPTION01', 'CAPTION02']);
+  'CAPTION06', 'CAPTION01', 'CAPTION02', 'CAPTION09']);
 
 const FLOW_START = rx(String.raw`^\s*create\s+(?:or\s+(?:modify|replace)\s+)?(?:microflow|nanoflow)\s+(?P<name>[\w.]+)`, 'i');
 const LAYOUT_ONLY = rx(String.raw`^\s*@(?:position|anchor|merge)\b`, 'i');
@@ -371,6 +372,9 @@ function main() {
   }
   const fresh = freshFlows(args, hashes);
 
+  // A code the rulebook turns off is not counted among the caption warnings either.
+  const dropped = f => ['off', 'info'].includes(levels[f.check]);
+  failures = failures.filter(f => !dropped(f)); warnings = warnings.filter(f => !dropped(f));
   let captionWarnings = 0;
   if (args.captions === 'warn') [failures, warnings, captionWarnings] = demoteCaptions(lines, failures, warnings, fresh);
   if (Object.keys(levels).length) [failures, warnings] = applyLevels(levels, failures, warnings);

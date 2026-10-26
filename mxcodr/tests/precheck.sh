@@ -100,7 +100,7 @@ precheck_script01() {
   fi
 }
 
-# CAPTION01-07: the flows these scripts create or modify carry their business captions now, not after
+# CAPTION01-07, 09: the flows these scripts create or modify carry their business captions now, not after
 # the gate names them (gate_scripts.cjs captionFindings): nine to twenty-three --only runs a B2B run
 # ended with "the full gate would refuse CAPTION01". CAPTION01 `off` in tests/rulebook/naming/ turns it off.
 precheck_caption01() {
@@ -110,7 +110,8 @@ precheck_caption01() {
       echo "precheck: CAPTION01 -- activities without a business caption (the real model is untouched):"
       printf '%s\n' "$uncaptioned"
       echo "  Put @caption '<what it does for the business>' on the line above each action and decision (a question ending in ?),"
-      echo "  @annotation '<why it repeats>' above each loop -- the e.g. is a paste when it fits -- then exec again."
+      echo "  @annotation '<why it repeats>' above each loop; fill each e.g.'s <slot> with what the step does for the person,"
+      echo "  in the request's words: a caption that only names the variable or the called flow is refused (CAPTION09). Then exec again."
       exit 1
     fi
   fi
@@ -156,8 +157,8 @@ precheck_req01() {
       echo "    count, limit, role and screen it names is its own line (a request in numbered sections gives"
       echo "    several per section; \"dates as DD/MM/YYYY\" is one). Slices by feature, one command per slice:"
       echo "      ./mxcli brain capture \"<requirement>\" --slice 01-<feature> -a @<Module.Doc> -p $MPR && ./mxcli brain capture ..."
-      echo "  - what the request leaves open, and what you build differently from its words (a sign-in where it asks"
-      echo "    for a picker), as an assumption: ./mxcli brain capture \"Assumed: <decision>\" --open --slice <slice> -p $MPR"
+      echo "  - what the request leaves open, as an assumption: ./mxcli brain capture \"Assumed: <decision>\" --open --slice <slice> -p $MPR"
+      echo "    (what the request says is built as it says, a caption, a count, a place, a state; only what an error or a gate rule refuses is an assumption, with its text)"
       echo "  - then ./mxcli brain promote <id> for each (assume mode promotes its own; ask mode waits for the person)."
       echo "  Each requirement then needs a test that names it (# requirement: <id>, gate REQ02), one test file per"
       echo "  slice so --only <slice> runs a short one. Then exec again."
@@ -172,10 +173,12 @@ precheck_req01() {
 # nothing said so, B2B 2026-10-15). Only once the app has pages and its plan has requirements.
 # Only after the app's first DONE (.mxcli/last-gate.txt): during the first build its new pages are
 # that request's, recorded by REQ01 -- REQ03 blocked twice inside the first part of b2b-f4 (2026-10-16).
+# "DONE" right after the date and time: `.* DONE` also matched "NOT DONE", so REQ03 fired after the
+# first red full gate of a build and demanded anchors the scope freeze then refused.
 precheck_req03() {
   if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ03 block)" = "block" ] \
      && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1 \
-     && grep -q '^full: .* DONE' .mxcli/last-gate.txt 2>/dev/null; then
+     && grep -qE '^full: [^ ]+ [^ ]+ DONE' .mxcli/last-gate.txt 2>/dev/null; then
     unanchored="$("$NODE" tools/mdl-checks/gate_helpers.cjs unanchored-features . "$MPR" "$@" 2>/dev/null)"
     if [ -n "$unanchored" ]; then
       echo "precheck: REQ03 -- no requirement of this request names these new documents (the real model is untouched):"
@@ -183,6 +186,8 @@ precheck_req03() {
       echo "  Record this request's requirements first, one per testable statement of it, in a slice of its own,"
       echo "  each anchored at the document that will build it:"
       echo "    ./mxcli brain capture \"<requirement>\" --slice <NN>-<this request> -a @<Module.Doc> -p $MPR"
+      echo "  A requirement already recorded keeps its id and gets the anchor:"
+      echo "    node tools/mdl-checks/plugins/capture_guard.cjs anchor <id> @<Module.Doc>"
       echo "  A part of the request you will not build now gets its requirement too, anchored at the document it"
       echo "  will be: the next session's orient.sh lists it as open. A part that needs a key or an outside service is"
       echo "  built with a stand-in, not deferred. Promote each (./mxcli brain promote <id>), then exec again."
@@ -212,6 +217,25 @@ precheck_scope02() {
       echo "  - it is more than was asked: take it out of the script, and list the idea under \"to add next\" in your final"
       echo "    report. Do not capture a new requirement for it (at requirements: assume the scope is frozen once"
       echo "    the requirements are promoted; with a person in the chat, ask them to approve it first). Then exec again."
+      exit 1
+    fi
+  fi
+}
+
+# REQ04: the requirements keep what the request spells out. A number, a quoted caption, a format, a bound
+# or a word like "exactly", "disabled", "above" of the request that no requirement or assumption repeats is
+# a detail nobody will test (b2b-orders hb1, 2026-10-25: "exactly 10 digits", "a bar above the table" and
+# "disabled" were in no requirement, and the gate said DONE). Checked at the first exec of features,
+# before the pages exist. REQ04 `off` in tests/rulebook/paths/REQ04.md turns it off.
+precheck_req04() {
+  if [ "${MDL_REQUIREMENTS:-ask}" != "off" ] && [ "$(mdl_rule_level REQ04 block)" = "block" ] \
+     && [ -f tools/mdl-checks/gate_helpers.cjs ] && ls docs/brain/plan/*.md >/dev/null 2>&1; then
+    gaps="$("$NODE" tools/mdl-checks/gate_helpers.cjs request-gaps . "$MPR" "$@" 2>/dev/null)"
+    if [ -n "$gaps" ]; then
+      echo "precheck: REQ04 -- the plan does not keep what the request spells out (the real model is untouched):"
+      printf '%s\n' "$gaps"
+      echo "  Capture those details as requirements (a capture that repeats the request's own words passes the freeze), then"
+      echo "  ./mxcli brain promote <id>, and exec again."
       exit 1
     fi
   fi
@@ -264,6 +288,7 @@ precheck_req01 "$@"
 precheck_req03 "$@"
 precheck_test01 "$@"
 precheck_scope02 "$@"
+precheck_req04 "$@"
 
 started="$(date +%s)"
 # The model often runs this by hand and the hook then runs it again before the exec: the second
@@ -395,11 +420,19 @@ done
 # here -- 5.2s against 2.3s, measured on a 41-microflow app -- and nothing in a script
 # changes widgets/. So the check runs without it, and only a CE0463 in the result buys the
 # slow run: a real one is still reported, a false one still prevented.
+# A script that writes a data grid or a file uploader always gets that error on the copy: mxcli writes
+# them in its own older definition, and the after-exec hook's `mxcli fix widgets` only ever runs on the
+# real model. Such a script goes straight to the slow run -- the fast one was 3.5 s spent on CE0463
+# before every page exec with a grid (b2b-orders hb4: 14-18 s prechecks of one page script).
 mx_args=(docker check -p "$scratch/$MPR")
 [ -n "${MDL_MXBUILD_PATH:-}" ] && mx_args+=(--mxbuild-path "$MDL_MXBUILD_PATH")
-out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
-if grep -q 'CE0463' <<< "$out"; then
+if grep -qiE '^[[:space:]]*(datagrid|fileuploader)[[:space:]]' "$@" 2>/dev/null; then
   out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
+else
+  out="$("$MXCLI" "${mx_args[@]}" --no-update-widgets 2>&1)"
+  if grep -q 'CE0463' <<< "$out"; then
+    out="$("$MXCLI" "${mx_args[@]}" 2>&1)"
+  fi
 fi
 # mx check exits 0 even with model errors, so read the count it prints.
 errors="$(printf '%s\n' "$out" | grep -oE 'contains: [0-9]+ errors' | grep -oE '[0-9]+' | tail -1)"

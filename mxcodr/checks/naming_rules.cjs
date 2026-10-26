@@ -35,6 +35,42 @@ const DEFAULT_ACTION_CAPTION_RE = rx(String.raw`^(?:` +
   String.raw`Show page(?:\s+\S+)?|` +
   String.raw`Call (?:microflow|nanoflow)(?:\s+\S+)?` +
   ')$', 'i');
+// CAPTION09: a caption that only restates its line: a call named after the flow it calls ("Run send
+// reminder" over `call microflow M.SUB_Reminder_Send`, or just "Send reminder"), a commit or a retrieve
+// named after its own variable or entity behind a stock verb ("Save the ticket" over `commit $Ticket`,
+// "Load the open tickets" over `retrieve $OpenTickets`), a stock phrase ("Work out the value") or a hint's
+// <slot> left unfilled. It says nothing the line does not, and a script can write it. Matched by words, so
+// "Mark the ticket as resolved" passes; change, create and set lines are judged by the stock phrases only.
+const VERBS = {
+  call: String.raw`run|call|execute|do|perform|invoke|start|trigger`,
+  commit: String.raw`save|commit|store|persist|keep|write`,
+  retrieve: String.raw`load|get|fetch|find|retrieve|read|look up|query`,
+};
+const STOCK_PHRASES = new Set(['work out the value', 'set the value', 'update the value', 'calculate the value', 'run the step', 'do the step',
+  'update the list', 'update the object', 'save the object', 'create the object', 'delete the object', 'change the object', 'open the page',
+  'run the flow', 'call the flow', 'run the microflow', 'call the microflow', 'run the subflow', 'call the subflow']);
+const PREFIX_RE = /^(?:ACT|SUB|DS|VAL|SCH|ASU|BCO|ACO|BDE|ADE|IVK|NF|JA|JS)_/i;
+const wordsOf = name => name.replace(PREFIX_RE, '').replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase().trim();
+const singular = text => text.split(' ').map(w => w.length > 3 ? w.replace(/(?:ies)$/, 'y').replace(/s$/, '') : w).join(' ');
+function genericCaption(caption, line) {
+  const plain = caption.toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (STOCK_PHRASES.has(plain) || /[<>]|\.\.\./.test(caption)) return true;  // a stock phrase, or a hint's slot left unfilled
+  const t = line.replace(/"/g, '').trim();
+  const kind = /^(?:\$\w+\s*=\s*)?call\s+(?:microflow|nanoflow|java\s+action|javascript\s+action)\b/i.test(t) ? 'call'
+    : /^commit\b/i.test(t) ? 'commit' : /^(?:\$\w+\s*=\s*)?retrieve\b/i.test(t) ? 'retrieve' : '';
+  if (!kind) return false;
+  const verb = new RegExp(String.raw`^(?:${VERBS[kind]})\b\s*`, 'i');
+  const rest = plain.replace(verb, '').replace(/^(?:the|a|an|all|this|that|these|those)\s+/, '').trim();
+  if (!rest) return true;
+  const names = new Set();
+  for (const m of t.matchAll(/\$(\w+)|\b[A-Za-z]\w*\.(\w+)(?=\s*[(;\s]|$)/g)) {
+    const w = wordsOf(m[1] || m[2]);
+    if (w) { names.add(w); names.add(w.split(' ').slice(1).join(' ')); }
+  }
+  names.delete('');
+  return [...names].some(n => singular(n) === singular(rest));
+}
+
 // Type word plus digits: $Int1, $List2, $Var10.
 const PLACEHOLDER_VAR_RE = rx(String.raw`\$(?:int|bool|boolean|str|string|dec|decimal|date|datetime|list|obj|object|var|num|item)\d+\b`, 'i');
 const THROWAWAY_VAR_RE = rx(String.raw`\$(?:tmp|temp|foo|bar|x|y|z|aa)\b`, 'i');
@@ -188,6 +224,12 @@ function actionFindings(lines, index) {
       `action caption restates the Mendix default: '${text}' -- say what it does for the business, e.g. 'Load the open invoices'`,
       index + 1)];
   }
+  if (text && genericCaption(text, line)) {
+    return [finding('CAPTION09',
+      `caption only names what the line already says: '${text}' -- say what it does for the person, in their words: ` +
+      `why it runs, what changes or what is checked (e.g. 'Mark the ticket as resolved', 'Record who closed the ticket')`,
+      index + 1)];
+  }
   return [];
 }
 
@@ -295,16 +337,36 @@ function refreshFindings(lines) {
   return failures;
 }
 
+// TEXT03: a backslash is not an escape in an MDL string. `'a\nb'` is four characters, so a text built
+// with `\n` shows the two characters wherever it ends up (a generated document came out as one line
+// with literal backslash-n in it, b2b-orders hb1, 2026-10-25; `mxcli syntax regular-expression`: "Backslashes
+// are NOT escape characters"). Lines that build a pattern are left alone.
+function escapeFindings(lines) {
+  const out = [];
+  lines.forEach((line, index) => {
+    if (/^\s*(?:--|\/\/|\/?\*|@)/.test(line) || /regular\s+expression|\bregex\b|\bpattern\b|\bmatch(?:es)?\b|replaceAll|\bfind\w*\(/i.test(line)) return;
+    for (const m of line.matchAll(/'((?:[^']|'')*)'/g)) {
+      const hit = /\\[nrt]/.exec(m[1]);
+      if (!hit) continue;
+      out.push(finding('TEXT03', `a string literal holds \`${hit[0]}\`, which MDL keeps as two characters (a backslash is no escape): ` +
+        'the text shows them instead of a line break or a tab. Build the lines in the Java action that produces the document ' +
+        '(split a list of rows there), or put each line in its own value; a pattern is a regular expression document.', index + 1));
+      break;
+    }
+  });
+  return out;
+}
+
 function checkNamingAndRefresh(lines) {
   const [failures, warnings] = checkNaming(lines);
   // Performance (PERF02/03/05/06, perf_rules.cjs): warnings, listed before the caption warnings.
   const perf = perfFindings(lines).map(([code, message, line]) => finding(code, message, line));
-  return [[...failures, ...refreshFindings(lines)], [...perf, ...warnings]];
+  return [[...failures, ...refreshFindings(lines)], [...perf, ...escapeFindings(lines), ...warnings]];
 }
 
-module.exports = {
+module.exports = { genericCaption,
   ANNOTATION_RE, CAPTION_RE, DECISION_RE, LOOP_RE, ACTION_RE, DEFAULT_ACTION_CAPTION_RE, PLACEHOLDER_VAR_RE,
   THROWAWAY_VAR_RE, TYPE_ECHO_VAR_RE, COMPARISON_RE, VARIABLE_RULES, MICROFLOW_START_RE, COMMIT_STATEMENT_RE,
   finding, stripComments, precedingAnnotations, captionText, annotationKinds, decisionFindings, loopFindings,
-  actionFindings, variableFindings, checkNaming, refreshFindings, checkNamingAndRefresh,
+  actionFindings, variableFindings, checkNaming, refreshFindings, escapeFindings, checkNamingAndRefresh,
 };

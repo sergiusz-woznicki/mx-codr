@@ -152,6 +152,14 @@
           body: (await res.text()).replace('"enableServiceWorkerCaching": false', '"enableServiceWorkerCaching": true')});
       });
     }
+    // tests/credentials.env holds passwords (security is on) but none for this TEST_USER: the browser would
+    // keep whoever the previous test left signed in and run this one as them, failing later on a page that
+    // user does not have.
+    if (!PASSWORD && USER && Object.keys(PASSWORDS).length) {
+      throw new Error('no TEST_PASSWORD_' + USER + '= line in tests/credentials.env, so the test cannot sign in as TEST_USER='
+        + USER + ' (users with one: ' + Object.keys(PASSWORDS).join(', ') + '). Add the line with that demo user\'s password,'
+        + ' or set TEST_USER to one of them');
+    }
     await __mdl_drop_stale_pages();
     await page.goto(BASE + '/' + (profile ? '?profile=' + profile : ''));
     await page.waitForSelector(LOGIN_FIELD + ', .mx-page', {timeout: 20000});
@@ -173,6 +181,13 @@
     }
     await sign_in_if_asked();
     await page.waitForSelector('.mx-page', {timeout: 20000});
+    // The session is TEST_USER's: a kept session (REUSE) or a sign-in that landed elsewhere is caught here,
+    // not three steps later on a page that user does not have.
+    const signed = PASSWORD ? await current_user() : '';
+    if (signed && !/^Anonymous/.test(signed) && signed.toLowerCase() !== String(USER).toLowerCase()) {
+      throw new Error('the app is signed in as ' + signed + ', not TEST_USER=' + USER + ': this test would run as the wrong user.'
+        + ' Check TEST_USER and its TEST_PASSWORD_' + USER + '= line in tests/credentials.env');
+    }
     __journey_started = true;
     if (offline) await __mdl_ready_offline(profile);
   };

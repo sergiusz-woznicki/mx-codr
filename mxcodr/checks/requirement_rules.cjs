@@ -14,6 +14,8 @@ const { withoutFolder } = require('./mxcli_client.cjs');
 const hash = text => crypto.createHash('sha1').update(withoutFolder(text)).digest('hex').slice(0, 12);
 
 const PLAN_ENTRY_RE = /^## (.+)\n\nAnchors: (.*)$/gm;
+// What a person meets on a screen: a requirement whose "checked when" says one of these is a browser test's.
+const SCREEN_CUE = /\b(?:pages?|screens?|buttons?|click\w*|menus?|tabs?|opens?|shows?|showing|shown|sees?|seen|display\w*|visible|lists?|listed|grids?|columns?|forms?|dropdowns?|panels?|dashboards?|charts?|filter\w*|sort\w*|pop-?ups?|dialogs?|badges?|highlight\w*|captions?|links?|navigat\w*|signs? in|logs? in|types?|enters?|selects?|picks?)\b/i;
 // Words too common to show a requirement was checked.
 const STOP = new Set(['that', 'this', 'with', 'from', 'when', 'than', 'then', 'them', 'they', 'their', 'there', 'each', 'every',
   'only', 'into', 'onto', 'must', 'have', 'shows', 'show', 'sees', 'user', 'users', 'page', 'pages', 'list', 'can', 'cannot',
@@ -102,7 +104,8 @@ function readsModel(line, vars) {
 
 // Where each id is named, and the test code under it: from its `# requirement:` line (or a run of
 // them) to the next one, comments and reads of the model's own text left out. {id: {file, code}},
-// the code lower-cased.
+// the code lower-cased. Only the browser tests (tests/verify-*.test.sh) prove a requirement: a microflow
+// test is never an obligation and never a proof (decision 2026-10-25).
 function namedRequirements(testFiles) {
   const named = new Map();
   for (const [file, text] of testFiles) {
@@ -132,11 +135,31 @@ function namedRequirements(testFiles) {
   return named;
 }
 
+// Whether the code looks for a literal the requirement quotes. A format with placeholders and a fixed part
+// (`ORD/YYYY/0001`) is looked for by a pattern or an instance of it -- `ORD/20[0-9][0-9]/[0-9]{4}`,
+// `printf 'ORD/%s/%04d'`, `ORD/2026/0003` -- with the fixed part as written: a run whose test matched the
+// pattern was told it "never looks for" the format and pasted it into a fail message (b2b-orders, 2026-10-25).
+const PLACEHOLDER = /^(?:Y+|M+|D+|N+|X+|#+|0*1|9+|\d{2,4})$/;
+function looksFor(code, literal) {
+  const lower = literal.toLowerCase();
+  if (code.includes(lower)) return true;
+  const parts = literal.split(/([\/-])/);
+  const segments = parts.filter((_, i) => i % 2 === 0);
+  if (!segments.some(p => PLACEHOLDER.test(p)) || segments.every(p => PLACEHOLDER.test(p))) return false;
+  const seps = [...new Set(parts.filter((_, i) => i % 2))].map(c => '\\' + c).join('');
+  const pattern = parts.map((p, i) => (i % 2 ? '\\' + p : PLACEHOLDER.test(p) ? `[^\\s'"${seps}]{1,40}` : p.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).join('');
+  return new RegExp(pattern).test(code);
+}
+
 // A test that names an id but checks nothing of it passed: one B2B test named thirteen requirements
 // on one line, the date and amount formats among them, and asserted no format -- the grid showed
 // 10/6/2026 and 19190.829 under a gate that said DONE (InvoiceB2BG2, 2026-10-12). So a requirement
 // counts as tested when the code under its name holds one of its own words that few other
 // requirements share -- a selector, a value, an OQL column, or the fail message that says what is checked.
+// A requirement no test names whose "checked when" names no screen cue -- a data rule (a format,
+// uniqueness, a bound) or logic no requested screen reaches -- is a suggested microflow test, a warning:
+// REQ02 that asked for a browser test sent a run to build two edit pages nobody asked for (b2b-orders hb2,
+// 2026-10-25). One with no "checked" clause, or with a screen cue, still needs its browser test.
 function judgeRequirements(requirements, open, named) {
   const out = [];
   const words = t => new Set((t.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(w => w.length >= 4 && !STOP.has(w)));
@@ -147,18 +170,37 @@ function judgeRequirements(requirements, open, named) {
   for (const r of requirements) {
     const where = named.get(r.id);
     if (!where) {
+      const checked = /\bchecked\b(.*)$/i.exec(r.text);
+      if (checked && !SCREEN_CUE.test(checked[1])) {
+        out.push({ code: 'REQ02', key: r.id, version: hash(r.text), warn: true,
+          message: `suggested microflow test: ${r.text} (optional: no requested screen reaches it, so no browser test can; ` +
+            'do not build a page to test it -- list it in your final report)' });
+        continue;
+      }
       out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
-        message: `requirement ${r.id} (docs/brain/plan/${r.slice}) has no test: "${r.text}" -- write the test that ` +
-          `checks its "checked when" and name it there, a line \`# requirement: ${r.id}\` above the step that checks it` });
+        message: `requirement ${r.id} (docs/brain/plan/${r.slice}) has no test: "${r.text}" -- write the browser test that ` +
+          `checks its "checked when" (tests/verify-<feature>.test.sh) and name it there, a line \`# requirement: ${r.id}\` above the step that checks it` });
       continue;
     }
     const own = [...words(r.text)].filter(w => df.get(w) <= rare).slice(0, 8);
-    if (!own.length || own.some(w => spellings(w).some(v => where.code.includes(v)))) continue;
+    if (!own.length || own.some(w => spellings(w).some(v => where.code.includes(v)))) {
+      // A caption or a format the requirement quotes is what the test must look for: the word check below
+      // would pass on any other word of the sentence (the quoted detail was the one that fell out).
+      const literals = [...r.text.matchAll(/["“]([^"”]{3,60})["”]/g)].map(m => m[1])
+        .concat(r.text.match(/(?<![\w\/-])[A-Z]{2,4}(?:[\/-][A-Z0-9]{2,4}){1,3}(?!\w)/g) || []);
+      const lost = literals.filter(l => !looksFor(where.code, l));
+      if (lost.length) {
+        out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
+          message: `${where.file} names requirement ${r.id} but its code never looks for ${lost.map(l => `"${l}"`).join(', ')}, which the requirement quotes: ` +
+            `"${r.text}" -- assert it under \`# requirement: ${r.id}\` (the caption or format itself, in a check or in the fail message)` });
+        continue;
+      }
+      continue;
+    }
     out.push({ code: 'REQ02', key: r.id, version: hash(r.text),
       message: `${where.file} names requirement ${r.id} but its code checks none of it: "${r.text}" -- under ` +
         `\`# requirement: ${r.id}\`, assert what it says, with a fail message in its words (one of: ${own.join(', ')}). ` +
-        'Reading the model back (describe, show, a catalog query) does not count: do what the person does and assert what they see, ' +
-        'or call the microflow in a microflow test' });
+        'Reading the model back (describe, show, a catalog query) does not count: do what the person does and assert what they see' });
   }
   for (const [id, { file }] of named) {
     // An assumption (open, in assume mode) a test checks is welcome, not a stale link: Opus named
@@ -170,6 +212,44 @@ function judgeRequirements(requirements, open, named) {
   return out;
 }
 
+// REQ04: the details the request spells out are kept by the plan. The requirements an agent writes are
+// paraphrases; "exactly 10 digits", "a bar above the table", "disabled", a quoted caption fell out of them,
+// no test asked for them, and the gate said DONE (b2b-orders hb1, 2026-10-25). A line of the newest
+// archived request (docs/brain/requests/) with a number, quote, format, bound or cue word (see
+// plugins/request_specifics.cjs) must find it again in a requirement or an assumption of the plan; one
+// kept only by an assumption that gives it up needs the platform's proof (an error text, a CE code), not
+// "simpler" and not a harness rule code.
+function requestFindings(appDir) {
+  const spec = require('./plugins/request_specifics.cjs');
+  const request = spec.latestRequest(appDir);
+  const entries = spec.planEntries(appDir);
+  if (!request || !entries.length || requirementsMode(appDir) === 'off') return [];
+  const out = [];
+  for (const { line, missing, departed } of spec.unkept(request, entries)) {
+    const shown = line.length > 110 ? line.slice(0, 107) + '...' : line;
+    const key = 'req:' + crypto.createHash('sha1').update(line).digest('hex').slice(0, 8);
+    if (missing.length) {
+      out.push({ code: 'REQ04', key, version: hash(missing.join('|')),
+        message: `the request says "${shown}" -- no requirement or assumption of docs/brain/plan keeps: ${missing.join('; ')}. ` +
+          'Record each as its own requirement in the request\'s words, with the detail in it and a "checked when" that asserts it ' +
+          '(./mxcli brain capture "<requirement>" --slice <slice> -a @<Module.Doc> -p <app>.mpr, then promote); built differently ' +
+          'or not at all: an "Assumed: ..." --open entry that names the detail and what proved it could not be built' });
+    }
+    if (departed.length) {
+      const rule = (departed.find(d => d.rule) || {}).rule;
+      out.push({ code: 'REQ04', warn: true, key: key + ':departure', version: hash(departed.map(d => d.show).join('|')),
+        message: `the request says "${shown}" -- ${departed.map(d => d.show).join('; ')} is recorded only as a departure: "${departed[0].entry}". ` +
+          (rule
+            ? `A harness rule code (${rule}) is not proof that it cannot be built: a rule says what it refuses, and the form the request ` +
+              `asks for passes it in its allowed spelling (a filter bar above a grid is the grid's controlbar) -- read the card (bash tests/rules.sh ` +
+              `explain ${rule}) and build that form. Only a platform limit is proof: the mx check or runtime error text (a CE code) (warning)`
+            : 'Build what the request says, or add to the assumption the proof that it cannot be built: the mx check or runtime error ' +
+              'text (a CE code) that blocks it. "Simpler" is not one, and neither is a harness rule code (warning)') });
+    }
+  }
+  return out.slice(0, 20);
+}
+
 // The REQ02 findings: {code, key, version, message}, as check_paths.cjs's other rules give them.
 function requirementFindings(appDir, testFiles) {
   const out = stagedFindings(appDir);
@@ -178,5 +258,5 @@ function requirementFindings(appDir, testFiles) {
   return out.concat(judgeRequirements(requirements, open, namedRequirements(testFiles)));
 }
 
-module.exports = { spellings, stagedEntries, requirementsMode, readPlan, stagedFindings, modelReadVariables, readsModel, namedRequirements,
-  judgeRequirements, requirementFindings };
+module.exports = { looksFor, requestFindings, spellings, stagedEntries, requirementsMode, readPlan, stagedFindings, modelReadVariables, readsModel, namedRequirements,
+  judgeRequirements, requirementFindings, SCREEN_CUE };

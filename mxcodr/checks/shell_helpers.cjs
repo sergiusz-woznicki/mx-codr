@@ -388,8 +388,18 @@ const tools = {
       ['FeedbackModule.LocalStorageKey', 'mxfeedback-form-data'],
       ['FeedbackModule.ClientIdentifier', 'Feedback Module 4.0.2']]);
     try {
-      const built = item(loads(readStrict(py.join(base, 'model', 'config.json'))), 'Constants');
-      if (isMap(built)) for (const [k, v] of built) constants.set(k, v);
+      const config = loads(readStrict(py.join(base, 'model', 'config.json')));
+      const built = item(config, 'Constants');
+      // A constant on the model's own port (its root URL's) is the app calling itself: give it this boot's
+      // port, as boot_with_mxcli_run does with --constant (checks/own_port.cjs).
+      let own = null;
+      try { own = /^https?:\/\/(?:localhost|127\.0\.0\.1):(\d+)/i.exec(String(item(item(config, 'Configuration'), 'ApplicationRootUrl'))); } catch (e) { own = null; }
+      if (isMap(built)) {
+        for (const [k, v] of built) {
+          const m = own && own[1] !== String(port) && typeof v === 'string' ? /^(https?:\/\/(?:localhost|127\.0\.0\.1)):(\d+)(.*)$/i.exec(v) : null;
+          constants.set(k, m && m[2] === own[1] ? `${m[1]}:${port}${m[3]}` : v);
+        }
+      }
     } catch (e) { /* no config.json yet: pass the Feedback constants only */ }
     print(dumps(new Map([['action', 'update_configuration'], ['params', new Map([
       ['BasePath', base], ['RuntimePath', runtime], ['DTAPMode', 'D'],

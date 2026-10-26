@@ -70,7 +70,9 @@ function listTabsFindings(lines, entityText) {
         check: 'TABS02', line: stacked[0].line, document: doc.name,
         message: `${doc.name}: ${stacked.length} lists one under another (${stacked.map(l => l.name).join(', ')}): the person ` +
           `scrolls past one to find the next. Put them in tabs, one list a tab, the heading over each as its caption: ` +
-          `tabcontainer ${key}_ListsTabs { ${tabs.join(' ')} } -- in one row and column, in place of the rows they were in.`,
+          `tabcontainer ${key}_ListsTabs { ${tabs.join(' ')} } -- in one row and column, in place of the rows they were in. ` +
+          'Two lists the person works with at once (picks from one, fills the other) go side by side instead: each in a column of ' +
+          'one row, DesktopWidth below 12.',
       });
     }
     doc = null;

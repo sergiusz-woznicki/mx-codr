@@ -102,7 +102,7 @@ clear_test_artefacts() {
 run_suite_once() {
   # From here on, what the runtime logs as an error happened during the suite (step_runtime_errors).
   date '+%Y-%m-%d %H:%M:%S' > "$WORK/tests.started"
-  out="$(run_suite "${targets[@]}")"
+  out="$(run_suite "${targets[@]}" 3>&-)"   # 3>&-: see boot_with_mxcli_run
   status=$?
   echo $((SECONDS - started)) > "$WORK/tests.secs"
   # Script verdicts only; each failure's cause line is printed once, under the gate verdict.
@@ -116,6 +116,14 @@ run_suite_once() {
     ( . tests/lib.sh >/dev/null 2>&1; release_session ) 2>/dev/null
   fi
   environment="$(environment_cause "$out")"
+}
+
+# leftover_rows_failure <suite output> -- true when a FAIL line or a cause line reads like rows an
+# earlier run left: a unique or duplicate value, a slot already taken, a list that is not empty, a count
+# other than the one expected.
+leftover_rows_failure() {
+  printf '%s\n' "$1" | grep -E 'FAIL|fail|✗|expected|Error' \
+    | grep -qiE 'unique|duplicat|already (exist|taken|booked|used|in use|there)|is taken|not empty|should be empty|expected [0-9]+[^0-9]{0,40}(got|found|saw|was|but|have|has) [0-9]+|[0-9]+ (rows?|items?|lines?|entries|records?) (but|instead|where|while)|count'
 }
 
 step_tests() {
@@ -150,10 +158,14 @@ step_tests() {
   # The rows this suite created stay until a restore (tests/db-snapshot.sh).
   if declare -F dbsnap_mark_dirty >/dev/null; then
     dbsnap_mark_dirty
-    if [ "$status" != "0" ] && [ "${RESET_DATA:-0}" != "1" ] && { [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ]; } && [ -f "${DBSNAP_DIR:-.mxcli/db-snapshot}/pending.dump" ]; then
+    # Only when a failure reads like leftover rows: after every red --only it sent a B2B run to
+    # --reset-data on assertions no earlier run's data had caused, ~5 min of restarts (b2b-orders hb4).
+    if [ "$status" != "0" ] && [ "${RESET_DATA:-0}" != "1" ] && { [ -n "$ONLY" ] || [ "$TESTS_ONLY" = "1" ]; } && [ -f "${DBSNAP_DIR:-.mxcli/db-snapshot}/pending.dump" ] \
+       && leftover_rows_failure "$out"; then
       echo "   the rows these tests created stay until DONE; if a test failed on rows an earlier run left"
       echo "   (a slot already taken, a list not empty), run it once more with --reset-data (a restart, ~15 s): the tests then"
-      echo "   start on the snapshot's data. Better: let the test make its own room (a time far from now, a name of its own)"
+      echo "   start on the snapshot's data (on a fresh database the current seed fills, when the after-startup seed changed"
+      echo "   since the snapshot -- never drop the schema by hand). Better: let the test make its own room (a time far from now, a name of its own)"
     fi
   fi
   # Only a run on the current model counts as having exercised it.

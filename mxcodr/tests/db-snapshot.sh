@@ -106,6 +106,72 @@ dbsnap_session() {
   printf '%s' "$id"
 }
 
+# dbsnap_seed_hash -- the seed the database was filled by: one digest over the describe of the
+# after-startup microflow and every microflow it calls, to 30 of them. `none` when the app has no
+# after-startup microflow; nothing (unknown) without mxcli or the model. A snapshot taken before the
+# seed was written, or before it changed, puts the old seed rows back: --reset-data then restores an
+# empty or stale database, and an agent drops the schema by hand to get its seed back.
+dbsnap_seed_hash() {
+  local start flow text all="" todo seen=" " n=0 callee
+  [ -n "${MXCLI:-}" ] && [ -n "${MPR:-}" ] && [ -f "$MPR" ] || return 0
+  text="$("$MXCLI" -p "$MPR" -c "describe settings" 2>/dev/null)" || return 0
+  [ -n "$text" ] || return 0
+  start="$(printf '%s\n' "$text" | sed -n "s/.*AfterStartupMicroflow:[[:space:]]*'\([^']*\)'.*/\1/p" | head -1)"
+  if [ -z "$start" ]; then printf 'none'; return 0; fi
+  todo="$start"
+  while [ -n "$todo" ] && [ "$n" -lt 30 ]; do
+    flow="${todo%% *}"
+    if [ "$flow" = "$todo" ]; then todo=""; else todo="${todo#* }"; fi
+    case "$seen" in *" $flow "*) continue ;; esac
+    seen="$seen$flow "; n=$((n + 1))
+    text="$("$MXCLI" -p "$MPR" -c "describe microflow $flow" 2>/dev/null)"
+    all="$all$text"
+    for callee in $(printf '%s\n' "$text" | sed -n 's/.*call microflow[[:space:]]*\([A-Za-z0-9_.]*\).*/\1/p' | sort -u); do
+      todo="${todo:+$todo }$callee"
+    done
+  done
+  printf '%s' "$all" | cksum | cut -d' ' -f1
+}
+
+# dbsnap_seed_changed -- true when the pending snapshot was taken with another seed than the model's now.
+dbsnap_seed_changed() {
+  local was now
+  was="$(sed -n 's/^seed=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null)"
+  [ -n "$was" ] || return 1
+  now="$(dbsnap_seed_hash)"
+  [ -n "$now" ] && [ "$now" != "$was" ]
+}
+
+# dbsnap_fresh -- an empty database the app boots on, so the current after-startup seed fills it; the
+# old one stays as <name>_before_restore, and the pending snapshot goes (the gate takes a new one).
+# The same stop and boot a restore costs. True when the app runs on it; otherwise the old data is back.
+dbsnap_fresh() {
+  local old="${DBSNAP_DB}_before_restore"
+  stop_project_app >/dev/null 2>&1
+  sleep 1
+  dbsnap_sql "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DBSNAP_DB' AND pid <> pg_backend_pid()" >/dev/null
+  dbsnap_sql "DROP DATABASE IF EXISTS \"$old\"" >/dev/null
+  if ! dbsnap_sql "ALTER DATABASE \"$DBSNAP_DB\" RENAME TO \"$old\"" >/dev/null || ! dbsnap_sql "CREATE DATABASE \"$DBSNAP_DB\"" >/dev/null; then
+    dbsnap_sql "ALTER DATABASE \"$old\" RENAME TO \"$DBSNAP_DB\"" >/dev/null
+    echo "   !! no fresh database could be made; the data stays as it was"
+    dbsnap_boot
+    return 1
+  fi
+  if ! dbsnap_boot; then
+    echo "   !! the app did not start on a fresh database; putting the previous one back"
+    stop_project_app >/dev/null 2>&1
+    sleep 1
+    dbsnap_sql "DROP DATABASE IF EXISTS \"$DBSNAP_DB\"" >/dev/null
+    dbsnap_sql "ALTER DATABASE \"$old\" RENAME TO \"$DBSNAP_DB\"" >/dev/null
+    dbsnap_boot
+    return 1
+  fi
+  mkdir -p "$DBSNAP_DIR"
+  [ -f "$DBSNAP_DIR/pending.dump" ] && mv "$DBSNAP_DIR/pending.dump" "$DBSNAP_DIR/restored-$(date '+%Y%m%d-%H%M%S').dump"
+  rm -f "$DBSNAP_DIR/pending.info" "$DBSNAP_DIR/pending.fp" "$DBSNAP_DIR/dirty"
+  return 0
+}
+
 dbsnap_take() {
   dbsnap_enabled || return 0
   [ -f "$DBSNAP_DIR/pending.dump" ] && return 0
@@ -127,7 +193,7 @@ dbsnap_take() {
     [ -n "$fp_before" ] && [ "$fp_before" = "$fp_after" ] && printf '%s' "$fp_before" > "$DBSNAP_DIR/pending.fp"
     mv "$DBSNAP_DIR/pending.dump.tmp" "$DBSNAP_DIR/pending.dump"
     rm -f "$DBSNAP_DIR/unavailable"
-    printf 'session=%s\ntaken=%s\n' "$session" "$(date '+%Y-%m-%d %H:%M:%S')" > "$DBSNAP_DIR/pending.info"
+    printf 'session=%s\ntaken=%s\nseed=%s\n' "$session" "$(date '+%Y-%m-%d %H:%M:%S')" "$(dbsnap_seed_hash)" > "$DBSNAP_DIR/pending.info"
     if [ "$DBSNAP_MODE" = "session" ]; then
       echo "   database snapshot taken (MDL_DB_RESET=session): the data goes back to it after this session's first DONE"
     else
@@ -205,6 +271,14 @@ dbsnap_restore() {
   [ -f "$DBSNAP_DIR/pending.dump" ] || return 0
   local old="${DBSNAP_DB}_before_restore" taken
   taken="$(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null)"
+  if dbsnap_seed_changed; then
+    echo "== the after-startup seed changed since the snapshot of ${taken:-?}: a fresh database instead, filled by the current seed (MDL_DB_RESET=${DBSNAP_MODE})"
+    dbsnap_fresh || return 0
+    dbsnap_session > "$DBSNAP_DIR/restored.session" 2>/dev/null
+    echo "   the app runs on its seed data alone; what the tests created is gone (the previous data is kept as the database ${old})"
+    dbsnap_empty_note
+    return 0
+  fi
   if dbsnap_unchanged; then
     echo "== the data equals the snapshot of ${taken:-?} (fingerprint of the app's own tables): nothing to put back, no restart"
   else
@@ -233,19 +307,29 @@ dbsnap_restore() {
 # it again. Costs one stop and boot (about 30 s), so only when a suite ran since the last restore.
 dbsnap_refresh() {
   dbsnap_enabled || return 0
+  local started=$SECONDS
   if [ ! -f "$DBSNAP_DIR/pending.dump" ]; then
-    [ "${1:-}" = "force" ] && echo "   --reset-data: no snapshot is pending, so there is nothing to put back (one is taken at this gate)"
+    [ "${1:-}" = "force" ] && echo "   --reset-data took 0s: no snapshot is pending, so there is nothing to put back (one is taken at this gate)"
+    return 0
+  fi
+  # The seed changed since the snapshot: its rows would put the old seed back. A fresh database, filled
+  # by the current seed, at a full gate and at --reset-data alike (the snapshot is retaken after the boot).
+  if dbsnap_seed_changed; then
+    echo "== the after-startup seed changed since the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null): a fresh database, filled by the current seed, before the tests"
+    dbsnap_fresh && echo "   the tests start on the seed's data alone; a new snapshot is taken now"
+    [ "${1:-}" = "force" ] && echo "   --reset-data took $((SECONDS - started))s (a fresh database and a restart)"
     return 0
   fi
   [ "${1:-}" = "force" ] || [ -f "$DBSNAP_DIR/dirty" ] || return 0
-  # Not for --reset-data: that one asks for a restart, and gets it.
-  if [ "${1:-}" != "force" ] && dbsnap_unchanged; then
+  # --reset-data too: a restart onto data that already equals the snapshot puts nothing back (a B2B run
+  # paid 15-30 s for it on --only runs whose tests had left no rows, b2b-orders hb4).
+  if dbsnap_unchanged; then
     rm -f "$DBSNAP_DIR/dirty"
     echo "== the data already equals the snapshot (fingerprint of the app's own tables): no restart; the tests start on it"
+    [ "${1:-}" = "force" ] && echo "   --reset-data took $((SECONDS - started))s (no restart: nothing to put back)"
     return 0
   fi
   echo "== putting the data back to the snapshot of $(sed -n 's/^taken=//p' "$DBSNAP_DIR/pending.info" 2>/dev/null) before the tests: an earlier run left its test rows"
-  local started=$SECONDS
   dbsnap_swap && echo "   the tests start on the snapshot's data; the next DONE puts it back again"
   # A room-booking session added --reset-data to every --only run, passing ones too: 13 restarts,
   # 17 s each, after one test had clashed with leftovers (2026-10-13). The cost, where it is paid.

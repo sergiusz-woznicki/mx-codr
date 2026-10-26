@@ -85,6 +85,11 @@ find_project() {
 # boot -- leaves them), so they do not write into the removed scratch directory.
 cleanup_work() {
   local pid pids status=$?
+  # A --only run that did not pass: its whole output, as it would have printed.
+  if [ -n "${ONLY_LOG:-}" ] && [ "${ONLY_SHORT:-0}" = "0" ]; then
+    exec 1>&3 3>&-
+    cat "$ONLY_LOG" 2>/dev/null
+  fi
   # The timing line goes last, whatever way the gate ended (--stop and --help are not gate runs).
   if [ "${STOP:-0}" = "0" ] && [ -n "${GATE_START:-}" ] && declare -F write_timing >/dev/null; then
     write_timing "$status"
@@ -134,6 +139,13 @@ main() {
   WORK="$(mdl_tmpdir mdl-gate)"
   trap cleanup_work EXIT
   GATE_START=$SECONDS
+  # --only: the output goes to .mxcli/last-only.txt; a pass prints a short form (print_only_short), any
+  # other ending the whole file, as before (cleanup_work).
+  ONLY_LOG=""; ONLY_SHORT=0
+  if [ -n "$ONLY" ] && mkdir -p .mxcli 2>/dev/null && [ ! -L .mxcli/last-only.txt ]; then
+    ONLY_LOG=".mxcli/last-only.txt"
+    exec 3>&1 1>"$ONLY_LOG"
+  fi
   phase_start setup
 
   # USER_MODULES_READ=0 tells a failed SHOW MODULES apart from a project with no module.

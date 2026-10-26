@@ -38,7 +38,19 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
         fi ;;
       CE0007) echo "   hint CE0007: an access rule names module roles of another module -- grant only this module's roles; for Administration.* give the user role Administration.User instead" ;;
       CE0642) echo "   hint CE0642: a required widget property is missing (a combo box or input needs a Caption/Label)" ;;
-      CE2729) echo "   hint CE2729: a page reaches something a role that can open it may not use. First ask whether that role should open the page at all: a page meant for one role is opened by another through the navigation's single home page or a shared menu item -- give each role its own home in the navigation (home page Mod.Page for UserRole) and keep the page's view grant to its own role; never grant a role data it should not see to silence this. When the role does belong on the page, grant what the message names: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant read * on entity Mod.Entity to Mod.Role;' (a non-persistent entity behind a data view needs it too). Skill: manage-security" ;;
+      CE2729) echo "   hint CE2729: a page reaches something a role that can open it may not use. First ask whether that role should open the page at all: a page meant for one role is opened by another through the navigation's single home page or a shared menu item -- give each role its own home in the navigation (home page Mod.Page for UserRole) and keep the page's view grant to its own role; never grant a role data it should not see to silence this. When the role does belong on the page, grant what the message names: 'grant execute on microflow Mod.DS_X to Mod.Role;' and 'grant read * on entity Mod.Entity to Mod.Role;' (a non-persistent entity behind a data view needs it too). Skill: manage-security"
+              # 35-38 errors for one user role, page after page (b2b-orders hb4): a role created for a REST
+              # client, and template roles with no role in the app's module, reach the pages through the
+              # navigation -- the default home page and its snippets -- not through grants of their own.
+              grep -E '\[CE2729\]' "$1" 2>/dev/null | sed -nE "s/.*for user role '([^']+)' \((with no roles defined in module '([^']+)'|with role)?.*/\1|\3/p" \
+                | sort | uniq -c | awk '$1 >= 3' | while read -r count role_module; do
+                    role="${role_module%%|*}"; module="${role_module#*|}"
+                    if [ -n "$module" ]; then
+                      echo "   hint CE2729 x$count for user role '$role': it has no module role of $module, so every page it reaches is refused -- give it one in the same script (alter user role \"$role\" add module roles (\"$module\".\"<Role>\");), or drop it and its demo user (drop demo user if exists '<name>'; drop user role if exists \"$role\";)"
+                    else
+                      echo "   hint CE2729 x$count for user role '$role': it reaches these pages through the navigation (the default home page when it has none of its own, and the menu). The script that creates a user role sets, in one go, its module roles, a page of its own and that page as its home: create user role \"$role\" (\"Mod\".\"$role\", \"System\".\"User\"); grant view on page Mod.${role}Home to Mod.$role; alter navigation Responsive { set home page Mod.${role}Home for \"$role\" }; (pitfalls: 'A new user role')"
+                    fi
+                  done ;;
       # Three sessions in a row: a page or microflow reached from a button, a menu or a page, with
       # no role. The pitfall "grant in the same script" was in the prompt each time; the name and
       # the line to paste, at the moment of the error, is what lands.
@@ -65,13 +77,14 @@ mdl_ce_hints() {   # mdl_ce_hints <file>
       # CE7247 is more than one error: a reserved name, and an invalid URL. A DeepSeek session set a
       # REST client's BaseUrl to a constant (stored as '{@Mod.Const}', refused as an invalid URL) and
       # was told to rename Owner/Type/Default. The hint follows the message, and says nothing when
-      # it does not know the text.
+      # it does not know the text. `get @Mod.Const + '/x'` is stored as that text (mxcli 0.28), so the
+      # URL hint gives the template form.
       CE7247)
         if grep -q 'CE7247.*is a reserved word' "$1" 2>/dev/null; then
           echo "   hint CE7247: that name is reserved by the Mendix platform and quoting does not rescue it -- Owner, Type and Default have to be renamed (Staff, ResourceType, Standard); other keywords only need quotes. Full list: ./mxcli syntax keywords"
         fi
         if grep -q "CE7247.*URL '.*' is invalid" "$1" 2>/dev/null; then
-          echo "   hint CE7247 (URL): a REST client's BaseUrl must be a literal http:// or https:// address -- a constant there is stored as '{@Mod.Const}' and refused. To point the app at a mock, build the URL in the microflow instead (rest call get @Mod.ApiBaseUrl + '/rates') or change the literal. Skill: mock-rest-apis"
+          echo "   hint CE7247 (URL): a REST client's BaseUrl cannot take a constant in mxcli -- it is stored as '{@Mod.Const}' and refused -- and a written-in address is ENDPOINT01. Call the endpoint from the microflow and drop the client: create constant Mod.ApiBaseUrl ( Type: String, DefaultValue: 'https://api.example.com' ); then call rest service get '{1}/rates' with ({1} = @Mod.ApiBaseUrl) returns String;"
         fi ;;
     esac
   done

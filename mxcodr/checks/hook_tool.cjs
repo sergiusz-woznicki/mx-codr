@@ -299,6 +299,17 @@ const tools = {
     core.writeHeredocScript(process.cwd(), found);
     py.print(found.path);
   },
+  // heredoc-put-back / heredoc-drop-note: after the precheck of a `cat >>` heredoc (harness-core).
+  'heredoc-put-back'() { require('./plugins/harness-core.cjs').putHeredocBack(process.cwd()); },
+  'heredoc-drop-note'() { require('./plugins/harness-core.cjs').dropHeredocNote(process.cwd()); },
+  // saved-script-note <script>...: the command on stdin was refused by the precheck -- where its script
+  // is, and to fix the named lines there and exec it alone (harness-core savedScriptNote).
+  'saved-script-note'(...scripts) {
+    const core = require('./plugins/harness-core.cjs');
+    const command = py.readStdin();
+    const found = core.heredocScript(command);
+    py.print(core.savedScriptNote(command, scripts, found && !found.unquoted ? found : null).replace(/\n$/, ''));
+  },
   // unquoted-heredoc-message <path>: the refusal for a bare delimiter.
   'unquoted-heredoc-message'(path) {
     py.print(require('./plugins/harness-core.cjs').HEREDOC_UNQUOTED(path));

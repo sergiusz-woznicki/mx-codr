@@ -7,7 +7,7 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `COVERAGE01` | every page and ACT_ microflow is on a test's # covers: line | Comma- or space-separated; a `SUB_`, entity or enumeration does not count. |
 | `LOOK01` | warning: every screenshot the suite took has been reviewed (MDL_VISUAL_REVIEW=agent) | Read each PNG in `.mxcli/visual/review.md`; write `verdicts.json`. |
 | `LOOK02` | warning: no reviewed screenshot was rejected (MDL_VISUAL_REVIEW=agent) | As LOOK01. |
-| `MFTEST01` | the microflow tests pass | Fix the flow, or the test if the need changed; output: .mxcli/microflow-tests.txt. |
+| `MFTEST01` | warning: the optional microflow tests pass | Optional: read the test first; fix it or the flow, or delete it (.mxcli/microflow-tests.txt). |
 | `MX01` | Mendix's consistency check reports 0 errors | The CE hints under each error. |
 | `REQ01` | requirements recorded before building | A `brain capture` per testable statement; open ones `Assumed:` --open. |
 | `REQ03` | a later request records its requirements | `brain capture -a @<Doc>` per statement, unbuilt ones too. |
@@ -38,5 +38,5 @@ One line per code of the `mx`, `coverage`, `precheck`, `scope`, `unused`, `tests
 | `CE0582` | no classic drop-down (not React-client compatible) | `combobox` or `radiobuttons` on the same enumeration or Boolean attribute |
 | `CE0106` `CE0557` | a microflow or page reached from a page, button or menu has a role | the hint's `grant execute` / `grant view` in the script that creates the document |
 | `CE0007` `CE0115` `CE0117` `CE0161` `CE0642` `CE1613` `CE2729` `CE7247` | build errors the gate and precheck explain | read the hint under the error |
-| `CE7247` | a reserved name, or an invalid URL (a REST client BaseUrl set to a constant) | rename Owner/Type/Default; a BaseUrl is a literal http(s):// address |
+| `CE7247` | a reserved name, or an invalid URL (a REST client BaseUrl set to a constant) | rename Owner/Type/Default; a URL: see ENDPOINT01 |
 | missing Marketplace module | mx check: "couldn't find the X module" | ask the person for `./mxcli auth login`, then `marketplace install <id>`; never build a replacement |
